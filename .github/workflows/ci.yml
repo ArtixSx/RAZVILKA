@@ -54,6 +54,38 @@ jobs:
       - name: Install native parser fixture
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static
 
+      - name: Bootstrap from actual read-only cwd with BusyBox early tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --mount --propagation private sh -eu <<'SH'
+          command -v busybox >/dev/null
+          command -v touch >/dev/null
+          trial=$(mktemp -d /tmp/razvilka-bootstrap-readonly.XXXXXX)
+          mounted=0
+          cleanup() {
+            result=$?
+            if test "$mounted" = 1; then umount "$trial/cwd" || result=1; fi
+            rmdir "$trial/cwd" "$trial" || result=1
+            exit "$result"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' HUP TERM
+          mkdir "$trial/cwd"
+          touch "$trial/cwd/write-before-remount"
+          rm "$trial/cwd/write-before-remount"
+          mount --bind "$trial/cwd" "$trial/cwd"
+          mounted=1
+          mount -o remount,bind,ro "$trial/cwd"
+          if touch "$trial/cwd/write-must-fail" 2>/dev/null; then
+            echo 'Readonly mount was not enforced' >&2
+            exit 1
+          fi
+          RAZVILKA_BOOTSTRAP_TEST_CWD="$trial/cwd" sh scripts/test-bootstrap.sh
+          echo 'ACTUAL_READONLY_CWD_BUSYBOX_BOOTSTRAP_PASS'
+          SH
+
       - name: Original unpublished intent with actual denied write
         shell: bash
         run: |

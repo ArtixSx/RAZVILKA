@@ -12,9 +12,11 @@ cleanup() { case "$TEST_ROOT" in "$TMP_BASE"/razvilka-bootstrap.*) rm -rf "$TEST
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 HOST_SH="$(command -v sh)"
+BUSYBOX="$(command -v busybox || true)"
 REAL_CP="$(command -v cp)"
 REAL_MKDIR="$(command -v mkdir)"
-export REAL_CP REAL_MKDIR
+REAL_RM="$(command -v rm)"
+export REAL_CP REAL_MKDIR REAL_RM
 # The bootstrap published with a tag must fetch exactly that release by default.
 RELEASE_VERSION="$(tr -d '\r\n' <"$ROOT/VERSION")"
 RELEASE_VERSION="${RELEASE_VERSION%-dev}"
@@ -23,11 +25,42 @@ RELEASE_DIR="RAZVILKA-$RELEASE_VERSION"
 mkdir -p "$TEST_ROOT/essential" "$TEST_ROOT/providers" "$TEST_ROOT/source/$RELEASE_DIR/scripts"
 for TOOL in cat chmod cp mkdir rm mv uname sh ls; do
   REAL_TOOL="$(command -v "$TOOL")"
-  printf '#!/bin/sh\nexec "%s" "$@"\n' "$REAL_TOOL" >"$TEST_ROOT/essential/$TOOL"
+  if [ -n "$BUSYBOX" ]; then
+    printf '#!/bin/sh\nexec "%s" %s "$@"\n' "$BUSYBOX" "$TOOL" >"$TEST_ROOT/essential/$TOOL"
+  else
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$REAL_TOOL" >"$TEST_ROOT/essential/$TOOL"
+  fi
   chmod 700 "$TEST_ROOT/essential/$TOOL"
 done
+if [ -n "$BUSYBOX" ]; then
+  HOST_SH="$TEST_ROOT/essential/sh"
+  cp "$TEST_ROOT/essential/mkdir" "$TEST_ROOT/host-mkdir"
+  cp "$TEST_ROOT/essential/rm" "$TEST_ROOT/host-rm"
+  REAL_MKDIR="$TEST_ROOT/host-mkdir"
+  REAL_RM="$TEST_ROOT/host-rm"
+  export REAL_MKDIR REAL_RM
+fi
 printf '#!/bin/sh\nprintf "0\\n"\n' >"$TEST_ROOT/essential/id"
 chmod 700 "$TEST_ROOT/essential/id"
+cat >"$TEST_ROOT/essential/mkdir" <<'MKDIR'
+#!/bin/sh
+set -eu
+case "${CASE_NAME:-}:$1" in
+  opkg-collision:*/.razvilka-opkg.*)
+    "$REAL_MKDIR" "$1"
+    printf foreign >"$1/foreign"
+    printf '%s\n' "$1" >"$CASE_ROOT/collision-path"
+    ;;
+esac
+exec "$REAL_MKDIR" "$@"
+MKDIR
+chmod 700 "$TEST_ROOT/essential/mkdir"
+cat >"$TEST_ROOT/essential/rm" <<'RM'
+#!/bin/sh
+case "${CASE_NAME:-}:$*" in opkg-cleanup-failed:*'/.razvilka-opkg.'*) exit 45 ;; esac
+exec "$REAL_RM" "$@"
+RM
+chmod 700 "$TEST_ROOT/essential/rm"
 for TOOL in sha256sum tar gzip mktemp readlink timeout awk dd od grep; do
   REAL_TOOL="$(command -v "$TOOL")"
   [ -n "$REAL_TOOL" ] || { echo "Bootstrap test needs host $TOOL" >&2; exit 1; }
@@ -64,6 +97,7 @@ printf '#!/bin/sh\nprintf "GNU Wget +https\\n"\n' >"$TEST_ROOT/providers/wget"
 cat >"$TEST_ROOT/providers/curl" <<'CURL'
 #!/bin/sh
 set -eu
+[ "${TMPDIR:-}" = "$EXPECTED_DOWNLOAD_TMP" ] || { echo "Dependency TMPDIR leaked to download" >&2; exit 97; }
 printf '%s\n' "$*" >>"$CASE_ROOT/downloads"
 [ "$CASE_NAME" != download-failed ] || exit 22
 DEST=""
@@ -93,11 +127,21 @@ done
 cat >"$TEST_ROOT/essential/opkg" <<'OPKG'
 #!/bin/sh
 set -eu
+case "${TMPDIR:-}" in "$RAZVILKA_BASE"/.razvilka-opkg.*) ;; *) echo "opkg has no private TMPDIR" >&2; exit 97 ;; esac
+[ -d "$TMPDIR" ] && [ ! -L "$TMPDIR" ] && [ "$PWD" = "$TMPDIR" ] || exit 96
+# Both package extraction and getcwd fallback must be writable. These files
+# also prove that recursive cleanup handles a failed package operation.
+printf scratch >"$TMPDIR/package.tmp"
+printf cwd >package-cwd.tmp
+printf '%s\n' "$TMPDIR" >>"$CASE_ROOT/opkg-workspaces"
 printf '%s\n' "$*" >>"$CASE_ROOT/opkg-called"
 [ "$CASE_NAME" != opkg-failed ] || exit 41
+[ "$CASE_NAME" != opkg-install-failed ] || [ "$1" != install ] || exit 42
+[ "$CASE_NAME" != opkg-wget-failed ] || [ "$*" != 'install wget-ssl' ] || exit 43
+if [ "$CASE_NAME" = opkg-signal ]; then kill -TERM "$PPID"; exit 44; fi
 case "$1" in
   update)
-    if [ "$CASE_NAME" = https-bootstrap ] && [ ! -f "$CASE_ROOT/tls-installed" ]; then exit 2; fi
+    case "$CASE_NAME" in https-bootstrap|opkg-wget-failed) [ -f "$CASE_ROOT/tls-installed" ] || exit 2 ;; esac
     exit 0 ;;
   install) shift ;;
   *) echo "Bootstrap attempted a global upgrade or unknown opkg operation" >&2; exit 99 ;;
@@ -123,8 +167,9 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root uninstall-purge purge-default-tmp purge-old-release purge-without-uninstall purge-rollback bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies missing-dependencies-unset incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root uninstall-purge purge-default-tmp purge-old-release purge-without-uninstall purge-rollback bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed opkg-install-failed opkg-wget-failed opkg-collision opkg-signal opkg-cleanup-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
+  [ "$CASE_NAME" != opkg-signal ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   case "$CASE_NAME" in install-default-cache|private-owner|private-writable)
     [ "$NATIVE_LINKS" -eq 1 ] && [ "$(id -u)" = 0 ] || continue ;;
   esac
@@ -133,7 +178,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   mkdir -p "$BASE/bin" "$BASE/sbin" "$BASE/tmp" "$BASE/etc/ssl/certs"
   RUN_TMP="$BASE/tmp"
   case "$CASE_NAME" in
-    install-default-cache) RUN_TMP='' ;;
+    install-default-cache|missing-dependencies-unset) RUN_TMP='' ;;
     private-owner) mkdir "$BASE/razvilka"; chown 1001 "$BASE/razvilka" ;;
     private-writable) mkdir "$BASE/razvilka"; chmod 777 "$BASE/razvilka" ;;
     private-type) printf foreign >"$BASE/razvilka" ;;
@@ -154,11 +199,12 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     uninstall|old-uninstall) set -- --uninstall ;;
     rollback) set -- --rollback ;;
     invalid-options) set -- --uninstall --rollback ;;
-    missing-dependencies|opkg-failed)
+    missing-dependencies|missing-dependencies-unset|opkg-failed|opkg-install-failed|opkg-collision|opkg-signal|opkg-cleanup-failed)
+      [ "$CASE_NAME" != missing-dependencies-unset ] || set -- --uninstall --purge
       for TOOL in curl wget sha256sum tar gzip mktemp readlink timeout awk dd od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
       rm "$BASE/sbin/start-stop-daemon" "$BASE/etc/ssl/certs/ca-certificates.crt"
       ;;
-    https-bootstrap)
+    https-bootstrap|opkg-wget-failed)
       printf '#!/bin/sh\nprintf "BusyBox wget HTTP only\\n"\n' >"$BASE/bin/wget"
       ;;
     incompatible-timeout|timeout-still-incompatible)
@@ -225,16 +271,40 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   CODE=0
   ARCH_OVERRIDE=""
   [ "$CASE_NAME" != install-explicit-mipsel ] || ARCH_OVERRIDE=mipsle
-  PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$RUN_TMP" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
-    RAZVILKA_VERSION="$VERSION_OVERRIDE" "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
+  EXPECTED_DOWNLOAD_TMP="$RUN_TMP"
+  export EXPECTED_DOWNLOAD_TMP
+  mkdir "$CASE_ROOT/read only cwd"
+  chmod 500 "$CASE_ROOT/read only cwd"
+  # Optional CI harness supplies an actually read-only bind mount in its own
+  # mount namespace. chmod alone does not constrain root or Windows hosts.
+  CALLER_CWD="${RAZVILKA_BOOTSTRAP_TEST_CWD:-$CASE_ROOT/read only cwd}"
+  (
+    cd "$CALLER_CWD"
+    if [ -n "$RUN_TMP" ]; then TMPDIR="$RUN_TMP"; export TMPDIR; else unset TMPDIR; fi
+    PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
+      RAZVILKA_VERSION="$VERSION_OVERRIDE" "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@"
+  ) >"$CASE_ROOT/output" 2>&1 || CODE=$?
+  chmod 700 "$CASE_ROOT/read only cwd"
+  [ -z "$(find "$CASE_ROOT/read only cwd" -mindepth 1 -print)" ] || { echo "Bootstrap wrote into caller cwd" >&2; exit 1; }
+  for OPKG_DIR in "$BASE"/.razvilka-opkg.*; do
+    [ -e "$OPKG_DIR" ] || continue
+    case "$CASE_NAME" in
+      opkg-collision) [ "$(cat "$OPKG_DIR/foreign")" = foreign ] || exit 1 ;;
+      opkg-cleanup-failed) [ -f "$OPKG_DIR/package.tmp" ] && grep -F "Cannot clean private Entware package workspace: $OPKG_DIR" "$CASE_ROOT/output" >/dev/null || exit 1 ;;
+      *) echo "Package workspace leaked: $CASE_NAME" >&2; exit 1 ;;
+    esac
+  done
+  if [ "$CASE_NAME" = opkg-collision ]; then
+    [ -f "$CASE_ROOT/collision-path" ] && [ -f "$(cat "$CASE_ROOT/collision-path")/foreign" ] && [ ! -e "$CASE_ROOT/opkg-called" ] || { echo "Colliding package workspace was adopted" >&2; exit 1; }
+  fi
   case "$CASE_NAME" in
-    install-*|symlink-base|missing-dependencies|incompatible-timeout|https-bootstrap|uninstall|rollback|uninstall-purge|purge-default-tmp)
+    install-*|symlink-base|missing-dependencies|missing-dependencies-unset|incompatible-timeout|https-bootstrap|uninstall|rollback|uninstall-purge|purge-default-tmp)
       [ "$CODE" = 0 ] && [ -f "$CASE_ROOT/helper-called" ] || { cat "$CASE_ROOT/output" >&2; echo "Bootstrap failed: $CASE_NAME" >&2; exit 1; }
       EXPECTED=install
       EXPECTED_ARGS=""
       case "$CASE_NAME" in
         uninstall|rollback) EXPECTED="$CASE_NAME" ;;
-        uninstall-purge|purge-default-tmp) EXPECTED=uninstall; EXPECTED_ARGS=--purge ;;
+        uninstall-purge|purge-default-tmp|missing-dependencies-unset) EXPECTED=uninstall; EXPECTED_ARGS=--purge ;;
       esac
       [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:$EXPECTED_ARGS" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
       if [ "$CASE_NAME" = purge-default-tmp ]; then
@@ -256,7 +326,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
       if [ "$ARCH" = mips ]; then
         grep -q 'платформа ядра: mips' "$CASE_ROOT/output" || { echo "Kernel identity is mislabeled as selected architecture" >&2; exit 1; }
       fi
-      if [ "$CASE_NAME" = missing-dependencies ]; then
+      if [ "$CASE_NAME" = missing-dependencies ] || [ "$CASE_NAME" = missing-dependencies-unset ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 2 ] || { echo "Dependencies were not installed in one bounded batch" >&2; exit 1; }
         for PACKAGE in curl wget-ssl coreutils-sha256sum tar gzip coreutils-mktemp coreutils-readlink coreutils-timeout busybox ip-full ca-bundle; do
           grep -q " $PACKAGE" "$CASE_ROOT/opkg-called" || { echo "Missing dependency: $PACKAGE" >&2; exit 1; }
@@ -274,6 +344,13 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     *)
       [ "$CODE" != 0 ] && [ ! -e "$CASE_ROOT/helper-called" ] || { echo "Unsafe bootstrap accepted: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
       case "$CASE_NAME" in
+        opkg-failed|opkg-install-failed|opkg-wget-failed|opkg-signal|opkg-collision|opkg-cleanup-failed)
+          [ ! -e "$CASE_ROOT/downloads" ] || { echo "Failed package preparation reached download" >&2; exit 1; }
+          case "$CASE_NAME:$CODE" in
+            opkg-failed:41|opkg-install-failed:42|opkg-wget-failed:43|opkg-signal:143|opkg-collision:12|opkg-cleanup-failed:12) ;;
+            *) echo "Package failure status changed: $CASE_NAME/$CODE" >&2; cat "$CASE_ROOT/output" >&2; exit 1 ;;
+          esac
+          ;;
         private-owner|private-writable|private-type)
           [ "$CODE" = 12 ] && [ ! -e "$CASE_ROOT/downloads" ] || { echo "Foreign private tree reached a download/helper" >&2; exit 1; }
           ;;
@@ -303,4 +380,4 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   esac
   [ -z "$(find "$BASE/tmp" -mindepth 1 -print)" ] || { echo "Bootstrap leaked extracted release files: $CASE_NAME" >&2; exit 1; }
 done
-echo "Isolated Entware bootstrap tests: PASS"
+echo "Isolated Entware bootstrap tests: PASS (BusyBox early tools: ${BUSYBOX:-unavailable})"

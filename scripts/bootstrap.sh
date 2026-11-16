@@ -125,6 +125,30 @@ if [ ! -r "$BASE/etc/ssl/certs/ca-certificates.crt" ] && [ ! -r "$BASE/etc/ssl/c
 fi
 if [ -n "$PACKAGES" ]; then
   step '1/5' "Устанавливаю недостающие инструменты: $PACKAGES"
+  (
+  # Entware opkg falls back to the caller's cwd when TMPDIR is absent. The
+  # firmware cwd may be read-only, and mktemp/coreutils may themselves be among
+  # the missing packages. Claim one private directory using only BusyBox mkdir;
+  # never adopt a colliding path. Keep this environment local to dependency
+  # installation so the caller's later download TMPDIR is preserved.
+  OPKG_TMP="$BASE/.razvilka-opkg.$$"
+  readonly OPKG_TMP
+  mkdir "$OPKG_TMP" || { echo "Cannot create private Entware package workspace" >&2; exit 12; }
+  cleanup_opkg() {
+    OPKG_STATUS=$?
+    if ! rm -rf "$OPKG_TMP"; then
+      echo "Cannot clean private Entware package workspace: $OPKG_TMP" >&2
+      [ "$OPKG_STATUS" -ne 0 ] || OPKG_STATUS=12
+    fi
+    exit "$OPKG_STATUS"
+  }
+  trap cleanup_opkg EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  TMPDIR="$OPKG_TMP"
+  export TMPDIR
+  cd -- "$OPKG_TMP"
   if ! opkg update; then
     if [ "$NEED_HTTPS_WGET" -eq 1 ]; then
       # Entware's HTTP index may have refreshed while existing HTTPS feeds
@@ -140,6 +164,7 @@ if [ -n "$PACKAGES" ]; then
   fi
   # Package names are exclusively the fixed allowlist above. No global upgrade.
   opkg install $PACKAGES
+  )
   hash -r 2>/dev/null || true
 fi
 for TOOL in curl sha256sum tar gzip mktemp readlink timeout awk dd od pidof grep ip; do
