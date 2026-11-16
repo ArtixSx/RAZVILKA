@@ -207,7 +207,9 @@ func TestMihomoSameBootCLINativeOriginalParent(t *testing.T) {
 	}
 
 	if err != nil {
-		t.Fatalf("actual sameboot CLI %v prepare_stage=%s", err, dataplane.MihomoSameBootRetirementStage(err))
+		t.Fatalf("actual sameboot CLI %v prepare_stage=%s absence_stage=%s canceled=%t deadline=%t", err,
+			dataplane.MihomoSameBootRetirementStage(err), dataplane.BootRetirementStage(err),
+			errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded))
 	}
 	if result.State != "rolled-back" || result.RollbackVerified || len(stages) != len(expected) {
 		t.Fatal("unverified or incomplete terminal acknowledgment")
