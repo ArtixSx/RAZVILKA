@@ -466,11 +466,117 @@ func (o *DomainTCPOriginalScope) LookupPublished(ctx context.Context, client, sy
 	if process == nil {
 		return nil, ErrDomainPolicyTCPConsumer
 	}
+	return o.lookupPublishedInOriginalToolObservation(ctx, process, client, synthetic)
+}
+
+type domainTCPLookupReadSources struct {
+	mapping  *domainTCPMappingReadSources
+	resolver *dnscontrol.NetworkPolicyDNSSyntheticResolver
+}
+
+func (s *domainTCPLookupReadSources) current(ctx context.Context, owner *DomainTCPOriginalScope, process *XrayDomainTCPExecutionResource, mapping *dnscontrol.SyntheticDNSMapping) error {
+	if s == nil || s.mapping == nil || s.resolver == nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	if err := s.mapping.current(ctx, owner, process, mapping); err != nil {
+		return err
+	}
+	if process.material.dnsSource != s.resolver {
+		return ErrDomainPolicyTCPConsumer
+	}
+	return nil
+}
+
+// Both original mapping comparisons remain independent: the resolver calls
+// CurrentSyntheticMapping and this owner repeats it after mapping.Current.
+// The fixed body is readonly; no flow registration, lease or dial is included.
+func (o *DomainTCPOriginalScope) lookupPublishedRead(ctx context.Context, process *XrayDomainTCPExecutionResource, client, synthetic netip.Addr) (*dnscontrol.SyntheticDNSMapping, error) {
 	mapping, err := process.material.dnsSource.LookupPublished(ctx, client, synthetic)
 	if err != nil || mapping != process.material.mapping {
 		return nil, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
 	return mapping, o.CurrentSyntheticMapping(ctx, mapping)
+}
+
+func (o *DomainTCPOriginalScope) lookupPublishedInOriginalToolObservation(ctx context.Context, process *XrayDomainTCPExecutionResource, client, synthetic netip.Addr) (*dnscontrol.SyntheticDNSMapping, error) {
+	if o == nil || o.self != o || process == nil || process.self != process || process.material == nil {
+		return nil, ErrDomainPolicyTCPConsumer
+	}
+	o.mu.Lock()
+	kernel, prepared := o.kernel, o.prepared
+	o.mu.Unlock()
+	if kernel == nil {
+		return o.lookupPublishedRead(ctx, process, client, synthetic)
+	}
+	baseline, original, err := kernel.originalCurrentSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !original {
+		return o.lookupPublishedRead(ctx, process, client, synthetic)
+	}
+	expected := baseline.mapping
+	s := &domainTCPLookupReadSources{mapping: &domainTCPMappingReadSources{baseline: baseline, kernel: kernel, prepared: prepared}, resolver: process.material.dnsSource}
+	if err := s.current(ctx, o, process, expected); err != nil {
+		return nil, err
+	}
+	defer domainTCPMeasure("accepted-lookup-outer-tool-read")(0)
+	mapping, err := domainTCPLookupObservedResult(ctx, baseline.resource.observeTools, func(observed context.Context) (*dnscontrol.SyntheticDNSMapping, error) {
+		if err := domainTCPBaselineCurrentReadContext(ctx, observed); err != nil {
+			return nil, err
+		}
+		if err := s.current(observed, o, process, expected); err != nil {
+			return nil, err
+		}
+		mapping, readErr := o.lookupPublishedRead(observed, process, client, synthetic)
+		return mapping, errors.Join(readErr, s.current(observed, o, process, expected), domainTCPBaselineCurrentReadContext(ctx, observed))
+	})
+	// A tentative mapping never escapes a failed actual tool closing or a
+	// revoked original resolver/owner/context, even if both body reads passed.
+	err = errors.Join(err, s.current(ctx, o, process, expected), ctx.Err())
+	if err != nil {
+		return nil, err
+	}
+	return mapping, nil
+}
+
+// This result bookend grants no source or mapping authority. It retains the
+// fixed caller body's outcome independently of the tool observer's returned
+// error, and accepts exactly one completed callback before outer closing.
+func domainTCPLookupObservedResult(ctx context.Context, observe func(context.Context, func(context.Context) error) error, read func(context.Context) (*dnscontrol.SyntheticDNSMapping, error)) (*dnscontrol.SyntheticDNSMapping, error) {
+	if ctx == nil || observe == nil || read == nil || ctx.Err() != nil {
+		return nil, ErrDomainPolicyTCPConsumer
+	}
+	var mu sync.Mutex
+	var calls int
+	var complete, closed bool
+	var mapping *dnscontrol.SyntheticDNSMapping
+	var bodyErr error
+	outerErr := observe(ctx, func(observed context.Context) error {
+		mu.Lock()
+		calls++
+		if closed || calls != 1 {
+			mu.Unlock()
+			return ErrDomainPolicyTCPConsumer
+		}
+		mu.Unlock()
+		result, err := read(observed)
+		mu.Lock()
+		defer mu.Unlock()
+		if closed {
+			return errors.Join(ErrDomainPolicyTCPConsumer, err)
+		}
+		mapping, bodyErr, complete = result, err, true
+		return err
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	closed = true
+	err := errors.Join(outerErr, bodyErr, ctx.Err())
+	if calls != 1 || !complete || mapping == nil || err != nil {
+		return nil, errors.Join(ErrDomainPolicyTCPConsumer, err)
+	}
+	return mapping, nil
 }
 
 type domainTCPOriginalFlowLease struct {
