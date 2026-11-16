@@ -117,7 +117,17 @@ for TOOL in awk dd od pidof grep; do
   command -v "$TOOL" >/dev/null 2>&1 || need_package busybox
 done
 [ -x "$BASE/sbin/start-stop-daemon" ] || need_package busybox
-if ! command -v ip >/dev/null 2>&1 || ! ip -4 -o addr show >/dev/null 2>&1; then
+supports_stock_ip_full() {
+  # BusyBox ip can pass the address probe while lacking the reviewed policy
+  # tool. Let opkg own its alternative; do not rewrite a user's link here.
+  [ -x "$BASE/libexec/ip-full" ] && command -v readlink >/dev/null 2>&1 || return 1
+  IP_FULL_MAIN="$(readlink -f "$BASE/libexec/ip-full" 2>/dev/null)" || return 1
+  IP_FULL_ALIAS="$(readlink -f "$BASE/sbin/ip" 2>/dev/null)" || return 1
+  [ -n "$IP_FULL_MAIN" ] && [ "$IP_FULL_ALIAS" = "$IP_FULL_MAIN" ] || return 1
+  IP_FULL_VERSION="$("$BASE/libexec/ip-full" -Version 2>&1)" || return 1
+  [ "$IP_FULL_VERSION" = 'ip utility, iproute2-ss4.4.0-11-entware' ]
+}
+if ! supports_stock_ip_full || ! command -v ip >/dev/null 2>&1 || ! ip -4 -o addr show >/dev/null 2>&1; then
   need_package ip-full
 fi
 if [ ! -r "$BASE/etc/ssl/certs/ca-certificates.crt" ] && [ ! -r "$BASE/etc/ssl/cert.pem" ]; then
@@ -175,7 +185,7 @@ case "$(wget --version 2>/dev/null || true)" in
   *+https*) ;;
   *) echo "Для HTTPS-каталогов opkg нужен wget-ssl. Проверьте PATH и установку пакета." >&2; exit 12 ;;
 esac
-if [ ! -x "$BASE/sbin/start-stop-daemon" ] || ! ip -4 -o addr show >/dev/null 2>&1; then
+if [ ! -x "$BASE/sbin/start-stop-daemon" ] || ! supports_stock_ip_full || ! ip -4 -o addr show >/dev/null 2>&1; then
   echo "Entware service/IP tools are incomplete; check busybox and ip-full packages." >&2
   exit 12
 fi
