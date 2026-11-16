@@ -41,7 +41,20 @@ func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.P
 		if err != nil {
 			return mihomoSameBootNativeFailure(held, "process-platform", err)
 		}
-		selfHash, selfInfo, err := mihomoColdFileHash(held, "/proc/self/exe")
+		image, err := borrowMihomoColdSelfImage(held, "/proc/self/exe", &domainTCPImageScratch)
+		if err != nil {
+			return mihomoSameBootNativeFailure(held, "process-self-opening", err)
+		}
+		if image != nil {
+			defer image.release()
+		}
+		readSelf := func() (string, os.FileInfo, error) {
+			if image != nil {
+				return image.read(held)
+			}
+			return mihomoColdFileHash(held, "/proc/self/exe")
+		}
+		selfHash, selfInfo, err := readSelf()
 		if err != nil {
 			return mihomoSameBootNativeFailure(held, "process-self-opening", err)
 		}
@@ -88,7 +101,7 @@ func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.P
 		}(); err != nil {
 			return mihomoSameBootNativeFailure(held, "process-parent-closing", err)
 		}
-		closingHash, closingInfo, err := mihomoColdFileHash(held, "/proc/self/exe")
+		closingHash, closingInfo, err := readSelf()
 		if err != nil || closingHash != selfHash || !os.SameFile(selfInfo, closingInfo) || selfInfo.Size() != closingInfo.Size() {
 			return mihomoSameBootNativeFailure(held, "process-self-closing", ErrMihomoProbeRetirement)
 		}

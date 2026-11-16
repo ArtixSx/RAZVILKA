@@ -82,6 +82,8 @@ jobs:
           go test -race -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestXrayListenerImage|^TestXrayImageScope|^TestXrayDomainFileObservation|^TestXrayDomainFileOpening' | tee artifacts/listener-image.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestXrayListenerImage|^TestXrayImageScope|^TestXrayDomainFileObservation|^TestXrayDomainFileOpening' | tee artifacts/listener-image-race.txt
+          go test -count=1 -v ./internal/dataplane -run '^TestMihomoColdSelfImage' | tee artifacts/mihomo-self-image.txt
+          go test -race -count=1 -v ./internal/dataplane -run '^TestMihomoColdSelfImage' | tee artifacts/mihomo-self-image-race.txt
           go test -count=1 -v ./internal/updatecheck -run '^(TestRuntimeQuiesceSnapshotAdmission|TestOrdinaryPreparationInstalledSourceConfigMigration)$' | tee artifacts/update-snapshot.txt
           go test -race -count=1 -v ./internal/updatecheck -run '^(TestRuntimeQuiesceSnapshotAdmission|TestOrdinaryPreparationInstalledSourceConfigMigration)$' | tee artifacts/update-snapshot-race.txt
           go test -count=50 -v ./internal/app -run '^(TestPlanReusesEvidenceOnlyFromMatchingCommittedTransaction|TestServiceEvidenceDoesNotPromoteExpiredProbe)$' | tee artifacts/committed-evidence.txt
