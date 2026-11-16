@@ -44,7 +44,7 @@ func proxyInactiveProcStat(raw []byte, pid int) (state byte, flags uint64, ticks
 	return fields[0][0], flags, fields[19], nil
 }
 
-func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *ProxyTunnelAdapter) error {
+func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *ProxyTunnelAdapter) (result error) {
 	if proof.selfPID < 1 || !filepath.IsAbs(proof.procRoot) || proof.readlink == nil || adapter == nil || adapter.SOCKSPort < 1024 || adapter.SOCKSPort > 65535 {
 		return ErrProxyRuntimeInactive
 	}
@@ -56,17 +56,32 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 	if err != nil {
 		return err
 	}
-	dir, err := os.Open(proof.procRoot)
-	if err != nil {
+	if proof.procPass == nil {
 		return ErrProxyRuntimeInactive
 	}
-	entries, readErr := dir.ReadDir(8193)
-	_ = dir.Close()
-	if readErr != nil && !errors.Is(readErr, io.EOF) || len(entries) == 0 || len(entries) > 8192 {
-		return ErrProxyRuntimeInactive
+	pass, err := proof.procPass(ctx, proof.procRoot, proof.selfPID)
+	if err != nil {
+		return errors.Join(ErrProxyRuntimeInactive, err)
+	}
+	var child inactiveProcPID
+	closeChild := func() error {
+		if child == nil {
+			return nil
+		}
+		previous := child
+		child = nil
+		return previous.Close()
+	}
+	defer func() { result = errors.Join(result, closeChild(), pass.Close()) }()
+	entries, err := pass.Entries()
+	if err != nil {
+		return errors.Join(ErrProxyRuntimeInactive, err)
 	}
 	self, processes, bytes := false, 0, 0
 	for _, entry := range entries {
+		if err := closeChild(); err != nil {
+			return errors.Join(ErrProxyRuntimeInactive, err)
+		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -78,9 +93,15 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 			return ErrProxyRuntimeInactive
 		}
 		processes++
-		path := filepath.Join(proof.procRoot, entry.Name())
-		stat, err := readProxyInactiveProc(filepath.Join(path, "stat"), 16<<10)
-		if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+		child, err = pass.OpenPID(pid)
+		if err != nil {
+			if inactiveProcOpenMissing(err) && pid != proof.selfPID && pass.GoneBeforeOpen(pid) {
+				continue
+			}
+			return errors.Join(ErrProxyRuntimeInactive, err)
+		}
+		stat, err := child.Stat()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && child.Terminal() {
 			continue
 		}
 		if err != nil {
@@ -91,13 +112,13 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 			return err
 		}
 		if state == 'Z' || state == 'X' || state == 'x' {
-			if pid == proof.selfPID {
+			if state != 'Z' || pid == proof.selfPID || !child.Terminal() {
 				return ErrProxyRuntimeInactive
 			}
 			continue
 		}
-		cmd, err := readProxyInactiveProc(filepath.Join(path, "cmdline"), 64<<10)
-		if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+		cmd, err := child.Command()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && child.Terminal() {
 			continue
 		}
 		if err != nil {
@@ -108,6 +129,9 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 			return ErrProxyRuntimeInactive
 		}
 		if len(cmd) == 0 {
+			if flags&0x00200000 == 0 && pid != proof.selfPID && child.Terminal() {
+				continue
+			}
 			if flags&0x00200000 == 0 || pid == proof.selfPID { // Linux PF_KTHREAD.
 				return ErrProxyRuntimeInactive
 			}
@@ -116,8 +140,8 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 			if !valid {
 				return ErrProxyRuntimeInactive
 			}
-			executable, err := proof.readlink(filepath.Join(path, "exe"))
-			if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+			executable, err := child.Executable()
+			if inactiveProcRetireError(err) && pid != proof.selfPID && child.Terminal() {
 				clear(cmd)
 				continue
 			}
@@ -138,8 +162,8 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 			}
 		}
 		clear(cmd)
-		again, err := readProxyInactiveProc(filepath.Join(path, "stat"), 16<<10)
-		if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+		again, err := child.Stat()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && child.Terminal() {
 			continue
 		}
 		_, _, currentTicks, e := proxyInactiveProcStat(again, pid)
@@ -147,6 +171,9 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 			return ErrProxyRuntimeInactive
 		}
 		self = self || pid == proof.selfPID
+	}
+	if err := closeChild(); err != nil {
+		return errors.Join(ErrProxyRuntimeInactive, err)
 	}
 	if !self || processes == 0 {
 		return ErrProxyRuntimeInactive

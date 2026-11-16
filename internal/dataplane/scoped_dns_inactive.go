@@ -16,6 +16,7 @@ var ErrScopedDNSRuntimeInactive = errors.New("fresh scoped DNS runtime inactivit
 var _ RuntimeInactivityObserver = (*ScopedDNSAdapter)(nil)
 
 type scopedDNSInactiveProof struct {
+	procPass             inactiveProcFactory
 	procRoot             string
 	netRoot              string
 	threadNetRoot        func() string

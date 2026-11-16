@@ -121,6 +121,7 @@ func NFQWSRuntimeInactiveStage(err error) string {
 }
 
 type nfqws2InactivePlatform struct {
+	procPass  inactiveProcFactory
 	procRoot  string
 	selfPID   int
 	readlink  func(string) (string, error)

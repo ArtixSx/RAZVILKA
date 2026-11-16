@@ -10,7 +10,7 @@ import (
 )
 
 func nfqws2InactiveSystemPlatform() (nfqws2InactivePlatform, error) {
-	return nfqws2InactivePlatform{
+	return nfqws2InactivePlatform{procPass: openLinuxInactiveProc,
 		procRoot: "/proc", selfPID: os.Getpid(), readlink: os.Readlink,
 		protected: func(info os.FileInfo, directory, private bool) bool {
 			if info == nil || info.Mode()&os.ModeSymlink != 0 || info.IsDir() != directory || !directory && !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {

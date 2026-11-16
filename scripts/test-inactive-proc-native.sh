@@ -8,9 +8,14 @@ case "$work" in /tmp/razvilka-inactive-proc.??????) ;; *) exit 2 ;; esac
 chmod 700 "$work"
 trap 'rm -rf -- "$work"' EXIT HUP INT TERM
 export GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+case "${RAZVILKA_INACTIVE_PROC_TEST_MODE-normal}" in
+  normal) set -- ;;
+  race) set -- -race ;;
+  *) echo 'unknown inactive process test mode' >&2; exit 2 ;;
+esac
 cc -std=c11 -O2 -Wall -Wextra -Werror -pthread "$repo/scripts/fixtures/inactive-proc-threadgroup.c" -o "$work/threadgroup-helper"
 cd "$repo"
-go test -tags razvilka_native_fixture -c ./internal/dataplane -o "$work/dataplane.test"
+go test "$@" -tags razvilka_native_fixture -c ./internal/dataplane -o "$work/dataplane.test"
 sha256sum "$work/threadgroup-helper" "$work/dataplane.test"
 export RAZVILKA_INACTIVE_THREADGROUP_HELPER="$work/threadgroup-helper"
 exec 8</proc/self/ns/net
@@ -23,11 +28,11 @@ timeout --kill-after=5s 60s unshare --fork --pid --net --mount sh -eu -c '
   mount --make-rprivate /
   umount -l /proc
   mount -t proc proc /proc
-  exec "$1" -test.v -test.timeout=45s -test.run "^TestInactiveProcNativeLeaderExitReproduction$"
+  exec "$1" -test.v -test.timeout=45s -test.run "^TestInactiveProcNativeThreadGroupClassification$"
 ' inactive-proc "$work/dataplane.test" >"$work/native.log" 2>&1 || status=$?
 cat "$work/native.log"
 if grep -F -- '--- SKIP:' "$work/native.log"; then status=1; fi
-for marker in '--- PASS: TestInactiveProcNativeLeaderExitReproduction ' INACTIVE_PROC_BASELINE_FALSE_PASS INACTIVE_PROC_WORKER_EXEC INACTIVE_PROC_Z1_THEN_GONE; do
+for marker in '--- PASS: TestInactiveProcNativeThreadGroupClassification ' INACTIVE_PROC_LIVE_WORKER_REFUSED INACTIVE_PROC_WORKER_EXEC INACTIVE_PROC_Z1_THEN_GONE INACTIVE_PROC_MOUNT_FENCES; do
   if ! grep -F -- "$marker" "$work/native.log" >/dev/null; then status=1; fi
 done
 exit "$status"

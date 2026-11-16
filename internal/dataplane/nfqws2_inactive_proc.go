@@ -3,8 +3,6 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -18,7 +16,7 @@ func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, 
 
 // The sole exemption is an original, live process rechecked by the actual
 // first-start owner. Ordinary inactivity never exempts a PID or a name.
-func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlatform, a *NFQWS2Adapter, exceptPID int, current func() error) error {
+func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlatform, a *NFQWS2Adapter, exceptPID int, current func() error) (result error) {
 	if ctx == nil {
 		return nfqws2InactiveProcessAt("coordinates", ErrNFQWSManagedProcessUnknown)
 	}
@@ -31,18 +29,46 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 	if exceptPID != 0 && (exceptPID <= 1 || exceptPID == proof.selfPID || current == nil) {
 		return nfqws2InactiveProcessAt("exemption", ErrNFQWSManagedProcessUnknown)
 	}
-	dir, err := os.Open(proof.procRoot)
-	if err != nil {
-		return nfqws2InactiveProcessAt("inventory.open", ErrNFQWSManagedProcessUnknown)
+	if proof.procPass == nil {
+		return nfqws2InactiveProcessAt("coordinates", ErrNFQWSManagedProcessUnknown)
 	}
-	entries, err := dir.ReadDir(8193)
-	_ = dir.Close()
-	if err != nil && !errors.Is(err, io.EOF) || len(entries) == 0 || len(entries) > 8192 {
-		return nfqws2InactiveProcessAt("inventory.read", ErrNFQWSManagedProcessUnknown)
+	pass, err := proof.procPass(ctx, proof.procRoot, proof.selfPID)
+	if err != nil {
+		return nfqws2InactiveProcessAt("inventory.open", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+	}
+	var child inactiveProcPID
+	closeChild := func() error {
+		if child == nil {
+			return nil
+		}
+		previous := child
+		child = nil
+		return previous.Close()
+	}
+	defer func() {
+		closing := errors.Join(closeChild(), pass.Close())
+		if closing != nil {
+			if ctx.Err() != nil {
+				closing = nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), closing))
+			} else {
+				closing = nfqws2InactiveProcessAt("inventory.closure", errors.Join(ErrNFQWSManagedProcessUnknown, closing))
+			}
+			result = errors.Join(result, closing)
+		}
+	}()
+	entries, err := pass.Entries()
+	if err != nil {
+		return nfqws2InactiveProcessAt("inventory.read", errors.Join(ErrNFQWSManagedProcessUnknown, err))
 	}
 	self, processes, bytes := false, 0, 0
 	exceptSeen := false
 	for _, entry := range entries {
+		if err := closeChild(); err != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
+			return nfqws2InactiveProcessAt("inventory.closure", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+		}
 		if err := ctx.Err(); err != nil {
 			return nfqws2InactiveProcessAt("context", err)
 		}
@@ -54,12 +80,25 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 			return nfqws2InactiveProcessAt("inventory.entry", ErrNFQWSManagedProcessUnknown)
 		}
 		processes++
-		path := filepath.Join(proof.procRoot, entry.Name())
-		stat, err := readProxyInactiveProc(filepath.Join(path, "stat"), 16<<10)
-		if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+		child, err = pass.OpenPID(pid)
+		if err != nil {
+			if inactiveProcOpenMissing(err) && pid != proof.selfPID && pid != exceptPID && pass.GoneBeforeOpen(pid) {
+				continue
+			}
+			return nfqws2InactiveProcessAt("stat.read", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+		}
+		stat, err := child.Stat()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
 			continue
 		}
 		if err != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
+			var statFailure *inactiveProcStatFailure
+			if errors.As(err, &statFailure) {
+				return nfqws2InactiveProcessAt("stat.parse", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+			}
 			return nfqws2InactiveProcessAt("stat.read", ErrNFQWSManagedProcessUnknown)
 		}
 		state, flags, ticks, err := proxyInactiveProcStat(stat, pid)
@@ -82,16 +121,19 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 			return nfqws2InactiveProcessAt("name", ErrNFQWSManagedProcessUnknown)
 		}
 		if state == 'Z' || state == 'X' || state == 'x' {
-			if pid == proof.selfPID {
+			if state != 'Z' || pid == proof.selfPID || !child.Terminal() {
 				return nfqws2InactiveProcessAt("self.state", ErrNFQWSManagedProcessUnknown)
 			}
 			continue
 		}
-		cmd, err := readProxyInactiveProc(filepath.Join(path, "cmdline"), 64<<10)
-		if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+		cmd, err := child.Command()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
 			continue
 		}
 		if err != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
 			return nfqws2InactiveProcessAt("cmdline.read", ErrNFQWSManagedProcessUnknown)
 		}
 		bytes += len(cmd)
@@ -99,6 +141,9 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 			return nfqws2InactiveProcessAt("budget", ErrNFQWSManagedProcessUnknown)
 		}
 		if len(cmd) == 0 {
+			if flags&0x00200000 == 0 && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
+				continue
+			}
 			if flags&0x00200000 == 0 || pid == proof.selfPID {
 				return nfqws2InactiveProcessAt("cmdline.empty", ErrNFQWSManagedProcessUnknown)
 			}
@@ -112,12 +157,15 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 			if exceptPID != 0 && strings.Contains(string(cmd), filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(a.InitPath))), "usr", "bin", "nfqws2")) {
 				return nfqws2InactiveProcessAt("exemption.wrapper", ErrNFQWSManagedProcessUnknown)
 			}
-			executable, err := proof.readlink(filepath.Join(path, "exe"))
-			if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+			executable, err := child.Executable()
+			if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
 				clear(cmd)
 				continue
 			}
 			if err != nil || executable == "" || len(executable) > 4096 || strings.ContainsRune(executable, '\x00') {
+				if ctx.Err() != nil {
+					return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+				}
 				return nfqws2InactiveProcessAt("exe", ErrNFQWSManagedProcessUnknown)
 			}
 			if nfqws2InactiveProcessName(strings.TrimSuffix(executable, " (deleted)")) || nfqws2InactiveProcessName(args[0]) {
@@ -130,18 +178,31 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 			}
 		}
 		clear(cmd)
-		again, err := readProxyInactiveProc(filepath.Join(path, "stat"), 16<<10)
-		if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
+		again, err := child.Stat()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
 			continue
 		}
 		_, _, closingTicks, parseErr := proxyInactiveProcStat(again, pid)
 		if err != nil || parseErr != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
+			var statFailure *inactiveProcStatFailure
+			if errors.As(err, &statFailure) && statFailure.birth {
+				return nfqws2InactiveProcessAt("startticks", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+			}
 			return nfqws2InactiveProcessAt("stat.close", ErrNFQWSManagedProcessUnknown)
 		}
 		if closingTicks != ticks {
 			return nfqws2InactiveProcessAt("startticks", ErrNFQWSManagedProcessUnknown)
 		}
 		self = self || pid == proof.selfPID
+	}
+	if err := closeChild(); err != nil {
+		if ctx.Err() != nil {
+			return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+		}
+		return nfqws2InactiveProcessAt("inventory.closure", errors.Join(ErrNFQWSManagedProcessUnknown, err))
 	}
 	if !self || processes == 0 || exceptPID != 0 && !exceptSeen {
 		return nfqws2InactiveProcessAt("inventory.closure", ErrNFQWSManagedProcessUnknown)

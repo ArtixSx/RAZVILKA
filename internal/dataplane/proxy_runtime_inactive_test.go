@@ -117,6 +117,7 @@ func newInactiveFixture(t *testing.T, engine string) *inactiveFixture {
 			return []net.Interface{{Index: 1, Name: "lo"}, {Index: 2, Name: "eth0"}}, nil
 		}}
 	f := &inactiveFixture{a: a, proof: proof, runner: runner, processes: processes}
+	f.proof.procPass = modelInactiveProcFactory(func(path string) (string, error) { return f.proof.readlink(path) })
 	f.writeProcess(t, proof.selfPID, "S", "0", "fixture-controller\x00--serve\x00")
 	for _, kind := range []string{"tcp", "tcp6"} {
 		inactiveWrite(t, filepath.Join(proof.procRoot, "net", kind), []byte(inactiveFixtureSocketHeader))
@@ -140,7 +141,7 @@ func (f *inactiveFixture) writeProcess(t *testing.T, pid int, state, flags, argv
 	for i := range fields {
 		fields[i] = "0"
 	}
-	fields[0], fields[6], fields[19] = state, flags, "12345"
+	fields[0], fields[6], fields[17], fields[19] = state, flags, "1", "12345"
 	path := filepath.Join(f.proof.procRoot, strconv.Itoa(pid))
 	inactiveWrite(t, filepath.Join(path, "stat"), []byte(fmt.Sprintf("%d (fixture) %s\n", pid, strings.Join(fields, " "))))
 	inactiveWrite(t, filepath.Join(path, "cmdline"), []byte(argv))

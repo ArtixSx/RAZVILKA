@@ -50,9 +50,8 @@ func inactiveThreadgroupReadStat(fd, pid int) (inactiveThreadgroupStat, error) {
 	return inactiveThreadgroupStat{state, threads, ticks}, nil
 }
 
-// Diagnostic baseline only: this test deliberately records the current false
-// terminal skip. After the production fix the same physical case must refuse.
-func TestInactiveProcNativeLeaderExitReproduction(t *testing.T) {
+// Actual thread-group regression: a zombie leader with a live worker is never terminal.
+func TestInactiveProcNativeThreadGroupClassification(t *testing.T) {
 	helper := os.Getenv("RAZVILKA_INACTIVE_THREADGROUP_HELPER")
 	if helper == "" {
 		t.Skip("explicit isolated pthread reproduction only")
@@ -145,6 +144,7 @@ func TestInactiveProcNativeLeaderExitReproduction(t *testing.T) {
 	if err != nil || opening.state == 'Z' {
 		t.Fatal("original live child", err)
 	}
+	inactiveThreadgroupMountFences(t, ctx, pid)
 	sameNamed := func() {
 		t.Helper()
 		var held, named unix.Stat_t
@@ -191,11 +191,11 @@ func TestInactiveProcNativeLeaderExitReproduction(t *testing.T) {
 		t.Fatal("live worker zombie leader not proven", zombie)
 	}
 	sameNamed()
-	observe(false)
+	observe(true)
 	send('P')
 	receive('P')
 	sameNamed()
-	t.Logf("INACTIVE_PROC_BASELINE_FALSE_PASS state=Z threads=%d live_worker_ping=true observers=proxy,scoped-dns; DIAGNOSTIC_NOT_ACCEPTANCE", zombie.threads)
+	t.Logf("INACTIVE_PROC_LIVE_WORKER_REFUSED state=Z threads=%d live_worker_ping=true observers=proxy,scoped-dns", zombie.threads)
 	send('X')
 	receive('E')
 	afterExec, err := inactiveThreadgroupReadStat(fd, pid)
@@ -249,4 +249,153 @@ func TestInactiveProcNativeLeaderExitReproduction(t *testing.T) {
 		t.Fatal(closeErr)
 	}
 	t.Log("INACTIVE_PROC_Z1_THEN_GONE sole_wait=true held_and_named_gone=true; process leaf only, no socket/route acceptance")
+}
+
+func inactiveThreadgroupMountFences(t *testing.T, ctx context.Context, pid int) {
+	t.Helper()
+	for _, which := range []string{"pid-directory", "stat", "cmdline", "self-ns-directory", "self-fdinfo-directory"} {
+		if !t.Run("mount-"+which, func(t *testing.T) {
+			passValue, err := openLinuxInactiveProc(ctx, "/proc", os.Getpid())
+			if err != nil {
+				t.Fatal(err)
+			}
+			pass := passValue.(*linuxInactiveProcPass)
+			defer func() {
+				if !pass.closed {
+					_ = pass.Close()
+				}
+			}()
+			child, err := pass.OpenPID(pid)
+			if err != nil {
+				t.Fatal(err)
+			}
+			closedChild := false
+			defer func() {
+				if !closedChild {
+					_ = child.Close()
+				}
+			}()
+			if _, err := child.Stat(); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join("/proc", strconv.Itoa(pid))
+			switch which {
+			case "stat", "cmdline":
+				target = filepath.Join(target, which)
+			case "self-ns-directory":
+				target = filepath.Join("/proc", strconv.Itoa(os.Getpid()), "ns")
+			case "self-fdinfo-directory":
+				target = filepath.Join("/proc", strconv.Itoa(os.Getpid()), "fdinfo")
+			}
+			before, err := unix.Open(target, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := unix.Close(before); err != nil {
+					t.Error(err)
+				}
+			}()
+			var beforeStat unix.Stat_t
+			if err := unix.Fstat(before, &beforeStat); err != nil {
+				t.Fatal(err)
+			}
+			beforeMount, err := pass.mountID(before)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := unix.Mount(target, target, "", unix.MS_BIND, ""); err != nil {
+				t.Fatal("owned mount fixture", err)
+			}
+			mounted := true
+			defer func() {
+				if mounted {
+					if err := unix.Unmount(target, 0); err != nil {
+						t.Error("fixture unmount", err)
+					}
+				}
+			}()
+			after, err := unix.Open(target, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var afterStat unix.Stat_t
+			statErr := unix.Fstat(after, &afterStat)
+			afterMount, mountErr := pass.mountID(after)
+			closeErr := unix.Close(after)
+			if statErr != nil || mountErr != nil || closeErr != nil || !inactiveProcSame(beforeStat, afterStat) || beforeMount == afterMount {
+				t.Fatal("same-inode different-mount fixture", statErr, mountErr, closeErr)
+			}
+			switch which {
+			case "pid-directory":
+				if child.Current() == nil {
+					t.Fatal("late same-inode PID bind accepted")
+				}
+				fresh, err := pass.OpenPID(pid)
+				if err == nil {
+					_ = fresh.Close()
+					t.Fatal("new same-inode PID bind accepted")
+				}
+			case "stat":
+				if _, err := child.Stat(); err == nil {
+					t.Fatal("stat bind accepted")
+				}
+			case "cmdline":
+				if _, err := child.Command(); err == nil {
+					t.Fatal("cmdline bind accepted")
+				}
+			default:
+				if pass.currentRoot() == nil {
+					t.Fatal("late self anchor bind accepted")
+				}
+				fresh, err := openLinuxInactiveProc(ctx, "/proc", os.Getpid())
+				if err == nil {
+					_ = fresh.Close()
+					t.Fatal("new self anchor bind accepted")
+				}
+			}
+			childCloseErr := child.Close()
+			closedChild = true
+			passCloseErr := pass.Close()
+			if !inactiveThreadgroupOnlyGuardRefusal(childCloseErr) || !inactiveThreadgroupOnlyGuardRefusal(passCloseErr) {
+				t.Fatal("unexpected cleanup failure", childCloseErr, passCloseErr)
+			}
+			if err := unix.Unmount(target, 0); err != nil {
+				t.Fatal("fixture unmount", err)
+			}
+			mounted = false
+			fresh, err := openLinuxInactiveProc(ctx, "/proc", os.Getpid())
+			if err != nil {
+				t.Fatal("restored root", err)
+			}
+			h, err := fresh.OpenPID(pid)
+			if err != nil {
+				_ = fresh.Close()
+				t.Fatal(err)
+			}
+			_, readErr := h.Stat()
+			closeErr = errors.Join(h.Close(), fresh.Close())
+			if readErr != nil || closeErr != nil {
+				t.Fatal("restored original PID", readErr, closeErr)
+			}
+		}) {
+			t.Fatal("mount fence regression")
+		}
+	}
+	t.Log("INACTIVE_PROC_MOUNT_FENCES same_inode_different_mount=true cases=5 restored=true")
+}
+
+func inactiveThreadgroupOnlyGuardRefusal(err error) bool {
+	if err == nil || err == ErrProxyRuntimeInactive {
+		return true
+	}
+	if many, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, child := range many.Unwrap() {
+			if !inactiveThreadgroupOnlyGuardRefusal(child) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }

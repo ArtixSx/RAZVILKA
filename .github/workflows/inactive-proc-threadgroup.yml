@@ -1,4 +1,4 @@
-name: Native process thread group diagnosis
+name: Native process thread group regression
 on:
   workflow_dispatch:
   push:
@@ -7,8 +7,13 @@ permissions:
   contents: read
 jobs:
   native:
+    name: Original procfs terminal proof (${{ matrix.mode }})
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -24,16 +29,30 @@ jobs:
           mkdir -p artifacts
           { git rev-parse HEAD; go version; uname -srvm; cc --version; unshare --version; } > artifacts/environment.txt
           sha256sum scripts/fixtures/inactive-proc-threadgroup.c scripts/test-inactive-proc-native.sh > artifacts/source.sha256
+      - name: Process model refusals and diagnostic compatibility
+        shell: bash
+        env:
+          TEST_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$TEST_MODE" = race ]; then flags=(-race); fi
+          go test "${flags[@]}" ./internal/dataplane -count=1 \
+            -run '^Test(InactiveProc|Proxy.*Inactive|ScopedDNS.*Inactive|NFQWS.*Inactive)' -v 2>&1 | tee artifacts/models.log
+          if grep -F -- '--- SKIP:' artifacts/models.log; then exit 1; fi
       - name: Isolated actual leader and worker lifecycle
         shell: bash
+        env:
+          RAZVILKA_INACTIVE_PROC_TEST_MODE: ${{ matrix.mode }}
         run: |
           set -euo pipefail
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_INACTIVE_PROC_TEST_MODE="$RAZVILKA_INACTIVE_PROC_TEST_MODE" \
             sh scripts/test-inactive-proc-native.sh 2>&1 | tee artifacts/native.log
           if grep -F -- '--- SKIP:' artifacts/native.log; then exit 1; fi
       - name: Preserve all results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: inactive-proc-threadgroup-${{ github.sha }}
+          name: inactive-proc-threadgroup-${{ matrix.mode }}-${{ github.sha }}
           path: artifacts/
