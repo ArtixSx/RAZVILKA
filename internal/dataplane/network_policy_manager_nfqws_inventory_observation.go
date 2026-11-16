@@ -46,6 +46,33 @@ const (
 	nfqInventoryContextBase
 )
 
+const (
+	nfqInventorySourceCoordinates = nfqInventoryContextBase + 16 + iota
+	nfqInventorySourceCleanup
+	nfqInventorySourceExecution
+	nfqInventorySourceMaterial
+	nfqInventorySourceResource
+	nfqInventorySourceRunner
+	nfqInventorySourceAdapter
+	nfqInventorySourceObserver
+	nfqInventorySourceRetired
+	nfqInventorySourceAssociation
+	nfqInventoryOwnerMissing
+	nfqInventoryOwnerOpeningInvalid
+	nfqInventoryOwnerOpeningNoActivation
+	nfqInventoryOwnerOpeningDeadline
+	nfqInventoryOwnerOpeningCanceled
+	nfqInventoryOwnerOpeningOther
+	nfqInventoryOwnerObserveError
+	nfqInventoryOwnerObserveMismatch
+	nfqInventoryOwnerObserveTransfer
+	nfqInventoryOwnerClosingInvalid
+	nfqInventoryOwnerClosingDeadline
+	nfqInventoryOwnerClosingCanceled
+	nfqInventoryOwnerClosingOther
+	nfqInventoryEventCount
+)
+
 func networkPolicyNFQInventoryContext(ctx context.Context) bool {
 	return networkPolicyNFQInventoryContextFailure(ctx) == 0
 }
@@ -138,7 +165,7 @@ func (c *NetworkPolicyChecks) nfqInventorySources(ctx context.Context, lan *LANP
 		noteNFQInventoryRead(nfqInventoryCollector)
 		return nil
 	}
-	s := c.nfqReadSources(ctx)
+	s := c.nfqReadSourcesDiagnostic(ctx, true)
 	p, present := ctx.Value(networkPolicyConsumerPlanKey{}).(Plan)
 	if s == nil {
 		noteNFQInventoryRead(nfqInventorySource)

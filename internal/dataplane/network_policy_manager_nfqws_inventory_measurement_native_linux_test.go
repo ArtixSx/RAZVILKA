@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -54,15 +55,105 @@ func TestNativeNFQInventoryCountersPreserveFirstReasonAndClose(t *testing.T) {
 
 func TestNativeNFQInventoryCounterLabelsClosed(t *testing.T) {
 	counts := NativeFixtureNFQInventoryReadCounts()
-	if len(counts) != 34 {
+	if len(counts) != 57 {
 		t.Fatal("closed diagnostic vocabulary changed", len(counts))
 	}
-	if len(nativeNFQInventoryReads) != 35 {
+	if len(nativeNFQInventoryReads) != 58 {
 		t.Fatal("closed counter capacity changed")
 	}
 	before := counts["fallback-nfq-rollback"]
 	noteNFQInventoryRead(nfqInventoryContextBase + 15)
 	if got := NativeFixtureNFQInventoryReadCounts()["fallback-nfq-rollback"]; got != before+1 {
 		t.Fatal("context index and label diverged", got, before)
+	}
+}
+
+// Err is observed only at the original short-circuit boundary.
+type nativeNFQOwnerDiagnosticContext struct {
+	context.Context
+	result error
+	calls  int
+}
+
+func (c *nativeNFQOwnerDiagnosticContext) Err() error { c.calls++; return c.result }
+
+func TestNativeNFQInventoryOwnerReasonUsesOriginalErrRead(t *testing.T) {
+	for _, mode := range []string{"missing", "invalid", "no-activation", "deadline", "canceled"} {
+		t.Run(mode, func(t *testing.T) {
+			activation := &nativeNFQOwnerDiagnosticContext{Context: context.Background()}
+			p := &NFQWSPreparedHandle{owner: &nfqws2ActiveOwner{state: "prepared", activation: activation}}
+			p.owner.prepared = p
+			label := "owner-opening-" + mode
+			wantCalls := 0
+			switch mode {
+			case "missing":
+				p.owner = nil
+				label = "owner-missing"
+			case "invalid":
+				p.owner.stopRequested = true
+			case "no-activation":
+				p.owner.activation = nil
+			case "deadline":
+				activation.result = context.DeadlineExceeded
+				wantCalls = 1
+			case "canceled":
+				activation.result = context.Canceled
+				wantCalls = 1
+			}
+			before := NativeFixtureNFQInventoryReadCounts()
+			err := p.VerifyOwnerObservation(context.Background(), NFQWSActiveObservation{})
+			if !errors.Is(err, ErrNFQWSManagedProcessUnknown) || activation.calls != wantCalls {
+				t.Fatal("original refusal/Err read changed", err, activation.calls, wantCalls)
+			}
+			after := NativeFixtureNFQInventoryReadCounts()
+			for k, v := range after {
+				want := uint64(0)
+				if k == label {
+					want = 1
+				}
+				if v-before[k] != want {
+					t.Fatal("first owner reason changed", k, v-before[k], want)
+				}
+			}
+		})
+	}
+}
+
+func TestNativeNFQInventorySourceReasonOnlyWholeSelector(t *testing.T) {
+	for _, mode := range []string{"coordinates", "execution", "resource-binding", "observer", "retired", "association"} {
+		t.Run(mode, func(t *testing.T) {
+			c, s, ctx := networkPolicyNFQReadSourcesFixture(t)
+			switch mode {
+			case "coordinates":
+				c.inventory = nil
+			case "execution":
+				ctx = context.WithValue(ctx, nfqws2ActiveExecutionKey{}, "foreign")
+			case "resource-binding":
+				s.execution.resource = nil
+			case "observer":
+				s.execution.inventory.reader.Runner = nfqws2RunFunc(func(context.Context, string, ...string) ([]byte, error) {
+					t.Fatal("source diagnostics ran command")
+					return nil, nil
+				})
+			case "retired":
+				s.execution.retired = true
+			case "association":
+				s.adapter.activeExecution = nil
+			}
+			before := NativeFixtureNFQInventoryReadCounts()
+			if c.nfqReadSources(ctx) != nil || c.nfqReadSourcesDiagnostic(ctx, true) != nil {
+				t.Fatal("source refusal changed")
+			}
+			after := NativeFixtureNFQInventoryReadCounts()
+			for k, v := range after {
+				want := uint64(0)
+				if k == "source-"+mode {
+					want = 1
+				}
+				if v-before[k] != want {
+					t.Fatal("narrow read duplicated whole-selector reason", k, v-before[k], want)
+				}
+			}
+		})
 	}
 }

@@ -28,31 +28,56 @@ type networkPolicyNFQReadSources struct {
 }
 
 func (c *NetworkPolicyChecks) nfqReadSources(ctx context.Context) *networkPolicyNFQReadSources {
-	if c == nil || ctx == nil || c.inventory == nil || c.inventory.reader.Runner == nil || ctx.Value(nfqwsRetiredInventoryKey{}) != nil || ctx.Value(nfqwsProbeCleanupKey{}) != nil {
+	return c.nfqReadSourcesDiagnostic(ctx, false)
+}
+
+// Only the whole-inventory selector records first-refusal reasons. Narrow
+// consumers use the exact same predicates without multiplying these counts.
+func (c *NetworkPolicyChecks) nfqReadSourcesDiagnostic(ctx context.Context, measure bool) *networkPolicyNFQReadSources {
+	fail := func(reason int) *networkPolicyNFQReadSources {
+		if measure {
+			noteNFQInventoryRead(reason)
+		}
 		return nil
+	}
+	if c == nil || ctx == nil || c.inventory == nil || c.inventory.reader.Runner == nil {
+		return fail(nfqInventorySourceCoordinates)
+	}
+	if ctx.Value(nfqwsRetiredInventoryKey{}) != nil || ctx.Value(nfqwsProbeCleanupKey{}) != nil {
+		return fail(nfqInventorySourceCleanup)
 	}
 	e, ok := ctx.Value(nfqws2ActiveExecutionKey{}).(*nfqws2ActiveExecution)
-	if !ok || e == nil || e.self != e || e.material == nil || e.material.self != e.material || e.resource == nil || e.binding == nil || e.inventory.reader.Runner == nil {
-		return nil // Existing absent/model/custom/refusal path, unchanged.
+	if !ok || e == nil || e.self != e {
+		return fail(nfqInventorySourceExecution)
 	}
+	if e.material == nil || e.material.self != e.material {
+		return fail(nfqInventorySourceMaterial)
+	}
+	if e.resource == nil || e.binding == nil {
+		return fail(nfqInventorySourceResource)
+	}
+	if e.inventory.reader.Runner == nil {
+		return fail(nfqInventorySourceRunner)
+	}
+
 	a, ok := c.adapters["nfqws2"].(*NFQWS2Adapter)
 	if !ok || a == nil || e.material.adapter != a {
-		return nil
+		return fail(nfqInventorySourceAdapter)
 	}
 	if _, ok := e.inventory.reader.Runner.(nfqwsProbeToolObserver); !ok {
-		return nil
+		return fail(nfqInventorySourceObserver)
 	}
 	e.mu.Lock()
 	retired := e.retired
 	e.mu.Unlock()
 	if retired {
-		return nil
+		return fail(nfqInventorySourceRetired)
 	}
 	nfqws2ActiveAdapterMu.Lock()
 	process, original := a.activeProcess, a.activeExecution == e
 	nfqws2ActiveAdapterMu.Unlock()
 	if !original {
-		return nil
+		return fail(nfqInventorySourceAssociation)
 	}
 	return &networkPolicyNFQReadSources{checks: c, adapter: a, execution: e, material: e.material, resource: e.resource, binding: e.binding, plan: e.resource.plan, process: process,
 		identity: c.identity, inventory: c.inventory, provider: e.inventory.reader.Provider, runner: e.inventory.reader.Runner, review: e.inventory.review}
