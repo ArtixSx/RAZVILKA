@@ -523,6 +523,11 @@ func applyPolicyEffectsWithOriginalRecovery(ctx context.Context, runtime PolicyE
 		defer recovery.finishApply()
 	}
 	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
+	if recovery != nil && recovery.preLedgerArmed() {
+		if err := s.fault("nfq-original-pre-ledger", -1); err != nil {
+			return err
+		}
+	}
 	if err := s.guard(ctx, runtime, 0); err != nil {
 		return err
 	}

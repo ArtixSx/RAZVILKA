@@ -7,7 +7,7 @@ on:
       focus:
         description: 'All acceptance jobs or one independent acceptance direction'
         type: choice
-        options: [all, strategy-pair, public-history, modern-pair, managed, domain]
+        options: [all, strategy-pair, public-history, modern-pair, managed, managed-recovery, domain]
         default: all
       domain_runner:
         description: 'Hosted image for domain admission; all guards remain active'
@@ -484,14 +484,14 @@ jobs:
           if-no-files-found: error
 
   managed-probe-native:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'managed' }}
-    name: managed-probe-native (${{ matrix.build-mode }})
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'managed' || inputs.focus == 'managed-recovery' }}
+    name: Managed scope ${{ inputs.focus || 'all' }} (${{ matrix.build-mode }})
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        build-mode: ${{ inputs.managed_manual_only && fromJSON('["production"]') || fromJSON('["production","race"]') }}
+        build-mode: ${{ inputs.focus != 'managed-recovery' && inputs.managed_manual_only && fromJSON('["production"]') || fromJSON('["production","race"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -517,7 +517,7 @@ jobs:
             "$managed_packages/libip6tc2.deb" "$managed_packages/libxtables12.deb"
           sudo python3 scripts/check-classic-save-pinned-fixture.py
       - name: Original active directory custody and error classification
-        if: ${{ !inputs.managed_manual_only }}
+        if: ${{ !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         shell: bash
         run: |
           race_flag=()
@@ -525,18 +525,18 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test "${race_flag[@]}" -count=1 ./internal/app ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestBackendClassicSave|^TestClassicSave|^TestFreshHeldNode|^TestNFQWSQuarantine|^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSNeverIssued|^TestNFQWSRecovery|^TestNFQWSUnpublished|^TestNFQWSActiveReadObservation|^TestNFQWSActivePreAdd|^TestNFQWSPreAddGenericAndProbe|^TestNFQWSActivePurePredicates|^TestNFQWSScopedExactPresenceObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
       - name: Actual path metadata parity and paired allocation benchmark
-        if: ${{ !inputs.managed_manual_only }}
+        if: ${{ !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" go test ./internal/startuptools -run '^TestFreshPathNode|^TestFreshHeldNode' -count=1 -v
           go test ./internal/startuptools -run '^$' -bench '^BenchmarkFresh(Path|Held)Node$' -benchtime=1s -count=3 -benchmem
       - name: Paired original collector scheduling benchmark (not end-to-end latency)
-        if: ${{ matrix.build-mode == 'production' && !inputs.managed_manual_only }}
+        if: ${{ matrix.build-mode == 'production' && !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         run: go test ./internal/physicalscope -run '^$' -bench '^BenchmarkOriginalFenceWakeScheduling$' -benchtime=1s -count=3 -benchmem
       - name: Actual identity syscalls with strict pointer checks
-        if: ${{ matrix.build-mode == 'production' && !inputs.managed_manual_only }}
+        if: ${{ matrix.build-mode == 'production' && !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         run: go test -gcflags=all=-d=checkptr=2 -count=1 ./internal/netidentity -run '^TestIdentitySyscallsConcurrentGC$' -v
       - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
-        if: ${{ !inputs.managed_manual_only }}
+        if: ${{ !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -551,7 +551,7 @@ jobs:
           grep -F -- '--- PASS: TestManagedStrategyProbeNativeAppHTTP ' artifacts/managed/probe.log
           if grep -F -- '--- SKIP:' artifacts/managed/probe.log; then exit 1; fi
       - name: Actual App LAN apply, exclusions and same-owner stop
-        if: ${{ !cancelled() && !inputs.managed_manual_only }}
+        if: ${{ !cancelled() && !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -562,7 +562,7 @@ jobs:
           grep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/lan.log
           if grep -F -- '--- SKIP:' artifacts/managed/lan.log; then exit 1; fi
       - name: Explicit manual LAN Apply, exclusions and same-owner stop
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.focus != 'managed-recovery' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -574,7 +574,7 @@ jobs:
           grep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/manual.log
           if grep -F -- '--- SKIP:' artifacts/managed/manual.log; then exit 1; fi
       - name: Original never-issued intent recovery and fresh manual Apply
-        if: ${{ !cancelled() && !inputs.managed_manual_only }}
+        if: ${{ !cancelled() && !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -592,7 +592,7 @@ jobs:
           done
           exit "$result"
       - name: Original quarantine close failure retains permanent fence
-        if: ${{ !cancelled() && matrix.build-mode == 'production' && !inputs.managed_manual_only }}
+        if: ${{ !cancelled() && matrix.build-mode == 'production' && !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -606,6 +606,32 @@ jobs:
           grep -F 'actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true' "$output"
           grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' "$output"
           if grep -F -- '--- SKIP:' "$output"; then exit 1; fi
+      - name: Original pre-ledger recovery contracts
+        if: ${{ inputs.focus == 'managed-recovery' || !inputs.managed_manual_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          race_flag=()
+          if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
+          go test "${race_flag[@]}" -count=1 ./internal/dataplane \
+            -run '^TestNFQWSPreLedger|^TestNFQWSOriginalPreLedger' -v | tee artifacts/managed/preledger-contracts.log
+          grep -F -- '--- PASS: TestNFQWSPreLedgerOriginalWriterPublishesOnlyPlannedAndClosesStrictly ' artifacts/managed/preledger-contracts.log
+          if grep -F -- '--- SKIP:' artifacts/managed/preledger-contracts.log; then exit 1; fi
+      - name: Actual pre-ledger failure recovery only
+        if: ${{ !cancelled() && (inputs.focus == 'managed-recovery' || !inputs.managed_manual_only) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+            RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE=pre-ledger RAZVILKA_MANAGED_PROBE_LAN_CASE=pre-ledger \
+            sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/preledger.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANPreLedgerRecovery ' artifacts/managed/preledger.log
+          grep -F 'actual_preledger_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false' artifacts/managed/preledger.log
+          grep -F 'actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false' artifacts/managed/preledger.log
+          if grep -F -- '--- SKIP:' artifacts/managed/preledger.log; then exit 1; fi
       - name: Preserve native managed outcomes
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

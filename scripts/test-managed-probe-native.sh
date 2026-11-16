@@ -135,6 +135,11 @@ if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
     full) probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP' ;;
     manual) probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANManualApply' ;;
+    pre-ledger)
+      test "${RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE:-}" = pre-ledger
+      test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+      test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = all
+      probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANPreLedgerRecovery' ;;
     *) exit 2 ;;
   esac
   probe_timeout=240s

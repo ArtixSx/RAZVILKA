@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"errors"
+	"log"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -23,7 +24,7 @@ type nfqNeverIssuedNativeCut struct {
 // Test binary only. This arms one real writer fault, never a receipt, ACK,
 // native child result, inventory, permission, or successful cleanup result.
 func ArmNFQWSNeverIssuedNativeFixture(manager *Manager, mode string) (func() (bool, bool), func(), error) {
-	if manager == nil || os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != mode || (mode != "intent" && mode != "settlement-sync") {
+	if manager == nil || os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != mode || (mode != "intent" && mode != "settlement-sync" && mode != "pre-ledger") {
 		return nil, nil, ErrNFQWSScopedOwner
 	}
 	cut := &nfqNeverIssuedNativeCut{mode: mode}
@@ -49,7 +50,17 @@ func nfqwsOriginalRecoveryOptions(e *nfqws2ActiveExecution, options policyAdditi
 				return err
 			}
 		}
-		if point == "intent" && index == 1 && cut.intent.CompareAndSwap(false, true) {
+		if cut.mode == "pre-ledger" && point == "nfq-original-pre-ledger" && index == -1 {
+			c := e.partialRecovery
+			if c == nil || !c.preLedgerArmed() || c.index != -1 || c.publication != 0 || c.renameAttempted || c.entered {
+				return ErrPolicyAdditionUnknown
+			}
+			if cut.intent.CompareAndSwap(false, true) {
+				log.Print("actual_preledger_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false")
+				return errNFQNeverIssuedNativeCut
+			}
+		}
+		if cut.mode != "pre-ledger" && point == "intent" && index == 1 && cut.intent.CompareAndSwap(false, true) {
 			return errNFQNeverIssuedNativeCut
 		}
 		if cut.mode == "settlement-sync" && point == "nfq-original-after-sync" && index == 1 && e.partialRecovery != nil && e.partialRecovery.session != nil && e.partialRecovery.session.doc.Steps[index].State == "removed" && !cut.released.Load() {

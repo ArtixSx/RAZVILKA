@@ -34,6 +34,15 @@ func TestManagedStrategyProbeNativeLANManualApply(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
 }
 
+// Explicit recovery-only population. The normal manual/full cases retain
+// their later fresh positive Apply and cannot finish at this recovery cut.
+func TestManagedStrategyProbeNativeLANPreLedgerRecovery(t *testing.T) {
+	if os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != "pre-ledger" || os.Getenv("RAZVILKA_MANAGED_PROBE_LAN_CASE") != "pre-ledger" {
+		t.Skip("requires explicit native pre-ledger recovery population")
+	}
+	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
+}
+
 func managedProbeNativeWANListener() (listener net.Listener, result error) {
 	runtime.LockOSThread()
 	unlock := true
@@ -187,7 +196,7 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		if failedCode == http.StatusOK || !intentCut || publicationCut != (mode == "settlement-sync") {
 			t.Fatal("actual original fault was not reached", failedCode, intentCut, publicationCut)
 		}
-		if mode == "intent" {
+		if mode == "intent" || mode == "pre-ledger" {
 			status, err := a.Dataplane.Status()
 			if err != nil || status.Execution == nil || status.Execution.State != "rolled-back" || !status.Execution.RollbackVerified {
 				t.Fatal("original never-issued failure did not join and verify rollback", err, status.Execution)
@@ -276,6 +285,27 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		r.mu.Unlock()
 		if retained || !reflect.DeepEqual(beforeConfig, a.Store.Get()) {
 			t.Fatal("partial recovery retained route owner or changed panel choice", retained)
+		}
+		if mode == "pre-ledger" && t.Name() == "TestManagedStrategyProbeNativeLANPreLedgerRecovery" {
+			// Restore panel readiness before closing original sources; this
+			// read-only plan does not stand in for a successful new Apply.
+			code, raw := request(http.MethodGet, "/api/v1/plan?scope=all", "")
+			var restored struct {
+				Review      applyReview    `json:"review"`
+				Transaction dataplane.Plan `json:"transaction"`
+			}
+			if code != http.StatusOK || json.Unmarshal(raw, &restored) != nil || !restored.Transaction.Ready || restored.Review.Digest == "" {
+				t.Fatal("recovery did not restore panel review", code)
+			}
+			closing, finish := context.WithTimeout(context.Background(), time.Minute)
+			defer finish()
+			failedRollback = status.Execution
+			if err := managedProbeCloseFailedApply(closing, a, r, status.Execution, readEmpty); err != nil {
+				t.Fatal("pre-ledger original Close and independent absence", err)
+			}
+			stopped = true
+			t.Log("actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false")
+			return
 		}
 		stopped = true // The failed Apply has already joined its original owner.
 		t.Logf("actual_never_issued_recovered mode=%s intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=%t", mode, os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") != "1")
