@@ -626,7 +626,15 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			if selected.Source != domainOriginalServer || selected.Marker != "native-domain-service" {
 				return fmt.Errorf("selected actual TLS flow not through native VLESS: %+v", selected)
 			}
-			mismatch := peers.clientRequest(t, original, "mismatch", published.Answer)
+			mismatch := func() domainOriginalPeerResult {
+				returned := false
+				defer func() {
+					t.Logf("actual mismatch request boundary returned=%t (before outer cleanup/opaque, including Fatal/Goexit; missing stage is not proof): %+v", returned, dataplane.DomainTCPNativeMeasurementSnapshot())
+				}()
+				result := peers.clientRequest(t, original, "mismatch", published.Answer)
+				returned = true
+				return result
+			}()
 			if mismatch.SourcePort == "" || mismatch.SourcePort == "0" || mismatch.SourcePort != mismatch.ClientPort || mismatch.Source != domainOriginalClient || mismatch.Marker != "native-domain-service" {
 				return fmt.Errorf("mismatched SNI changed original baseline tuple: %+v", mismatch)
 			}

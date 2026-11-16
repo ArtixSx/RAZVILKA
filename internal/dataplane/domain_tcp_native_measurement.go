@@ -148,7 +148,7 @@ func StartDomainTCPNativeMeasurement() func() map[string]DomainTCPNativeMetric {
 func domainTCPMeasureAcceptedStage(ctx context.Context, name string) func(error) {
 	switch name {
 	case "initial-current":
-	case "admit", "baseline", "socks-dial", "socks-handshake", "post-socks-check", "post-dial-check", "relay-enter":
+	case "admit", "baseline", "socks-dial", "socks-handshake", "post-socks-check", "post-dial-check", "relay-enter", "baseline-issue", "baseline-prepare", "baseline-connect":
 		if ctx == nil {
 			return func(error) {}
 		}

@@ -27,16 +27,22 @@ func dialDomainTCPBaseline(ctx context.Context, kernel *domainTCPBaselineKernelO
 	if ctx == nil || kernel == nil || flow.synthetic == nil || !flow.synthetic.matches(flow) || flow.Source != socket.Source || flow.Destination != socket.OriginalDestination || decision.Kind != "baseline" || decision.Generation != flow.Generation {
 		return nil, ErrDomainTCPBaselineKernel
 	}
+	finishIssue := domainTCPMeasureAcceptedStage(ctx, "baseline-issue")
 	r, err := issueDomainTCPBaselineFlow(ctx, kernel, socket)
+	finishIssue(err)
 	if r == nil {
 		return nil, err
 	}
 	if err == nil {
+		finishPrepare := domainTCPMeasureAcceptedStage(ctx, "baseline-prepare")
 		err = r.prepare(ctx)
+		finishPrepare(err)
 	}
 	var native *domainTCPBaselineNative
 	if err == nil {
+		finishConnect := domainTCPMeasureAcceptedStage(ctx, "baseline-connect")
 		native, err = r.connectNative(ctx)
+		finishConnect(err)
 	}
 	if err != nil {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

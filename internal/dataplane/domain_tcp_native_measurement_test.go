@@ -63,7 +63,7 @@ func TestDomainNativeAcceptedStagesAreClosedAndIncomplete(t *testing.T) {
 			t.Fatal("unbounded diagnostic", name)
 		}
 	}
-	stages := []string{"admit", "baseline", "socks-dial", "socks-handshake", "post-socks-check", "post-dial-check", "relay-enter"}
+	stages := []string{"admit", "baseline", "socks-dial", "socks-handshake", "post-socks-check", "post-dial-check", "relay-enter", "baseline-issue", "baseline-prepare", "baseline-connect"}
 	accepted.open.Store(true)
 	for _, name := range stages {
 		prefix := "accepted-stage/" + name + "/"
