@@ -2,6 +2,31 @@
 
 ## Обновлённые отказы полной приёмки
 
+Общий push и PR CI8ab8f100 PASS (43927646979/43927655267).
+Обычный Mihomo live43927647165: lifecycle, check-settlement, manual-http,
+postcas-failure PASS4/4; это не отдельная race ACK матрица ниже.
+
+[VLESS и очередь8ab](probe-comparison-8ab8f100.json), run43927647138 PASS:
+на одной машине baseline363f→8ab, N12 повторов, полная медиана live
+311.549→220.1895мс; selected1527.3895→1329.274мс; single699.367→600.2145мс.
+Dead-node6.6265→6.8415мс стал медленнее. Все182 строки, ожидаемые verdict и
+cleanup проверены; first samples отдельно, фиксированный порядок может влиять
+на cache/load. Это частная Linux-сеть, не аппаратный LAN или cold boot.
+
+Matched domain image43927646960 на8ab отказал ДО native samples:
+fixture drift относительно исторической344912c. Отказ сравнимости сохранён;
+из него нельзя вывести скорость или функциональную ошибку DNS. Новый парный
+эксперимент готовится из одной текущей ревизии с явным synthetic fallback.
+
+NFQ diagnostic6818: original scope не включён, fallback-wg-inactivity-cleanup37.
+Вd67342c8 захвачен исходный comparison carrier при BindExecution; остальные
+cleanup exclusions и полный body сохранены. Native43932269168 подтвердил
+16 eligible/entered/body-completed/completed, body-error/error0. Сам manual
+Apply всё ещё FAIL42.297с включая rollback, NATIVE_OWNER_REFUSED; rollback
+verified и независимый failed-Apply Close PASS. Другой host исключает вывод
+об ускорении по сравнению абсолютных времён двух прогонов. Raw:
+`C:/RAZVILKA-research-20261116/managed-d673-network/`.
+
 [Mihomo race60bd5153](mihomo-parent-race-60bd5153.json), run43926086704:
 parent/private и два ACK cuts PASS; completed.json, terminal-transaction и
 terminal-global FAIL120с, retirement absence-source-opening. Это не закрытая

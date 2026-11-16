@@ -1,0 +1,351 @@
+{
+  "baseline_commit": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "candidate_commit": "8ab8f1007c492823a337a211cd7b2452193a8d5d",
+  "run_id": 43927647138,
+  "result": "PASS",
+  "platform": "same Linux amd64 runner, private loopback-only namespace",
+  "order": "baseline then candidate; fixed order may bias caches/load",
+  "engine_sha256": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+  "method": "current-reuse in both builds; first +12 repeated per scenario; service40ms, controlled queue25ms",
+  "limits": [
+    "Not physical router, WAN, browser paint or LAN route readiness",
+    "First fixture check is not system cold boot",
+    "Nested stage durations must not be summed",
+    "Reported RSS is sampled, not guaranteed peak; includes test controller"
+  ],
+  "measurements": {
+    "baseline": {
+      "cancel": {
+        "first_ms": 268.831,
+        "repeat_n": 12,
+        "median_ms": 270.9675,
+        "p95_ms_nearest_rank": 274.593,
+        "cleanup": [
+          "verified"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "tcp_connect": 0.0,
+          "transport": 0.0,
+          "configuration": 16.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "route_identity": 1.0,
+          "protocol": 65.0,
+          "egress": 65.0,
+          "service": 64.0,
+          "cleanup": 101.0
+        }
+      },
+      "dead-node": {
+        "first_ms": 7.442,
+        "repeat_n": 12,
+        "median_ms": 6.6265,
+        "p95_ms_nearest_rank": 7.036,
+        "cleanup": [
+          "not_required"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "transport": 0.0
+        }
+      },
+      "dead-service": {
+        "first_ms": 285.01,
+        "repeat_n": 12,
+        "median_ms": 312.4465,
+        "p95_ms_nearest_rank": 318.58,
+        "cleanup": [
+          "verified"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "tcp_connect": 0.0,
+          "transport": 0.0,
+          "configuration": 16.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "route_identity": 1.0,
+          "protocol": 65.0,
+          "egress": 65.0,
+          "service": 105.0,
+          "cleanup": 101.0
+        }
+      },
+      "live": {
+        "first_ms": 312.949,
+        "repeat_n": 12,
+        "median_ms": 311.549,
+        "p95_ms_nearest_rank": 315.157,
+        "cleanup": [
+          "verified"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "tcp_connect": 0.0,
+          "transport": 0.0,
+          "configuration": 16.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "route_identity": 0.0,
+          "protocol": 64.5,
+          "egress": 64.5,
+          "service": 104.5,
+          "service_ip": 0.0,
+          "cleanup": 100.5
+        }
+      },
+      "all-vless": {
+        "first_ms": 1545.317,
+        "repeat_n": 12,
+        "median_ms": 1544.586,
+        "p95_ms_nearest_rank": 1567.523,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 27.0,
+        "server_completion_median_ms": 1542.0
+      },
+      "selected-batch": {
+        "first_ms": 1473.441,
+        "repeat_n": 12,
+        "median_ms": 1527.3895,
+        "p95_ms_nearest_rank": 1547.091,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "server_completion_median_ms": 1524.5
+      },
+      "single": {
+        "first_ms": 689.496,
+        "repeat_n": 12,
+        "median_ms": 699.367,
+        "p95_ms_nearest_rank": 710.82,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "server_completion_median_ms": 697.0
+      }
+    },
+    "candidate": {
+      "cancel": {
+        "first_ms": 182.904,
+        "repeat_n": 12,
+        "median_ms": 179.50549999999998,
+        "p95_ms_nearest_rank": 187.312,
+        "cleanup": [
+          "verified"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "tcp_connect": 0.0,
+          "transport": 0.0,
+          "configuration": 16.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "route_identity": 1.0,
+          "protocol": 65.0,
+          "egress": 65.0,
+          "service": 64.0,
+          "cleanup": 10.0
+        }
+      },
+      "dead-node": {
+        "first_ms": 7.541,
+        "repeat_n": 12,
+        "median_ms": 6.8415,
+        "p95_ms_nearest_rank": 7.72,
+        "cleanup": [
+          "not_required"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "transport": 0.0
+        }
+      },
+      "dead-service": {
+        "first_ms": 220.962,
+        "repeat_n": 12,
+        "median_ms": 219.68900000000002,
+        "p95_ms_nearest_rank": 221.455,
+        "cleanup": [
+          "verified"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "tcp_connect": 0.0,
+          "transport": 0.0,
+          "configuration": 15.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "route_identity": 1.0,
+          "protocol": 64.5,
+          "egress": 64.5,
+          "service": 105.0,
+          "cleanup": 10.0
+        }
+      },
+      "live": {
+        "first_ms": 220.943,
+        "repeat_n": 12,
+        "median_ms": 220.1895,
+        "p95_ms_nearest_rank": 223.162,
+        "cleanup": [
+          "verified"
+        ],
+        "stage_median_ms": {
+          "dns": 0.0,
+          "tcp_connect": 0.0,
+          "transport": 0.0,
+          "configuration": 16.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "route_identity": 1.0,
+          "protocol": 64.0,
+          "egress": 64.0,
+          "service": 105.0,
+          "service_ip": 0.0,
+          "cleanup": 11.0
+        }
+      },
+      "all-vless": {
+        "first_ms": 1332.266,
+        "repeat_n": 12,
+        "median_ms": 1355.3815,
+        "p95_ms_nearest_rank": 1379.563,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 27.0,
+        "server_completion_median_ms": 1352.5
+      },
+      "selected-batch": {
+        "first_ms": 1292.826,
+        "repeat_n": 12,
+        "median_ms": 1329.274,
+        "p95_ms_nearest_rank": 1354.424,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "server_completion_median_ms": 1327.0
+      },
+      "single": {
+        "first_ms": 590.719,
+        "repeat_n": 12,
+        "median_ms": 600.2145,
+        "p95_ms_nearest_rank": 631.647,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "server_completion_median_ms": 598.5
+      }
+    }
+  },
+  "raw_directory": "C:\\RAZVILKA-research-20261116\\integration-8ab\\probe",
+  "raw_sha256": [
+    {
+      "file": "mihomo-handler-native-8ab8f1007c492823a337a211cd7b2452193a8d5d\\native.log",
+      "bytes": 3525,
+      "sha256": "44296479ad59b8d02c22988247c15963238da437c946b4d8228b25cff994f7ae"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\baseline\\check-current-reuse.csv",
+      "bytes": 85851,
+      "sha256": "182acdb106329adfa271b276f1a75ee2a42bfb2168d47b0595f83747ba5f71f1"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\baseline\\environment.txt",
+      "bytes": 1441,
+      "sha256": "b7d6c14cf145c383fe93e7af21f084941853dfadaaa27380a29cad9e2ff3f8d6"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\baseline\\native-performance.log",
+      "bytes": 1550,
+      "sha256": "61084698743e1e38fa47d17fc22c687bb3c45d056730f2b9c1ce5f84836ee8f7"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\baseline\\queue-http-current.csv",
+      "bytes": 251346,
+      "sha256": "443ab783d3722ead778d430458e34c649ad65335bd17fef2bcc2ef95a488a6cf"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\baseline\\resource-helper.log",
+      "bytes": 350,
+      "sha256": "08cf4923638bc82d4b24f702695bf876cb098fef403d08b811ab3b2204571f29"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\candidate\\check-current-reuse.csv",
+      "bytes": 85874,
+      "sha256": "e09bde9ece6c4714ec5d93a8fdfa10624dcc46036e12f33ec0cac2f5b1618794"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\candidate\\environment.txt",
+      "bytes": 1441,
+      "sha256": "c0112bc417cc8e3d758ecc586caeacb1529aa4a0b37d8f6a625294601f4ca043"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\candidate\\native-performance.log",
+      "bytes": 1549,
+      "sha256": "2f28b1bb417610f4627b7f2d8e52a1f6b351eaa8836a49a1ef4e9b503f4a0a7e"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\candidate\\queue-http-current.csv",
+      "bytes": 251245,
+      "sha256": "12a16b025aae7039633313ee1f600b6cb67a0e319e670ce97e399adedddab02a"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\candidate\\resource-helper.log",
+      "bytes": 350,
+      "sha256": "08cf4923638bc82d4b24f702695bf876cb098fef403d08b811ab3b2204571f29"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\comparison.txt",
+      "bytes": 352,
+      "sha256": "6689936dce63da2e10ab2e927b2f11a409cf8d55ddc47ac9ef8314a74984bbbb"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\check-current-reuse.csv",
+      "bytes": 85794,
+      "sha256": "77d3b5302d3ca2b3cde382c8ccf8c81bc3d6f10f940526f8a5b2b4dcf8754bc5"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\environment.txt",
+      "bytes": 1441,
+      "sha256": "c0112bc417cc8e3d758ecc586caeacb1529aa4a0b37d8f6a625294601f4ca043"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\native-performance.log",
+      "bytes": 94891,
+      "sha256": "727f7cfaeb7f920e9db88b06f81fa137dae0cc0ef7e943871ea7cdd2258f8c44"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\queue-cpu-cumulative.txt",
+      "bytes": 4348,
+      "sha256": "bb00ad7a9c2ef40072dcfb9446a7ef5ae1843a90a154f7a5280d684503d5a77e"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\queue-cpu-top.txt",
+      "bytes": 3923,
+      "sha256": "26ac5bbe0c9e42b00cc0d635399e866671043d7f9bb0159684faa9262549d085"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\queue-cpu.pprof",
+      "bytes": 60396,
+      "sha256": "23e13079c18e53b0731ce0250b6fce58e609b320749af8db67b06408018479d1"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\queue-http-current.csv",
+      "bytes": 251189,
+      "sha256": "2e8d71c7b08c348711757ddfe3dcf3dde11abf791e95d50d6732a9fe30b4d3bd"
+    },
+    {
+      "file": "research-probes-8ab8f1007c492823a337a211cd7b2452193a8d5d\\profile\\resource-helper.log",
+      "bytes": 350,
+      "sha256": "08cf4923638bc82d4b24f702695bf876cb098fef403d08b811ab3b2204571f29"
+    }
+  ]
+}
