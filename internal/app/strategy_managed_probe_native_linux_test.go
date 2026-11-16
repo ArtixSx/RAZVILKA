@@ -443,8 +443,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			}
 		}
 		release() // Each actual HTTP request must obtain its own new admission.
-		metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
-		versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
+		versionMeasurement := startuptools.NativeFixtureMeasureVersions(tools)
 		stopOriginalToolStarts := startuptools.StartDomainNativeToolMeasurement()
 		defer func() { t.Log("native actual HTTP original started tool children by kind", stopOriginalToolStarts()) }()
 		payloadAttempts, payloadBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
@@ -460,12 +459,13 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			t.Log("native actual HTTP member-read attempts/returned-bytes", attempts-payloadAttempts, returnedBytes-payloadBytes)
 			t.Log("native actual HTTP inclusive phase [started completed wall]", dataplane.NativeFixtureNFQWSProbePhases(consumer))
 			t.Log("native actual HTTP aggregate inventory ToolCheck calls", toolMeasurements.calls.Load(), "wall", time.Duration(toolMeasurements.nanos.Load()))
-			t.Log("native actual HTTP aggregate original metadata traversal attempts", startuptools.NativeFixtureVersionMetadataCount(tools)-metadataStarted)
-			children := startuptools.NativeFixtureVersionChildCount(tools)
-			for i := range children {
-				children[i] -= versionChildrenStarted[i]
+			metadata, children, measurementErr := versionMeasurement.Delta()
+			if measurementErr != nil {
+				t.Error("native actual HTTP version measurement invalid", measurementErr)
+			} else {
+				t.Log("native actual HTTP aggregate original metadata traversal attempts", metadata)
+				t.Log("native actual HTTP aggregate actual version child Starts [iptables ip6tables IP]", children)
 			}
-			t.Log("native actual HTTP aggregate actual version child Starts [iptables ip6tables IP]", children)
 		}()
 		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty, lan, manualOnly)
 		return
