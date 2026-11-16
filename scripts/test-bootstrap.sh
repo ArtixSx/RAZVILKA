@@ -33,12 +33,26 @@ for TOOL in cat chmod cp mkdir rm mv uname sh ls; do
   chmod 700 "$TEST_ROOT/essential/$TOOL"
 done
 if [ -n "$BUSYBOX" ]; then
-  HOST_SH="$TEST_ROOT/essential/sh"
   cp "$TEST_ROOT/essential/mkdir" "$TEST_ROOT/host-mkdir"
   cp "$TEST_ROOT/essential/rm" "$TEST_ROOT/host-rm"
   REAL_MKDIR="$TEST_ROOT/host-mkdir"
   REAL_RM="$TEST_ROOT/host-rm"
   export REAL_MKDIR REAL_RM
+  cat >"$TEST_ROOT/busybox-bootstrap" <<'BUSYBOX_SHELL'
+#!/bin/sh
+# Standalone ash resolves built-in applets before PATH. These two fixture
+# providers must remain explicit: wget never touches the network, and timeout
+# does not leave the standalone applet's orphan watchdog holding the test cwd.
+# All other shell/app commands in these two cases use actual BusyBox behavior.
+exec "$BOOTSTRAP_TEST_BUSYBOX" sh -c '
+  wget() { "$RAZVILKA_BASE/bin/wget" "$@"; }
+  timeout() { "$RAZVILKA_BASE/bin/timeout" "$@"; }
+  fixture_script=$1
+  shift
+  . "$fixture_script"
+' bootstrap-busybox-fixture "$@"
+BUSYBOX_SHELL
+  chmod 700 "$TEST_ROOT/busybox-bootstrap"
 fi
 printf '#!/bin/sh\nprintf "0\\n"\n' >"$TEST_ROOT/essential/id"
 chmod 700 "$TEST_ROOT/essential/id"
@@ -167,9 +181,11 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies missing-dependencies-unset incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root uninstall-purge purge-default-tmp purge-old-release purge-without-uninstall purge-rollback bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed opkg-install-failed opkg-wget-failed opkg-collision opkg-signal opkg-cleanup-failed; do
+BUSYBOX_CASES=0
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies missing-dependencies-unset busybox-shell busybox-shell-unset incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root uninstall-purge purge-default-tmp purge-old-release purge-without-uninstall purge-rollback bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed opkg-install-failed opkg-wget-failed opkg-collision opkg-signal opkg-cleanup-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   [ "$CASE_NAME" != opkg-signal ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
+  case "$CASE_NAME" in busybox-shell*) [ -n "$BUSYBOX" ] || continue ;; esac
   case "$CASE_NAME" in install-default-cache|private-owner|private-writable)
     [ "$NATIVE_LINKS" -eq 1 ] && [ "$(id -u)" = 0 ] || continue ;;
   esac
@@ -178,7 +194,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   mkdir -p "$BASE/bin" "$BASE/sbin" "$BASE/tmp" "$BASE/etc/ssl/certs"
   RUN_TMP="$BASE/tmp"
   case "$CASE_NAME" in
-    install-default-cache|missing-dependencies-unset) RUN_TMP='' ;;
+    install-default-cache|missing-dependencies-unset|busybox-shell-unset) RUN_TMP='' ;;
     private-owner) mkdir "$BASE/razvilka"; chown 1001 "$BASE/razvilka" ;;
     private-writable) mkdir "$BASE/razvilka"; chmod 777 "$BASE/razvilka" ;;
     private-type) printf foreign >"$BASE/razvilka" ;;
@@ -206,6 +222,10 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
       ;;
     https-bootstrap|opkg-wget-failed)
       printf '#!/bin/sh\nprintf "BusyBox wget HTTP only\\n"\n' >"$BASE/bin/wget"
+      ;;
+    busybox-shell|busybox-shell-unset)
+      rm "$BASE/bin/curl"
+      [ "$CASE_NAME" != busybox-shell-unset ] || set -- --uninstall --purge
       ;;
     incompatible-timeout|timeout-still-incompatible)
       printf '#!/bin/sh\n[ "$1" != -k ] || exit 2\nexit 0\n' >"$BASE/bin/timeout"
@@ -278,11 +298,15 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   # Optional CI harness supplies an actually read-only bind mount in its own
   # mount namespace. chmod alone does not constrain root or Windows hosts.
   CALLER_CWD="${RAZVILKA_BOOTSTRAP_TEST_CWD:-$CASE_ROOT/read only cwd}"
+  CASE_SH="$HOST_SH"
+  case "$CASE_NAME" in
+    busybox-shell*) CASE_SH="$TEST_ROOT/busybox-bootstrap"; BUSYBOX_CASES=$((BUSYBOX_CASES + 1)) ;;
+  esac
   (
     cd "$CALLER_CWD"
     if [ -n "$RUN_TMP" ]; then TMPDIR="$RUN_TMP"; export TMPDIR; else unset TMPDIR; fi
     PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
-      RAZVILKA_VERSION="$VERSION_OVERRIDE" "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@"
+      BOOTSTRAP_TEST_BUSYBOX="$BUSYBOX" RAZVILKA_VERSION="$VERSION_OVERRIDE" "$CASE_SH" "$ROOT/scripts/bootstrap.sh" "$@"
   ) >"$CASE_ROOT/output" 2>&1 || CODE=$?
   chmod 700 "$CASE_ROOT/read only cwd"
   [ -z "$(find "$CASE_ROOT/read only cwd" -mindepth 1 -print)" ] || { echo "Bootstrap wrote into caller cwd" >&2; exit 1; }
@@ -298,13 +322,13 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     [ -f "$CASE_ROOT/collision-path" ] && [ -f "$(cat "$CASE_ROOT/collision-path")/foreign" ] && [ ! -e "$CASE_ROOT/opkg-called" ] || { echo "Colliding package workspace was adopted" >&2; exit 1; }
   fi
   case "$CASE_NAME" in
-    install-*|symlink-base|missing-dependencies|missing-dependencies-unset|incompatible-timeout|https-bootstrap|uninstall|rollback|uninstall-purge|purge-default-tmp)
+    install-*|symlink-base|missing-dependencies|missing-dependencies-unset|busybox-shell*|incompatible-timeout|https-bootstrap|uninstall|rollback|uninstall-purge|purge-default-tmp)
       [ "$CODE" = 0 ] && [ -f "$CASE_ROOT/helper-called" ] || { cat "$CASE_ROOT/output" >&2; echo "Bootstrap failed: $CASE_NAME" >&2; exit 1; }
       EXPECTED=install
       EXPECTED_ARGS=""
       case "$CASE_NAME" in
         uninstall|rollback) EXPECTED="$CASE_NAME" ;;
-        uninstall-purge|purge-default-tmp|missing-dependencies-unset) EXPECTED=uninstall; EXPECTED_ARGS=--purge ;;
+        uninstall-purge|purge-default-tmp|missing-dependencies-unset|busybox-shell-unset) EXPECTED=uninstall; EXPECTED_ARGS=--purge ;;
       esac
       [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:$EXPECTED_ARGS" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
       if [ "$CASE_NAME" = purge-default-tmp ]; then
@@ -337,6 +361,9 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
       elif [ "$CASE_NAME" = https-bootstrap ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 4 ] || { echo "HTTPS bootstrap was not bounded" >&2; exit 1; }
         [ -f "$CASE_ROOT/tls-installed" ] || { echo "HTTPS downloader was not installed" >&2; exit 1; }
+      elif [ "$CASE_NAME" = busybox-shell ] || [ "$CASE_NAME" = busybox-shell-unset ]; then
+        [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 2 ] &&
+          grep -q '^install curl$' "$CASE_ROOT/opkg-called" || { echo "BusyBox shell did not exercise exact missing-curl package scope" >&2; exit 1; }
       else
         [ ! -e "$CASE_ROOT/opkg-called" ] || { echo "Complete Entware was modified unnecessarily" >&2; exit 1; }
       fi
@@ -380,4 +407,5 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   esac
   [ -z "$(find "$BASE/tmp" -mindepth 1 -print)" ] || { echo "Bootstrap leaked extracted release files: $CASE_NAME" >&2; exit 1; }
 done
-echo "Isolated Entware bootstrap tests: PASS (BusyBox early tools: ${BUSYBOX:-unavailable})"
+[ -z "$BUSYBOX" ] || [ "$BUSYBOX_CASES" -eq 2 ] || exit 1
+echo "Isolated Entware bootstrap tests: PASS (BusyBox early tools: ${BUSYBOX:-unavailable}; actual ash package-temp cases: $BUSYBOX_CASES; wget/timeout controlled)"
