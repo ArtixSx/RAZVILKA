@@ -42,6 +42,13 @@ func init() {
 // metadata helpers so the production opening/closing checks run unchanged.
 func wgKernelLinkHeldSourceFixture(t *testing.T) (*Lease, string) {
 	t.Helper()
+	// The complete metadata reader requires protected canonical ancestors too.
+	// Keep testing's original TempDir/cleanup ownership, but place this opt-in
+	// root-only model under /root rather than the deliberately writable /tmp.
+	if os.Geteuid() != 0 {
+		t.Fatal("original held metadata fixture requires root")
+	}
+	t.Setenv("TMPDIR", "/root")
 	l, root := wgInactivityHeldChildFixture(t)
 	data, err := os.ReadFile(l.profile.ipAlias)
 	if err != nil {
@@ -79,6 +86,25 @@ func wgKernelLinkHeldSourceFixture(t *testing.T) (*Lease, string) {
 	}
 	l.profile.ipVersion = ubuntuPolicyProfile().ipVersion
 	l.review.profile = l.profile
+	// Capture named images, every parent and symlink using the same resolver
+	// as acquisition. Hand-inserting only final image nodes would omit the
+	// original resolution graph and its fresh opening/closing checks.
+	for path, image := range l.review.images {
+		canonical, err := l.review.resolve(path)
+		if err != nil || canonical != image.path || !sameNode(l.review.nodes[canonical].info, image.info) {
+			t.Fatal("private held image canonical metadata", err)
+		}
+	}
+	canonical, err := l.review.resolve(l.profile.extension)
+	if err != nil {
+		t.Fatal("private extension canonical metadata", err)
+	}
+	if err := l.review.retainExtensionPath(canonical); err != nil {
+		t.Fatal("private extension source binding", err)
+	}
+	if err := l.review.versionMetadataCurrent(ctx); err != nil {
+		t.Fatal("complete private metadata fixture", err)
+	}
 	return l, root
 }
 
@@ -122,16 +148,41 @@ func TestNativeWGInactivityKernelToolObservation(t *testing.T) {
 	if os.Getenv("RAZVILKA_WG_INACTIVITY_READ_CHILD") != "1" {
 		t.Skip("coordinator-owned original retained source gate")
 	}
-	l, _ := wgKernelLinkHeldSourceFixture(t)
-	// This fixture predates the full canonical-node metadata requirement.
-	// Retain every already-opened original image node as the real factory does;
-	// otherwise the normal CHECK_HELD_FILE guard must refuse this model.
-	for path, image := range l.review.images {
-		l.review.nodes[path] = heldNode{path: path, info: image.info}
-	}
+	l, root := wgKernelLinkHeldSourceFixture(t)
 	r := &wgInactivityRunner{lease: l, engine: "wireguard"}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	t.Run("fresh-parent-mode", func(t *testing.T) {
+		before, err := os.Stat(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(root, 0777); err != nil {
+			t.Fatal(err)
+		}
+		err = l.review.versionMetadataCurrent(ctx)
+		restoreErr := os.Chmod(root, before.Mode().Perm())
+		if restoreErr != nil || err == nil {
+			t.Fatal("fresh canonical parent guard", err, restoreErr)
+		}
+		if err := l.review.versionMetadataCurrent(ctx); err != nil {
+			t.Fatal("restored original parent", err)
+		}
+	})
+	t.Run("fresh-extension-membership", func(t *testing.T) {
+		path := filepath.Join(l.profile.extension, "unexpected.so")
+		if err := os.WriteFile(path, []byte("fixture membership only"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		err := l.review.versionMetadataCurrent(ctx)
+		removeErr := os.Remove(path)
+		if removeErr != nil || err == nil {
+			t.Fatal("fresh extension membership guard", err, removeErr)
+		}
+		if err := l.review.versionMetadataCurrent(ctx); err != nil {
+			t.Fatal("restored original membership", err)
+		}
+	})
 	for _, cut := range []string{"current", "changed-bytes"} {
 		entered := false
 		err := r.WithWGInactivityToolObservation(ctx, l.identity, l.digest, func(observed context.Context) error {
