@@ -22,7 +22,7 @@
     },
     "generic": {
       "id": 43889164918,
-      "conclusion": "pending_at_capture"
+      "conclusion": "success"
     }
   },
   "compatibility": {
@@ -38,6 +38,14 @@
       "elapsed_seconds": 0.52,
       "result": "pass",
       "limits": "Historical library executable; modeled immutable archive evidence; not historical application main or router"
+    },
+    "historical_library_linux": {
+      "revision": "c972ab262022c02072eef424f3d845841cafa5df",
+      "run": 43891102721,
+      "result": "success",
+      "normal_seconds": 0.14,
+      "race_seconds": 0.13,
+      "limits": "historical library executable; modeled archive evidence; not historical application main or router"
     }
   },
   "diagnostic_baseline": {
