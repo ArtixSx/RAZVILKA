@@ -215,6 +215,7 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(e.ctx), 5*time.Second)
 	defer cancel()
+	lateACK := false
 	probe, _ := e.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution)
 	if probe != nil {
 		if probe.self != probe || probe.resource != r || probe.binding != e.binding {
@@ -225,6 +226,19 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 			probe.processResult = &copy
 		}
 		cleanupCtx = context.WithValue(cleanupCtx, nfqwsProbeCleanupKey{}, probe)
+		if probe.processResult == nil {
+			// Consume only this producer's retained sole Wait within the SAME
+			// cleanup budget. Its original unknown outcome is never promoted.
+			lateACK = true
+			runErr = errors.Join(runErr, ErrNFQWSManagedProcessUnknown)
+			settled, err := e.acknowledgeInitialProbeCleanup(cleanupCtx, probe)
+			if err != nil {
+				return errors.Join(runErr, err)
+			}
+			lease = settled
+			copy := settled
+			probe.processResult = &copy
+		}
 	}
 	// Inspect is read-only and requires the existing common receipt/lock. A
 	// missing receipt never acquires a new deletion or synthetic unused grant.
@@ -249,7 +263,7 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 	if cleanupErr == nil && probe != nil {
 		cleanupErr = probe.acknowledgeRemoved(cleanupCtx, lease)
 	}
-	if cleanupErr == nil && completed && e.ctx.Err() == nil && nfqwsScopedLeaseExecutionMatches(lease, r.Plan(), r.Binding()) &&
+	if cleanupErr == nil && !lateACK && completed && e.ctx.Err() == nil && nfqwsScopedLeaseExecutionMatches(lease, r.Plan(), r.Binding()) &&
 		lease.Acknowledged && lease.Receipt.WaitECHILD && nfqws2ValidateManagedLease(lease) == nil && nfqwsExecutionOnlyCanceled(runErr, 0) {
 		runErr = nil // Only the deliberate internal stop, independently settled above.
 	}
