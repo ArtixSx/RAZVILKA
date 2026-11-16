@@ -87,7 +87,7 @@ jobs:
             if [ "$mode" = race ]; then race_flag=(-race); fi
             sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
               go test "${race_flag[@]}" -count=1 -v ./internal/dataplane \
-              -run '^TestNFQWS(ScopedIssuedBoundary|ActiveIssuedBoundary|Issued)|^TestPolicyEffectCommandInvocation|^TestNetworkPolicyNFQ(Read|Inventory)|^TestNetworkPolicyInventoryReader' \
+              -run '^TestNFQWS(ScopedIssuedBoundary|ActiveIssuedBoundary|Issued)|^TestPolicyEffectCommandInvocation|^TestNetworkPolicyNFQ(Read|Inventory)|^TestNetworkPolicyInventoryReader|^TestBackendInventoryProcRead' \
               | tee "artifacts/nfq-issued-$mode.txt"
             if grep -F -- '--- SKIP:' "artifacts/nfq-issued-$mode.txt"; then exit 1; fi
             go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/startuptools \

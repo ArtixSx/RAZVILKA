@@ -7,8 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
-	"io"
-	"os"
 	"strconv"
 	"time"
 
@@ -311,17 +309,12 @@ func backendInventoryThreadProc(ctx context.Context, which backendThreadProcFile
 		if err != nil {
 			return "", err
 		}
-		file := os.NewFile(uintptr(f), "proc-fdinfo")
-		if file == nil {
+		if !check(f, false) {
 			_ = unix.Close(f)
 			return "", errBackendInventory
 		}
-		if !check(f, false) {
-			_ = file.Close()
-			return "", errBackendInventory
-		}
-		data, readErr := io.ReadAll(io.LimitReader(file, 4097))
-		closeErr := file.Close()
+		data, readErr := backendInventoryReadProcFD(ctx, f, 4096)
+		closeErr := unix.Close(f)
 		if readErr != nil || closeErr != nil || len(data) > 4096 {
 			return "", errBackendInventory
 		}
@@ -336,16 +329,10 @@ func backendInventoryThreadProc(ctx context.Context, which backendThreadProcFile
 			return nil, errBackendInventory
 		}
 	}
-	// Duplicate ownership for os.File; retained FD is used for closing checks.
-	dup, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 0)
-	if err != nil {
-		return nil, err
-	}
-	file := os.NewFile(uintptr(dup), "classic-table-names")
-	data, readErr := io.ReadAll(io.LimitReader(file, int64(limit)+1))
-	closeErr := file.Close()
-	if readErr != nil || closeErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {
-		return nil, errors.Join(errBackendInventory, readErr, closeErr, ctx.Err())
+	// The same retained FD remains owned until all original closing checks.
+	data, readErr := backendInventoryReadProcFD(ctx, fd, limit)
+	if readErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {
+		return nil, errors.Join(errBackendInventory, readErr, ctx.Err())
 	}
 	for i, f := range fds {
 		if !check(f, i != len(fds)-2) {

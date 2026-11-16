@@ -13,6 +13,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,41 +25,6 @@ import (
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"golang.org/x/sys/unix"
 )
-
-// Measurement-only closed-proc candidate; no production caller uses this IO.
-func backendProcCandidateRead(ctx context.Context, fd, limit int) ([]byte, error) {
-	return backendProcCandidateBounded(ctx, limit, func(p []byte) (int, error) { return unix.Read(fd, p) })
-}
-func backendProcCandidateBounded(ctx context.Context, limit int, read func([]byte) (int, error)) ([]byte, error) {
-	if ctx == nil || limit <= 0 || limit > 1<<20 || read == nil {
-		return nil, errBackendInventory
-	}
-	var data []byte
-	var block [4096]byte
-	for {
-		if err := ctx.Err(); err != nil {
-			clear(data)
-			return nil, err
-		}
-		want := min(len(block), limit+1-len(data))
-		n, err := read(block[:want])
-		if errors.Is(err, unix.EINTR) && n <= 0 {
-			continue
-		}
-		if err != nil || n < 0 || n > want || n > limit-len(data) {
-			clear(data)
-			return nil, errors.Join(errBackendInventory, err)
-		}
-		if n == 0 {
-			if err := ctx.Err(); err != nil {
-				clear(data)
-				return nil, err
-			}
-			return data, nil
-		}
-		data = append(data, block[:n]...)
-	}
-}
 
 func backendProcFunctionBody(t *testing.T, source []byte, name string) string {
 	t.Helper()
@@ -90,23 +56,35 @@ func backendProcSourceParity(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := strings.ReplaceAll(string(source), "\r\n", "\n")
-	for _, change := range [][2]string{{backendProcOldMountIO, backendProcNewMountIO}, {backendProcOldPayloadIO, backendProcNewPayloadIO}} {
-		if strings.Count(expected, change[0]) != 1 {
-			t.Fatal("declared source IO block changed")
-		}
-		expected = strings.Replace(expected, change[0], change[1], 1)
-	}
 	actual, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := backendProcFunctionBody(t, source, "backendInventoryThreadProc")
-	want := backendProcFunctionBody(t, []byte(expected), "backendInventoryThreadProc")
-	got := backendProcFunctionBody(t, actual, "backendInventoryThreadProcRawCandidate")
-	if want != got {
-		t.Fatal("candidate changed more than declared two IO blocks")
+	original := backendProcFunctionBody(t, actual, "backendInventoryThreadProcOriginalBaseline")
+	if backendProcSHA([]byte(original)) != "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7" {
+		t.Fatal("frozen measured 60bd5153 original baseline changed")
 	}
+	expected := strings.ReplaceAll(string(actual), "\r\n", "\n")
+	for _, change := range [][2]string{{backendProcOldMountIO, backendProcNewMountIO}, {backendProcOldPayloadIO, backendProcNewPayloadIO}} {
+		if strings.Count(expected, change[0]) != 1 {
+			t.Fatal("pinned original IO block changed")
+		}
+		expected = strings.Replace(expected, change[0], change[1], 1)
+	}
+	want := backendProcFunctionBody(t, []byte(expected), "backendInventoryThreadProcOriginalBaseline")
+	got := backendProcFunctionBody(t, source, "backendInventoryThreadProc")
+	if want != got {
+		t.Fatal("production changed more than measured two IO blocks")
+	}
+	helper, err := os.ReadFile(filepath.Join(filepath.Dir(file), "network_backend_proc_read_linux.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if backendProcSHA([]byte(backendProcFunctionBody(t, helper, "backendInventoryReadProcBounded"))) != "d6f950084625a39f1cd0dd737c06b8f985b7a2e58a612ccb130c00e7cc3615af" {
+		t.Fatal("measured bounded reader contract changed")
+	}
+
+	t.Logf("backend_proc_io_implementations baseline_revision=60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4 raw=actual-production helper_sha256=%s", backendProcSHA(helper))
 	return backendProcSHA(source), backendProcSHA([]byte(original))
 }
 func TestBackendProcIOSourceParity(t *testing.T) {
@@ -114,73 +92,7 @@ func TestBackendProcIOSourceParity(t *testing.T) {
 	t.Logf("backend_proc_io_source file_sha256=%s original_body_sha256=%s", file, body)
 }
 
-func TestBackendProcIOBoundedRefusals(t *testing.T) {
-	for _, limit := range []int{4096, 1 << 20} {
-		for _, size := range []int{0, 1, limit - 1, limit, limit + 1} {
-			input := bytes.Repeat([]byte{0x5a}, size)
-			pos, calls := 0, 0
-			got, err := backendProcCandidateBounded(context.Background(), limit, func(p []byte) (int, error) {
-				calls++
-				n := min(len(p), min(37, len(input)-pos))
-				copy(p, input[pos:pos+n])
-				pos += n
-				return n, nil
-			})
-			if size <= limit {
-				if err != nil || !bytes.Equal(got, input) || calls < 1 {
-					t.Fatal("short/EOF changed", size, err)
-				}
-			} else if err == nil || got != nil {
-				t.Fatal("limit+1 accepted")
-			}
-		}
-	}
-	for _, cut := range []string{"eintr", "eintr-minus-one", "eagain", "eagain-minus-one", "cancel-eintr", "cancel-eof", "error", "invalid-negative", "invalid-size"} {
-		t.Run(cut, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			calls := 0
-			got, err := backendProcCandidateBounded(ctx, 4096, func(p []byte) (int, error) {
-				calls++
-				switch cut {
-				case "eintr":
-					if calls <= 3 {
-						return 0, unix.EINTR
-					}
-					return 0, nil
-				case "eintr-minus-one":
-					if calls <= 3 {
-						return -1, unix.EINTR
-					}
-					return 0, nil
-				case "eagain":
-					return 0, unix.EAGAIN
-				case "eagain-minus-one":
-					return -1, unix.EAGAIN
-				case "cancel-eintr":
-					cancel()
-					return 0, unix.EINTR
-				case "cancel-eof":
-					cancel()
-					return 0, nil
-				case "error":
-					return 0, unix.EIO
-				case "invalid-negative":
-					return -1, nil
-				default:
-					return len(p) + 1, nil
-				}
-			})
-			if cut == "eintr" || cut == "eintr-minus-one" {
-				if err != nil || len(got) != 0 || calls != 4 {
-					t.Fatal("EINTR contract", err, calls)
-				}
-			} else if err == nil || got != nil || calls != 1 {
-				t.Fatal("failure lost", cut, err, calls)
-			}
-		})
-	}
-}
+func TestBackendProcIOBoundedRefusals(t *testing.T) { checkBackendInventoryProcReadRefusals(t) }
 
 func backendProcIOFixture(t *testing.T, use func(context.Context, *netidentity.Provider) error) {
 	t.Helper()
@@ -224,11 +136,11 @@ func TestBackendProcIOActualPairs(t *testing.T) {
 		var expected []byte
 		if err := provider.WithCurrent(ctx, func(held context.Context, _ netidentity.Identity) error {
 			var err error
-			expected, err = backendInventoryThreadProc(held, backendThreadNetlink)
+			expected, err = backendInventoryThreadProcOriginalBaseline(held, backendThreadNetlink)
 			if err != nil {
 				return err
 			}
-			got, err := backendInventoryThreadProcRawCandidate(held, backendThreadNetlink)
+			got, err := backendInventoryThreadProc(held, backendThreadNetlink)
 			if err != nil || !bytes.Equal(got, expected) {
 				return errors.Join(errBackendInventory, err)
 			}
@@ -254,9 +166,9 @@ func TestBackendProcIOActualPairs(t *testing.T) {
 						var got []byte
 						var err error
 						if mode == "original" {
-							got, err = backendInventoryThreadProc(held, backendThreadNetlink)
+							got, err = backendInventoryThreadProcOriginalBaseline(held, backendThreadNetlink)
 						} else {
-							got, err = backendInventoryThreadProcRawCandidate(held, backendThreadNetlink)
+							got, err = backendInventoryThreadProc(held, backendThreadNetlink)
 						}
 						if err != nil || !bytes.Equal(got, expected) {
 							return errors.Join(errBackendInventory, err)
@@ -273,7 +185,7 @@ func TestBackendProcIOActualPairs(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				row := map[string]any{"pair": pair, "mode": mode, "calls": 64, "wall_ns": wall, "thread_cpu_ns": cpu, "provider_bracket_ns": providerNS, "bytes": len(expected), "payload_sha256": backendProcSHA(expected), "source_sha256": fileSHA, "original_body_sha256": bodySHA}
+				row := map[string]any{"baseline_revision": "60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4", "raw_implementation": "actual-production", "pair": pair, "mode": mode, "calls": 64, "wall_ns": wall, "thread_cpu_ns": cpu, "provider_bracket_ns": providerNS, "bytes": len(expected), "payload_sha256": backendProcSHA(expected), "source_sha256": fileSHA, "original_body_sha256": bodySHA}
 				data, _ := json.Marshal(row)
 				t.Logf("backend_proc_io_pair %s", data)
 			}
@@ -282,7 +194,7 @@ func TestBackendProcIOActualPairs(t *testing.T) {
 	})
 }
 
-// Separate tracing population. Provider setup/closing and Go startup are
+// Separate tracing population: frozen original versus actual production. Provider setup/closing and Go startup are
 // outside fixed BEGIN/END markers on the same locked OS thread.
 func TestBackendProcIOTrace(t *testing.T) {
 	mode := os.Getenv("RAZVILKA_BACKEND_PROC_IO_TRACE")
@@ -301,9 +213,9 @@ func TestBackendProcIOTrace(t *testing.T) {
 			var data []byte
 			var err error
 			if mode == "original" {
-				data, err = backendInventoryThreadProc(held, backendThreadNetlink)
+				data, err = backendInventoryThreadProcOriginalBaseline(held, backendThreadNetlink)
 			} else {
-				data, err = backendInventoryThreadProcRawCandidate(held, backendThreadNetlink)
+				data, err = backendInventoryThreadProc(held, backendThreadNetlink)
 			}
 			_, closing := unix.Write(2, []byte("BACKEND_PROC_IO_END\n"))
 			if err != nil || closing != nil {
@@ -318,11 +230,12 @@ func TestBackendProcIOTrace(t *testing.T) {
 }
 
 const backendProcOldMountIO = "\t\tfile := os.NewFile(uintptr(f), \"proc-fdinfo\")\n\t\tif file == nil {\n\t\t\t_ = unix.Close(f)\n\t\t\treturn \"\", errBackendInventory\n\t\t}\n\t\tif !check(f, false) {\n\t\t\t_ = file.Close()\n\t\t\treturn \"\", errBackendInventory\n\t\t}\n\t\tdata, readErr := io.ReadAll(io.LimitReader(file, 4097))\n\t\tcloseErr := file.Close()"
-const backendProcNewMountIO = "\t\tif !check(f, false) {\n\t\t\t_ = unix.Close(f)\n\t\t\treturn \"\", errBackendInventory\n\t\t}\n\t\tdata, readErr := backendProcCandidateRead(ctx, f, 4096)\n\t\tcloseErr := unix.Close(f)"
+const backendProcNewMountIO = "\t\tif !check(f, false) {\n\t\t\t_ = unix.Close(f)\n\t\t\treturn \"\", errBackendInventory\n\t\t}\n\t\tdata, readErr := backendInventoryReadProcFD(ctx, f, 4096)\n\t\tcloseErr := unix.Close(f)"
 const backendProcOldPayloadIO = "\t// Duplicate ownership for os.File; retained FD is used for closing checks.\n\tdup, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 0)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tfile := os.NewFile(uintptr(dup), \"classic-table-names\")\n\tdata, readErr := io.ReadAll(io.LimitReader(file, int64(limit)+1))\n\tcloseErr := file.Close()\n\tif readErr != nil || closeErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {\n\t\treturn nil, errors.Join(errBackendInventory, readErr, closeErr, ctx.Err())\n\t}"
-const backendProcNewPayloadIO = "\t// The same retained FD remains owned until all original closing checks.\n\tdata, readErr := backendProcCandidateRead(ctx, fd, limit)\n\tif readErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {\n\t\treturn nil, errors.Join(errBackendInventory, readErr, ctx.Err())\n\t}"
+const backendProcNewPayloadIO = "\t// The same retained FD remains owned until all original closing checks.\n\tdata, readErr := backendInventoryReadProcFD(ctx, fd, limit)\n\tif readErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {\n\t\treturn nil, errors.Join(errBackendInventory, readErr, ctx.Err())\n\t}"
 
-func backendInventoryThreadProcRawCandidate(ctx context.Context, which backendThreadProcFile) (result []byte, resultErr error) {
+// Frozen original leaf from 60bd5153; diagnostic baseline only.
+func backendInventoryThreadProcOriginalBaseline(ctx context.Context, which backendThreadProcFile) (result []byte, resultErr error) {
 	name, limit := "ip_tables_names", backendClassicNamesBytes
 	pid, tid := unix.Getpid(), unix.Gettid()
 	parts := []string{strconv.Itoa(pid), "task", strconv.Itoa(tid), "net"}
@@ -411,12 +324,17 @@ func backendInventoryThreadProcRawCandidate(ctx context.Context, which backendTh
 		if err != nil {
 			return "", err
 		}
-		if !check(f, false) {
+		file := os.NewFile(uintptr(f), "proc-fdinfo")
+		if file == nil {
 			_ = unix.Close(f)
 			return "", errBackendInventory
 		}
-		data, readErr := backendProcCandidateRead(ctx, f, 4096)
-		closeErr := unix.Close(f)
+		if !check(f, false) {
+			_ = file.Close()
+			return "", errBackendInventory
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, 4097))
+		closeErr := file.Close()
 		if readErr != nil || closeErr != nil || len(data) > 4096 {
 			return "", errBackendInventory
 		}
@@ -431,10 +349,16 @@ func backendInventoryThreadProcRawCandidate(ctx context.Context, which backendTh
 			return nil, errBackendInventory
 		}
 	}
-	// The same retained FD remains owned until all original closing checks.
-	data, readErr := backendProcCandidateRead(ctx, fd, limit)
-	if readErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {
-		return nil, errors.Join(errBackendInventory, readErr, ctx.Err())
+	// Duplicate ownership for os.File; retained FD is used for closing checks.
+	dup, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(dup), "classic-table-names")
+	data, readErr := io.ReadAll(io.LimitReader(file, int64(limit)+1))
+	closeErr := file.Close()
+	if readErr != nil || closeErr != nil || len(data) > limit || ctx.Err() != nil || unix.Getpid() != pid || unix.Gettid() != tid {
+		return nil, errors.Join(errBackendInventory, readErr, closeErr, ctx.Err())
 	}
 	for i, f := range fds {
 		if !check(f, i != len(fds)-2) {
