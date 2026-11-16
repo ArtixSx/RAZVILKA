@@ -30,7 +30,7 @@ jobs:
             if [ "$mode" = race ]; then race_flag=(-race); fi
             sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
               go test "${race_flag[@]}" -count=1 -v ./internal/selfupdatejournal ./internal/updatecheck ./cmd/razvilka \
-              -run '^(TestPairedOfflineRetry|TestPairedRestoreCommand|TestJournalReaderVersionStrictABI|TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2|TestExternalBootstrapPreparationCapabilitiesKeepOrdinarySchemaFence)' \
+              -run '^(TestPairedOfflineRetry|TestPairedOfflinePlanOnly|TestPairedRestoreCommand|TestJournalReaderVersionStrictABI|TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2|TestExternalBootstrapPreparationCapabilitiesKeepOrdinarySchemaFence)' \
               | tee "artifacts/offline-retry/$mode.txt"
             if grep -F -- '--- SKIP:' "artifacts/offline-retry/$mode.txt"; then exit 1; fi
             grep -F -- '--- PASS: TestPairedOfflineRetryNative' "artifacts/offline-retry/$mode.txt"

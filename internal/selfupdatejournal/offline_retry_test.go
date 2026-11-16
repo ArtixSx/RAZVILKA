@@ -19,14 +19,14 @@ func TestPairedOfflineRetryReceiptFenceAndExactCompletion(t *testing.T) {
 	}
 	cut := errors.New("known interrupted offline restore")
 	plan := []byte(`{"schema":1,"test":"bounded model; not native image proof"}`)
-	run := func(callback func(context.Context, Receipt, []byte, bool, Check, func([]byte) error) error) error {
+	run := func(callback func(context.Context, Receipt, []byte, bool, Check, func([]byte, Check) error) error) error {
 		return f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, pairedAdmission, callback)
 	}
-	err = run(func(c context.Context, r Receipt, data []byte, verifyOnly bool, check Check, bind func([]byte) error) error {
+	err = run(func(c context.Context, r Receipt, data []byte, verifyOnly bool, check Check, bind func([]byte, Check) error) error {
 		if c != ctx || len(data) != 0 || r.Schema != PairedSchema {
 			t.Fatal("initial binding detached")
 		}
-		if err := bind(plan); err != nil {
+		if err := bind(plan, nil); err != nil {
 			return err
 		}
 		if err := check(c); err != nil {
@@ -74,12 +74,12 @@ func TestPairedOfflineRetryReceiptFenceAndExactCompletion(t *testing.T) {
 			t.Fatal("pending5 granted ordinary mutation")
 		}
 	}
-	err = run(func(c context.Context, r Receipt, data []byte, verifyOnly bool, check Check, bind func([]byte) error) error {
+	err = run(func(c context.Context, r Receipt, data []byte, verifyOnly bool, check Check, bind func([]byte, Check) error) error {
 		encoded, _ := json.Marshal(r)
 		if !bytes.Equal(data, plan) || !bytes.Equal(encoded, original) {
 			t.Fatal("retry original receipt/plan changed")
 		}
-		if bind(plan) == nil {
+		if bind(plan, nil) == nil {
 			t.Fatal("bound plan overwritten")
 		}
 		return check(c)
@@ -97,8 +97,8 @@ func TestPairedOfflineRetryReceiptFenceAndExactCompletion(t *testing.T) {
 	if data, err := os.ReadFile(filepath.Join(f.journal, transaction, "offline-retry-v1.json")); err != nil || !bytes.Equal(data, plan) {
 		t.Fatal("retained plan removed")
 	}
-	if err := run(func(_ context.Context, _ Receipt, data []byte, verifyOnly bool, _ Check, bind func([]byte) error) error {
-		if !verifyOnly || !bytes.Equal(data, plan) || bind(plan) == nil {
+	if err := run(func(_ context.Context, _ Receipt, data []byte, verifyOnly bool, _ Check, bind func([]byte, Check) error) error {
+		if !verifyOnly || !bytes.Equal(data, plan) || bind(plan, nil) == nil {
 			t.Fatal("completed retained stage adopted as mutation authority")
 		}
 		return nil
@@ -119,7 +119,7 @@ func TestPairedOfflineRetryRefusesBindingDriftAndLostAuthority(t *testing.T) {
 					t.Fatal(err)
 				}
 				called := false
-				err := f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, pairedAdmission, func(context.Context, Receipt, []byte, bool, Check, func([]byte) error) error {
+				err := f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, pairedAdmission, func(context.Context, Receipt, []byte, bool, Check, func([]byte, Check) error) error {
 					called = true
 					return nil
 				})
@@ -129,8 +129,8 @@ func TestPairedOfflineRetryRefusesBindingDriftAndLostAuthority(t *testing.T) {
 				return
 			}
 			cut := errors.New("cut")
-			err := f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, pairedAdmission, func(_ context.Context, _ Receipt, _ []byte, _ bool, _ Check, bind func([]byte) error) error {
-				if err := bind([]byte(`{"schema":1}`)); err != nil {
+			err := f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, pairedAdmission, func(_ context.Context, _ Receipt, _ []byte, _ bool, _ Check, bind func([]byte, Check) error) error {
+				if err := bind([]byte(`{"schema":1}`), nil); err != nil {
 					return err
 				}
 				return cut
@@ -168,7 +168,7 @@ func TestPairedOfflineRetryRefusesBindingDriftAndLostAuthority(t *testing.T) {
 				}
 			}
 			called := false
-			err = f.store.WithPairedOfflineRetry(ctx, transaction, authority, quiescence, admission, func(c context.Context, _ Receipt, _ []byte, _ bool, check Check, _ func([]byte) error) error {
+			err = f.store.WithPairedOfflineRetry(ctx, transaction, authority, quiescence, admission, func(c context.Context, _ Receipt, _ []byte, _ bool, check Check, _ func([]byte, Check) error) error {
 				called = true
 				return check(c)
 			})
@@ -195,8 +195,8 @@ func TestPairedOfflineRetryPlanPublicationWithoutFenceHasNoResumeAuthority(t *te
 			return cut
 		}
 		return pairedAdmission(c, effect, begin)
-	}, func(_ context.Context, _ Receipt, _ []byte, _ bool, _ Check, bind func([]byte) error) error {
-		return bind([]byte(`{"schema":1}`))
+	}, func(_ context.Context, _ Receipt, _ []byte, _ bool, _ Check, bind func([]byte, Check) error) error {
+		return bind([]byte(`{"schema":1}`), nil)
 	})
 	if !errors.Is(err, cut) {
 		t.Fatal(err)
@@ -208,13 +208,66 @@ func TestPairedOfflineRetryPlanPublicationWithoutFenceHasNoResumeAuthority(t *te
 	err = f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, func(context.Context, string, func() error) error {
 		t.Fatal("unbound plan supplied receipt mutation authority")
 		return nil
-	}, func(_ context.Context, _ Receipt, data []byte, verifyOnly bool, _ Check, bind func([]byte) error) error {
-		if !verifyOnly || len(data) == 0 || bind(data) == nil {
+	}, func(_ context.Context, _ Receipt, data []byte, verifyOnly bool, _ Check, bind func([]byte, Check) error) error {
+		if !verifyOnly || len(data) == 0 || bind(data, nil) == nil {
 			t.Fatal("plan-only cut supplied resume authority")
 		}
 		return cut
 	})
 	if !errors.Is(err, cut) {
+		t.Fatal(err)
+	}
+	prepared := 0
+	effects := []string{}
+	err = f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, func(c context.Context, effect string, begin func() error) error {
+		effects = append(effects, effect)
+		return pairedAdmission(c, effect, begin)
+	}, func(c context.Context, _ Receipt, data []byte, verifyOnly bool, check Check, bind func([]byte, Check) error) error {
+		if !verifyOnly {
+			t.Fatal("plan-only state incorrectly bound")
+		}
+		return bind(data, func(held context.Context) error {
+			prepared++
+			if held != c {
+				t.Fatal("rederived precheck context changed")
+			}
+			return check(held)
+		})
+	})
+	if err != nil || prepared != 1 || len(effects) != 2 || effects[0] != "paired-offline-pending" || effects[1] != "paired-offline-complete" {
+		t.Fatal("reverified plan did not finish missing fence without rewriting plan", prepared, effects, err)
+	}
+}
+
+func TestPairedOfflineRetryPendingRenameUncertaintyKeepsColdRetryFence(t *testing.T) {
+	f, ctx, b, _ := pairedJournalFixture(t)
+	sealPairedFixture(t, f, ctx, b)
+	cut := errors.New("rename completed but durability acknowledgement lost")
+	err := f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, func(c context.Context, effect string, begin func() error) error {
+		if err := pairedAdmission(c, effect, begin); err != nil {
+			return err
+		}
+		if effect == "paired-offline-pending" {
+			return cut
+		}
+		return nil
+	}, func(_ context.Context, _ Receipt, _ []byte, _ bool, _ Check, bind func([]byte, Check) error) error {
+		return bind([]byte(`{"schema":1}`), nil)
+	})
+	if !errors.Is(err, cut) {
+		t.Fatal(err)
+	}
+	r, _, err := f.store.Current()
+	if err != nil || r.Schema != OfflineRetrySchema {
+		t.Fatal("uncertain publication lost fence", err)
+	}
+	err = f.store.WithPairedOfflineRetry(ctx, transaction, okay, okay, pairedAdmission, func(c context.Context, _ Receipt, data []byte, verifyOnly bool, check Check, _ func([]byte, Check) error) error {
+		if verifyOnly || len(data) == 0 {
+			t.Fatal("cold retry ignored durable pending receipt")
+		}
+		return check(c)
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 }

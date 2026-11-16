@@ -5,6 +5,7 @@ package updatecheck
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 )
 
 func runOfflineRetryNative(f *priorArchiveFixture, receipt selfupdatejournal.Receipt, data *[]byte, cut func(string) error, effects *[]string) error {
-	return restorePairedOfflineWithRetry(f.ctx, f.installation, receipt, func(string) error { return nil }, func(c context.Context) error { return c.Err() }, func(effect string, begin func() error) error { *effects = append(*effects, effect); return begin() }, commitOfflinePriorReplacement, cut, &offlineRetryState{data: *data, bind: func(next []byte) error {
+	return restorePairedOfflineWithRetry(f.ctx, f.installation, receipt, func(string) error { return nil }, func(c context.Context) error { return c.Err() }, func(effect string, begin func() error) error { *effects = append(*effects, effect); return begin() }, commitOfflinePriorReplacement, cut, &offlineRetryState{data: *data, bind: func(next []byte, _ selfupdatejournal.Check) error {
 		if len(*data) != 0 {
 			return ErrPairedOfflineRestore
 		}
@@ -177,7 +178,7 @@ func TestPairedOfflineRetryNativeStopAtAdmissionKeepsExactPreimage(t *testing.T)
 		// Refuse immediately around the prepared native rename. No begin means no
 		// installation CAS; merely reaching a positive owner check is insufficient.
 		return denied
-	}, commitOfflinePriorReplacement, nil, &offlineRetryState{bind: func(next []byte) error { data = bytes.Clone(next); return nil }})
+	}, commitOfflinePriorReplacement, nil, &offlineRetryState{bind: func(next []byte, _ selfupdatejournal.Check) error { data = bytes.Clone(next); return nil }})
 	if !errors.Is(err, denied) || admissions != 1 || len(data) == 0 {
 		t.Fatal("did not exercise exact admission window", admissions, err)
 	}
@@ -204,5 +205,93 @@ func TestPairedOfflineRetryNativeStopAtAdmissionKeepsExactPreimage(t *testing.T)
 	var effects []string
 	if err := runOfflineRetryNative(f, r, &data, nil, &effects); err != nil || len(effects) != len(doc.Items) {
 		t.Fatal("fresh authority could not resume retained stages", len(effects), err)
+	}
+}
+
+func TestPairedOfflinePlanOnlyNativeReDerivesBeforeFencing(t *testing.T) {
+	for _, failure := range []string{"none", "preconfig", "stage-inode", "forged-post", "mixed-prefix", "stop-before-fence"} {
+		t.Run(failure, func(t *testing.T) {
+			f, r := offlineRestoreFixture(t, false)
+			var data []byte
+			var initial []string
+			cut := errors.New("plan publication cut")
+			point := "before:offline-replace:etc/init.d/S99razvilka"
+			if failure == "mixed-prefix" {
+				point = "after:offline-replace:etc/init.d/S99razvilka"
+			}
+			err := runOfflineRetryNative(f, r, &data, func(name string) error {
+				if name == point {
+					return cut
+				}
+				return nil
+			}, &initial)
+			if !errors.Is(err, cut) {
+				t.Fatal(err)
+			}
+			doc, err := decodeOfflinePriorPlan(r, data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch failure {
+			case "preconfig":
+				err = os.WriteFile(filepath.Join(f.installation, "etc/razvilka/config.json"), []byte(`{"schema":1}`), 0600)
+			case "stage-inode", "forged-post":
+				item := &doc.Items[0]
+				stage := filepath.Join(f.installation, filepath.Dir(filepath.FromSlash(item.Path)), item.Stage)
+				payload, readErr := os.ReadFile(stage)
+				info, statErr := os.Stat(stage)
+				if readErr != nil || statErr != nil {
+					t.Fatal("stage unavailable")
+				}
+				if failure == "stage-inode" {
+					err = os.WriteFile(stage+"-foreign", payload, info.Mode())
+					if err == nil {
+						err = os.Rename(stage+"-foreign", stage)
+					}
+				} else {
+					payload = []byte("#!/bin/sh\nexit 0\n")
+					err = os.WriteFile(stage, payload, info.Mode())
+					info, statErr = os.Stat(stage)
+					if statErr != nil {
+						t.Fatal(statErr)
+					}
+					row := &item.After[0]
+					row.Size = int64(len(payload))
+					row.SHA256 = digestBytes(payload)
+					row.Identity, err = offlinePersistentIdentity(info)
+					data, err = json.Marshal(doc)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			fenced, effects := 0, 0
+			revoked := false
+			err = restorePairedOfflineWithRetry(f.ctx, f.installation, r, func(string) error { return nil }, func(c context.Context) error {
+				if revoked {
+					return cut
+				}
+				return c.Err()
+			}, func(_ string, begin func() error) error { effects++; return begin() }, commitOfflinePriorReplacement, nil, &offlineRetryState{data: data, verifyOnly: true, bind: func(got []byte, ready selfupdatejournal.Check) error {
+				if !bytes.Equal(got, data) || ready == nil {
+					t.Fatal("plan changed or missing prepared full proof")
+				}
+				if failure == "stop-before-fence" {
+					revoked = true
+				}
+				if err := ready(f.ctx); err != nil {
+					return err
+				}
+				fenced++
+				return nil
+			}})
+			if failure == "none" {
+				if err != nil || fenced != 1 || effects != len(doc.Items) {
+					t.Fatal("known plan-only cut did not safely finish", fenced, effects, err)
+				}
+			} else if err == nil || fenced != 0 || effects != 0 {
+				t.Fatal("invalid plan-only state obtained fence/effects", fenced, effects, err)
+			}
+		})
 	}
 }

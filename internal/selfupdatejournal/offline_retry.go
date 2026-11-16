@@ -42,7 +42,7 @@ func offlinePlanSHA(data []byte) string {
 // Success is legal only after the callback verifies the entire post-image;
 // only then is the original schema4 receipt restored atomically. All ordinary
 // mutation entry points reject schema5 through matching().
-func (s *Store) WithPairedOfflineRetry(ctx context.Context, id string, authority, quiescence Check, admission Admission, restore func(context.Context, Receipt, []byte, bool, Check, func([]byte) error) error) error {
+func (s *Store) WithPairedOfflineRetry(ctx context.Context, id string, authority, quiescence Check, admission Admission, restore func(context.Context, Receipt, []byte, bool, Check, func([]byte, Check) error) error) error {
 	if s == nil || ctx == nil || authority == nil || quiescence == nil || admission == nil || restore == nil || s.pairedEvidence == nil || !idPattern.MatchString(id) {
 		return ErrMismatch
 	}
@@ -86,8 +86,10 @@ func (s *Store) WithPairedOfflineRetry(ctx context.Context, id string, authority
 			if err != nil || len(plan) == 0 {
 				return ErrMismatch
 			}
-			// A schema4 receipt supplies NO resume authority. Existing plan-only or
-			// completed attempts may only prove all post-images without any effect.
+			// A schema4 receipt supplies NO direct resume authority. A completed
+			// attempt may prove all post-images without effects. A plan-only cut
+			// needs a fresh independently rederived prepared proof before bind
+			// may publish the missing schema5 fence and permit installation.
 			verifyOnly = true
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return ErrMismatch
@@ -117,41 +119,51 @@ func (s *Store) WithPairedOfflineRetry(ctx context.Context, id string, authority
 	if err := s.verifyPairedEvidence(ctx, original); err != nil {
 		return err
 	}
-	publish := func(receipt Receipt, effect string) error {
+	publish := func(receipt Receipt, effect string, ready Check) error {
 		data, err := json.Marshal(receipt)
 		if err != nil || !valid(receipt) {
 			return ErrMismatch
 		}
-		_, err = s.journal.WriteAtomicWithRenameAdmission(id+"/receipt.json", data, 0600, func(rename func() error) error { return admission(ctx, effect, rename) }, func() error { return check(ctx) })
+		_, err = s.journal.WriteAtomicWithRenameAdmission(id+"/receipt.json", data, 0600, func(rename func() error) error { return admission(ctx, effect, rename) }, func() error {
+			if err := check(ctx); err != nil {
+				return err
+			}
+			if ready != nil {
+				return ready(ctx)
+			}
+			return nil
+		})
 		if err != nil {
 			return err
 		}
 		expected = receiptSHA(receipt)
 		return syncDirectory(s.journalFiles, id)
 	}
-	bind := func(data []byte) error {
-		if bound || verifyOnly || len(data) == 0 || len(data) > MaximumOfflinePlanBytes {
+	bind := func(data []byte, ready Check) error {
+		if bound || len(data) == 0 || len(data) > MaximumOfflinePlanBytes || verifyOnly && (ready == nil || !bytes.Equal(data, plan)) {
 			return ErrMismatch
 		}
 		if err := check(ctx); err != nil {
 			return err
 		}
-		if _, err := s.journal.Stat(planName); !errors.Is(err, os.ErrNotExist) {
-			return ErrMismatch
-		}
-		if _, err := s.journal.WriteAtomicWithRenameAdmission(planName, data, 0600, func(rename func() error) error { return admission(ctx, "paired-offline-plan", rename) }, func() error { return check(ctx) }); err != nil {
-			return err
-		}
-		if err := syncDirectory(s.journalFiles, id); err != nil {
-			return err
+		if !verifyOnly {
+			if _, err := s.journal.Stat(planName); !errors.Is(err, os.ErrNotExist) {
+				return ErrMismatch
+			}
+			if _, err := s.journal.WriteAtomicWithRenameAdmission(planName, data, 0600, func(rename func() error) error { return admission(ctx, "paired-offline-plan", rename) }, func() error { return check(ctx) }); err != nil {
+				return err
+			}
+			if err := syncDirectory(s.journalFiles, id); err != nil {
+				return err
+			}
 		}
 		next := original
 		next.Schema, next.Phase = OfflineRetrySchema, "offline-restoring"
 		next.Offline = &OfflineRetryBinding{offlinePlanSHA(data), receiptSHA(original), original.Phase}
-		if err := publish(next, "paired-offline-pending"); err != nil {
+		if err := publish(next, "paired-offline-pending", ready); err != nil {
 			return err
 		}
-		plan, bound = bytes.Clone(data), true
+		plan, bound, verifyOnly = bytes.Clone(data), true, false
 		return check(ctx)
 	}
 	// The DTO passed to the callback is a copy; its slices cannot rewrite the
@@ -176,7 +188,7 @@ func (s *Store) WithPairedOfflineRetry(ctx context.Context, id string, authority
 	if err := s.verifyPairedEvidence(ctx, original); err != nil {
 		return err
 	}
-	if err := publish(original, "paired-offline-complete"); err != nil {
+	if err := publish(original, "paired-offline-complete", nil); err != nil {
 		return err
 	}
 	return check(ctx)

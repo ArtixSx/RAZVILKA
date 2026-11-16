@@ -335,7 +335,7 @@ func (a *SelfUpdateFileAdapter) RestorePairedPriorState(ctx context.Context, id 
 	defer store.Close()
 	err = store.WithPairedOfflineRetry(ctx, id, check, quiescence, func(c context.Context, effect string, begin func() error) error {
 		return admission(c, id, effect, begin)
-	}, func(c context.Context, receipt selfupdatejournal.Receipt, plan []byte, verifyOnly bool, held selfupdatejournal.Check, bind func([]byte) error) error {
+	}, func(c context.Context, receipt selfupdatejournal.Receipt, plan []byte, verifyOnly bool, held selfupdatejournal.Check, bind func([]byte, selfupdatejournal.Check) error) error {
 		return restorePairedOfflineWithRetry(c, a.installation, receipt, a.owned, held, func(effect string, begin func() error) error {
 			return admission(c, id, effect, begin)
 		}, commitOfflinePriorReplacement, nil, &offlineRetryState{data: plan, bind: bind, verifyOnly: verifyOnly})
@@ -624,7 +624,7 @@ func restorePairedOffline(ctx context.Context, installation string, receipt self
 
 type offlineRetryState struct {
 	data       []byte
-	bind       func([]byte) error
+	bind       func([]byte, selfupdatejournal.Check) error
 	verifyOnly bool
 }
 
@@ -697,6 +697,43 @@ func restorePairedOfflineWithRetry(ctx context.Context, installation string, rec
 	}
 	defer fs.Close()
 	if retry != nil && len(retry.data) != 0 {
+		if retry.verifyOnly {
+			doc, err := decodeOfflinePriorPlan(receipt, retry.data)
+			if err != nil {
+				return err
+			}
+			completed, err := offlinePriorPlanPosition(ctx, installation, fs, doc, owned)
+			if err != nil {
+				return err
+			}
+			if completed == 0 {
+				if retry.bind == nil {
+					return ErrPairedOfflineRestore
+				}
+				ready := func(c context.Context) error {
+					if c != ctx {
+						return ErrPairedOfflineRestore
+					}
+					if err := boundary("before:offline-rebind"); err != nil {
+						return err
+					}
+					fresh, freshData, err := readPairedPriorArchive(c, archive, archiveFS, binding)
+					if err != nil || !reflect.DeepEqual(prior, fresh) || !bytes.Equal(data, freshData) {
+						return ErrPairedOfflineRestore
+					}
+					return verifyOfflinePriorUnbound(c, installation, source, fs, archiveFS, prior, doc, owned)
+				}
+				if err := ready(ctx); err != nil {
+					return err
+				}
+				if err := retry.bind(retry.data, ready); err != nil {
+					return err
+				}
+				retry.verifyOnly = false
+			} else if completed != len(doc.Items) {
+				return ErrPairedOfflineRestore
+			}
+		}
 		return resumeOfflinePriorPlan(ctx, installation, fs, receipt, retry.data, owned, boundary, admission, commit, retry.verifyOnly)
 	}
 	current, seen, err := scanPairedPriorState(ctx, source, fs, nil, binding, owned, boundary)
@@ -780,7 +817,7 @@ func restorePairedOfflineWithRetry(ctx context.Context, installation string, rec
 		if err != nil {
 			return err
 		}
-		if err := retry.bind(data); err != nil {
+		if err := retry.bind(data, nil); err != nil {
 			return err
 		}
 		return resumeOfflinePriorPlan(ctx, installation, fs, receipt, data, owned, boundary, admission, commit, false)

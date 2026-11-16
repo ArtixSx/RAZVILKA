@@ -9,9 +9,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
@@ -483,6 +485,100 @@ func offlineRetryNoForeignStages(ctx context.Context, fs *os.Root, doc offlineRe
 			if err := walk(spec.path, true); err != nil {
 				return err
 			}
+		}
+	}
+	return ctx.Err()
+}
+
+func offlinePriorPlanPosition(ctx context.Context, installation string, fs *os.Root, doc offlineRetryPlan, owned func(string) error) (int, error) {
+	if err := offlineRetryNoForeignStages(ctx, fs, doc); err != nil {
+		return 0, err
+	}
+	completed := 0
+	sawPre := false
+	for _, item := range doc.Items {
+		parent, fd, err := offlineRetryParent(installation, item, owned)
+		if err != nil {
+			return 0, err
+		}
+		post, _, err := offlineRetryLayout(ctx, parent, item)
+		fd.Close()
+		parent.Close()
+		if err != nil {
+			return 0, err
+		}
+		if post {
+			if sawPre {
+				return 0, ErrPairedOfflineRestore
+			}
+			completed++
+		} else {
+			sawPre = true
+		}
+	}
+	if err := verifyOfflineRetryInventory(ctx, fs, doc, completed); err != nil {
+		return 0, err
+	}
+	return completed, ctx.Err()
+}
+
+func offlineRetryNodes(rows []offlineRetryNode) map[string]offlinePriorNode {
+	nodes := map[string]offlinePriorNode{}
+	for _, row := range rows {
+		nodes[row.Path] = offlinePriorNode{directory: row.Directory, mode: row.Mode, size: row.Size, sha: row.SHA256}
+	}
+	return nodes
+}
+
+// A plan-only cut has no receipt5 authority. Re-derive every replacement from
+// the immutable source archive and the verified CURRENT pre-config; never
+// promote a descriptor's self-asserted destination/hash into installation
+// authority. The prepared callback repeats this immediately before fencing5.
+func verifyOfflinePriorUnbound(ctx context.Context, installation string, source *ownedfs.Root, fs, archive *os.Root, prior pairedPriorArchive, doc offlineRetryPlan, owned func(string) error) error {
+	completed, err := offlinePriorPlanPosition(ctx, installation, fs, doc, owned)
+	if err != nil || completed != 0 {
+		return ErrPairedOfflineRestore
+	}
+	before := offlineRetryNodes(doc.Unchanged)
+	for _, item := range doc.Items {
+		for name, node := range offlineRetryNodes(item.Before) {
+			before[name] = node
+		}
+	}
+	after := offlinePriorNodes(prior)
+	priorConfig, err := readOfflineBlob(ctx, archive, after["etc/razvilka/config.json"], 4<<20)
+	if err != nil {
+		return err
+	}
+	currentConfig, err := source.ReadLimited("etc/razvilka/config.json", 4<<20)
+	if err != nil || digestBytes(currentConfig) != before["etc/razvilka/config.json"].sha {
+		return ErrPairedOfflineRestore
+	}
+	merged, err := offlinePriorConfig(priorConfig, currentConfig)
+	if err != nil {
+		return err
+	}
+	after["etc/razvilka/config.json"] = offlinePriorNode{mode: 0600, size: int64(len(merged)), sha: digestBytes(merged), data: merged}
+	for _, name := range []string{"etc/init.d/S99razvilka", "etc/init.d/S99artem-flow", "etc/init.d/S99artem-flow.razvilka-disabled"} {
+		_, old := after[name]
+		_, exists := before[name]
+		if old || exists {
+			guard := []byte(pairedOfflineInitGuard)
+			mode := uint32(0755)
+			if strings.HasSuffix(name, ".razvilka-disabled") {
+				mode = 0600
+			}
+			after[name] = offlinePriorNode{mode: mode, size: int64(len(guard)), sha: digestBytes(guard), data: guard}
+		}
+	}
+	delete(after, "razvilka/run/razvilka.pid")
+	expected, err := offlineRestorePlan(before, after, nil)
+	if err != nil || len(expected) != len(doc.Items) {
+		return ErrPairedOfflineRestore
+	}
+	for i, item := range doc.Items {
+		if expected[i].path != item.Path || !reflect.DeepEqual(offlineSubtree(expected[i].before, item.Path), offlineRetryNodes(item.Before)) || !reflect.DeepEqual(offlineSubtree(expected[i].after, item.Path), offlineRetryNodes(item.After)) {
+			return ErrPairedOfflineRestore
 		}
 	}
 	return ctx.Err()
