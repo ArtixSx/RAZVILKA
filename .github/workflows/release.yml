@@ -138,6 +138,21 @@ jobs:
           }
           (cd dist && sha256sum -c ../SHA256SUMS)
 
+      - name: Prepare pinned AMD64 HEV vendor assets with complete source and notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Preparation only: this does not change the application's default
+          # component catalog, qualify ARM64, or publish a component release.
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y curl ca-certificates make patch python3 xz-utils
+          python3 scripts/test-prepare-hev-vendor-assets.py
+          sh scripts/build-hev-runtime-altstack-lab.sh "$RUNNER_TEMP/hev-vendor-build"
+          python3 scripts/prepare-hev-vendor-assets.py \
+            --repo "$GITHUB_WORKSPACE" --build-dir "$RUNNER_TEMP/hev-vendor-build" \
+            --output "$RUNNER_TEMP/hev-vendor-assets"
+          (cd "$RUNNER_TEMP/hev-vendor-assets" && sha256sum -c razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS)
+
       - name: Attest release provenance
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
@@ -152,6 +167,9 @@ jobs:
             RAZVILKA-*.SHA256SUMS
             RAZVILKA-entware.tar.gz
             RAZVILKA-entware.tar.gz.sha256
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-linux-amd64
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS
 
       - name: Prepare draft GitHub Release
         env:
@@ -185,4 +203,7 @@ jobs:
             "RAZVILKA-${VERSION}-entware.zip" \
             "RAZVILKA-${VERSION}.SHA256SUMS" \
             RAZVILKA-entware.tar.gz \
-            RAZVILKA-entware.tar.gz.sha256
+            RAZVILKA-entware.tar.gz.sha256 \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-linux-amd64" \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz" \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS"

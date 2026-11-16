@@ -29,6 +29,7 @@ jobs:
           mkdir -p artifacts
           { git rev-parse HEAD; go version; uname -srvm; lscpu; strace -V; } > artifacts/platform.txt
       - name: Build unchanged and patched source with the same pinned compiler
+        id: source-build
         shell: bash
         run: |
           set -euo pipefail
@@ -64,6 +65,79 @@ jobs:
           PYCODE
           printf 'lab_exit=%s production_pin_unchanged=true route_readiness_claim=false\n' "$status" > artifacts/outcome.txt
           exit "$status"
+      - name: Verify fresh vendor packaging without publishing
+        if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'TESTS' 2>&1 | tee artifacts/vendor-packaging-tests.txt
+          import runpy, sys, unittest
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(runpy.run_path('scripts/test-prepare-hev-vendor-assets.py')['Packaging'])
+          result = unittest.TextTestRunner(stream=sys.stdout, verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.skipped or result.testsRun == 0:
+              raise SystemExit(1)
+          print('HEV_VENDOR_PACKAGING_TESTS_NO_SKIP_PASS')
+          TESTS
+          for side in one two; do
+            python3 scripts/prepare-hev-vendor-assets.py \
+              --repo "$GITHUB_WORKSPACE" --build-dir "$GITHUB_WORKSPACE/artifacts/hev-lab" \
+              --output "$RUNNER_TEMP/hev-vendor-$side" > "artifacts/vendor-packaging-$side.json"
+          done
+          python3 - <<'VERIFY'
+          import hashlib, json, os, pathlib, tarfile
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          first, second = root/'hev-vendor-one', root/'hev-vendor-two'
+          name = 'razvilka-hev-2.17.1-runtime-altstack1'
+          filenames = {name+'-linux-amd64', name+'-sources-notices.tar.xz', name+'.SHA256SUMS'}
+          assert {p.name for p in first.iterdir()} == {p.name for p in second.iterdir()} == filenames
+          blobs = {n: (first/n).read_bytes() for n in filenames}
+          assert all(blobs[n] == (second/n).read_bytes() for n in filenames), 'nondeterministic packaging'
+          sha = lambda data: hashlib.sha256(data).hexdigest()
+          assert sha(blobs[name+'-linux-amd64']) == '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9'
+          def sums(data):
+              pairs = [line.split('  ', 1) for line in data.decode('utf-8').splitlines()]
+              assert all(len(p) == 2 and len(p[0]) == 64 and set(p[0]) <= set('0123456789abcdef') for p in pairs)
+              result = {n: digest for digest, n in pairs}
+              assert len(result) == len(pairs), 'duplicate checksum entry'
+              return result
+          assert sums(blobs[name+'.SHA256SUMS']) == {n: sha(d) for n, d in blobs.items() if n != name+'.SHA256SUMS'}
+          assert len(blobs[name+'-sources-notices.tar.xz']) <= 16 << 20
+          with tarfile.open(first/(name+'-sources-notices.tar.xz'), 'r:xz') as tar:
+              members = tar.getmembers()
+              assert len(members) <= 1000 and sum(m.size for m in members) <= 32 << 20
+              assert len({m.name for m in members}) == len(members)
+              payload = {}
+              for member in members:
+                  path = pathlib.PurePosixPath(member.name)
+                  assert member.isfile() and not member.pax_headers
+                  assert member.uid == member.gid == member.mtime == 0 and member.mode == 0o644
+                  assert path.parts[0] == name and not path.is_absolute() and '..' not in path.parts
+                  assert path.as_posix() == member.name and '\\' not in member.name
+                  payload[path.relative_to(name).as_posix()] = tar.extractfile(member).read()
+          assert sums(payload['SHA256SUMS']) == {n: sha(d) for n, d in payload.items() if n != 'SHA256SUMS'}
+          manifest = json.loads(payload['vendor-manifest.json'])
+          assert manifest['architecture'] == 'linux-amd64' and manifest['binary_sha256'] == sha(blobs[name+'-linux-amd64'])
+          assert len(manifest['licenses']) == 129
+          assert len({e['bundle_path'] for e in manifest['licenses']}) == 129
+          assert all(sha(payload[e['bundle_path']]) == e['sha256'] for e in manifest['licenses'])
+          assert all(sha(payload[n]) == digest for n, digest in manifest['payload_sha256'].items())
+          assert payload['LICENSE'] == pathlib.Path('LICENSE').read_bytes()
+          assert payload['provenance/build-manifest.json'] == pathlib.Path('artifacts/hev-lab/build-manifest.json').read_bytes()
+          assert sha(payload['source/hev-socks5-tunnel-2.17.1.tar.xz']) == 'a7b86050091c5a268d81de70b95d3bb0871ba4136160662b6496596761c2f9a7'
+          result = dict(schema=1, source_commit=os.environ['GITHUB_SHA'], assets_sha256={n: sha(d) for n,d in sorted(blobs.items())},
+                        archive_members=len(payload), inner_hashes=len(payload)-1, upstream_notices=129,
+                        repeated_packages_identical=True, project_license_preserved=True,
+                        fresh_linux_builder=True, published=False, default_pin_changed=False, router_acceptance=False)
+          pathlib.Path('artifacts/vendor-packaging-verification.json').write_text(json.dumps(result, indent=2)+'\n')
+          print('HEV_VENDOR_FRESH_BUILD_PACKAGING_PASS')
+          VERIFY
+      - name: Preserve prepared vendor assets without release publication
+        if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-vendor-prepared-${{ github.sha }}-${{ matrix.runner }}
+          path: ${{ runner.temp }}/hev-vendor-one/*
+          if-no-files-found: error
       - name: Preserve reviewed inputs and actual results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
