@@ -115,6 +115,14 @@ jobs:
           set -euo pipefail
           sudo apt-get install --no-install-recommends -y make patch
           mkdir -p artifacts
+          python3 - <<'PYCODE'
+          import json,pathlib,struct
+          data=pathlib.Path('/proc/self/auxv').read_bytes()
+          assert 0 < len(data) <= 4096 and len(data)%16 == 0
+          minimum=next(value for key,value in struct.iter_unpack('<QQ',data) if key==51)
+          assert 0 < minimum <= 1<<20
+          pathlib.Path('artifacts/hev-lab-platform.json').write_text(json.dumps({'at_minsigstksz_bytes':minimum,'official_fixed_stack_bytes':8192,'official_libc_minimum_bytes':max(minimum,1024)+1024,'source_lab':True})+'\n')
+          PYCODE
           sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
           echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
           sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
@@ -138,6 +146,7 @@ jobs:
           name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: |
             artifacts/hev-lab-build.txt
+            artifacts/hev-lab-platform.json
             artifacts/hev-lab-pin-tests.txt
             artifacts/hev-lab/build-manifest.json
             artifacts/hev-lab/fault-tests.txt
@@ -245,6 +254,14 @@ jobs:
           set -euo pipefail
           sudo apt-get install --no-install-recommends -y make patch
           mkdir -p artifacts
+          python3 - <<'PYCODE'
+          import json,pathlib,struct
+          data=pathlib.Path('/proc/self/auxv').read_bytes()
+          assert 0 < len(data) <= 4096 and len(data)%16 == 0
+          minimum=next(value for key,value in struct.iter_unpack('<QQ',data) if key==51)
+          assert 0 < minimum <= 1<<20
+          pathlib.Path('artifacts/hev-lab-platform.json').write_text(json.dumps({'at_minsigstksz_bytes':minimum,'official_fixed_stack_bytes':8192,'official_libc_minimum_bytes':max(minimum,1024)+1024,'source_lab':True})+'\n')
+          PYCODE
           sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
           echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
           sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
@@ -268,6 +285,7 @@ jobs:
           name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: |
             artifacts/hev-lab-build.txt
+            artifacts/hev-lab-platform.json
             artifacts/hev-lab-pin-tests.txt
             artifacts/hev-lab/build-manifest.json
             artifacts/hev-lab/fault-tests.txt
