@@ -1,15 +1,20 @@
-name: Matched original domain image comparison
+name: Matched current-source domain image comparison
 
 on:
   workflow_dispatch:
   push:
-    branches: ['work/research-build-20261109']
+    branches: ['work/research-build-20261109', 'work/domain-image-current-20261116']
     paths:
       - 'internal/dataplane/xray_domain_tcp_file_observation.go'
       - 'internal/dataplane/xray_domain_tcp_resource_files.go'
       - 'internal/dataplane/xray_domain_tcp_image_read.go'
       - 'internal/dataplane/xray_domain_tcp_image_read_test.go'
       - 'scripts/compare-domain-image-native.sh'
+      - 'scripts/domain-image-variant/**'
+      - 'scripts/test-domain-image-comparison.py'
+      - 'internal/dataplane/xray_domain_tcp_execution.go'
+      - 'internal/dataplane/domain_tcp_guard_read.go'
+      - 'internal/dataplane/domain_tcp_successor_byte_comparison.go'
       - '.github/workflows/domain-image-comparison.yml'
 
 permissions:
@@ -23,7 +28,7 @@ env:
 jobs:
   matched-domain:
     name: Same runner ABBA / ${{ matrix.scenario }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -38,6 +43,10 @@ jobs:
         with:
           go-version: '1.26.5'
           cache: false
+      - name: Current-source variant AST and complete tree parity contracts
+        run: |
+          go test ./scripts/domain-image-variant -count=1
+          python3 scripts/test-domain-image-comparison.py
       - name: Same installed pinned binary and tools for all four samples
         shell: bash
         run: |
@@ -49,7 +58,7 @@ jobs:
           unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
-      - name: Original unchanged deadlines, joined ABBA samples
+      - name: Image feature versus full-SHA fallback, unchanged deadlines, joined ABBA
         shell: bash
         env:
           SCENARIO: ${{ matrix.scenario }}

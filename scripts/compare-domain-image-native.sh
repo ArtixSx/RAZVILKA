@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-export GIT_OPTIONAL_LOCKS=0
+export GIT_OPTIONAL_LOCKS=0 GIT_NO_LAZY_FETCH=1
 # Disposable CI only. Each sample uses the unchanged original harness, which
 # creates a fresh process and private topology and joins its owned children.
 test "$(id -u)" = 0 || { echo 'root isolated CI fixture required' >&2; exit 2; }
@@ -18,7 +18,7 @@ case "$RAZVILKA_DOMAIN_IMAGE_OUTPUT" in /*) ;; *) exit 2 ;; esac
 case "$RAZVILKA_XRAY_NATIVE" in /*) ;; *) exit 2 ;; esac
 for tool in git python3 timeout go sha256sum tar setsid sleep; do command -v "$tool" >/dev/null; done
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-baseline=344912c11f285a4c2dc0ac0eadd8ab64e6110160
+baseline=synthetic-current-source-full-SHA-fallback
 candidate=$(git -c safe.directory="$repo" -C "$repo" rev-parse HEAD)
 case "$candidate" in *[!0-9a-f]*) exit 2 ;; esac
 test "${#candidate}" = 40 || exit 2
@@ -33,20 +33,16 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' HUP TERM
-# The old source is independently pinned even after the published Git history is reset.
-python3 "$repo/scripts/restore-compatibility-source.py" --commit "$baseline" --destination "$work/baseline" --local-repo "$repo" --git-fixture
-# Reject fixture/budget/dependency drift rather than silently compare different
-# acceptance rules. Neither archived source tree is patched.
-for path in scripts/test-domain-original-native.sh scripts/fetch-native-fixture.sh \
-  internal/app/domain_tcp_original_native_linux_test.go \
-  internal/app/domain_tcp_original_native_peers_linux_test.go go.mod go.sum; do
-  old=$(git -c safe.directory="$work/baseline" -C "$work/baseline" rev-parse "HEAD:$path")
-  new=$(git -c safe.directory="$repo" -C "$repo" rev-parse "$candidate:$path")
-  test "$old" = "$new" || { printf 'comparison fixture drift: %s\n' "$path" >&2; exit 2; }
-  printf '%s %s\n' "$old" "$path" >> "$output/unchanged-fixtures.txt"
+# Both trees are the SAME exact current source. Historical344912c comparisons
+# remain separate evidence; do not relabel this controlled variant as history.
+for side in baseline candidate; do
+  mkdir -m 700 "$work/$side"
+  git --no-lazy-fetch -c safe.directory="$repo" -C "$repo" archive "$candidate" | tar -x -C "$work/$side"
 done
-mkdir -m 700 "$work/candidate"
-git -c safe.directory="$repo" -C "$repo" archive "$candidate" | tar -x -C "$work/candidate"
+# One reviewed AST statement disables image acquisition in the baseline only.
+# Its existing nil-image branches perform the full-SHA fallback, including the
+# dependent pre-Add/Guard paths. Every other source byte/mode must match.
+go -C "$work/candidate" run ./scripts/domain-image-variant "$work/candidate" "$work/baseline" "$output/source-comparison" "$candidate"
 export DOMAIN_IMAGE_BASELINE=$baseline DOMAIN_IMAGE_CANDIDATE=$candidate
 export DOMAIN_IMAGE_SCENARIO=$scenario DOMAIN_IMAGE_EXPECTED=$expected DOMAIN_IMAGE_OUTPUT=$output
 python3 - <<'PY'
@@ -54,7 +50,7 @@ import hashlib,json,os,pathlib,platform,subprocess
 out=pathlib.Path(os.environ['DOMAIN_IMAGE_OUTPUT'])
 cpu=next((x.split(':',1)[1].strip() for x in pathlib.Path('/proc/cpuinfo').read_text().splitlines() if x.startswith('model name')), 'unknown')
 files={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in map(pathlib.Path,[os.environ['RAZVILKA_XRAY_NATIVE'],'/usr/sbin/xtables-legacy-multi','/usr/bin/ip'])}
-meta={'baseline':os.environ['DOMAIN_IMAGE_BASELINE'],'candidate':os.environ['DOMAIN_IMAGE_CANDIDATE'],'scenario':os.environ['DOMAIN_IMAGE_SCENARIO'],'order':['baseline','candidate','candidate','baseline'],'cpu_model':cpu,'kernel':platform.release(),'go':subprocess.check_output(['go','version'],text=True).strip(),'assets_sha256':files,'native_GOMAXPROCS':2,'limits':['Unchanged publication12s/client4s; no diagnostic deadline override','Fresh process/namespace each sample; warm host page cache, not cold IO','Original profile span label is Run-through-join; failed cleanup error is not retained, so counter/profile markers do not prove joined cleanup','Retained image bytes are not process RSS or router memory proof','Two samples per side do not establish statistical significance; compare identical completed stages only']}
+meta={'baseline':os.environ['DOMAIN_IMAGE_BASELINE'],'candidate':os.environ['DOMAIN_IMAGE_CANDIDATE'],'source_variants':json.loads((out/'source-comparison/variant.json').read_text()),'scenario':os.environ['DOMAIN_IMAGE_SCENARIO'],'order':['baseline','candidate','candidate','baseline'],'cpu_model':cpu,'kernel':platform.release(),'go':subprocess.check_output(['go','version'],text=True).strip(),'assets_sha256':files,'native_GOMAXPROCS':2,'limits':['Unchanged publication12s/client4s; no diagnostic deadline override','Same current-source image feature versus synthetic full-SHA fallback, including dependent pre-Add/Guard sharing; not historical344912c or memcmp-only','Ubuntu24.04 host; absolute durations are not comparable to earlier different-host runs','Fresh process/namespace each sample; warm host page cache, not cold IO','Counter/profile markers alone do not prove joined cleanup; original errors and supervisor outcomes are retained','Retained image bytes are not process RSS or router memory proof','Two samples per side do not establish statistical significance; compare identical completed stages only']}
 cg=pathlib.Path('/sys/fs/cgroup/cpu.max')
 meta['cgroup_cpu_max']=cg.read_text().strip() if cg.exists() else 'unavailable'
 (out/'provenance.json').write_text(json.dumps(meta,indent=2)+'\n')
@@ -231,7 +227,7 @@ for index,side in enumerate(['baseline','candidate','candidate','baseline'],1):
     row['descendant_boundary']=boundary
     if not boundary.get('no_overlap_boundary',False):failed=True
     if not row['diagnostic_evidence_complete']:failed=True
-    if not valid or int((p/'log-status.txt').read_text())!=0 or rc>1 or side=='candidate' and not passed:failed=True
+    if not passed:failed=True # Any native FAIL stays a failed comparison, on either side.
     for line in log.splitlines():
         stage='first_answer' if 'actual first DNS answer completed-counter snapshot' in line else 'before_stop' if 'actual before stopRun completed-counter snapshot' in line else 'joined' if 'actual Run through join observation counts:' in line else None
         if stage:
@@ -239,6 +235,14 @@ for index,side in enumerate(['baseline','candidate','candidate','baseline'],1):
             keys=['whole-executable-hash','executable-image-capture','executable-image-compare']
             row[stage]['observed_executable_io']={field:sum(row[stage].get(key,{}).get(field,0) for key in keys) for field in ['calls','bytes']}
     row['first_dns_answer_observed']='first_answer' in row
+    image_counts=[int(n) for n in re.findall(r'executable-image-(?:capture|compare|storage):\{Calls:(\d+)',log)]
+    row['image_path_observed']=any(image_counts)
+    row['full_sha_path_observed']=any(int(n)>0 for n in re.findall(r'whole-executable-hash:\{Calls:(\d+)',log))
+    # Do not require image activity when a sample refuses before reaching it.
+    path_valid=(not row['image_path_observed']) if side=='baseline' else (not row['first_dns_answer_observed'] or row['image_path_observed'])
+    if side=='baseline' and row['first_dns_answer_observed'] and not row['full_sha_path_observed']:path_valid=False
+    row['variant_path_valid']=path_valid
+    if not path_valid:row['status']='fail';failed=True
     row['selected_tls_timeout']='Client.Timeout exceeded while awaiting headers' in log
     row['gen1_publication_failure']='actual DNS publication did not become available' in log
     row['native_outcomes']=[line.strip() for line in log.splitlines() if line.startswith(('--- PASS:','--- FAIL:'))]
@@ -248,7 +252,7 @@ entries=list(out.rglob('*'))
 if any(p.is_symlink() or not (p.is_dir() or p.is_file()) for p in entries):raise SystemExit('nonregular comparison evidence refused')
 files=[p for p in entries if p.is_file()]
 if len(files)>80 or sum(p.stat().st_size for p in files)>16<<20:raise SystemExit('bounded comparison evidence limit exceeded')
-report={'baseline':os.environ['DOMAIN_IMAGE_BASELINE'],'candidate':os.environ['DOMAIN_IMAGE_CANDIDATE'],'scenario':os.environ['DOMAIN_IMAGE_SCENARIO'],'samples':rows,'all_candidate_samples_pass':all(r.get('status')=='pass' for r in rows if r['side']=='candidate'),'evidence':{str(p.relative_to(out)):{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in files}}
+report={'baseline':os.environ['DOMAIN_IMAGE_BASELINE'],'candidate':os.environ['DOMAIN_IMAGE_CANDIDATE'],'source_variants':json.loads((out/'source-comparison/variant.json').read_text()),'scenario':os.environ['DOMAIN_IMAGE_SCENARIO'],'samples':rows,'all_samples_pass':all(r.get('status')=='pass' for r in rows),'all_candidate_samples_pass':all(r.get('status')=='pass' for r in rows if r['side']=='candidate'),'evidence':{str(p.relative_to(out)):{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in files}}
 (out/'comparison.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps({'scenario':report['scenario'],'samples':[{k:r[k] for k in ['sample','side','status']} for r in rows],'all_candidate_samples_pass':report['all_candidate_samples_pass']}))
 sys.exit(1 if failed else 0)
