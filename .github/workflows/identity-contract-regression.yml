@@ -78,6 +78,8 @@ jobs:
           { git rev-parse HEAD; go version; uname -a; lscpu; } > artifacts/environment.txt
           go test -count=1 -v ./internal/netidentity | tee artifacts/identity.txt
           go test -race -count=1 -v ./internal/netidentity | tee artifacts/identity-race.txt
+          go test -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent' | tee artifacts/baseline-current.txt
+          go test -race -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent' | tee artifacts/baseline-current-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestXrayListenerImage|^TestXrayImageScope|^TestXrayDomainFileObservation|^TestXrayDomainFileOpening' | tee artifacts/listener-image.txt
