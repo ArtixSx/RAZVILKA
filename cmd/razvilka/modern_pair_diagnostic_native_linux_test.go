@@ -53,6 +53,19 @@ func nativeModernClosedFailureCode(value string) string {
 	return "unavailable"
 }
 
+func nativeModernClosedQuiesce(data []byte) string {
+	const prefix = "runtime quiesce refused; category="
+	text := string(data)
+	if len(data) > 512 || !strings.HasPrefix(text, prefix) || !strings.HasSuffix(text, "\n") {
+		return "unavailable"
+	}
+	stage := strings.TrimSuffix(strings.TrimPrefix(text, prefix), "\n")
+	if stage == "unknown" || text != updatecheck.RuntimeQuiesceFailureOutput(stage)+"\n" {
+		return "unavailable"
+	}
+	return stage
+}
+
 func nativeModernTerminalJob(job updatecheck.Job, id string, helperPID int, helperAbsent bool) bool {
 	return len(id) == 32 && strings.Trim(id, "0123456789abcdef") == "" && helperPID > 1 && helperAbsent &&
 		job.ID == id && job.HelperPID == helperPID && job.State == "requires-review" && job.Stage == "file-protocol" &&
@@ -103,6 +116,13 @@ func nativeModernFailureReceipts(t *testing.T, id string) {
 		return
 	}
 	defer root.Close()
+	quiesce, quiesceErr := root.ReadLimited("quiesce-old-runtime.diagnostic", 512)
+	if quiesceErr == nil {
+		t.Logf("modern_quiesce category=%s", nativeModernClosedQuiesce(quiesce))
+	} else {
+		t.Log("modern_quiesce category=unavailable")
+	}
+	clear(quiesce)
 	for _, command := range nativeModernCommands {
 		data, err := root.ReadLimited(command+".process.json", 4096)
 		var r struct {
@@ -127,6 +147,16 @@ func TestNativeModernDiagnosticClosureAndTerminal(t *testing.T) {
 	for _, value := range []string{"private-token /private/path", "file-protocol-install-action-secret", "file-protocol-secret-source", strings.Repeat("x", 1024)} {
 		if nativeModernClosedFailureCode(value) != "unavailable" || nativeModernClosedLabel(value, nativeModernCommands...) != "unavailable" {
 			t.Fatal("private value escaped closed diagnostics")
+		}
+	}
+	for _, stage := range []string{"entry", "provider", "manager-platform", "runtime-source-close"} {
+		if nativeModernClosedQuiesce([]byte(updatecheck.RuntimeQuiesceFailureOutput(stage)+"\n")) != stage {
+			t.Fatal("original closed quiesce category lost")
+		}
+	}
+	for _, text := range []string{"private-token /private/path", "runtime quiesce refused; category=private\n", "runtime quiesce refused; category=provider\nextra\n", "runtime quiesce refused; category=unknown\n", strings.Repeat("x", 513)} {
+		if nativeModernClosedQuiesce([]byte(text)) != "unavailable" {
+			t.Fatal("arbitrary child output escaped quiesce diagnostics")
 		}
 	}
 	id := strings.Repeat("a", 32)
