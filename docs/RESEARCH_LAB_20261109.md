@@ -985,4 +985,37 @@ HEV9da0e4e2: `build-hev-runtime-altstack-lab.sh` →
 различаются между hosts, поэтому source archives не обязаны иметь общий SHA.
 Ссылки/версии/лицензии закреплены в manifest, полный source и patch включены.
 [Проверки](measurements/2026-11-16/hev-vendor-9da0e4e2.json).
-Default pin, ARM64 и router admission не изменены.
+На этом историческом этапе default pin, ARM64 и router admission не менялись.
+
+### Последующая интеграция default delivery и проверка границ ускорения
+
+ec62ac2a переводит обычный AMD64 selector на те же проверенные vendor bytes;
+ARM64 остаётся прежним. Native43949636941: по10 обязательных PASS normal/race,
+actual HTTP replacement1.19/3.23с, отказ при занятом процессе, подмене SHA,
+прерывании и незавершённой замене. Это local exact-URL transport, не публичный
+GET. URLv0.20.0 подготовлен для будущего пересоздания GitHub; старый tag
+наaef3a398 не меняется. Stage2 сохраняет official fixture отдельно для
+исторических сравнений; они больше не считаются изолированным замером кода.
+[Точная ревизия и raw SHA](measurements/2026-11-16/hev-default-ec62ac2a.json).
+
+6cba005b43948051402 подтвердил оба original NFQ recovery cuts в двух режимах:
+pre-ledger29.95/62.59с, prepared-active26.78/56.95с. Все6 логов независимо
+сверены по SHA, по16 контрактов в каждом режиме и полные4 маркера восстановления.
+[Доказательства](measurements/2026-11-16/nfq-recovery-6cba005b.json).
+Full Apply остаётся отдельным FAIL. 6db7a49e измеряет закрытый список стадий
+WG inactivity только в native fixture; bounded40 записей выводятся после
+исходной функции. Два прохода и8с сохранены, обычная сборка не читает часы
+или окружение и ничего не пишет. Независимое review и focused Windows PASS.
+
+Sameboot7a завершился12/14 PASS: parent/private4 и8 ACK; два race ACK120с FAIL.
+[Стадии](measurements/2026-11-16/mihomo-sameboot-7a338026.json).
+Исходные opening/closing self SHA разделены проверками ядра и процессов;
+повторное использование старого hash не эквивалентно свежему доказательству.
+
+Test-only netidentity.readFile experiment1cdb:8 AB/BA пар на режим,512 чтений
+на сторону, normal2224.34→2018.93ns, race4253.65→3812.53ns. Это лишь1.64µs
+или3.53µs на8 чтений capture; production-оптимизация отклонена как решение
+четырёхсекундного DNS отказа. [Измерения и пределы](measurements/2026-11-16/netidentity-readfile-1cdbbfae.json).
+Внешнее review дополнительно нашло mixed-mask/zero-ID край в test-only
+кандидате; исправление и новые негативные тесты проверяются отдельно и не
+наследуют исторический PASS замера.

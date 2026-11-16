@@ -1,14 +1,18 @@
 # Сборки и поддержка запуска
 
-Актуальный код `7a338026`, полный PR CI `4b7807e7` PASS:
+Актуальный код `a0ac0bb3`, полный PR CI `4b7807e7` PASS:
 [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 Наba5ffd02 все7 StrategyPair cuts и восстановленная панель PASS.
-На4b actual pre-ledger recovery-only normal/race PASS; полный NFQWS2 Apply,
-более ранний prepared.active и LAN rollback ещё не приняты.
+На6cba actual pre-ledger и prepared-active recovery-only normal/race PASS;
+полный NFQWS2 Apply и LAN rollback ещё не приняты.
 DNS9de:8 полных сценариев FAIL, хотя selected HTTPS проходит.
-Mihomo cb700 parent race FAIL120с; statx7a338026 с прежним Linux4.9 fallback
-прошёл отдельную native normal/race проверку43945773992; полный sameboot43946381158 выполняется. HEV9da готовит source/notices/assets;
-production pin/ARM64 не изменены. Generic CI не расширяет платформенный допуск.
+Mihomo7a: parent/private4/4 и ACK8/10 PASS; race completed.json и
+terminal-transaction FAIL120с. Fresh statx и принудительный ENOSYS fallback
+прошли отдельные полные native normal/race проверки.
+HEVec62 default AMD64 vendor install/HTTP replacement normal/race PASS;
+ARM64 unchanged. Публичный URLv0.20.0 относится к будущему пересозданному
+репозиторию; существующий tag не изменён. Default route проходит отдельный
+прогон. Generic CI не расширяет платформенный допуск.
 Роутер ожидает проверки изменившегося SSH host key владельцем.
 Старые таблицы ниже — история отдельных сценариев.
 

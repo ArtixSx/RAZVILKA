@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "sha": "7a338026094baf11b6e3635a20286d883509e211",
+  "run_id": 43946381158,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158",
+  "result": "FAIL",
+  "scope": "Historical HEV lab selector, unchanged full same-boot ownership matrix",
+  "parent_private_pass": 4,
+  "ack_pass": 8,
+  "ack_fail": 2,
+  "router_proven": false,
+  "failures": [
+    {
+      "source_current_calls": 261,
+      "cut": "completed.json",
+      "self_sha_calls": 522,
+      "actor_ms": 119996.67,
+      "self_sha_ms": 26150.194,
+      "source_current_ms": 57756.39,
+      "mode": "race"
+    },
+    {
+      "source_current_calls": 259,
+      "cut": "terminal-transaction",
+      "self_sha_calls": 517,
+      "actor_ms": 119995.411,
+      "self_sha_ms": 33728.405,
+      "source_current_ms": 57461.173,
+      "mode": "race"
+    }
+  ],
+  "limitations": [
+    "Nested intervals must not be added.",
+    "Two original consumer attempts share unchanged 120 second deadline.",
+    "Success count is completed GitHub job readback; failed-stage raw log retained.",
+    "No causal total-latency speedup established from different host runs."
+  ],
+  "jobs": [
+    {
+      "name": "original-parent-native (normal)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133577054713"
+    },
+    {
+      "name": "original-private-set (race)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133577055077"
+    },
+    {
+      "name": "original-private-set (normal)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133577055241"
+    },
+    {
+      "name": "original-parent-native (race)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133577055334"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994191"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994222"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994232"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994248"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994265"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994302"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "conclusion": "failure",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994336"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994343"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "conclusion": "success",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994439"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "conclusion": "failure",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43946381158/job/133580994474"
+    }
+  ],
+  "raw": [
+    {
+      "sha256": "1DE54D5487A4713EDE22F2FA5C8DCF62DC69492A74AADCEFB49DFCB157C61044",
+      "bytes": 35737,
+      "path": "C:\\RAZVILKA-research-20261116\\sameboot-statx-7a338026\\run.json"
+    },
+    {
+      "sha256": "E89D41ECAAE882F848835CD1DC37E182625F5ACE58E5917745DDE82884EC7C50",
+      "bytes": 54898,
+      "path": "C:\\RAZVILKA-research-20261116\\sameboot-statx-7a338026\\failed.log"
+    }
+  ]
+}
