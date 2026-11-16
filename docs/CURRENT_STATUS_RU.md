@@ -86,6 +86,16 @@ Netidentity normal/race и source parity PASS на8baead92. Микробенчм
 74.610→36.940мкс, 127296→63648Б на одинаковых валидных данных; это цена
 parser, не полный Apply или LAN. Raw hashes и отрицательные случаи сохранены.
 
+Повтор7b6e: modern/Strategy pair/три legacy recovery и iptables normal/race PASS.
+Mihomo2/4: lifecycle/settlement PASS, manual/post-CAS FAIL при раннем HEV exit254.
+NFQ fullLAN/manual и strict DNS остаются непринятыми. Probe pair PASS:
+314.0245→224.7245мс live,1473→1302.5мс selected queue, N12.
+Generic62b PASS; PR generic7b6e обнаружил недетерминированную предпосылку
+теста committed evidence о неизменности живого inventory. В7561f2ec точный
+state/digest/revision predicate не изменён; fixture стал детерминированным,
+добавлены отрицательные engine/host/route drift проверки и50 normal/race повторов.
+Новый CI оценивается по собственной ревизии, без переноса PASS старого запуска.
+
 ## Последний сохранённый сетевой этап: 09.11.2026
 
 Код modern public update/known rollback интегрирован в `690c0c30`, отдельный

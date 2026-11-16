@@ -39,6 +39,12 @@ DNS `eacafc39` на ubuntu24 проходит BPF guard, но не заверш�
 программная задача, не запрос оборудования. На8ba/62b targeted identity/BPF и
 schema2/3 update admission normal/race PASS. Полный hardware workflow не проверен.
 
+Повтор7b6e: Strategy pair и public legacy3/3 PASS, modern public rollback/restart
+PASS141.86с. Mihomo lifecycle/settlement PASS, manual/post-CAS FAIL до целевой
+границы (HEV startup). Probe182rows PASS, NFQ и strict DNS всё ещё FAIL.
+Generic62b PASS; generic PR7b6e отказал в ambient-dependent evidence fixture.
+Точность state/digest/revision predicate сохранена при детерминизации7561f2ec.
+
 Новая панель: 13 основных разделов, 21 сохранённая страница; Chromium desktop/mobile
 PASS с синтетическим остановленным состоянием. Это изменение представления,
 оно не расширяет API/AUTO admission или список поддержанных router-профилей.

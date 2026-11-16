@@ -170,3 +170,29 @@ Mihomo повтор e895, run43860680897:3/4PASS. Lifecycle candidate HEV sideca
 exit254/signal0, original same-host baseline также sidecar-start FAIL (exitcode
 не записан); оба rollback/verify-rollback PASS. Причина выхода HEV ещё неизвестна,
 stdout/stderr отбрасываются. Не делать вывод о TTL/сети/TUN только из exit254.
+
+## Интегрированная повторная проверка7b6e576b
+
+Public modern PASS141.86с; Strategy pair и old193 empty/draft/history PASS;
+iptables1.8.11 normal/race PASS. Strict DNS и diagnostic30 FAIL на известной
+effective BPF policy ubuntu-latest. NFQ fullLAN/manual normal/race FAIL.
+Отдельно core probe не достигнут: предварительный эксперимент фиксированного
+8MiB image model отверг actual8,918,408байт. Это не успешная проверка core.
+
+Mihomo run43865735517: lifecycle и check-settlement PASS, manual и post-CAS
+FAIL до целевой границы при HEV exit254. Для manual same-host baseline тоже
+sidecar-start FAIL, без записанного exit code. Не считать2/4 готовностью workflow.
+
+Probe run43865735751 PASS: baseline363f→7b6e, N12 live p50
+314.0245→224.7245мс, selected queue1473→1302.5мс, cleanup verified.
+Разница с147d на другой машине не доказывает эффект текущих изменений.
+Raw/manifest сохранены в `C:/RAZVILKA-research-20261116/integration-7b6e576b/`.
+
+Generic62b53867 PASS. PR generic7b6e FAIL в тесте committed evidence:
+он предполагал неизменность двух независимых ambient engine/host inventories.
+CreatedAt не участвует в digest; конкретный изменившийся field старый лог
+не сохранил. В7561f2ec прежние predicate/copy выделены без изменения семантики;
+положительный контракт проверяется на фиксированном actual BuildAt→Record→Committed,
+отдельно проверяются state/digest/revision/missing/read-error, реальный engine/host/route
+drift и nonaliasing. HTTP negative и запрет stale evidence сохранены.
+Независимое ревью PASS; normal/race повторы50 выполняются отдельным workflow.
