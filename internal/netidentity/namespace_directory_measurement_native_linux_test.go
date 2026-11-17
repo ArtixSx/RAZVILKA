@@ -140,7 +140,7 @@ func TestNamespaceDirectoryFDNativePaired(t *testing.T) {
 			}
 			var before, after runtime.MemStats
 			runtime.ReadMemStats(&before)
-			threadBefore, err := namespaceDirectoryCPU(-1)
+			threadBefore, err := namespaceDirectoryCPU(syscall.RUSAGE_THREAD)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -156,7 +156,7 @@ func TestNamespaceDirectoryFDNativePaired(t *testing.T) {
 				}
 			}
 			wall := time.Since(start)
-			threadAfter, err := namespaceDirectoryCPU(-1)
+			threadAfter, err := namespaceDirectoryCPU(syscall.RUSAGE_THREAD)
 			if err != nil {
 				t.Fatal(err)
 			}
