@@ -1,10 +1,36 @@
 package systemprobe
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+func TestProbeEntwareOpkgDiscoveryResult(t *testing.T) {
+	firmware := t.TempDir()
+	name := "opkg"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(firmware, name), []byte("lookup only; never execute"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", firmware)
+	if _, err := exec.LookPath("opkg"); err != nil {
+		t.Fatal("firmware PATH control missing", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, path := range []string{"", "/opt/bin/opkg", "/opt/sbin/opkg"} {
+		got := probeContextWithOpkg(ctx, path)
+		if got.Opkg != (path != "") {
+			t.Fatalf("discovery %q: reported opkg=%t", path, got.Opkg)
+		}
+	}
+}
 
 func TestProbeAlwaysReportsArchitecture(t *testing.T) {
 	if Probe().Architecture == "" {
