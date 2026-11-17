@@ -1,0 +1,222 @@
+{
+  "decision": "NO_GO; no production changes recommended in this inspected scope",
+  "source_pair": "nfqws2_active_execution.go:328 then339; nfqws2_active_process_owner.go:346",
+  "native_sequence": [
+    "operation finite ctx; protected path",
+    "R1 ownership.json image, strict decode and known",
+    "V1 running/notACK + complete asset bytes + control + Provider/helper/child",
+    "Q1 complete stock rules/queue/socket/PID and closing inventory",
+    "R2 ownership.json equal R1; V2 repeated full verify; known and ctx",
+    "select same active/prepared handle under original owner/execution mutex",
+    "prepared owner opening state + activation (or active finalACK/stop)",
+    "second operation finite ctx + protected path",
+    "R3 strict image/decode/known; V3; Q2; R4 equals R3; V4; known and ctx",
+    "actual first/second supplied observation equality",
+    "transfer none/provisional or final; owner/activation closing",
+    "final process proof validation and original first lease proof return"
+  ],
+  "first_result_use": [
+    "local supplied observation comparison",
+    "final proof return only; no external guard callback in between"
+  ],
+  "rejected_whole_merge": "Would remove Q2, one ownership byte pair and independent process/provider checks. Exact native provenance does not justify this.",
+  "narrow_middle_verify": "V2/V3-only composition would retain4record reads and2queue observations but needs typed reader provenance + frozen complete verify inputs + unconditional retained closing on later pure/R3 failure; not recommended due small measured CPU bound.",
+  "native_reader_provenance": "Current o.read is a function callback. A boolean original marker next to it is insufficient. A concrete owner-bound interface dispatch would be required, while custom function adapter retains old path; no such refactor implemented.",
+  "measured_cpu_seconds_997": {
+    "production_process": 6.22,
+    "production_verify_owner": 3.1,
+    "production_all_native_verify": 0.56,
+    "race_process": 3.49,
+    "race_verify_owner": 1.69,
+    "race_all_native_verify": 0.24,
+    "production_classic": 6.22,
+    "production_classic_save_runner": 3.89,
+    "production_between_tool_check": 1.43,
+    "production_registered_tables": 0.78,
+    "production_save_parse": 0.08,
+    "production_xtables_rows": 0.02
+  },
+  "finite_alternative_audit": "Classic reader already uses full-family save/batch, two complete images, registered-name before/after, shared aggregate limits and byte equality. Pure parse allocation target <=0.10CPU s in997; native syscall costs in fresh tools/provider/metadata have no proven removable adjacent work. Previous Readdirnames/parent-cache/parallel metadata approaches excluded; no extra experiment proposed.",
+  "review": "Lifecycle agrees whole-read NO-GO and no V2/V3 implementation recommendation",
+  "limits": [
+    "CPU inclusive, not wall prediction",
+    "997 normal and race distinct hosts/populations",
+    "manual failed Apply with successful rollback separate from fullLAN24s rollback failure",
+    "no deadline/effect/cleanup/source checks changed",
+    "generic consumer-close still lacks exactbranch evidence"
+  ],
+  "records": [
+    {
+      "mode": "production",
+      "profile": "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\production\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "profile_sha256": "b5484557b665d973e43f65d35810f75a0debefae78ae7f472222aef1ce187ea7",
+      "command": [
+        "C:/Projects/RAZVILKA/tools/go/bin/go.exe",
+        "tool",
+        "pprof",
+        "-nodecount=30",
+        "-peek=nfqws2ActiveRead.func1|\\(\\*nfqws2ActiveExecution\\).process",
+        "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\production\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof"
+      ],
+      "exit": 0,
+      "output": "C:\\RAZVILKA-research-20261117\\nfq-consumer-close-readonly-e3297ff1\\997-production-process-verify.txt",
+      "output_sha256": "778a2e123ec483cb05437cacf8e2a59e2df66c4d078b90225ce7395a897e77fd"
+    },
+    {
+      "mode": "production",
+      "profile": "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\production\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "profile_sha256": "b5484557b665d973e43f65d35810f75a0debefae78ae7f472222aef1ce187ea7",
+      "command": [
+        "C:/Projects/RAZVILKA/tools/go/bin/go.exe",
+        "tool",
+        "pprof",
+        "-nodecount=30",
+        "-peek=backendXTablesRows|backendXTablesRowTokens|backendClassicSaveTables|\\(\\*backendInventoryReader\\).classic",
+        "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\production\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof"
+      ],
+      "exit": 0,
+      "output": "C:\\RAZVILKA-research-20261117\\nfq-consumer-close-readonly-e3297ff1\\997-production-classic.txt",
+      "output_sha256": "20997c34a41bb511653912e14869dde914b8180331b36dfb3542fb456911da90"
+    },
+    {
+      "raw": "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\production\\manual.log",
+      "sha256": "a74c999c23e41d89008dc4f62f574d90da21b877a8ea7c034a303129e24258f0",
+      "selected": [
+        {
+          "line": 170,
+          "text": "2026/11/17 08:53:51 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=29234"
+        },
+        {
+          "line": 173,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN execution state=rolled-back rollback_verified=true"
+        },
+        {
+          "line": 182,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=nfqws2 phase=rollback state=passed"
+        },
+        {
+          "line": 183,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=nfqws2 phase=verify-rollback state=passed"
+        },
+        {
+          "line": 184,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=lan-policy phase=rollback state=passed"
+        },
+        {
+          "line": 185,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=lan-policy phase=verify-rollback state=passed"
+        },
+        {
+          "line": 188,
+          "text": "    strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+        },
+        {
+          "line": 199,
+          "text": "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (32.19s)"
+        }
+      ]
+    },
+    {
+      "raw": "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\production\\lan.log",
+      "sha256": "1e1d15b7e1cbf2a53bfa8bcdb632b1876b60dce7a888d96da2afe9e4f8a9de77",
+      "selected": [
+        {
+          "line": 173,
+          "text": "2026/11/17 08:53:13 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=29001"
+        },
+        {
+          "line": 177,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN execution state=rolled-back rollback_verified=true"
+        },
+        {
+          "line": 186,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=nfqws2 phase=rollback state=passed"
+        },
+        {
+          "line": 187,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=nfqws2 phase=verify-rollback state=passed"
+        },
+        {
+          "line": 188,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=lan-policy phase=rollback state=passed"
+        },
+        {
+          "line": 189,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=lan-policy phase=verify-rollback state=passed"
+        },
+        {
+          "line": 192,
+          "text": "    strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+        },
+        {
+          "line": 203,
+          "text": "--- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (49.53s)"
+        }
+      ]
+    },
+    {
+      "mode": "race",
+      "profile": "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\race\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "profile_sha256": "cfb0fa36de4f085415a7b9319f25f7f124a0af65f98be72005a523a3b4b9d63e",
+      "command": [
+        "C:/Projects/RAZVILKA/tools/go/bin/go.exe",
+        "tool",
+        "pprof",
+        "-nodecount=30",
+        "-peek=nfqws2ActiveRead.func1|\\(\\*nfqws2ActiveExecution\\).process",
+        "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\race\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof"
+      ],
+      "exit": 0,
+      "output": "C:\\RAZVILKA-research-20261117\\nfq-consumer-close-readonly-e3297ff1\\997-race-process-verify.txt",
+      "output_sha256": "2b3cef6be30a58ea36d46e5bda467a6c04c20e394a34e118286189072eb99c3c"
+    },
+    {
+      "raw": "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\race\\manual.log",
+      "sha256": "50031d08654ba4ae7ec54a21b8326fd8c940a14bae6161afc3a8ea281a2407bc",
+      "selected": [
+        {
+          "line": 164,
+          "text": "2026/11/17 08:57:35 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=OPERATION_BUSY total_ms=52532"
+        },
+        {
+          "line": 167,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN execution state=rolled-back rollback_verified=true"
+        },
+        {
+          "line": 176,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=nfqws2 phase=rollback state=passed"
+        },
+        {
+          "line": 177,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=nfqws2 phase=verify-rollback state=passed"
+        },
+        {
+          "line": 178,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=lan-policy phase=rollback state=passed"
+        },
+        {
+          "line": 179,
+          "text": "    strategy_managed_probe_native_linux_test.go:546: actual original LAN step adapter=lan-policy phase=verify-rollback state=passed"
+        },
+        {
+          "line": 182,
+          "text": "    strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+        },
+        {
+          "line": 193,
+          "text": "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (60.14s)"
+        }
+      ]
+    },
+    {
+      "raw": "C:\\RAZVILKA-research-20261117\\managed-phases-9971aa1b\\race\\lan.log",
+      "sha256": "41d1fd3a303f251d5ec340b9128e9609b9482e5a2ce317f535cd00052d673d62",
+      "selected": [
+        {
+          "line": 39,
+          "text": "--- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (22.06s)"
+        }
+      ]
+    }
+  ]
+}

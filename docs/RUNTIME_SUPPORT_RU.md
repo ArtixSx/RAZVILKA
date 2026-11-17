@@ -1,9 +1,11 @@
 # Сборки и поддержка запуска
 
-Текущая интеграция `49c25e20`: push CI SUCCESS, PR CI SUCCESS.
-Mihomo4jobs, probe comparison, StrategyLab7cuts/restored panel, modern и
-legacy update/rollback PASS. Native lifecycle FAILURE: strict DNS selected
-и canceled-ready, managed NFQWS normal/race остаются открытыми.
+Интеграция997: push и PR CI SUCCESS; текущие4Mihomo-сценария, probe,
+StrategyLab/modern/legacy rollback PASS. Исторический4cc manual отдельный FAIL.
+Кандидатd1 содержит проверенные WG/DNS оптимизации; source-only сравнения
+показывают сокращение конкретной работы, но все fullApply/mixed DNS arms FAIL.
+Полный managed d1 normal/race FAIL; общий CI кандидата ещё выполняется.
+Это не готовность router/LAN и не разрешение установки.
 [Единая актуальная матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 
 Новый pinned profile `5031d70d` относится к нынешним40ELF/30extension names

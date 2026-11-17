@@ -1,0 +1,688 @@
+{
+  "source": "d1e44b1d0c49f7708247a2fffd1fe717787926cb",
+  "run": 44053982264,
+  "conclusion": "failure",
+  "recorded_utc": "2026-11-17T09:33:57.617092+00:00",
+  "jobs": [
+    {
+      "id": 133938470951,
+      "name": "Startup loader closure (normal)",
+      "conclusion": "success"
+    },
+    {
+      "id": 133938471375,
+      "name": "Managed scope managed (race)",
+      "conclusion": "failure"
+    },
+    {
+      "id": 133938471430,
+      "name": "Managed scope managed (production)",
+      "conclusion": "failure"
+    },
+    {
+      "id": 133938471594,
+      "name": "Startup loader closure (race)",
+      "conclusion": "success"
+    }
+  ],
+  "artifact_zip_sha256": {
+    "production": "5468565ff87ec846644958601218d4a01d7c108a70cfd0aefa864c5a9bf5d5a7",
+    "race": "c96400f3eb2f4e5298b608fe6fab82c3125b5dcf8181fae631b1986e26ea8fdb"
+  },
+  "raw_files_verified": 33,
+  "profiles_verified": [
+    {
+      "mode": "production",
+      "test": "TestManagedStrategyProbeNativeLANManualApply",
+      "original_test_exit": 1,
+      "path": "production/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "bytes": 99247,
+      "sha256": "f19d21cc45e24be4c9c12abdd9db8c22b4e3bfc91344649d728a34ebbc443bc8"
+    },
+    {
+      "mode": "production",
+      "test": "TestManagedStrategyProbeNativeLANManualApply",
+      "original_test_exit": 1,
+      "path": "production/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "bytes": 132345,
+      "sha256": "c54dd8e7a06a7dc15c41cfbf9006d3feee7b6ea5867d173dbdb67ed3eb1924d5"
+    },
+    {
+      "mode": "production",
+      "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+      "original_test_exit": 1,
+      "path": "production/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "bytes": 162341,
+      "sha256": "989250baa685fd4c8530229cdc9c89b1b646b931f1143519495f25eff747190f"
+    },
+    {
+      "mode": "production",
+      "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+      "original_test_exit": 1,
+      "path": "production/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "bytes": 221888,
+      "sha256": "ee03f7fa1fb64be9b800b6fdcfbff325976a44f61f978c81f6fbb550ecc13c99"
+    },
+    {
+      "mode": "race",
+      "test": "TestManagedStrategyProbeNativeLANManualApply",
+      "original_test_exit": 1,
+      "path": "race/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "bytes": 140789,
+      "sha256": "861eaba750bad8c81083678e6874e24686be0d8412f90e1c5ffd5293793ead4f"
+    },
+    {
+      "mode": "race",
+      "test": "TestManagedStrategyProbeNativeLANManualApply",
+      "original_test_exit": 1,
+      "path": "race/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "bytes": 130464,
+      "sha256": "2caceef149ce503a6cf55450d9b025a361f72439616a6d4e464bb2057edf79a2"
+    },
+    {
+      "mode": "race",
+      "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+      "original_test_exit": 1,
+      "path": "race/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "bytes": 61992,
+      "sha256": "9d8005d20dc1f9a7c06f62e3c44f766b66cd4bae3440e51bc1dc87467813642f"
+    },
+    {
+      "mode": "race",
+      "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+      "original_test_exit": 1,
+      "path": "race/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "bytes": 60789,
+      "sha256": "9999ee2d9f910fddae2443dee65e5acf884b5367d2ef7e21476e5c8d3a1dc455"
+    }
+  ],
+  "cases": [
+    {
+      "mode": "production",
+      "file": "lan.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 1.9
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "seconds": 53.3
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 28173
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": true,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        1231610288,
+        1221797677,
+        1299234839,
+        1236600667
+      ]
+    },
+    {
+      "mode": "production",
+      "file": "manual.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 1.72
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "seconds": 30.76
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 28025
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": true,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        1227623808,
+        1215580326,
+        1208278293,
+        1251156719
+      ]
+    },
+    {
+      "mode": "production",
+      "file": "never-issued-intent.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 2.17
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "seconds": 53.41
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 22431
+        },
+        {
+          "stage": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 27848
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": true,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [
+        "strategy_managed_probe_native_linux_test.go:546: actual_never_issued_recovered mode=intent intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true"
+      ],
+      "completed_wg_calls_ns": [
+        1202310945,
+        1194438300,
+        1195385588,
+        1188594001,
+        1223492937,
+        1207323200,
+        1198993810,
+        1204244297
+      ]
+    },
+    {
+      "mode": "production",
+      "file": "never-issued-settlement-sync.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 2.02
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "seconds": 56.15
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "native-apply",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 13848
+        },
+        {
+          "stage": "native-apply",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 28539
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": true,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [
+        "strategy_managed_probe_native_linux_test.go:546: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true"
+      ],
+      "completed_wg_calls_ns": [
+        1226756756,
+        1240001737,
+        1220552181,
+        1275598150,
+        1313519330,
+        1274040839,
+        1263411699,
+        1254692431
+      ]
+    },
+    {
+      "mode": "production",
+      "file": "preledger.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 2.1
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPreLedgerRecovery",
+          "seconds": 20.14
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 16931
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        1210969893,
+        1238010356,
+        1243251004,
+        1220247454
+      ]
+    },
+    {
+      "mode": "production",
+      "file": "prepared-active.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 1.95
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPreparedActiveRecovery",
+          "seconds": 17.11
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 14217
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        1217283522,
+        1220573568,
+        1273224112,
+        1220659428
+      ]
+    },
+    {
+      "mode": "production",
+      "file": "probe.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeConsumer",
+          "seconds": 6.99
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeConsumerInitialWaitCleanup",
+          "seconds": 9.76
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeConsumerLateWaitCleanup",
+          "seconds": 14.67
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeAppHTTP",
+          "seconds": 22.95
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeClosingSource",
+          "seconds": 6.87
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeClosingRuntime",
+          "seconds": 6.83
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeClosingControl",
+          "seconds": 6.88
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeClosingEnvironment",
+          "seconds": 6.66
+        }
+      ],
+      "apply_timings_including_rollback": [],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": []
+    },
+    {
+      "mode": "production",
+      "file": "quarantine-close-retry.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 1.73
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "seconds": 27.92
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "native-apply",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 14335
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [
+        "strategy_managed_probe_native_linux_test.go:546: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=false"
+      ],
+      "completed_wg_calls_ns": [
+        1261911493,
+        1288930434,
+        1295597607,
+        1292481769
+      ]
+    },
+    {
+      "mode": "production",
+      "file": "wg-measurement-contracts.log",
+      "outcomes": [],
+      "apply_timings_including_rollback": [],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": []
+    },
+    {
+      "mode": "production",
+      "file": "wg-tool-observation.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestNativeWGKernelLinkOriginalHeldSource",
+          "seconds": 0.11
+        }
+      ],
+      "apply_timings_including_rollback": [],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": []
+    },
+    {
+      "mode": "race",
+      "file": "lan.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 1.71
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "seconds": 22.09
+        }
+      ],
+      "apply_timings_including_rollback": [],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": []
+    },
+    {
+      "mode": "race",
+      "file": "manual.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 1.96
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "seconds": 62.18
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "lan-preflight-inventory-consumer-close",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 53779
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": true,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        3351124180,
+        3407382516,
+        3396544153,
+        3397408137
+      ]
+    },
+    {
+      "mode": "race",
+      "file": "never-issued-intent.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 2.23
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "seconds": 61.86
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "lan-preflight-inventory-consumer-close",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 53568
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": true,
+      "retained_cleanup_refused": true,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        3369173303,
+        3340879101,
+        3391222094,
+        3319225289
+      ]
+    },
+    {
+      "mode": "race",
+      "file": "never-issued-settlement-sync.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 2.04
+        },
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "seconds": 61.43
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "lan-preflight-inventory-consumer-close",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 53474
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": true,
+      "retained_cleanup_refused": true,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        3348553382,
+        3345906801,
+        3362997402,
+        3338572937
+      ]
+    },
+    {
+      "mode": "race",
+      "file": "preledger.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 2.09
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPreLedgerRecovery",
+          "seconds": 60.15
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 50902
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        3363850387,
+        3349838665,
+        3360736222,
+        3375738923
+      ]
+    },
+    {
+      "mode": "race",
+      "file": "prepared-active.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "seconds": 2.05
+        },
+        {
+          "result": "PASS",
+          "test": "TestManagedStrategyProbeNativeLANPreparedActiveRecovery",
+          "seconds": 53.76
+        }
+      ],
+      "apply_timings_including_rollback": [
+        {
+          "stage": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 44178
+        }
+      ],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": [
+        3337156680,
+        3330394856,
+        3328480794,
+        3323064555
+      ]
+    },
+    {
+      "mode": "race",
+      "file": "probe.log",
+      "outcomes": [
+        {
+          "result": "FAIL",
+          "test": "TestManagedStrategyProbeNativeConsumer",
+          "seconds": 19.6
+        }
+      ],
+      "apply_timings_including_rollback": [],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": []
+    },
+    {
+      "mode": "race",
+      "file": "wg-measurement-contracts.log",
+      "outcomes": [],
+      "apply_timings_including_rollback": [],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": []
+    },
+    {
+      "mode": "race",
+      "file": "wg-tool-observation.log",
+      "outcomes": [
+        {
+          "result": "PASS",
+          "test": "TestNativeWGKernelLinkOriginalHeldSource",
+          "seconds": 0.25
+        }
+      ],
+      "apply_timings_including_rollback": [],
+      "independently_empty_failed_apply_cleanup": false,
+      "fault_not_reached": false,
+      "retained_cleanup_refused": false,
+      "recovered_cut_markers": [],
+      "completed_wg_calls_ns": []
+    }
+  ],
+  "interpretation": {
+    "production": "CoreConsumer/InitialWait/LateWait/AppHTTP pass. FullLAN and manual Apply deadline at nfq-consumer-open; rollback and independent cleanup pass. Never-issued intent/sync recover original cuts, later freshApply fails; recovery-only and quarantine-close retry pass.",
+    "race": "Core counter opening deadline; fullLAN probe503 RECOVERY_REQUIRED beforeApply. Manual consumer-close deadline with independentcleanup pass. Never-issued fault cuts not reached, retained cleanup refuses. Recovery-only cases pass.",
+    "acceptance": "FAIL. Do not infer readiness from completed WG cleanup or recovery-only results."
+  },
+  "limits": [
+    "No cross-host causal latency comparison with prior runs.",
+    "Original operation deadlines and parent race unchanged.",
+    "FullLAN24s acceptance distinct from manualABBA experiment.",
+    "Raw profiles include setup and rollback; phase counters overlap.",
+    "Full raw artifact SHA validated against GitHub API digest; local manifest covers extractedbytes."
+  ]
+}

@@ -1427,3 +1427,38 @@ lifecycle11/15jobs PASS. Strict DNS и managed NFQWS failures сохранены
 включая fullLAN rollback-failed при исходном24с cleanup. Успешные profiles
 не закрывают эти направления. [26 independently verified rawfiles](measurements/2026-11-16/integrated-49c25e20.json),
 [managed33rawfiles/8profiles и исходы](measurements/2026-11-16/managed-phases-49c25e20.json).
+
+
+## 17.11.2026 — d1: joined cleanup и prepared DNS read
+
+Исходные функции и новые пути независимо проверены. WG candidate e3297ff1,
+baseline9971aa1b: отличаются только два kernel-read leaf файла. Все остальные
+исходники, helper и тесты одинаковы; normal/race порядок ABBA. Скрипт
+`scripts/wg-tools-comparison/compare-wg-cleanup.py CHECKOUT NEW_OUTPUT` требует
+Linux root в disposable CI и pinned supervisor. [Run44053144205](https://github.com/ArtixSx/RAZVILKA/actions/runs/44053144205).
+4 completedWG calls:8,303481→5,243943с normal;11,612504→8,842598с race.
+Числа member reads/bytes внутри режима одинаковы.16CPU/alloc profiles проверены.
+Все8 full manualApply FAIL,8 independent cleanup PASS; это улучшение cleanup
+read cost, не доказательство работающего маршрута.
+
+DNS candidate76378802: baseline заменяет только checkPreparedWithFiles на точную
+функцию997; generic readWithFiles и новые helper definitions одинаковы.
+`scripts/compare-domain-prepared-read.sh` с RAZVILKA_DOMAIN_PREPARED_REPO,
+RAZVILKA_DOMAIN_PREPARED_OUTPUT и pinned RAZVILKA_XRAY_NATIVE; original12/4с.
+[Run44053144237](https://github.com/ArtixSx/RAZVILKA/actions/runs/44053144237).
+Selected HTTPS4/4 успешен, process-current delta270→238; cumulative1,572→1,391с.
+Все4 mismatch unknown.example.com FAIL4с доrelay; opaque не достигнут.
+capture-prepared-read86 completed calls у каждого candidate, включая ошибки.
+Это подтверждает фактическое использование пути, а не его readiness.83 comparison
+raw SHA и86 artifact files проверены. Scope/cancellation/cleanup не ослаблялись.
+
+Отвергнуто объединение двух NFQ o.observe: второй содержит отдельную Q2 kernel
+queue/rules sample; её удаление меняет контракт. Более узкий V2/V3 вариант имеет
+менее~0,14CPUс возможной части при сложной provenance-проверке; не реализован.
+Также generic DNS mapping/material callbacks нельзя объявить чистыми:
+FreshProfile/guard/resolver могут быть внешними callbacks. [Разбор NFQ](measurements/2026-11-16/nfq-observation-no-go-9971aa1b.json),
+[разбор DNS critical path](measurements/2026-11-16/domain-mismatch-d1e44b1d.json).
+
+На997 generic push+PR CI PASS; наd1 full managed44053982264 FAIL, loader2PASS.
+Программные отказы остаются задачами реализации. Установленный роутер не изменён;
+проверки Windows, genericCI, privileged Linux native и router/LAN не подменяют друг друга.

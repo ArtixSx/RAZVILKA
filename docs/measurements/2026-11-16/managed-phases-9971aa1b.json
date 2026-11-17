@@ -1,0 +1,1541 @@
+{
+  "run": 44049646012,
+  "head_sha": "9971aa1bdb4f4daf3afd65b85ebe7e1cdae4156c",
+  "overall": "FAIL",
+  "raw_manifest_sha256": "b9003c147a588fb0660e82927e90b4d967219087efb170dee671b2964b797bc1",
+  "all_downloaded_raw_hashes_verified": true,
+  "profiles": [
+    {
+      "path": "production/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "bytes": 162369,
+      "sha256": "a96673bcfb17704122d34941465bdb3039e560117de3f8b972719c1919908347",
+      "original_test_exit": 1
+    },
+    {
+      "path": "production/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "bytes": 266180,
+      "sha256": "9644e89abdca73277993567387ec3284bf64153dfdb7b6e6a3286e72e4395673",
+      "original_test_exit": 1
+    },
+    {
+      "path": "production/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "bytes": 110931,
+      "sha256": "b5484557b665d973e43f65d35810f75a0debefae78ae7f472222aef1ce187ea7",
+      "original_test_exit": 1
+    },
+    {
+      "path": "production/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "bytes": 166438,
+      "sha256": "6cb4de4f20bded58c012ff5db4f45664cbd38b54a1d7c29dfca999cc9097ead9",
+      "original_test_exit": 1
+    },
+    {
+      "path": "race/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "bytes": 63172,
+      "sha256": "7ec92aeb39af045a9a3f1dd0a7a4129b46cf55007fd2ab889020e710c425d9cf",
+      "original_test_exit": 1
+    },
+    {
+      "path": "race/lan-profiles/TestManagedStrategyProbeNativeLANAppHTTP/TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "bytes": 67014,
+      "sha256": "a4a9a0b4bd5060dde99b360f5bcad86822d9ffd5d07c4eb8a8995075f8b28230",
+      "original_test_exit": 1
+    },
+    {
+      "path": "race/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "bytes": 138168,
+      "sha256": "cfb0fa36de4f085415a7b9319f25f7f124a0af65f98be72005a523a3b4b9d63e",
+      "original_test_exit": 1
+    },
+    {
+      "path": "race/manual-profiles/TestManagedStrategyProbeNativeLANManualApply/TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "bytes": 139397,
+      "sha256": "21e23357fb2e990d37238296d42b16e49eea64ec6f016dd13bec23b1695906e0",
+      "original_test_exit": 1
+    }
+  ],
+  "cases": {
+    "production": {
+      "lan.log": {
+        "sha256": "1e1d15b7e1cbf2a53bfa8bcdb632b1876b60dce7a888d96da2afe9e4f8a9de77",
+        "bytes": 40189,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.14"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANAppHTTP",
+            "49.53"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=29001"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [
+          "actual original LAN execution state=rolled-back rollback_verified=true"
+        ],
+        "primary_failed_cleanup_independently_empty": true,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=1716615493 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1725076874 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1717042704 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1717046342 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 15.572752331s} active-inventory-capture:{142 142 1.59391289s} active-lan:{19 19 10.697464728s} active-read-pair:{71 71 2.419250199s} capture-current:{0 0 0s} cleanup-current:{10 10 174.937249ms} counter:{0 0 0s} current:{15 15 505.330271ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{1243 1243 4.193874406s} policy-apply:{1 1 13.940196848s} policy-readback:{25 25 23.320398571s} policy-remove:{0 0 0s} prepared-active:{1 1 1.767317379s}]"
+        ]
+      },
+      "manual.log": {
+        "sha256": "a74c999c23e41d89008dc4f62f574d90da21b877a8ea7c034a303129e24258f0",
+        "bytes": 39875,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.04"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANManualApply",
+            "32.19"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=29234"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [
+          "actual original LAN execution state=rolled-back rollback_verified=true"
+        ],
+        "primary_failed_cleanup_independently_empty": true,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=1742610351 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1712451348 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1754857777 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1775408537 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 15.590200199s} active-inventory-capture:{140 140 1.585689926s} active-lan:{18 18 10.794767766s} active-read-pair:{70 70 2.408991961s} capture-current:{0 0 0s} cleanup-current:{10 10 176.555935ms} counter:{0 0 0s} current:{15 15 525.798589ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{1221 1221 4.20180113s} policy-apply:{1 1 13.913074824s} policy-readback:{25 25 23.161435809s} policy-remove:{0 0 0s} prepared-active:{1 1 1.826395061s}]"
+        ]
+      },
+      "never-issued-intent.log": {
+        "sha256": "dbbc3efe7e3763b761b1e9f79764804e9b83453cfc2a22695622cea9f6ef5ee6",
+        "bytes": 55613,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.11"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANManualApply",
+            "51.90"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=19153",
+          "Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=29472"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply",
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [
+          "actual original LAN execution state=rolled-back rollback_verified=true"
+        ],
+        "primary_failed_cleanup_independently_empty": true,
+        "recovery_only_markers": [
+          "strategy_managed_probe_native_linux_test.go:546: actual_never_issued_recovered mode=intent intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true"
+        ],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=1760208727 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1749465569 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1736461620 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1730479682 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1794691242 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1764276913 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1765618217 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1780758513 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{2 2 22.620773278s} active-inventory-capture:{204 204 2.304876703s} active-lan:{27 27 15.419730739s} active-read-pair:{102 102 3.575443085s} capture-current:{0 0 0s} cleanup-current:{20 20 369.05239ms} counter:{0 0 0s} current:{30 30 1.068355079s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{1805 1805 6.94515266s} policy-apply:{2 2 19.216434741s} policy-readback:{40 40 30.949095978s} policy-remove:{0 0 0s} prepared-active:{2 2 3.59975901s}]"
+        ]
+      },
+      "never-issued-settlement-sync.log": {
+        "sha256": "a6686efbbf89b9db837d9f817d306ae1e1acc0a6d55edc159a4f0c584ab1bce0",
+        "bytes": 56161,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.13"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANManualApply",
+            "53.54"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=9782",
+          "Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=OPERATION_BUSY total_ms=29703"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply",
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [
+          "actual original LAN execution state=rolled-back rollback_verified=true"
+        ],
+        "primary_failed_cleanup_independently_empty": true,
+        "recovery_only_markers": [
+          "strategy_managed_probe_native_linux_test.go:546: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true"
+        ],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=1734758895 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1735389510 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1761219534 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1749489601 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1823719666 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1802449045 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1780264856 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1772679425 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{2 2 22.859143161s} active-inventory-capture:{212 212 2.525555163s} active-lan:{27 27 15.575144097s} active-read-pair:{106 106 4.134379932s} capture-current:{0 0 0s} cleanup-current:{31 31 562.181272ms} counter:{0 0 0s} current:{30 30 1.064205049s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{1828 1828 7.531994848s} policy-apply:{2 2 19.425705383s} policy-readback:{40 40 31.23323094s} policy-remove:{0 0 0s} prepared-active:{2 2 3.635124038s}]"
+        ]
+      },
+      "preledger.log": {
+        "sha256": "1868a5deb5fc0ee6ed57654c49d084aba5094f19644149b60c8c3e83862d980c",
+        "bytes": 37132,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "1.86"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPreLedgerRecovery",
+            "19.30"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=16067"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [
+          "strategy_managed_probe_native_linux_test.go:546: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        ],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=1808918188 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1771129858 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1745464046 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1727054494 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 3.523689881s} active-inventory-capture:{48 48 632.388867ms} active-lan:{5 5 2.013783639s} active-read-pair:{24 24 1.123529047s} capture-current:{0 0 0s} cleanup-current:{14 14 253.668332ms} counter:{0 0 0s} current:{15 15 539.017911ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{344 344 2.34528677s} policy-apply:{1 1 1.804400411s} policy-readback:{12 12 2.957166063s} policy-remove:{0 0 0s} prepared-active:{1 1 1.80409812s}]"
+        ]
+      },
+      "prepared-active.log": {
+        "sha256": "5afb7fea7848bceb1118419c05484e7013a9b36056e12cb9cc73872470fc02a0",
+        "bytes": 36759,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.02"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPreparedActiveRecovery",
+            "17.55"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=14466"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply/prepared.active"
+        ],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [
+          "strategy_managed_probe_native_linux_test.go:546: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        ],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=1807692607 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1790548081 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1796577511 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1766971529 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 1.823493556s} active-inventory-capture:{46 46 610.492976ms} active-lan:{3 3 661.098239ms} active-read-pair:{23 23 1.088385084s} capture-current:{0 0 0s} cleanup-current:{14 14 251.723165ms} counter:{0 0 0s} current:{14 14 517.125246ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{230 230 2.06357621s} policy-apply:{1 1 99.593284ms} policy-readback:{11 11 1.283357621s} policy-remove:{0 0 0s} prepared-active:{1 1 99.309461ms}]"
+        ]
+      },
+      "probe.log": {
+        "sha256": "55ab286f00195b9911cd7ff48194567c3bf7998676fa0e116b19e46292fbaffa",
+        "bytes": 196875,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestStaticVersionFactNativeNFQLANRPDB",
+            "0.12"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeNFQLANRPDB",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeNFQLANRPDB",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyWriteErrorPrecedence",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyFastPaths",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyClearsScratch",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyFreshFiles",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyConcurrent",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveCopyParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveWriterToCannotBypassBudget",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveClearsScratch",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveActualFamilies",
+            "0.04"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveActualCancellationJoins",
+            "0.01"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderCopyParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderPreservesWriterTo",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClearsOnErrorAndPanic",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderConcurrentCombinedWriter",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderChild",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderActualChild",
+            "0.04"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeSyscallArgumentParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeActualMutationAndSymlink",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeConcurrentArgumentsRemainExclusive",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeActualRootNodes",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeStatComparisonFields",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshHeldNodeActualMutationAndClosedFileParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshHeldNodeCloseRacesOriginalControl",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestClassicSaveNativeInventoryParity",
+            "0.41"
+          ],
+          [
+            "PASS",
+            "TestClassicSaveNativeLockCustody",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeClassicBatchBookends",
+            "0.11"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativePolicyReadObservation",
+            "0.19"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeScope",
+            "0.17"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeFailedIPClearsFact",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativePartialBatchNeverRetained",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeOriginalFingerprint",
+            "0.15"
+          ],
+          [
+            "PASS",
+            "TestClassicReadBatchNativeMutation",
+            "0.90"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeConsumer",
+            "5.32"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeConsumerInitialWaitCleanup",
+            "8.36"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeConsumerLateWaitCleanup",
+            "13.31"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeAppHTTP",
+            "18.37"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeClosingSource",
+            "5.28"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeClosingRuntime",
+            "5.32"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeClosingControl",
+            "5.39"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeClosingEnvironment",
+            "5.36"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelActualParity",
+            "0.08"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelOwnedMutations",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelActualParity",
+            "0.07"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelOwnedMutations",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelActualParity",
+            "0.07"
+          ],
+          [
+            "PASS",
+            "TestMetadataParallelOwnedMutations",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestVersionNamesCandidateSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestVersionNamesCandidateActualParity",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestVersionNamesCandidateSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestVersionNamesCandidateActualParity",
+            "0.06"
+          ],
+          [
+            "PASS",
+            "TestVersionNamesCandidateSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestVersionNamesCandidateActualParity",
+            "0.06"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementActualParity",
+            "0.10"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementRefusals",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementReadBoundaries",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementFixedSlot",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementConcurrentSlot",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementPairStorageAndFallback",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementPairFailureCleanup",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementActualParity",
+            "0.09"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementRefusals",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementReadBoundaries",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementFixedSlot",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementConcurrentSlot",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementPairStorageAndFallback",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementPairFailureCleanup",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementSourceParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementActualParity",
+            "0.08"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementRefusals",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementReadBoundaries",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementFixedSlot",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementConcurrentSlot",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementPairStorageAndFallback",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestStartupImageMeasurementPairFailureCleanup",
+            "0.00"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [],
+        "execution_stages": [],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[]"
+        ]
+      },
+      "quarantine-close-retry.log": {
+        "sha256": "b159855c3b9cf7c735fba7590eadc6e4380df85ad32743dc41aabbedb2563552",
+        "bytes": 37314,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.11"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANManualApply",
+            "24.04"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=9923"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [
+          "strategy_managed_probe_native_linux_test.go:546: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=false"
+        ],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=1818082140 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1839609571 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1809326405 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=1767871650 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 7.319361271s} active-inventory-capture:{72 72 949.618534ms} active-lan:{9 9 4.86983856s} active-read-pair:{36 36 1.68043628s} capture-current:{0 0 0s} cleanup-current:{21 21 392.083532ms} counter:{0 0 0s} current:{15 15 540.41587ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{615 615 3.279624434s} policy-apply:{1 1 5.562218015s} policy-readback:{15 15 8.265115652s} policy-remove:{0 0 0s} prepared-active:{1 1 1.82892606s}]"
+        ]
+      },
+      "wg-measurement-contracts.log": {
+        "sha256": "4ef992ecc16e3a693c68ab627d47e6e355f8ad68df0edd1368ec12a1834f9747",
+        "bytes": 5147,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestNativeActivePhaseMeasurementGeneration",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeActivePhaseMeasurementPopulation",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableOriginalSourceAndClosedRefusals",
+            "0.25"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableAllOwnedTablesAndCLIFallback",
+            "0.04"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableCloseCancelsAndJoins",
+            "0.02"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableKeepsNameFileBookends",
+            "0.07"
+          ],
+          [
+            "PASS",
+            "TestWGRuntimeInactiveMeasurementOriginalTwoPassOrder",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestWGRuntimeInactiveMeasurementRefusalAndPrivacy",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestWGRuntimeInactiveMeasurementBoundAndIncomplete",
+            "0.00"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [],
+        "execution_stages": [],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [],
+        "phase_lines": []
+      },
+      "wg-tool-observation.log": {
+        "sha256": "41b6f2415655c84556386781745c6b5423c849a214a132751ae276b2bbc2289f",
+        "bytes": 495,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestNativeWGKernelLinkOriginalHeldSource",
+            "0.07"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [],
+        "execution_stages": [],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [],
+        "phase_lines": []
+      }
+    },
+    "race": {
+      "lan.log": {
+        "sha256": "41d1fd3a303f251d5ec340b9128e9609b9482e5a2ce317f535cd00052d673d62",
+        "bytes": 21207,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.14"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANAppHTTP",
+            "22.06"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [],
+        "execution_stages": [],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[]"
+        ]
+      },
+      "manual.log": {
+        "sha256": "50031d08654ba4ae7ec54a21b8326fd8c940a14bae6161afc3a8ea281a2407bc",
+        "bytes": 38853,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.02"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANManualApply",
+            "60.14"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=OPERATION_BUSY total_ms=52532"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [
+          "actual original LAN execution state=rolled-back rollback_verified=true"
+        ],
+        "primary_failed_cleanup_independently_empty": true,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=3848216523 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3872358077 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3808046729 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3856473371 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 18.087801247s} active-inventory-capture:{50 50 2.059900547s} active-lan:{7 7 9.497717891s} active-read-pair:{25 25 3.260520494s} capture-current:{0 0 0s} cleanup-current:{14 14 556.171667ms} counter:{0 0 0s} current:{15 15 2.62929173s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{451 451 6.149798119s} policy-apply:{1 1 10.218777007s} policy-readback:{13 13 13.1354715s} policy-remove:{0 0 0s} prepared-active:{1 1 5.477386948s}]"
+        ]
+      },
+      "never-issued-intent.log": {
+        "sha256": "cf08e46dcbfc41d35f3f676231d87ca2f98a868b5f6de4de4690232666d416f6",
+        "bytes": 37169,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.13"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANManualApply",
+            "58.21"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=DEADLINE_EXCEEDED total_ms=50490"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": true,
+        "cleanup_refusals": [
+          "strategy_managed_probe_lan_native_linux_test.go:166: retained original LAN cleanup scoped NFQWS owner unavailable or mismatched"
+        ],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=3837972758 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3870345071 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3770943730 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3831544456 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 18.078419075s} active-inventory-capture:{47 47 1.661694614s} active-lan:{7 7 9.341777259s} active-read-pair:{24 24 2.573963365s} capture-current:{0 0 0s} cleanup-current:{10 10 402.831191ms} counter:{0 0 0s} current:{15 15 2.604379968s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{447 447 5.660853344s} policy-apply:{1 1 10.329457628s} policy-readback:{13 13 12.936237642s} policy-remove:{0 0 0s} prepared-active:{1 1 5.419048298s}]"
+        ]
+      },
+      "never-issued-settlement-sync.log": {
+        "sha256": "8189f32df446526b4c5962d532674a58bcbfcfe7feca70440d47afa2be5b18c3",
+        "bytes": 37139,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.12"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeLANManualApply",
+            "57.78"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=DEADLINE_EXCEEDED total_ms=50317"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": true,
+        "cleanup_refusals": [
+          "strategy_managed_probe_lan_native_linux_test.go:166: retained original LAN cleanup scoped NFQWS owner unavailable or mismatched"
+        ],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=3822925595 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3805137939 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3792313868 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3800450255 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 18.095742002s} active-inventory-capture:{48 48 1.665475407s} active-lan:{7 7 9.400844339s} active-read-pair:{24 24 2.563460774s} capture-current:{0 0 0s} cleanup-current:{10 10 396.158501ms} counter:{0 0 0s} current:{15 15 2.585177432s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{448 448 5.642160545s} policy-apply:{1 1 10.411583593s} policy-readback:{13 13 12.96409285s} policy-remove:{0 0 0s} prepared-active:{1 1 5.437304665s}]"
+        ]
+      },
+      "preledger.log": {
+        "sha256": "2143876c8dc115e1dd4a79c294f42662336d63a426d94ab9a079c1767a3a5834",
+        "bytes": 37384,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "2.09"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPreLedgerRecovery",
+            "57.23"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=48032"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+        ],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [
+          "strategy_managed_probe_native_linux_test.go:546: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        ],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=3901437165 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3892822137 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3899238966 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3813476632 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 13.337644782s} active-inventory-capture:{48 48 1.999840601s} active-lan:{5 5 5.765632993s} active-read-pair:{24 24 3.198728322s} capture-current:{0 0 0s} cleanup-current:{14 14 559.669271ms} counter:{0 0 0s} current:{15 15 2.613125663s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{344 344 5.474357419s} policy-apply:{1 1 5.485556803s} policy-readback:{12 12 8.541807757s} policy-remove:{0 0 0s} prepared-active:{1 1 5.48184213s}]"
+        ]
+      },
+      "prepared-active.log": {
+        "sha256": "f15721face7af564be56e863b7a1aa9146cc2d4a831167597c0378ffe0518769",
+        "bytes": 37585,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestManagedProbeFailedCleanupTerminalVector",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeFixturePhysicalSourceCopiesRefuse",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPhysical",
+            "1.95"
+          ],
+          [
+            "PASS",
+            "TestManagedStrategyProbeNativeLANPreparedActiveRecovery",
+            "52.63"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [
+          "Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=43286"
+        ],
+        "execution_stages": [
+          "Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply/prepared.active"
+        ],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [
+          "strategy_managed_probe_native_linux_test.go:546: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        ],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [
+          "actual_wg_runtime_inactive total_ns=3884131605 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3978874592 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3931452145 outcome=completed records=34 overflow=false",
+          "actual_wg_runtime_inactive total_ns=3952127577 outcome=completed records=34 overflow=false"
+        ],
+        "phase_lines": [
+          "strategy_managed_probe_native_linux_test.go:506: native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success map[activate:{1 1 8.171662962s} active-inventory-capture:{46 46 1.914381178s} active-lan:{3 3 1.864003214s} active-read-pair:{23 23 3.08082831s} capture-current:{0 0 0s} cleanup-current:{14 14 567.500983ms} counter:{0 0 0s} current:{14 14 2.448488228s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{230 230 4.816484288s} policy-apply:{1 1 503.253336ms} policy-readback:{11 11 3.695779967s} policy-remove:{0 0 0s} prepared-active:{1 1 500.164666ms}]"
+        ]
+      },
+      "probe.log": {
+        "sha256": "fd263898cc0488d9f9805113288eaac308b40f6d4d5b5fc37abb59172e432959",
+        "bytes": 68064,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestStaticVersionFactNativeNFQLANRPDB",
+            "0.28"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeNFQLANRPDB",
+            "0.26"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeNFQLANRPDB",
+            "0.25"
+          ],
+          [
+            "PASS",
+            "TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyWriteErrorPrecedence",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyFastPaths",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyClearsScratch",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyFreshFiles",
+            "0.02"
+          ],
+          [
+            "PASS",
+            "TestNFQWSManagedCopyConcurrent",
+            "0.01"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveCopyParity",
+            "0.01"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveWriterToCannotBypassBudget",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveClearsScratch",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveActualFamilies",
+            "6.24"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClassicSaveActualCancellationJoins",
+            "0.06"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderCopyParity",
+            "0.01"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderPreservesWriterTo",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderClearsOnErrorAndPanic",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderConcurrentCombinedWriter",
+            "0.02"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderChild",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestOutputReaderActualChild",
+            "4.25"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeSyscallArgumentParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeActualMutationAndSymlink",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeConcurrentArgumentsRemainExclusive",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeActualRootNodes",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshPathNodeStatComparisonFields",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshHeldNodeActualMutationAndClosedFileParity",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestFreshHeldNodeCloseRacesOriginalControl",
+            "0.01"
+          ],
+          [
+            "PASS",
+            "TestClassicSaveNativeInventoryParity",
+            "1.05"
+          ],
+          [
+            "PASS",
+            "TestClassicSaveNativeLockCustody",
+            "0.19"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeClassicBatchBookends",
+            "0.31"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativePolicyReadObservation",
+            "0.46"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeScope",
+            "0.45"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeFailedIPClearsFact",
+            "0.24"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativePartialBatchNeverRetained",
+            "0.23"
+          ],
+          [
+            "PASS",
+            "TestStaticVersionFactNativeOriginalFingerprint",
+            "0.50"
+          ],
+          [
+            "PASS",
+            "TestClassicReadBatchNativeMutation",
+            "2.60"
+          ],
+          [
+            "FAIL",
+            "TestManagedStrategyProbeNativeConsumer",
+            "19.23"
+          ]
+        ],
+        "status": "FAIL",
+        "apply_timing": [],
+        "execution_stages": [],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [],
+        "phase_lines": []
+      },
+      "wg-measurement-contracts.log": {
+        "sha256": "d7e8b9bd60d229ed92409a8ef6a9cb533e2c31e07cfca4f09a4e813061589779",
+        "bytes": 5147,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestNativeActivePhaseMeasurementGeneration",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestNativeActivePhaseMeasurementPopulation",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableOriginalSourceAndClosedRefusals",
+            "2.69"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableAllOwnedTablesAndCLIFallback",
+            "0.50"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableCloseCancelsAndJoins",
+            "0.24"
+          ],
+          [
+            "PASS",
+            "TestWGInactivityEmptyTableKeepsNameFileBookends",
+            "0.81"
+          ],
+          [
+            "PASS",
+            "TestWGRuntimeInactiveMeasurementOriginalTwoPassOrder",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestWGRuntimeInactiveMeasurementRefusalAndPrivacy",
+            "0.00"
+          ],
+          [
+            "PASS",
+            "TestWGRuntimeInactiveMeasurementBoundAndIncomplete",
+            "0.00"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [],
+        "execution_stages": [],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [],
+        "phase_lines": []
+      },
+      "wg-tool-observation.log": {
+        "sha256": "f07f81f6a368c00f4125529aeb372f88cd637ff38a207f7aff46a936cba38873",
+        "bytes": 495,
+        "top_outcomes": [
+          [
+            "PASS",
+            "TestNativeWGKernelLinkOriginalHeldSource",
+            "0.15"
+          ]
+        ],
+        "status": "PASS",
+        "apply_timing": [],
+        "execution_stages": [],
+        "execution_state": [],
+        "primary_failed_cleanup_independently_empty": false,
+        "recovery_only_markers": [],
+        "cut_not_reached": false,
+        "cleanup_refusals": [],
+        "wg_inactivity_totals": [],
+        "phase_lines": []
+      }
+    }
+  },
+  "first_boundaries": {
+    "production_core": "PASS all original selected core tests; no broader full Apply inference.",
+    "production_fullLAN": "FAIL49.53s; nativeApply29.001s first lan-preflight-inventory-nfq-consumer-open DEADLINE_EXCEEDED; rolled-back+verified and independent empty cleanup marker.",
+    "production_manual": "FAIL32.19s; nativeApply29.234s lan-preflight-inventory-consumer-close DEADLINE_EXCEEDED; rolled-back+verified and independent empty cleanup marker.",
+    "race_core": "FAIL19.23s TestManagedStrategyProbeNativeConsumer; CHECK_BYTES/context deadline, unknown process settlement, scope retained. Later core tests not reached.",
+    "race_fullLAN": "FAIL22.06s at preliminary probe HTTP503 MANAGED_STRATEGY_PROBE_RECOVERY_REQUIRED; ACTIVE phases empty (Apply not entered). No independent failed-Apply cleanup marker.",
+    "race_manual": "FAIL60.14s; nativeApply52.532s lan-preflight-inventory-consumer-close OPERATION_BUSY; rolled-back+verified and independent empty cleanup marker.",
+    "production_intent_and_sync": "Original injected recovery marker reached, then mandatory fresh Apply FAIL; final independent failed-Apply cleanup proven.",
+    "race_intent_and_sync": "Original cut not reached due to deadline in prepared.policy-apply; retained original LAN cleanup refused (owner unavailable/mismatched). No cleanup completion proof.",
+    "preledger_preparedactive": "Recovery-only original tests PASS in both modes; full_apply_proven=false.",
+    "quarantine": "Production-only separate retry fixture PASS; race not scheduled, not a race PASS."
+  },
+  "limits": [
+    "NativeApply timing includes compensation; never treat as forward deadline alone.",
+    "ACTIVE phases overlap; do not sum or call returned count success.",
+    "Absence of independent cleanup marker is not proof of leaked resources; it means cleanup is not established by that marker.",
+    "Different CI host from49; do not infer candidate performance or regressions from cross-run timing."
+  ]
+}

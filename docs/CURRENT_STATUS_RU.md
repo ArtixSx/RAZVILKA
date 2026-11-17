@@ -2,31 +2,39 @@
 
 <a id="current-release-checkpoint"></a>
 
-## Текущая сверка: 17.11.2026, интеграция `49c25e20`
+## Текущая сверка: 17.11.2026, кандидат `d1e44b1d`
 
-Релиз ещё не принят. Полный push CI [44044228489](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228489) — SUCCESS на точной ревизии
-`49c25e2063dfda053a7f345e3489ce610fcec19f`; PR CI44044236307 также SUCCESS. [Проверены точные SHA, jobs и26rawfiles](measurements/2026-11-16/integrated-49c25e20.json).
-Native lifecycle [44044228410](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228410) — FAILURE:11 успешных jobs и4 failed
-(strict DNS selected/canceled-ready и managed NFQWS production/race).
-Mihomo [44044228550](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228550) и probe comparison [44044228436](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228436) — SUCCESS.
+Релиз ещё не принят. На `9971aa1bdb4f4daf3afd65b85ebe7e1cdae4156c` полный
+[push CI44049645961](https://github.com/ArtixSx/RAZVILKA/actions/runs/44049645961)
+и [PR CI44049655757](https://github.com/ArtixSx/RAZVILKA/actions/runs/44049655757) — SUCCESS.
+Native lifecycle44049646012 — FAILURE:10 успешных jobs и5 failed. Все четыре
+текущих Mihomo-сценария прошли; красный job относится к отдельному историческому
+4cc manual запуску (sidecar-start material refusal, затем verified rollback).
+Probe comparison — SUCCESS. [Точные исходы и raw SHA](measurements/2026-11-16/integrated-9971aa1b.json).
 
-Следующий коммит `5031d70d` добавляет отдельный закреплённый профиль нынешних
-пакетов NC-1812/Entware. Independent source review и Windows проверки PASS;
-Linux native normal/race PASS:4 новых package closure +4 loader +4 helper tests в каждом режиме, без SKIP. [Доказательства](measurements/2026-11-16/entware-profile-5031d70d.json). Public selection подключён в497a9e4b; native normal/race PASS:4selector+4closure+4CPUID+4helper в каждом режиме. [Доказательства](measurements/2026-11-16/entware-selection-497a9e4b.json).
-Это не готовность роутера; результат CI49 не переносится на новые изменения.
+В `d1e44b1d0c49f7708247a2fffd1fe717787926cb` интегрированы независимо проверенные
+WG cleanup scope (`e3297ff1`), DNS prepared read (`76378802`) и два source-only ABBA
+стенда. Общий CI44053143961 ещё выполняется; результат997 на него не переносится.
+Windows focused contract tests точногоd1 PASS. Полный managed native
+[44053982264](https://github.com/ArtixSx/RAZVILKA/actions/runs/44053982264) — FAILURE:
+loader normal/race PASS, managed normal/race FAIL. [Доказательства](measurements/2026-11-16/managed-full-d1e44b1d.json).
 
-Root владеет интеграцией, общими документами и workflow. catalog_network_analysis
-исправляет полный managed NFQWS; catalog_product_analysis — точный Entware
-профиль и startup integration. catalog_lifecycle_review независимо проверяет
-изменения и результаты. Исходные worktrees и неопубликованная работа сохранены.
+Текущие Entware package closure503 и public selection497 уже входят в этот
+кандидат; прежние pins и shortcuts сохранены. Их normal/race проверки прошли,
+но synthetic ARM64 ELF на LinuxAMD64 не доказывает ARM64 execution или router boot.
+
+Root владеет интеграцией, документами и workflow; catalog_product_analysis
+разбирает DNS critical path, catalog_network_analysis — managed lifecycle/busy,
+catalog_lifecycle_review проверяет рискованные изменения и результаты независимо.
+Исходные worktrees и неопубликованная работа сохранены.
 
 | Направление / владелец | Работающий сценарий и доказательство | Оставшееся действие / конкретный блокер |
 | --- | --- | --- |
-| DNS / Root; lifecycle review | d88 сохраняет свежие настройки и независимые копии каталога. [Same-source ABBA](measurements/2026-11-16/domain-provider-catalog-3a9b0e1c.json): sampled allocation2465,18→1978,18МиБ (−19,75%), все4 selected4с FAIL. На49 direct-deny PASS17,12с: zero-SYN, same-FD positive control, восстановление и join; diagnostic30 recovery-pair PASS94,49/88,00с | Strict49 selected FAIL21,25с: первоначальная DNS публикация не достигнута за12с; canceled-ready FAIL32,63с: GEN2 readiness не достигнута. Diagnostic30/10с не закрывает original12/4с. Исправить полную стоимость, проверить selected/mismatch/opaque/cancel; программная задача |
-| Managed NFQWS2 / catalog_network_analysis; lifecycle review | На49 original producer/helper и два numeric measurement контракта normal/race PASS; preledger/prepared-active recovery PASS. Полные профили8 файлов проверены вместе с33rawfiles. [Точные исходы](measurements/2026-11-16/managed-phases-49c25e20.json). [b6d ABBA](measurements/2026-11-16/proc-scratch-a6dece77.json): sampled allocation −16,45%, без доказанного full latency gain | Full Apply/manual FAIL на lan-preflight-inventory-consumer-close. Normal fullLAN также rollback-failed: LAN packet.cleanup24с; NFQ rollback завершён. Manual normal/race rolled-back/true. Race core отказал без owned NFQUEUE packet proof, raceLAN остановился на probe0 доApply. Исправить повторную работу и cleanup, не увеличивая deadlines. Единичный прежний GC crash не воспроизведён, причина не установлена |
-| Mihomo / Root; lifecycle review | На49 все4jobs SUCCESS: actual lifecycle Apply/Stop/freshApply230,73с, manual HTTP261,44с, failed-Check settlement114,22с, post-CAS failure79,94с. Это полное время тестов, не отдельныхApply. [Прежние адресные ACK проверки](measurements/2026-11-16/mihomo-sameboot-ac6ce6fb.json) | Итоговая ACK матрица и физический LAN на точном кандидате. Same-host historical4cc имел другие HEV inputs и fixed order, поэтому не является изолированным сравнением ускорения |
-| Binary + StrategyLab / Root | На49 strategy-pair SUCCESS:7 отдельных stopped completion cuts и restored-panel boot PASS; modern rollback, legacy empty/draft/history PASS. [Исходные сценарии](measurements/2026-11-16/strategy-cuts-ba5ffd02.json) сохраняют историю, ручной выбор и unknown/finalizing fences | Аппаратная приёмка финальной ревизии; физическое отключение питания отдельно. Произвольный downgrade не разрешён |
-| VLESS и очередь / Root | На49 probe comparison SUCCESS. [Ранее182строки,N12](measurements/2026-11-16/probe-comparison-33de2dde.json): live Check311,549→220,1895мс, selected group1527,3895→1329,274мс, cleanup verified | Частная Linux-сеть и fixed order; WAN/LAN/flash на роутере отдельно |
+| DNS / catalog_product_analysis; lifecycle review | [763 source-only ABBA](measurements/2026-11-16/domain-prepared-76378802.json): выбранный HTTPS успешен во всех4 arms; число process-current в этом запросе270→238, cumulative interval1,572→1,391с. Это вложенные интервалы, не end-to-end latency. Новая ветка действительно выполнялась | Все4 full mixed FAIL: unknown.example.com превышает4с до relay; opaque не достигнут. Direct connect при достижении занимал микросекунды. Strict publication12с и canceled-ready также требуют завершения. [Critical path](measurements/2026-11-16/domain-mismatch-d1e44b1d.json); программная задача, не внешний блокер |
+| Managed NFQWS2 / catalog_network_analysis; lifecycle review | [e329 ABBA](measurements/2026-11-16/wg-cleanup-e3297ff1.json): средняя сумма4 завершённых WG checks production8,303→5,244с, race11,613→8,843с при одинаковых member reads/bytes внутри режима;8/8 independent cleanup PASS. Это стоимость конкретных cleanup checks | Все8 manualApply FAIL. [Полныйd1](measurements/2026-11-16/managed-full-d1e44b1d.json): normal fullLAN/manual Apply DEADLINE, independent cleanup PASS; race fullLAN не доходит доApply, manual DEADLINE. Never-issued recovery-only cuts и последующий freshApply различаются. Исправить forward в исходных budgets; прежний единичный GC crash не объяснён |
+| Mihomo / Root; lifecycle review | На997 текущие actual lifecycle198,19с, manual HTTP230,01с, settlement121,88с, post-CAS66,36с — PASS. Это длительности полных тестов. Старый4cc manual отдельно FAIL14,23с при sidecar-start и успешно откатился | Итоговая ACK матрица и физический LAN точного кандидата. Historical4cc использует другие HEV inputs и fixed order, поэтому не даёт изолированного сравнения ускорения |
+| Binary + StrategyLab / Root | На997 strategy-pair SUCCESS:7 stopped completion cuts и restored-panel boot; modern rollback и legacy empty/draft/history PASS. История, ручной выбор и unknown/finalizing fences сохранены | Аппаратная приёмка финальной ревизии; физическое отключение питания отдельно. Произвольный downgrade не разрешён |
+| VLESS и очередь / Root | На997 probe comparison SUCCESS. [Прежние182строки,N12](measurements/2026-11-16/probe-comparison-33de2dde.json): live Check311,549→220,1895мс, selected group1527,3895→1329,274мс, cleanup verified | Частная Linux-сеть и fixed order; WAN/LAN/flash на роутере отдельно |
 | Панель/API/AUTO / Root |13разделов/21страница,118 Node checks, Chromium desktop/mobile/keyboard проверки; оформление по референсам NetZapret | Actual backend flow на принятом router/LAN-профиле; unknown не превращать в availability |
 | HEV / Root | [ec62](measurements/2026-11-16/hev-default-ec62ac2a.json): AMD64 install и actual HTTP replacement normal/race по10PASS | ARM64 pin прежний; будущая публичная доставка0.20.0 не проверена; выпущенный tag не перемещён |
 | Роутер / catalog_product_analysis; lifecycle review |69backupfiles verified; две /opt copies925members +startup-config+firmware. [Offline ext4](measurements/2026-11-16/router-offline-ext4-20261117.json): exact925entries/578payloads/263links/metadata,fsck иcleanup PASS. [Свежая диагностика](measurements/2026-11-16/router-current-diagnostic-20261117.json):43 tool hashes opening/closing совпали,40ELF/30extension names сверены | Диагностика WITH_GAPS:6 namespace links недоступны; protected custody и service boot closure не доказаны. UID1001 у5каталогов, ip-full отсутствует.503 новый pinned profile прошёл native normal/race; selection497a9e4b подключён, native normal/race PASS; ARM64 полный acquire ещё не проверен. До software acceptance установки нет. Offline restore не router boot/firmware/ACL/xattrs proof |
