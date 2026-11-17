@@ -1,0 +1,67 @@
+name: Small WG metadata helper original producer checks
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/wg-small-helper-20261117']
+permissions:
+  contents: read
+jobs:
+  original:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        parent: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Build ordinary external CLI model and record exact provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 artifacts
+          go build -ldflags='-s -w' -o "$RUNNER_TEMP/wg-inactivity-child" ./scripts/fixtures/wg-inactivity-child
+          bytes=$(stat -c %s "$RUNNER_TEMP/wg-inactivity-child")
+          test "$bytes" -gt 0 && test "$bytes" -le 16777216
+          {
+            git rev-parse HEAD
+            go version
+            printf 'parent=%s helper=ordinary-stripped bytes=%s startup_limit=16777216\n' '${{ matrix.parent }}' "$bytes"
+            sha256sum scripts/fixtures/wg-inactivity-child/main.go internal/startuptools/wg_inactivity_run_linux_test.go "$RUNNER_TEMP/wg-inactivity-child"
+            go version -m "$RUNNER_TEMP/wg-inactivity-child"
+          } > artifacts/provenance.txt
+      - name: Original producer and held-source tests with unchanged deadlines
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags=()
+          if test '${{ matrix.parent }}' = race; then flags=(-race); fi
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_WG_INACTIVITY_READ_CHILD=1 \
+            RAZVILKA_WG_INACTIVITY_HELPER="$RUNNER_TEMP/wg-inactivity-child" \
+            go test "${flags[@]}" -ldflags='-s -w' -tags razvilka_native_fixture -count=1 -v -timeout=90s \
+            ./internal/startuptools \
+            -run '^(TestWGInactivityFixtureImageRefusals|TestWGInactivitySmallHelperABI|TestWGInactivityReadHeldChildDiagnostics|TestNativeWGKernelLinkOriginalHeldSource)$' \
+            2>&1 | tee artifacts/native.log || status=$?
+          for name in TestWGInactivityFixtureImageRefusals TestWGInactivitySmallHelperABI TestWGInactivityReadHeldChildDiagnostics TestNativeWGKernelLinkOriginalHeldSource; do
+            if ! grep -F -- "--- PASS: $name " artifacts/native.log; then status=1; fi
+          done
+          if grep -F -- '--- SKIP:' artifacts/native.log; then status=1; fi
+          printf 'exit_status=%s\n' "$status" > artifacts/status.txt
+          exit "$status"
+      - name: Preserve all results including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wg-small-helper-${{ matrix.parent }}-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14

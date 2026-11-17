@@ -30,6 +30,7 @@ on:
       - 'work/domain-alloc-profile-*'
       - 'work/domain-provider-catalog-*'
       - 'work/proc-scratch-*'
+      - 'work/wg-small-helper-*'
   pull_request:
 
 permissions:
