@@ -24,6 +24,11 @@ on:
       - 'work/domain-baseline-tuple-collision-*'
       - 'work/nfq-wait-cleanup-*'
       - 'work/expected-pair-stream-experiment-*'
+      - 'work/wg-tool-comparison-*'
+      - 'work/wg-memory-diagnostic-*'
+      - 'work/domain-accepted-prefix-*'
+      - 'work/domain-alloc-profile-*'
+      - 'work/domain-provider-catalog-*'
   pull_request:
 
 permissions:
