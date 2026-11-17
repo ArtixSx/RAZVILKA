@@ -1,0 +1,646 @@
+{
+  "schema": 1,
+  "run_id": 43976051557,
+  "run_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43976051557",
+  "head": "ac6ce6fb46b2783630352c900ed88f91c689bcaf",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "original-private-set (race)",
+      "id": 133680201760,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-private-set (normal)",
+      "id": 133680202019,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native (normal)",
+      "id": 133680202084,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native (race)",
+      "id": 133680202098,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "id": 133684483796,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "id": 133684484104,
+      "conclusion": "success"
+    }
+  ],
+  "diagnostic_gates": {
+    "normal": {
+      "TestInactiveProcTerminalNativeDiagnosticVocabulary": {
+        "result": "PASS",
+        "seconds": 0.0
+      },
+      "TestInactiveProcTerminalNativeDiagnosticExistingStat": {
+        "result": "PASS",
+        "seconds": 0.0
+      },
+      "TestInactiveProcTerminalNativeDiagnosticActualLive": {
+        "result": "PASS",
+        "seconds": 0.01
+      }
+    },
+    "race": {
+      "TestInactiveProcTerminalNativeDiagnosticVocabulary": {
+        "result": "PASS",
+        "seconds": 0.0
+      },
+      "TestInactiveProcTerminalNativeDiagnosticExistingStat": {
+        "result": "PASS",
+        "seconds": 0.0
+      },
+      "TestInactiveProcTerminalNativeDiagnosticActualLive": {
+        "result": "PASS",
+        "seconds": 1.03
+      }
+    }
+  },
+  "parent_cases": {
+    "parent-normal": {
+      "log": "original-parent-native_normal.log",
+      "result": "PASS",
+      "test_seconds": 49.13,
+      "actor_ms": 49124.111,
+      "original_context_budget_seconds": 120,
+      "retained_retry_messages": 0,
+      "updater_fences": {
+        "intent": "fenced",
+        "sidecar": "fenced",
+        "policy": "fenced",
+        "forwarding": "fenced",
+        "archive": "fenced",
+        "terminal-transaction": "fenced",
+        "terminal-global": "open"
+      },
+      "terminal_pair_passed": true,
+      "failure_phase_labels": [],
+      "inclusive_phases": {
+        "absence": {
+          "calls": 55,
+          "inclusive_ms": 32018.339
+        },
+        "absence-tool-read": {
+          "calls": 55,
+          "inclusive_ms": 32018.118
+        },
+        "home-current": {
+          "calls": 25,
+          "inclusive_ms": 29064.384
+        },
+        "native-stage": {
+          "calls": 7,
+          "inclusive_ms": 9064.785
+        },
+        "native-witness-callback": {
+          "calls": 7,
+          "inclusive_ms": 67.212
+        },
+        "phase-archive": {
+          "calls": 1,
+          "inclusive_ms": 14949.593
+        },
+        "phase-completed": {
+          "calls": 1,
+          "inclusive_ms": 4730.128
+        },
+        "phase-forwarding": {
+          "calls": 1,
+          "inclusive_ms": 12737.745
+        },
+        "phase-intent": {
+          "calls": 1,
+          "inclusive_ms": 146.62
+        },
+        "phase-opening": {
+          "calls": 1,
+          "inclusive_ms": 140.761
+        },
+        "phase-policy": {
+          "calls": 1,
+          "inclusive_ms": 3212.51
+        },
+        "phase-sidecar": {
+          "calls": 1,
+          "inclusive_ms": 493.374
+        },
+        "phase-terminal": {
+          "calls": 1,
+          "inclusive_ms": 12087.763
+        },
+        "prepare": {
+          "calls": 1,
+          "inclusive_ms": 273.937
+        },
+        "run": {
+          "calls": 1,
+          "inclusive_ms": 48498.503
+        },
+        "source-before-sidecar": {
+          "calls": 34,
+          "inclusive_ms": 901.663
+        },
+        "source-command-kernel": {
+          "calls": 576,
+          "inclusive_ms": 602.741
+        },
+        "source-command-version": {
+          "calls": 2041,
+          "inclusive_ms": 2407.181
+        },
+        "source-current": {
+          "calls": 195,
+          "inclusive_ms": 27868.174
+        },
+        "source-current-tool-read": {
+          "calls": 85,
+          "inclusive_ms": 13426.915
+        },
+        "source-lease-owner-tool": {
+          "calls": 390,
+          "inclusive_ms": 2554.117
+        },
+        "source-lease-private": {
+          "calls": 692,
+          "inclusive_ms": 243.55
+        },
+        "source-lease-read-tool": {
+          "calls": 1152,
+          "inclusive_ms": 6093.938
+        },
+        "source-self-sha": {
+          "calls": 390,
+          "inclusive_ms": 10473.697
+        }
+      }
+    },
+    "parent-race": {
+      "log": "original-parent-native_race.log",
+      "result": "PASS",
+      "test_seconds": 99.64,
+      "actor_ms": 99630.432,
+      "original_context_budget_seconds": 120,
+      "retained_retry_messages": 0,
+      "updater_fences": {
+        "intent": "fenced",
+        "sidecar": "fenced",
+        "policy": "fenced",
+        "forwarding": "fenced",
+        "archive": "fenced",
+        "terminal-transaction": "fenced",
+        "terminal-global": "open"
+      },
+      "terminal_pair_passed": true,
+      "failure_phase_labels": [],
+      "inclusive_phases": {
+        "absence": {
+          "calls": 55,
+          "inclusive_ms": 58393.684
+        },
+        "absence-tool-read": {
+          "calls": 55,
+          "inclusive_ms": 58392.599
+        },
+        "home-current": {
+          "calls": 25,
+          "inclusive_ms": 53191.725
+        },
+        "native-stage": {
+          "calls": 7,
+          "inclusive_ms": 23846.349
+        },
+        "native-witness-callback": {
+          "calls": 7,
+          "inclusive_ms": 7297.35
+        },
+        "phase-archive": {
+          "calls": 1,
+          "inclusive_ms": 28217.48
+        },
+        "phase-completed": {
+          "calls": 1,
+          "inclusive_ms": 8739.914
+        },
+        "phase-forwarding": {
+          "calls": 1,
+          "inclusive_ms": 25838.869
+        },
+        "phase-intent": {
+          "calls": 1,
+          "inclusive_ms": 1326.221
+        },
+        "phase-opening": {
+          "calls": 1,
+          "inclusive_ms": 328.403
+        },
+        "phase-policy": {
+          "calls": 1,
+          "inclusive_ms": 7362.102
+        },
+        "phase-sidecar": {
+          "calls": 1,
+          "inclusive_ms": 2002.233
+        },
+        "phase-terminal": {
+          "calls": 1,
+          "inclusive_ms": 24389.838
+        },
+        "prepare": {
+          "calls": 1,
+          "inclusive_ms": 597.58
+        },
+        "run": {
+          "calls": 1,
+          "inclusive_ms": 98205.126
+        },
+        "source-before-sidecar": {
+          "calls": 34,
+          "inclusive_ms": 1730.925
+        },
+        "source-command-kernel": {
+          "calls": 576,
+          "inclusive_ms": 884.421
+        },
+        "source-command-version": {
+          "calls": 2041,
+          "inclusive_ms": 3330.57
+        },
+        "source-current": {
+          "calls": 195,
+          "inclusive_ms": 48737.087
+        },
+        "source-current-tool-read": {
+          "calls": 85,
+          "inclusive_ms": 26639.126
+        },
+        "source-lease-owner-tool": {
+          "calls": 390,
+          "inclusive_ms": 4784.68
+        },
+        "source-lease-private": {
+          "calls": 692,
+          "inclusive_ms": 705.212
+        },
+        "source-lease-read-tool": {
+          "calls": 1152,
+          "inclusive_ms": 11469.103
+        },
+        "source-self-sha": {
+          "calls": 390,
+          "inclusive_ms": 22442.867
+        }
+      }
+    },
+    "completed-normal": {
+      "log": "original-parent-native-ack-cuts_normal_completed.json.log",
+      "result": "PASS",
+      "test_seconds": 48.72,
+      "actor_ms": 48717.5,
+      "original_context_budget_seconds": 120,
+      "retained_retry_messages": 1,
+      "updater_fences": {
+        "intent": "fenced",
+        "sidecar": "fenced",
+        "policy": "fenced",
+        "forwarding": "fenced",
+        "archive": "fenced",
+        "terminal-transaction": "fenced",
+        "terminal-global": "open"
+      },
+      "terminal_pair_passed": true,
+      "failure_phase_labels": [],
+      "inclusive_phases": {
+        "absence": {
+          "calls": 67,
+          "inclusive_ms": 33100.302
+        },
+        "absence-tool-read": {
+          "calls": 67,
+          "inclusive_ms": 33099.905
+        },
+        "home-current": {
+          "calls": 31,
+          "inclusive_ms": 30640.57
+        },
+        "native-stage": {
+          "calls": 7,
+          "inclusive_ms": 7759.493
+        },
+        "native-witness-callback": {
+          "calls": 7,
+          "inclusive_ms": 76.228
+        },
+        "phase-archive": {
+          "calls": 1,
+          "inclusive_ms": 13602.728
+        },
+        "phase-completed": {
+          "calls": 2,
+          "inclusive_ms": 8106.339
+        },
+        "phase-forwarding": {
+          "calls": 1,
+          "inclusive_ms": 11057.073
+        },
+        "phase-intent": {
+          "calls": 1,
+          "inclusive_ms": 160.895
+        },
+        "phase-opening": {
+          "calls": 1,
+          "inclusive_ms": 166.889
+        },
+        "phase-policy": {
+          "calls": 1,
+          "inclusive_ms": 2835.974
+        },
+        "phase-sidecar": {
+          "calls": 1,
+          "inclusive_ms": 427.487
+        },
+        "phase-terminal": {
+          "calls": 2,
+          "inclusive_ms": 10482.733
+        },
+        "prepare": {
+          "calls": 1,
+          "inclusive_ms": 287.934
+        },
+        "run": {
+          "calls": 2,
+          "inclusive_ms": 48007.7
+        },
+        "source-before-sidecar": {
+          "calls": 42,
+          "inclusive_ms": 1029.247
+        },
+        "source-command-kernel": {
+          "calls": 696,
+          "inclusive_ms": 724.212
+        },
+        "source-command-version": {
+          "calls": 2377,
+          "inclusive_ms": 2680.388
+        },
+        "source-current": {
+          "calls": 219,
+          "inclusive_ms": 26360.166
+        },
+        "source-current-tool-read": {
+          "calls": 85,
+          "inclusive_ms": 11530.081
+        },
+        "source-lease-owner-tool": {
+          "calls": 438,
+          "inclusive_ms": 2030.541
+        },
+        "source-lease-private": {
+          "calls": 768,
+          "inclusive_ms": 168.339
+        },
+        "source-lease-read-tool": {
+          "calls": 1392,
+          "inclusive_ms": 5241.127
+        },
+        "source-self-sha": {
+          "calls": 438,
+          "inclusive_ms": 14891.126
+        }
+      }
+    },
+    "completed-race": {
+      "log": "race-completed.log",
+      "result": "PASS",
+      "test_seconds": 110.1,
+      "actor_ms": 110084.443,
+      "original_context_budget_seconds": 120,
+      "retained_retry_messages": 1,
+      "updater_fences": {
+        "intent": "fenced",
+        "sidecar": "fenced",
+        "policy": "fenced",
+        "forwarding": "fenced",
+        "archive": "fenced",
+        "terminal-transaction": "fenced",
+        "terminal-global": "open"
+      },
+      "terminal_pair_passed": true,
+      "failure_phase_labels": [],
+      "inclusive_phases": {
+        "absence": {
+          "calls": 67,
+          "inclusive_ms": 68727.362
+        },
+        "absence-tool-read": {
+          "calls": 67,
+          "inclusive_ms": 68726.369
+        },
+        "home-current": {
+          "calls": 31,
+          "inclusive_ms": 63628.716
+        },
+        "native-stage": {
+          "calls": 7,
+          "inclusive_ms": 23287.244
+        },
+        "native-witness-callback": {
+          "calls": 7,
+          "inclusive_ms": 7299.983
+        },
+        "phase-archive": {
+          "calls": 1,
+          "inclusive_ms": 29398.198
+        },
+        "phase-completed": {
+          "calls": 2,
+          "inclusive_ms": 16784.491
+        },
+        "phase-forwarding": {
+          "calls": 1,
+          "inclusive_ms": 25442.707
+        },
+        "phase-intent": {
+          "calls": 1,
+          "inclusive_ms": 1350.964
+        },
+        "phase-opening": {
+          "calls": 1,
+          "inclusive_ms": 323.879
+        },
+        "phase-policy": {
+          "calls": 1,
+          "inclusive_ms": 7256.958
+        },
+        "phase-sidecar": {
+          "calls": 1,
+          "inclusive_ms": 1984.242
+        },
+        "phase-terminal": {
+          "calls": 2,
+          "inclusive_ms": 23733.292
+        },
+        "prepare": {
+          "calls": 1,
+          "inclusive_ms": 579.085
+        },
+        "run": {
+          "calls": 2,
+          "inclusive_ms": 108644.622
+        },
+        "source-before-sidecar": {
+          "calls": 42,
+          "inclusive_ms": 2032.21
+        },
+        "source-command-kernel": {
+          "calls": 696,
+          "inclusive_ms": 893.782
+        },
+        "source-command-version": {
+          "calls": 2377,
+          "inclusive_ms": 3418.992
+        },
+        "source-current": {
+          "calls": 219,
+          "inclusive_ms": 53666.113
+        },
+        "source-current-tool-read": {
+          "calls": 85,
+          "inclusive_ms": 26272.108
+        },
+        "source-lease-owner-tool": {
+          "calls": 438,
+          "inclusive_ms": 4950.442
+        },
+        "source-lease-private": {
+          "calls": 768,
+          "inclusive_ms": 758.336
+        },
+        "source-lease-read-tool": {
+          "calls": 1392,
+          "inclusive_ms": 12591.736
+        },
+        "source-self-sha": {
+          "calls": 438,
+          "inclusive_ms": 24887.342
+        }
+      }
+    }
+  },
+  "profiles": {
+    "normal": {
+      "profile": "artifacts\\normal-completed\\sameboot-consumer.cpu.pprof",
+      "binary": "artifacts\\normal-completed\\sameboot-consumer.test",
+      "top": "completed-normal-cpu-top.txt",
+      "build_id": "56bdd5df302f678d50f2ee21905980974a629639",
+      "cpu_total_seconds": 46.64
+    },
+    "race": {
+      "profile": "artifacts\\race-completed\\sameboot-consumer.cpu.pprof",
+      "binary": "artifacts\\race-completed\\sameboot-consumer.test",
+      "top": "completed-race-cpu-top.txt",
+      "build_id": "e284024248c635b5cdccfb435e67921bf56be07a",
+      "cpu_total_seconds": 101.44
+    }
+  },
+  "raw_manifest": [
+    {
+      "path": "artifacts/normal-completed/sameboot-consumer.cpu.pprof",
+      "bytes": 100207,
+      "sha256": "401d084ad4caf4fb3e5b8097c9a93edc200ad796bad71f87256b45bd6e291a0a"
+    },
+    {
+      "path": "artifacts/normal-completed/sameboot-consumer.test",
+      "bytes": 42053897,
+      "sha256": "e7b8709b8d922cde2d51ef6fc60e0ecbd80182f7529b32514fcd9a0557998ff1"
+    },
+    {
+      "path": "artifacts/race-completed/race-exit-cost.json",
+      "bytes": 1477,
+      "sha256": "39eca617bda7887f036614933b3dfa7911f3a496f295d91a1649ed3c4935cf8f"
+    },
+    {
+      "path": "artifacts/race-completed/sameboot-consumer.cpu.pprof",
+      "bytes": 157919,
+      "sha256": "b5a9f11e6c8a03a16ce58ad195d7802c7990eac0a5d80f38740dbc300755bc8c"
+    },
+    {
+      "path": "artifacts/race-completed/sameboot-consumer.test",
+      "bytes": 59060489,
+      "sha256": "54be7205c03493305cc7fb533f7d4dac8bd42fb5792f74b8830fbe2154950f41"
+    },
+    {
+      "path": "completed-normal-cpu-top.txt",
+      "bytes": 1304,
+      "sha256": "f5fc07ff493e1eb371b188f43dfc9716cdcf759a94cda52da77354e8f0546157"
+    },
+    {
+      "path": "completed-race-cpu-top.txt",
+      "bytes": 1149,
+      "sha256": "70ffa41a53886e2ab6761b57e9274e8b98357c71ec9a0c56b8ba0b450d8ecde4"
+    },
+    {
+      "path": "original-parent-native-ack-cuts_normal_completed.json.log",
+      "bytes": 170016,
+      "sha256": "3677f89a6cd0c8c597c13ac5e2d3aa96ba328ff91877f3fd18f6e68510ecf099"
+    },
+    {
+      "path": "original-parent-native_normal.log",
+      "bytes": 161958,
+      "sha256": "98cbe106ea9beab11eed5f11918f020564c1bb5b17feb9c2e6bbe9e2094fadd3"
+    },
+    {
+      "path": "original-parent-native_race.log",
+      "bytes": 160480,
+      "sha256": "ec68cf1bf0e418b700b675b5f9461c5e9e1cf5e4348e97ab00e57f6bed413147"
+    },
+    {
+      "path": "original-private-set_normal.log",
+      "bytes": 168248,
+      "sha256": "cec5a923a8b30fa13cca04dc257bf948c4e20eb6db989019cb5b131341e28e34"
+    },
+    {
+      "path": "original-private-set_race.log",
+      "bytes": 166587,
+      "sha256": "21d47ae4caf17f899f9ea8a587a71d15ba11a9244159f1f2642ea68eb2cc6b3f"
+    },
+    {
+      "path": "race-completed.log",
+      "bytes": 86375,
+      "sha256": "1ae3f725e8a0ac14d0b0d33f5f258538e4813a28870ff962f8bb896263675234"
+    },
+    {
+      "path": "run.json",
+      "bytes": 15100,
+      "sha256": "e97adca527123a8815c6e2d6d6812eb0b6d27363c8ccfe19563c3dfcc52b809c"
+    }
+  ],
+  "assessment": {
+    "previous_run": 43972077940,
+    "previous_failure_test_seconds": 71.73,
+    "previous_failure": "race completed.json retained retry refused fresh absence on nonself empty cmdline, PF_KTHREAD false; not a timeout",
+    "previous_log_sha256": "f7190a19465b860a6f2c13039ced6784468137227552a4b67b6c9c00610bf2d2",
+    "current_reproduction": false,
+    "source_defect_established": false,
+    "interpretation": "The prior refusal remains unexplained. Current exact-source success demonstrates this retained suffix and fresh terminal proof can complete, but does not prove the earlier process was harmless or establish its transient kernel state. No guard weakening, PF_EXITING exemption, cached absence, or automatic retry expansion is justified.",
+    "recommendation": "Retain fail-closed behavior and new closed diagnostics; investigate a future recurrence from its actual terminal reason. No production code change follows from this evidence."
+  },
+  "limits": [
+    "Only completed.json ACK cut rerun in this focused run; not a rerun of all ten ACK modes.",
+    "Independent Ubuntu jobs are not a same-host performance comparison; normal and race times are not causal speedup evidence.",
+    "Phase timings are nested/inclusive and must not be summed.",
+    "Three diagnostic substantive gates passed; conditional failure-only HEV steps were skipped because acceptance succeeded.",
+    "Model private tests supplement real original-parent process/native cleanup tests; Ubuntu classification remains modeled, not router/LAN acceptance.",
+    "Race completed actor consumed 110.084443 seconds of the original 120-second context; this one success does not guarantee timing headroom across hosts.",
+    "Prior bcc failure was not reproduced; its exact terminal reason is unknown."
+  ]
+}

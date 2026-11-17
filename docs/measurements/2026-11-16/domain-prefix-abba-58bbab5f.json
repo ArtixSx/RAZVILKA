@@ -1,0 +1,212 @@
+{
+  "workflow_sha": "58bbab5fec3a06a3588ce1f62107747d4952ae51",
+  "source_revision": "293462082f07c828e7bce6a7da2ba308ae3c272d",
+  "run": 43977358908,
+  "overall": "FAIL",
+  "source_hashes_verified": 63,
+  "only_changed_file": "internal/dataplane/domain_tcp_accepted_prefix.go",
+  "binary_pair_valid": true,
+  "samples": [
+    {
+      "sample": 1,
+      "variant": "baseline",
+      "pass": false,
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44101897,
+        "sha256": "95d20665f84b1b4b85fd7abd705f4d2e6126c44064a8ed0a1d47d711a15edbd9"
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "first_fail": [
+        "domain_tcp_original_native_peers_linux_test.go:484: Get \"https://unknown.example.com/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+        "--- FAIL: TestDomainTCPOriginalNativePeer (4.00s)",
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.84s)"
+      ],
+      "selected_stages_ns": {
+        "initial-current": 289829158,
+        "admit": 370544435,
+        "baseline": 370621941,
+        "post-dial-check": 428251767
+      },
+      "prefix_stage_sum_ns": 1030995534,
+      "selected_lookup_ns": 740378689,
+      "selected_guard_ns": 1708652862,
+      "mismatch_direct_stages": {},
+      "before_dns_initial_ns": 6176815284
+    },
+    {
+      "sample": 2,
+      "variant": "candidate",
+      "pass": false,
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44118281,
+        "sha256": "e85e5d2f7ee62827da4f95799b9436329757beb80a1cf763bc8c69d1e341594b"
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "first_fail": [
+        "domain_tcp_original_native_peers_linux_test.go:484: Get \"https://unknown.example.com/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+        "--- FAIL: TestDomainTCPOriginalNativePeer (4.00s)",
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.37s)"
+      ],
+      "selected_stages_ns": {
+        "initial-current": 58273635,
+        "admit": 325015017,
+        "baseline": 325325000,
+        "post-dial-check": 435238205
+      },
+      "prefix_stage_sum_ns": 708613652,
+      "selected_lookup_ns": 738016537,
+      "selected_guard_ns": 1718556576,
+      "mismatch_direct_stages": {
+        "accepted-stage/direct-current-pre/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 0
+        },
+        "accepted-stage/direct-local-route/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 14587207
+        },
+        "accepted-stage/direct-local-route/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 0
+        },
+        "accepted-stage/direct-local-route/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 0
+        }
+      },
+      "before_dns_initial_ns": 6142319701
+    },
+    {
+      "sample": 3,
+      "variant": "candidate",
+      "pass": false,
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44118281,
+        "sha256": "e85e5d2f7ee62827da4f95799b9436329757beb80a1cf763bc8c69d1e341594b"
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "first_fail": [
+        "domain_tcp_original_native_peers_linux_test.go:484: Get \"https://unknown.example.com/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+        "--- FAIL: TestDomainTCPOriginalNativePeer (4.00s)",
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.30s)"
+      ],
+      "selected_stages_ns": {
+        "initial-current": 57034803,
+        "admit": 328322121,
+        "baseline": 323994788,
+        "post-dial-check": 427207179
+      },
+      "prefix_stage_sum_ns": 709351712,
+      "selected_lookup_ns": 732103632,
+      "selected_guard_ns": 1700264702,
+      "mismatch_direct_stages": {
+        "accepted-stage/direct-current-pre/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 0
+        },
+        "accepted-stage/direct-local-route/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 13614844
+        },
+        "accepted-stage/direct-local-route/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 0
+        },
+        "accepted-stage/direct-local-route/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ns": 0
+        }
+      },
+      "before_dns_initial_ns": 6274750912
+    },
+    {
+      "sample": 4,
+      "variant": "baseline",
+      "pass": false,
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44101897,
+        "sha256": "95d20665f84b1b4b85fd7abd705f4d2e6126c44064a8ed0a1d47d711a15edbd9"
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "first_fail": [
+        "domain_tcp_original_native_peers_linux_test.go:484: Get \"https://unknown.example.com/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+        "--- FAIL: TestDomainTCPOriginalNativePeer (4.00s)",
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.73s)"
+      ],
+      "selected_stages_ns": {
+        "initial-current": 290232923,
+        "admit": 373078250,
+        "baseline": 367976871,
+        "post-dial-check": 433194254
+      },
+      "prefix_stage_sum_ns": 1031288044,
+      "selected_lookup_ns": 744453011,
+      "selected_guard_ns": 1702244446,
+      "mismatch_direct_stages": {},
+      "before_dns_initial_ns": 6051835422
+    }
+  ],
+  "prefix_stage_sum_mean_ns": {
+    "baseline": 1031141789,
+    "candidate": 708982682
+  },
+  "prefix_stage_sum_ratio": 0.6875705063680626,
+  "limits": [
+    "All4 full scenarios FAIL at mismatch4s. Selected HTTPS returns in all4. Opaque not reached.",
+    "Prefix sum comprises3 sequential stages, excludes outer opening/closing; not total ready-route latency.",
+    "2samples pervariant no statistical speed claim.",
+    "Fresh actual kernel/process checks retained; no router proof."
+  ]
+}

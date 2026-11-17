@@ -1,16 +1,24 @@
 # Сборки и поддержка запуска
 
-Актуальный код `bcc7fd8d`; последний полный CI `93463d85` PASS.
+Актуальный код `133b89c3`; полный CI `9c88e034`43979666531 PASS;
+новый44031025183 выполняется, его результат отдельно.
 [Единая актуальная матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
-StrategyLab7cuts и лабораторный Mihomo LAN проходят; DNS positive/cancel,
-полный NFQWS2 Apply и Mihomo race ACK ещё не приняты. ACK исправление bcc7
-проходит full native43972077940. NFQ runtime frame отменён после сравнения:
-меньше чтения, но больше времени; race все4 FAIL. DNS actual deny PASS,
-debug/strip full ABBA все4 FAIL. Подтверждение SSH-ключа владельцем найдено
-и проверено: read-only инвентаризация роутера возобновлена.
+StrategyLab7cuts и лабораторный Mihomo LAN проходят. bcc ACK9/10,
+focused ac6 parent/private/completed6/6 PASS; прежний отказ пустого cmdline
+не воспроизведён и не оправдывает ослабления проверки процессов.
+DNS source-only ABBA: выбранный HTTPS4/4 PASS, полный mixed4/4 FAIL на mismatch4с;
+три последовательные prefix стадии1031.14→708.98мс, это не полное время маршрута.
+Managed NFQWS2 full Apply ещё не принят; WG43979666415 прошёл metadata prerequisite,
+затем первый baseline Apply отказал и после подтверждённого rollback произошёл
+GC fatal. Причина не установлена: diagnostics44031025392 не повторили memory crash,
+но все3 fullApply FAIL при подтверждённом rollback. Исходный ABBA повторяется
+один раз для ранее не выполненных candidate arms; прежний FAIL сохранён. Роутер read-only проверен,
+две согласованные копии /opt, startup-config и firmware сохранены;69 файлов
+независимо сверены.40 ELF совпали с пакетами; UID1001 защищённых каталогов
+и отсутствие ip-full препятствуют ordinary admission. Новый профиль после переустановки
+Entware пока не допущен. Установок RAZVILKA на устройстве не выполнялось.
 Generic CI, native fixture, public asset delivery и router/LAN acceptance
 не заменяют друг друга и не расширяют допуск платформ.
-
 Старые таблицы ниже — история отдельных сценариев.
 
 Последняя сверка: `fc5bcc6c`, 16.11.2026. Платформенный допуск не расширен.

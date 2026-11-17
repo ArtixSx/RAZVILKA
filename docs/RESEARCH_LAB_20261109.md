@@ -1222,3 +1222,43 @@ Router host-key blocker оказался устаревшим: исходная 
 с existing verified known_hosts. Root проверил оба локально; ключ не менял.
 Следующий шаг — свежий read-only inventory после независимой переустановки
 Entware, с сохранением NDMS queues/policies и отдельным backup до установки.
+
+
+## 17.11.2026: Entware discovery, DNS ABBA и ошибка памяти NFQ
+
+- `16817239`: одна функция обнаружения Entware opkg для components/systemprobe,
+  только canonical /opt/bin|sbin. Firmware PATH больше не источник пакетов.
+  Отказ до Runner/state/feed writes; explicit test injection сохранён. Полные
+  Windows3packages, vet и Linux crosscompile PASS; independent review воспроизвёл
+  и помог исправить промежуточный state-directory write. Actual Linux CI отдельно.
+- DNS accepted-prefix293 source-only ABBA43977358908: selected HTTPS4/4 PASS,
+  mismatch4/4 FAIL; три sequential prefix стадии1031.14→708.98мс. Это частичное
+  измерение, а не доказанная готовность маршрута; новые таймауты не вводились.
+- WG full manual43979666415 на source63d5: metadata graph prerequisite PASS;
+  первый baseline отказал на read-close-classic, original rollback подтверждён,
+  затем GC fatal `found pointer to free object`. Семь последующих arms не запускались.
+  Independent audit8 unsafe/syscall source files не установил overflow/lifetime bug.
+  Runtime/pprof allocation — место обнаружения, не доказанная причина повреждения.
+- `133b89c3` добавляет отдельную диагностическую матрицу44031025392:
+  Go1.26.5 checkptr=2, race+checkptr=2 и Go1.26.11 ordinary. Один exact baseline
+  source63d5, original240s/internal budgets и profile сохранены. ELF SHA/size
+  сверяется до/после; supervisor подтверждает отсутствие потомков до artifact handoff.
+  Все3 fullApply FAIL, rollback/cleanup PASS; memory/race/checkptr report не повторился.
+  Это не доказательство исправления runtime. [Точные данные](measurements/2026-11-16/wg-memory-diagnostic-133b89c3.json).
+
+Источники: [Go releases](https://go.dev/doc/devel/release),
+[Go1.26.5→1.26.11](https://github.com/golang/go/compare/go1.26.5...go1.26.11),
+[reportZombies diagnostic issue80799](https://github.com/golang/go/issues/80799).
+Точная runtime attribution пока отсутствует. Дополнительный primary-source audit
+не нашёл доказанного совпадения этой AMD64 ошибки с выпущенным исправлением.
+Не отключались GC, profiling, rollback verification или freshness checks.
+
+Воспроизводимые CI entrypoints:
+
+```sh
+sudo env PATH="$PATH" GOTOOLCHAIN=local python3 scripts/wg-tools-comparison/diagnose-memory.py "$PWD" /tmp/new-memory-diagnostic old-checkptr
+# Other isolated jobs use old-race-checkptr with Go1.26.5 or patch-production with Go1.26.11.
+# The output directory must not already exist; original native fixture dependencies are in the workflow.
+```
+
+Native, generic CI и физический router/LAN остаются разными уровнями приёмки.
