@@ -14,6 +14,16 @@ probe_work=$(mktemp -d /tmp/razvilka-managed-probe.XXXXXX)
 chmod 700 "$probe_work"
 trap 'rm -rf -- "$probe_work"' EXIT HUP INT TERM
 export TMPDIR="$probe_work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+if test -n "${RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT:-}"; then
+  test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1
+  python3 - <<'PY'
+import os, pathlib
+p=pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT'])
+if not p.is_absolute() or p.resolve()!=p or not p.parent.is_dir(): raise SystemExit('profile output must be a fresh canonical absolute directory')
+p.mkdir(mode=0o755) # No adoption, overwrite, or recursive cleanup of supplied output.
+p.chmod(0o755) # Public synthetic profile evidence must be readable by the CI uploader.
+PY
+fi
 
 # Official release v1.0.6, source tag resolves to
 # 221d7dff24bfec0cd5ac0a5070b8acef2008af3d. The archive digest was checked
@@ -283,6 +293,59 @@ unshare --mount --net sh -c '
   python3 "$RAZVILKA_MANAGED_PROBE_FIXTURE_REPO/scripts/native-managed-probe-queue-init.py"
   exec "$@"
 ' sh "$@" || probe_status=$?
+# Only these original HTTP populations create the two profiles. Their source
+# contains function/build locations and numeric samples, never packet bodies,
+# credentials, config values or environment dumps. Preserve raw evidence after
+# the original child returned; profile transfer cannot turn its FAIL into PASS.
+case "$probe_case" in
+  TestManagedStrategyProbeNativeLANAppHTTP|TestManagedStrategyProbeNativeLANManualApply|TestManagedStrategyProbeNativeLANPreLedgerRecovery|TestManagedStrategyProbeNativeLANPreparedActiveRecovery)
+    if test -n "${RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT:-}"; then
+      if ! python3 - "$probe_work" "$probe_case" "$probe_status" <<'PY'
+import hashlib,json,os,pathlib,stat,sys
+work=pathlib.Path(sys.argv[1]); name=sys.argv[2]
+root=pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT'])
+root_stat=root.lstat()
+if root.resolve()!=root or not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid!=os.geteuid() or stat.S_IMODE(root_stat.st_mode)!=0o755: raise SystemExit('profile output changed')
+out=root/name; out.mkdir(mode=0o755); out.chmod(0o755)
+rows=[]
+for suffix in ('.pprof','.pprof.alloc'):
+ p=work/(name+suffix)
+ fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+ try:
+  before=os.fstat(fd)
+  if not stat.S_ISREG(before.st_mode) or before.st_uid!=os.geteuid() or before.st_nlink!=1 or not 0<before.st_size<=64<<20: raise ValueError('profile bounds/type/owner')
+  digest=hashlib.sha256(); total=0
+  dest=os.open(out/p.name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+  try:
+   while True:
+    b=os.read(fd,min(65536,(64<<20)+1-total))
+    if not b: break
+    total+=len(b)
+    if total>64<<20: raise ValueError('profile grew beyond cap')
+    digest.update(b)
+    view=memoryview(b)
+    while view:
+     n=os.write(dest,view)
+     if n<=0: raise ValueError('profile write made no progress')
+     view=view[n:]
+   os.fsync(dest)
+   os.fchmod(dest,0o644)
+  finally: os.close(dest)
+  after=os.fstat(fd); named=os.stat(p,follow_symlinks=False)
+  fields=lambda s:(s.st_dev,s.st_ino,s.st_mode,s.st_uid,s.st_gid,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
+  if fields(before)!=fields(after) or fields(before)!=fields(named) or total!=before.st_size: raise ValueError('profile changed while copying')
+  rows.append({'file':p.name,'bytes':total,'sha256':digest.hexdigest()})
+ finally: os.close(fd)
+(out/'manifest.json').write_text(json.dumps({'test':name,'original_test_exit':int(sys.argv[3]),'scope':'whole HTTP population including setup and rollback; not forward-only','profiles':rows},indent=2)+'\n')
+(out/'manifest.json').chmod(0o644)
+print('actual_native_profiles_preserved test='+name+' original_exit='+sys.argv[3])
+PY
+      then
+        printf 'native_profile_transfer_failed original_test_status=%s\n' "$probe_status" >&2
+        if test "$probe_status" = 0; then probe_status=1; fi
+      fi
+    fi ;;
+esac
 # Analyze outside the private /opt mount; retain the original native failure.
 if test -f "$probe_work/$probe_case.pprof"; then
   if ! timeout 50s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then

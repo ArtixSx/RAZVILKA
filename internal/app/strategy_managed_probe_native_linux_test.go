@@ -493,6 +493,18 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		}
 		release() // Each actual HTTP request must obtain its own new admission.
 		versionMeasurement := startuptools.NativeFixtureMeasureVersions(tools)
+		finishActivePhases, phaseErr := dataplane.NativeFixtureBeginNFQWSActivePhaseMeasurement()
+		if phaseErr != nil {
+			t.Fatal("native active HTTP population unavailable", phaseErr)
+		}
+		defer func() {
+			phases, err := finishActivePhases()
+			if err != nil {
+				t.Error("native active HTTP population invalid", err)
+				return
+			}
+			t.Log("native actual HTTP ACTIVE inclusive phases [started returned wall]; includes rollback; returned is not success", phases)
+		}()
 		inventoryReadsBefore := dataplane.NativeFixtureNFQInventoryReadCounts()
 		stopOriginalToolStarts := startuptools.StartDomainNativeToolMeasurement()
 		defer func() { t.Log("native actual HTTP original started tool children by kind", stopOriginalToolStarts()) }()

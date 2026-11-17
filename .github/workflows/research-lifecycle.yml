@@ -568,7 +568,10 @@ jobs:
           race_flag=()
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
           go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane ./internal/startuptools \
-            -run '^TestWGRuntimeInactiveMeasurement|^TestWGInactivityEmptyTable' | tee artifacts/managed/wg-measurement-contracts.log
+            -run '^TestWGRuntimeInactiveMeasurement|^TestWGInactivityEmptyTable|^TestNativeActivePhaseMeasurement' | tee artifacts/managed/wg-measurement-contracts.log
+          for name in Generation Population; do
+            grep -F -- "--- PASS: TestNativeActivePhaseMeasurement$name " artifacts/managed/wg-measurement-contracts.log
+          done
           for name in OriginalTwoPassOrder RefusalAndPrivacy BoundAndIncomplete; do
             grep -F -- "--- PASS: TestWGRuntimeInactiveMeasurement$name " artifacts/managed/wg-measurement-contracts.log
           done
@@ -637,6 +640,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/managed
           sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/managed/lan-profiles" \
             RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/lan.log
           grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANAppHTTP ' artifacts/managed/lan.log
           grep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/lan.log
@@ -649,6 +653,7 @@ jobs:
           mkdir -p artifacts/managed
           sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+            RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/managed/manual-profiles" \
             RAZVILKA_MANAGED_PROBE_LAN_CASE=manual sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/manual.log
           grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' artifacts/managed/manual.log
           grep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/manual.log

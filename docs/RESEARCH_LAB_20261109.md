@@ -1355,3 +1355,23 @@ mount namespace. Umount и удаление только собственног�
 в результат. Production guard и старые pins неизменны. Команда:
 `sudo env PATH="$PATH" GOTOOLCHAIN=local bash scripts/test-startup-loader-native.sh race`.
 [Результаты](measurements/2026-11-16/startup-loader-d60ca908.json).
+
+
+#### Измерение actual Apply вместо пустого probe счётчика
+
+В full HTTP/Apply стенде выводился `NativeFixtureNFQWSProbePhases(consumer)`,
+хотя actual Apply записывает фазы по `NFQWSActiveMaterial`. Измеритель теперь
+снимает разницу неизменённых native-only счётчиков вокруг единственной HTTP
+популяции и её завершённого cleanup. Смена поколения, незавершённые операции,
+переполнение и повторное чтение отказывают; результат не является admission.
+Полные CPU/allocation pprof сохраняются после выхода исходного child в новый
+явно указанный каталог (каждый до64МиБ, SHA manifest). Исходный FAIL сохраняется.
+Полный профиль включает setup/Apply/rollback, вложенные интервалы не складываются.
+Следующий integrated native run проверяет Linux исполнение и даст attribution
+forward/cleanup; compile/vet и независимое source review оцениваются отдельно.
+
+Read-only source audit обнаружил, что static-version path уже использовался:
+2078 IP version starts против564 пар xtables означает минимум1514 пропущенных
+пар через существующий exact-profile механизм. Оставшиеся564 пары пока не
+разделены на новый original scope, обычную Check и invalidation после ошибки.
+Расширение whitelist или отключение настоящего IP Start/Wait не выполнено.
