@@ -610,6 +610,19 @@ jobs:
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test "${race_flag[@]}" -count=1 ./internal/app ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestBackendClassicSave|^TestClassicSave|^TestFreshHeldNode|^TestNFQWSQuarantine|^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSNeverIssued|^TestNFQWSRecovery|^TestNFQWSUnpublished|^TestNFQWSActiveReadObservation|^TestNFQWSActivePreAdd|^TestNFQWSPreAddGenericAndProbe|^TestNFQWSActivePurePredicates|^TestNFQWSScopedExactPresenceObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
+      - name: Native NFQ boundary measurement contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          race_flag=()
+          if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
+          go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 ./internal/dataplane \
+            -run '^TestNFQWSBoundaryMeasurement' -v | tee artifacts/managed/boundary-contracts.log
+          for name in ClosedOutput BoundAndIdentity AbortAndCancellation OriginalEntryRefusals Disabled; do
+            grep -F -- "--- PASS: TestNFQWSBoundaryMeasurement$name " artifacts/managed/boundary-contracts.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/managed/boundary-contracts.log; then exit 1; fi
       - name: Actual path metadata parity and paired allocation benchmark
         if: ${{ !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         run: |

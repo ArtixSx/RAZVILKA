@@ -558,8 +558,18 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 	return b.applyPreparedPolicy(ctx, p, root, nil)
 }
 
-func (b *NFQWSScopedBinding) applyPreparedPolicy(ctx context.Context, p *NFQWSScopedPlan, root string, prepared *nfqwsActivePreparedPolicy) error {
+func (b *NFQWSScopedBinding) applyPreparedPolicy(ctx context.Context, p *NFQWSScopedPlan, root string, prepared *nfqwsActivePreparedPolicy) (result error) {
 	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyApply)()
+	measurement := beginNFQWSBoundaryMeasurement(ctx, "policy-apply", "unspecified")
+	returned := false
+	defer func() { measurement.finish(ctx, result, returned) }()
+	result = b.applyPreparedPolicyMeasured(ctx, p, root, prepared, &measurement)
+	returned = true
+	return result
+}
+
+func (b *NFQWSScopedBinding) applyPreparedPolicyMeasured(ctx context.Context, p *NFQWSScopedPlan, root string, prepared *nfqwsActivePreparedPolicy, measurement *nfqwsBoundaryMeasurement) error {
+	measurement.begin("prepare")
 	r, plan, err := b.prepare(p, false)
 	if err != nil {
 		return err
@@ -568,14 +578,17 @@ func (b *NFQWSScopedBinding) applyPreparedPolicy(ctx context.Context, p *NFQWSSc
 	// Only this private Apply runner moves the full exact-prefix proof to the
 	// actual mutation boundary; the base runner still owns Cmd.Start admission.
 	r.Runner = nfqwsScopedApplyRunner{base: r.Runner, binding: b, scoped: p, plan: plan, tools: r.Tools, guard: r.Guard}
+	measurement.begin("effects")
 	if err := b.applyOriginalPolicyEffectsPrepared(ctx, p, r, plan, root, prepared); err != nil {
 		return err
 	}
 	// The final external admission callback precedes the final full proof.
 	// Its nominal success must not hide a removed body or newly foreign rule.
+	measurement.begin("guard")
 	if err := r.Guard(ctx, len(plan.Effects)-1); err != nil {
 		return err
 	}
+	measurement.begin("complete-readback")
 	return b.readback(ctx, p, nfqwsScopedComplete, -1)
 }
 
