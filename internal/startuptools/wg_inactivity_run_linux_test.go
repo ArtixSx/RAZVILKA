@@ -3,15 +3,20 @@
 package startuptools
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -55,6 +60,72 @@ func init() {
 	os.Exit(2)
 }
 
+// An explicit helper selects only the private diagnostic image, never a native
+// consumer/service or factory grant. Historical callers retain the self image.
+func wgInactivityFixtureImage(t *testing.T) []byte {
+	t.Helper()
+	path := os.Getenv("RAZVILKA_WG_INACTIVITY_HELPER")
+	if path == "" {
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(executable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	data, err := readWGInactivityFixtureImage(path)
+	if err != nil {
+		t.Fatal("explicit private helper refused", err)
+	}
+	return data
+}
+
+func readWGInactivityFixtureImage(path string) ([]byte, error) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return nil, errors.New("helper path")
+	}
+	before, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() || before.Mode().Perm()&0111 == 0 || before.Size() <= 0 || before.Size() > maxImageBytes {
+		return nil, errors.New("helper shape")
+	}
+	// Do not let a named replacement between Lstat and open turn the private
+	// image read into a blocking FIFO or a followed symlink.
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(fd), path)
+	if file == nil {
+		return nil, errors.Join(errors.New("helper file descriptor"), unix.Close(fd))
+	}
+	opened, statErr := file.Stat()
+	if statErr != nil || !os.SameFile(before, opened) {
+		return nil, errors.Join(errors.New("helper open identity"), statErr, file.Close())
+	}
+	data, readErr := io.ReadAll(io.LimitReader(file, maxImageBytes+1))
+	after, afterErr := file.Stat()
+	named, namedErr := os.Lstat(path)
+	closeErr := file.Close()
+	if err := errors.Join(readErr, afterErr, namedErr, closeErr); err != nil {
+		clear(data)
+		return nil, err
+	}
+	same := func(info os.FileInfo) bool {
+		return os.SameFile(before, info) && info.Size() == before.Size() && info.Mode() == before.Mode() && info.ModTime() == before.ModTime()
+	}
+	if int64(len(data)) != before.Size() || !same(after) || !same(named) {
+		clear(data)
+		return nil, errors.New("helper closing identity")
+	}
+	return data, nil
+}
+
 func wgInactivityHeldChildFixture(t *testing.T) (*Lease, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -62,14 +133,7 @@ func wgInactivityHeldChildFixture(t *testing.T) (*Lease, string) {
 	if err := os.Mkdir(extension, 0700); err != nil {
 		t.Fatal(err)
 	}
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(executable)
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := wgInactivityFixtureImage(t)
 	path := filepath.Join(root, wgInactivityChildAlias)
 	if err := os.WriteFile(path, data, 0700); err != nil {
 		t.Fatal(err)
@@ -312,5 +376,129 @@ func TestProductionWGReadonlyFIBDiagnosticNative(t *testing.T) {
 	}
 	if err := l.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWGInactivityFixtureImageRefusals(t *testing.T) {
+	root := t.TempDir()
+	valid := filepath.Join(root, "helper")
+	if err := os.WriteFile(valid, []byte("private fixture bytes"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := readWGInactivityFixtureImage(valid); err != nil || string(data) != "private fixture bytes" {
+		t.Fatal("valid helper read", err)
+	}
+	link := filepath.Join(root, "alias")
+	if err := os.Symlink(valid, link); err != nil {
+		t.Fatal(err)
+	}
+	fifo := filepath.Join(root, "fifo")
+	if err := unix.Mkfifo(fifo, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"relative", root, link, fifo, filepath.Join(root, "missing")} {
+		if data, err := readWGInactivityFixtureImage(path); err == nil || data != nil {
+			t.Fatal("invalid helper accepted", path)
+		}
+	}
+	if err := os.Chmod(valid, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readWGInactivityFixtureImage(valid); err == nil {
+		t.Fatal("non-executable helper accepted")
+	}
+	if err := os.Chmod(valid, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(valid, maxImageBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readWGInactivityFixtureImage(valid); err == nil {
+		t.Fatal("oversized helper accepted")
+	}
+	if err := os.Truncate(valid, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readWGInactivityFixtureImage(valid); err == nil {
+		t.Fatal("empty helper accepted")
+	}
+}
+
+func TestWGInactivitySmallHelperABI(t *testing.T) {
+	if os.Getenv("RAZVILKA_WG_INACTIVITY_READ_CHILD") != "1" || os.Getenv("RAZVILKA_WG_INACTIVITY_HELPER") == "" {
+		t.Skip("explicit small private helper required")
+	}
+	l, root := wgInactivityHeldChildFixture(t)
+	file := l.review.ipEntry.file
+	for _, row := range []struct {
+		alias  string
+		args   []string
+		output string
+		code   int
+	}{
+		{"wg-kernel-link-metadata-ip", []string{"-Version"}, ubuntuPolicyProfile().ipVersion, 0},
+		{"wg-kernel-link-metadata-iptables", []string{"--version"}, "iptables v" + ubuntuProfile().version + "\n", 0},
+		{"wg-kernel-link-metadata-ip6tables", []string{"--version"}, "ip6tables v" + ubuntuProfile().version + "\n", 0},
+		{"unknown", []string{"-Version"}, "", 99},
+		{"wg-kernel-link-metadata-ip", []string{"-Version", "extra"}, "", 99},
+		{"wg-kernel-link-metadata-iptables", []string{"-Version"}, "", 99},
+		{"wg-kernel-link-metadata-ip6tables", []string{"-Version"}, "", 99},
+		{wgInactivityChildAlias, []string{"-N", "-6", "-j", "route", "show", "table", "999"}, "", 99},
+	} {
+		t.Run(row.alias+strings.Join(row.args, "-"), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "/proc/self/fd/3", row.args...)
+			cmd.Args[0] = row.alias
+			cmd.ExtraFiles = []*os.File{file}
+			cmd.Env = append(os.Environ(), "XTABLES_LIBDIR="+l.profile.extension)
+			data, err := cmd.CombinedOutput()
+			if cmd.ProcessState == nil || cmd.ProcessState.ExitCode() != row.code || string(data) != row.output || (err == nil) != (row.code == 0) {
+				t.Fatal("private alias ABI", row.alias, err, string(data))
+			}
+			if _, err := os.Lstat(filepath.Join(root, "started")); !os.IsNotExist(err) {
+				t.Fatal("metadata/unknown argv started diagnostic")
+			}
+		})
+	}
+	// Actual original held image executes the same wait-for-release protocol;
+	// cancellation must kill/join it without emitting a diagnostic or release.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/proc/self/fd/3", "-N", "-6", "-j", "route", "show", "table", "205")
+	cmd.Args[0] = wgInactivityChildAlias
+	cmd.ExtraFiles = []*os.File{file}
+	cmd.Env = append(os.Environ(), "XTABLES_LIBDIR="+l.profile.extension)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waited := false
+	defer func() {
+		cancel()
+		if !waited {
+			waited = true
+			_ = cmd.Wait()
+		}
+	}()
+	for {
+		if _, err := os.Stat(filepath.Join(root, "started")); err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatal("small helper did not start")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	waited = true
+	err := cmd.Wait()
+	if err == nil || output.Len() != 0 {
+		t.Fatal("canceled helper supplied diagnostic", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "release")); !os.IsNotExist(err) {
+		t.Fatal("cancel synthesized release")
 	}
 }
