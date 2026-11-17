@@ -499,6 +499,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		if err != nil {
 			return fmt.Errorf("original resource issuer: %w", err)
 		}
+		joined := false
 		if work := os.Getenv("RAZVILKA_DOMAIN_CPU_PROFILE"); work != "" {
 			info, err := os.Lstat(work)
 			if err != nil {
@@ -523,6 +524,15 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				if err := profile.Close(); err != nil {
 					t.Error(err)
 				}
+				if !joined {
+					t.Log("GEN1_ALLOCS_PROFILE_SKIPPED_NOT_JOINED; original failure remains")
+					return
+				}
+				count, err := writeDomainOriginalAllocsProfile(work, info)
+				t.Logf("GEN1_ALLOCS_PROFILE_COMPLETE bytes=%d complete=%t joined=true sampling_rate=%d; cumulative sampled process allocations including setup, GC-cycle lag possible, no forced GC or sampling changes, not Run-only or readiness proof", count, err == nil, runtime.MemProfileRate)
+				if err != nil {
+					t.Error("original allocation profile:", err)
+				}
 			}()
 		}
 		stopDomainMetrics := dataplane.StartDomainTCPNativeMeasurement()
@@ -534,12 +544,12 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		runCtx, stopRun := context.WithCancel(original)
 		runDone := make(chan error, 1)
 		go func() { runDone <- owner.Run(runCtx, resource) }()
-		joined := false
 		defer func() {
 			stopRun()
 			if !joined {
 				select {
 				case runErr := <-runDone:
+					joined = true
 					t.Logf("original Run result from existing deferred join (including peer failure): %v", runErr)
 				case <-time.After(15 * time.Second):
 					t.Error("original runtime did not join after fixture failure")

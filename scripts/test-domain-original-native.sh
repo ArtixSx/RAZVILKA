@@ -164,6 +164,22 @@ if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
   timeout 50s go tool pprof -top -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.cpu.pprof" 2>&1 | head -c 65536 > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/cpu-top.txt" || true
   timeout 50s go tool pprof -top -cum -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.cpu.pprof" 2>&1 | head -c 65536 > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/cpu-cumulative.txt" || true
  fi
+ # The full sampled allocation stream was written only after original Run
+ # joined and CPU profiling stopped. It is process-cumulative, including
+ # setup and runtime GC-cycle lag; never label it an exact Run-only interval.
+ if test -s "$domain_work/original-run.allocs.pprof"; then
+  cp "$domain_work/original-run.allocs.pprof" "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/"
+  for domain_alloc_report in space objects processes; do
+   domain_alloc_report_status=0
+   case "$domain_alloc_report" in
+    space) timeout 50s go tool pprof -sample_index=alloc_space -top -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.allocs.pprof" > "$domain_work/allocs-report.txt" 2>&1 || domain_alloc_report_status=$? ;;
+    objects) timeout 50s go tool pprof -sample_index=alloc_objects -top -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.allocs.pprof" > "$domain_work/allocs-report.txt" 2>&1 || domain_alloc_report_status=$? ;;
+    processes) timeout 50s go tool pprof -sample_index=alloc_space -peek='captureProc|observeDomainListener|xraySelectedTCPSockets|xraySelectedTCPReadBoundedFD' "$domain_work/app.test" "$domain_work/original-run.allocs.pprof" > "$domain_work/allocs-report.txt" 2>&1 || domain_alloc_report_status=$? ;;
+   esac
+   head -c 65536 "$domain_work/allocs-report.txt" > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/allocs-$domain_alloc_report.txt"
+   printf '%s_exit_status=%s\n' "$domain_alloc_report" "$domain_alloc_report_status" >> "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/allocs-analysis-status.txt"
+  done
+ fi
  domain_publication_budget=${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-12}
  domain_diagnostic=${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-false}
  if test "$domain_case" = TestDomainTCPOriginalNativeUnpublishedRetirement; then
