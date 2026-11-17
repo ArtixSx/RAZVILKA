@@ -164,6 +164,43 @@ func TestNativeWGKernelLinkOriginalHeldSource(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(root, "started")); !os.IsNotExist(err) {
 		t.Fatal("kernel observer executed the modeled route/effect CLI")
 	}
+	// Actual original held-byte scope and kernel reads. Cleanup/control lifetime
+	// is separately covered by dataplane tests and the full Apply/rollback gate;
+	// these modeled version helpers do not prove that complete scenario.
+	var scopedLinks int
+	err = r.WithWGInactivityCleanupToolObservation(ctx, l.identity, l.digest, func(c context.Context) error {
+		if _, present := readObservationMarker(c); !present {
+			return fmt.Errorf("missing original byte observation")
+		}
+		if err := readObservationEffectRefusal(c); err == nil {
+			return fmt.Errorf("read scope permitted an effect")
+		}
+		if err := r.CheckWG(c, l.identity); err != nil {
+			return err
+		}
+		rows, err := r.ReadWGKernelLinks(c, l.identity)
+		if err != nil {
+			return err
+		}
+		scopedLinks = len(rows)
+		return r.CheckWG(c, l.identity)
+	})
+	if err != nil || scopedLinks == 0 {
+		t.Fatal("original cleanup tool leaf refused actual full read pair", err)
+	}
+	t.Log("actual_wg_cleanup_tool_leaf original_scope=true full_check_pair=true kernel_dump=true effect_refused=true")
+	// A byte mutation after the kernel result must still refuse the outer
+	// closing observation. No mutation is restored into an accepted result.
+	err = r.WithWGInactivityCleanupToolObservation(ctx, l.identity, l.digest, func(c context.Context) error {
+		rows, err := r.ReadWGKernelLinks(c, l.identity)
+		if err != nil || len(rows) == 0 {
+			return fmt.Errorf("kernel opening: %w", err)
+		}
+		return os.WriteFile(l.profile.ipAlias, []byte("changed held source bytes"), 0700)
+	})
+	if err == nil {
+		t.Fatal("outer closing accepted mutated held source")
+	}
 	if err := os.WriteFile(l.profile.ipAlias, []byte("changed held source bytes"), 0700); err != nil {
 		t.Fatal(err)
 	}

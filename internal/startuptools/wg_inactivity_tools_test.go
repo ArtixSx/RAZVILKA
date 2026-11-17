@@ -51,6 +51,39 @@ func TestWGInactivityStartupSourceRequiresSameOriginalLeaseAndEngine(t *testing.
 	}
 }
 
+func TestWGCleanupToolObservationRequiresOriginalSourceTuple(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for _, cut := range []string{"nil-runner", "nil-lease", "engine", "profile", "identity", "review", "callback"} {
+		t.Run(cut, func(t *testing.T) {
+			l := managedListDescriptorFixture(t, [2]bool{false, false})
+			r := &wgInactivityRunner{l, "wireguard"}
+			identity, review := l.identity, l.digest
+			calls := 0
+			use := func(context.Context) error { calls++; return nil }
+			switch cut {
+			case "nil-runner":
+				r = nil
+			case "nil-lease":
+				r.lease = nil
+			case "engine":
+				r.engine = "other"
+			case "profile":
+				l.profile.wgEngine = "wireguard"
+			case "identity":
+				identity.Inode++
+			case "review":
+				review = ""
+			case "callback":
+				use = nil
+			}
+			if err := r.WithWGInactivityCleanupToolObservation(ctx, identity, review, use); err == nil || calls != 0 {
+				t.Fatal("foreign source reached observation", cut, err, calls)
+			}
+		})
+	}
+}
+
 func TestWGInactivityStartupIndependentABIRejectsEffectsAndFallback(t *testing.T) {
 	l := managedListDescriptorFixture(t, [2]bool{true, false})
 	for _, test := range []struct {
