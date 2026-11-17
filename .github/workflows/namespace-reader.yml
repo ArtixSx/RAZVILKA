@@ -1,0 +1,74 @@
+name: Namespace reader actual FD allocation comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/identity-contract-namespace-reader-20261117']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Exact parser contracts and paired actual namespace reads
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 -p artifacts/namespace-reader
+          git rev-parse HEAD > artifacts/namespace-reader/revision.txt
+          for mode in normal race; do
+            flags=()
+            if test "$mode" = race; then flags=(-race); fi
+            env GOTOOLCHAIN=local RAZVILKA_NAMESPACE_DIRECTORY_MEASURE=1 \
+              go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v -timeout=90s \
+              ./internal/netidentity \
+              -run '^(TestNamespaceDirectory(SourceParity|ParserContracts|CallbackIsolation|FDNativeContracts|FDNativePaired)|TestRawDirentsCannotHideNetOrManufactureEOF|TestAuditCapacityCandidateSourceParity)$' \
+              2>&1 | tee "artifacts/namespace-reader/$mode.log"
+          done
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Verify every paired outcome without promoting a microbenchmark to readiness
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,pathlib,re,statistics
+          root=pathlib.Path('artifacts/namespace-reader')
+          required=['TestNamespaceDirectorySourceParity','TestNamespaceDirectoryParserContracts','TestNamespaceDirectoryCallbackIsolation','TestNamespaceDirectoryFDNativeContracts','TestNamespaceDirectoryFDNativePaired','TestRawDirentsCannotHideNetOrManufactureEOF','TestAuditCapacityCandidateSourceParity']
+          results=[]
+          for mode in ('normal','race'):
+              path=root/(mode+'.log'); text=path.read_text(encoding='utf-8')
+              outcomes=re.findall(r'^--- (PASS|FAIL|SKIP): (\w+) \([0-9.]+s\)$',text,re.M)
+              valid=all(outcomes.count(('PASS',name))==1 for name in required) and '--- SKIP:' not in text and '--- FAIL:' not in text
+              rows=[json.loads(line.split('namespace-directory-paired ',1)[1]) for line in text.splitlines() if 'namespace-directory-paired ' in line]
+              valid=valid and len(rows)==16
+              expected_keys={'pair','position','variant','calls','wall_ns','thread_cpu_ns','process_cpu_ns','allocated_bytes','allocations','names'}
+              for i,row in enumerate(rows):
+                  order=('original_callback','fixed_fd') if i//2%2==0 else ('fixed_fd','original_callback')
+                  valid=valid and set(row)==expected_keys and row.get('pair')==i//2 and row.get('position')==i%2 and row.get('variant')==order[i%2] and row.get('calls')==512
+                  valid=valid and all(type(row.get(k)) is int and row[k]>=0 for k in ('wall_ns','thread_cpu_ns','process_cpu_ns','allocated_bytes','allocations','names'))
+                  valid=valid and row['wall_ns']>0 and 1<=row['names']<=64
+              if valid: valid=len({row['names'] for row in rows})==1
+              means={variant:{key:statistics.mean(row[key]/row['calls'] for row in rows if row['variant']==variant) for key in ('wall_ns','thread_cpu_ns','process_cpu_ns','allocated_bytes','allocations')} for variant in ('original_callback','fixed_fd')} if valid else {}
+              results.append({'mode':mode,'pass':bool(valid),'rows':rows,'mean_per_call':means,'log_sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
+          report={'revision':(root/'revision.txt').read_text().strip(),'results':results,'pass':all(row['pass'] for row in results),'limits':['Same process and locked thread, fresh actual /proc/self/ns FD per leaf call; not the full Provider or DNS flow.','Global allocation counters are serial process deltas, not exact attribution under concurrent runtime work.','Normal and race are separate populations; no router/LAN or deadline acceptance claim.','All parser, raw-dirent, cookie, error, EOF and read bounds remain unchanged.']}
+          (root/'comparison.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps({'pass':report['pass'],'mean_per_call':{r['mode']:r['mean_per_call'] for r in results}}))
+          if not report['pass']:raise SystemExit(1)
+          PY
+      - name: Preserve logs and original outcomes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: namespace-reader-${{ github.sha }}
+          path: artifacts/namespace-reader/
+          if-no-files-found: error
+          retention-days: 14

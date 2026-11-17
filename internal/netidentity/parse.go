@@ -19,15 +19,12 @@ const (
 // Parse raw records directly: syscall.ParseDirent would skip d_ino == 0 records.
 // d_type never decides whether a namespace name is kept, including DT_UNKNOWN.
 func readNamespaceDirectory(ctx context.Context, read func([]byte) (int, error)) ([]string, bool, bool, bool) {
-	names := []string{}
-	seen := map[string]bool{}
-	unknown, dot, dotdot := false, false, false
+	state := newNamespaceDirectoryState()
 	buf := make([]byte, 4096)
 	total := 0
-	var cookie uint64
 	for calls := 0; calls < maxDirectoryCalls; calls++ {
 		if ctx.Err() != nil || total >= maxDirectoryBytes {
-			return names, unknown, false, false
+			return state.names, state.unknown, false, false
 		}
 		chunk := buf
 		if remaining := maxDirectoryBytes - total; remaining < len(chunk) {
@@ -35,65 +32,85 @@ func readNamespaceDirectory(ctx context.Context, read func([]byte) (int, error))
 		}
 		n, err := read(chunk)
 		if err != nil || n < 0 || n > len(chunk) {
-			return names, unknown, false, false
+			return state.names, state.unknown, false, false
 		}
 		if n == 0 {
-			return names, unknown, true, dot && dotdot
+			return state.names, state.unknown, true, state.dot && state.dotdot
 		}
 		total += n
-		for off := 0; off < n; {
-			if n-off < 20 {
-				return names, unknown, false, false
-			}
-			recordLength := int(binary.LittleEndian.Uint16(chunk[off+16 : off+18]))
-			if recordLength < 24 || recordLength%8 != 0 || recordLength > n-off {
-				return names, unknown, false, false
-			}
-			record := chunk[off : off+recordLength]
-			next := binary.LittleEndian.Uint64(record[8:16])
-			if next != cookie+1 {
-				return names, unknown, false, false
-			}
-			cookie = next
-			end := bytes.IndexByte(record[19:], 0)
-			if end < 1 || end > 64 {
-				return names, unknown, false, false
-			}
-			name := string(record[19 : 19+end])
-			if seen[name] {
-				return names, unknown, false, false
-			}
-			seen[name] = true
-			switch name {
-			case ".":
-				if cookie != 1 {
-					return names, unknown, false, false
-				}
-				dot = true
-			case "..":
-				if cookie != 2 {
-					return names, unknown, false, false
-				}
-				dotdot = true
-			default:
-				if !dot || !dotdot || len(names) >= maxNames {
-					return names, unknown, false, false
-				}
-				for i := 0; i < len(name); i++ {
-					b := name[i]
-					if !((b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '_') {
-						return names, unknown, false, false
-					}
-				}
-				names = append(names, name)
-				if record[18] == 0 {
-					unknown = true
-				}
-			}
-			off += recordLength
+		if !state.consume(chunk, n) {
+			return state.names, state.unknown, false, false
 		}
 	}
-	return names, unknown, false, false
+	return state.names, state.unknown, false, false
+}
+
+type namespaceDirectoryState struct {
+	names                []string
+	seen                 map[string]bool
+	unknown, dot, dotdot bool
+	cookie               uint64
+}
+
+func newNamespaceDirectoryState() namespaceDirectoryState {
+	return namespaceDirectoryState{names: []string{}, seen: map[string]bool{}}
+}
+
+// consume owns every returned name; raw input may be reused after this call.
+// Failure retains the same partial names, type, dot and cookie state.
+func (s *namespaceDirectoryState) consume(chunk []byte, n int) bool {
+	for off := 0; off < n; {
+		if n-off < 20 {
+			return false
+		}
+		recordLength := int(binary.LittleEndian.Uint16(chunk[off+16 : off+18]))
+		if recordLength < 24 || recordLength%8 != 0 || recordLength > n-off {
+			return false
+		}
+		record := chunk[off : off+recordLength]
+		next := binary.LittleEndian.Uint64(record[8:16])
+		if next != s.cookie+1 {
+			return false
+		}
+		s.cookie = next
+		end := bytes.IndexByte(record[19:], 0)
+		if end < 1 || end > 64 {
+			return false
+		}
+		name := string(record[19 : 19+end])
+		if s.seen[name] {
+			return false
+		}
+		s.seen[name] = true
+		switch name {
+		case ".":
+			if s.cookie != 1 {
+				return false
+			}
+			s.dot = true
+		case "..":
+			if s.cookie != 2 {
+				return false
+			}
+			s.dotdot = true
+		default:
+			if !s.dot || !s.dotdot || len(s.names) >= maxNames {
+				return false
+			}
+			for i := 0; i < len(name); i++ {
+				b := name[i]
+				if !((b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '_') {
+					return false
+				}
+			}
+			s.names = append(s.names, name)
+			if record[18] == 0 {
+				s.unknown = true
+			}
+		}
+		off += recordLength
+	}
+	return true
 }
 
 func mountLayoutOK(data []byte, rootID uint64, paths []string) bool {

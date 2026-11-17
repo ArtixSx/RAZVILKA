@@ -135,7 +135,7 @@ func captureProcBeforeReservation(ctx context.Context) observation {
 		return r
 	}
 	r.Checks.FreshPositionZero = true
-	r.Names, r.DTUnknownObserved, r.DirectoryComplete, ok = readNamespaceDirectory(ctx, func(buf []byte) (int, error) { return syscall.ReadDirent(nsFD, buf) })
+	r.Names, r.DTUnknownObserved, r.DirectoryComplete, ok = readNamespaceDirectoryFD(ctx, nsFD)
 	if !ok {
 		return r
 	}
@@ -145,7 +145,7 @@ func captureProcBeforeReservation(ctx context.Context) observation {
 	if err != nil || position != 0 {
 		return r
 	}
-	pidNames, _, complete, valid := readNamespaceDirectory(ctx, func(buf []byte) (int, error) { return syscall.ReadDirent(pidNSFD, buf) })
+	pidNames, _, complete, valid := readNamespaceDirectoryFD(ctx, pidNSFD)
 	if !complete || !valid {
 		return r
 	}
