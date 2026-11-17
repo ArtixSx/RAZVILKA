@@ -1,0 +1,464 @@
+{
+  "run": 44044228410,
+  "sha": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+  "managed_jobs": {
+    "production": 133905845709,
+    "race": 133905845665
+  },
+  "conclusions": {
+    "production": "failure",
+    "race": "failure"
+  },
+  "numeric_contracts": {
+    "production": "exact2PASS noSKIP",
+    "race": "exact2PASS noSKIP"
+  },
+  "raw_profiles": [
+    {
+      "mode": "production",
+      "path": "production\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "bytes": 117234,
+      "sha256": "880c51a9ba4de2f9a4980f1218892dc0e8352bed170f14f00645da5c3dfd19bb",
+      "original_exit": 1
+    },
+    {
+      "mode": "production",
+      "path": "production\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "bytes": 109844,
+      "sha256": "a82f560b4072b2053aa85f000b3d4f8b869ac3a11741ed2a37a5c31cf77fa176",
+      "original_exit": 1
+    },
+    {
+      "mode": "production",
+      "path": "production\\lan-profiles\\TestManagedStrategyProbeNativeLANAppHTTP\\TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "bytes": 179261,
+      "sha256": "2050e7dd2b800f3befb047c3b6ee8fd9d1ad26f9ec9d8de06a0a812b989c4861",
+      "original_exit": 1
+    },
+    {
+      "mode": "production",
+      "path": "production\\lan-profiles\\TestManagedStrategyProbeNativeLANAppHTTP\\TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "bytes": 194337,
+      "sha256": "7b0d9b62e74552f1f995e58c51a0501a483f4b4e84d1e7d5178dc8e869152a6e",
+      "original_exit": 1
+    },
+    {
+      "mode": "race",
+      "path": "race\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof",
+      "bytes": 138634,
+      "sha256": "ef449e7ab77d1d94a3b6f1c76ba52901a8773cb94456f3e27e4cd3f5cf16819f",
+      "original_exit": 1
+    },
+    {
+      "mode": "race",
+      "path": "race\\manual-profiles\\TestManagedStrategyProbeNativeLANManualApply\\TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANManualApply.pprof.alloc",
+      "bytes": 136324,
+      "sha256": "a8b664c516407d066d9435ca5ff754441576fcfe414c09b34ed58183bbfe632d",
+      "original_exit": 1
+    },
+    {
+      "mode": "race",
+      "path": "race\\lan-profiles\\TestManagedStrategyProbeNativeLANAppHTTP\\TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof",
+      "bytes": 61429,
+      "sha256": "4fbfcc5a189c191270c1caf824e8486b91b8f9a2407f4665349e0810215d75b4",
+      "original_exit": 1
+    },
+    {
+      "mode": "race",
+      "path": "race\\lan-profiles\\TestManagedStrategyProbeNativeLANAppHTTP\\TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "file": "TestManagedStrategyProbeNativeLANAppHTTP.pprof.alloc",
+      "bytes": 67967,
+      "sha256": "a865eb602fb42841626c759048e893c15679cdf48ca483ef0946419208931aa9",
+      "original_exit": 1
+    }
+  ],
+  "limits": [
+    "Inclusive nested durations must not be added. Returned is not successful outcome.",
+    "Manual profiles include setup/forward/rollback; allocs cumulative sampled without forcedGC.",
+    "policy-remove=0 is missing context attribution for original recovery path, not proof no effects/removal.",
+    "Race LAN stops at probe0; empty active map is correct, not Apply measurement.",
+    "Different hosts/modes do not constitute comparable before/after performance."
+  ],
+  "private_evidence_directory": "C:\\RAZVILKA-research-20261117\\managed-phases-49c25e20",
+  "independent_root_verified_raw_files": 33,
+  "verification_sha256": "82816ca2a4db13bb2bc7675610b15f6bc1fdfb50eaa189b4de63c67dad37aa8d",
+  "raw_manifest_sha256": "a4532b738156d58cd596b6940914374c10c28e2bcd9fec6d454bec1b9f82e381",
+  "populations": [
+    {
+      "mode": "production",
+      "case": "probe",
+      "execution_states": [],
+      "timing": [],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeConsumer",
+          "10.99s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeConsumerInitialWaitCleanup",
+          "13.76s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeConsumerLateWaitCleanup",
+          "19.04s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeAppHTTP",
+          "36.93s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeClosingSource",
+          "10.65s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeClosingRuntime",
+          "10.62s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeClosingControl",
+          "10.77s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeClosingEnvironment",
+          "10.72s"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "case": "lan",
+      "execution_states": [
+        [
+          "rollback-failed",
+          "false"
+        ]
+      ],
+      "timing": [
+        "2026/11/17 08:18:07 Managed NFQ original timing outer=native-apply inner=lan-preflight-boundary-physical/packet-cleanup-physical/packet.capture/fence.check.context/context.deadline/context.deadline/context.deadline/context.deadline/context.deadline/context.deadline/context.deadline/context.deadline reason=DEADLINE_EXCEEDED total_ms=23999",
+        "2026/11/17 08:18:07 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.19s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANAppHTTP",
+          "64.54s"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "case": "manual",
+      "execution_states": [
+        [
+          "rolled-back",
+          "true"
+        ]
+      ],
+      "timing": [
+        "2026/11/17 08:18:58 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=39095",
+        "2026/11/17 08:18:58 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.77s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "42.67s"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "case": "preledger",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:22:06 Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=31911",
+        "2026/11/17 08:22:06 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.83s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPreLedgerRecovery",
+          "36.09s"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "case": "prepared-active",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:22:45 Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=27987",
+        "2026/11/17 08:22:45 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply/prepared.active"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.22s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPreparedActiveRecovery",
+          "31.84s"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "case": "never-issued-intent",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:19:47 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=39166",
+        "2026/11/17 08:19:47 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.13s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "42.88s"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "case": "never-issued-settlement-sync",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:20:36 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=OPERATION_BUSY total_ms=39057",
+        "2026/11/17 08:20:36 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.17s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "42.58s"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "case": "quarantine-close-retry",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:21:25 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=38933",
+        "2026/11/17 08:21:25 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.18s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "42.38s"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "case": "probe",
+      "execution_states": [],
+      "timing": [],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeConsumer",
+          "19.10s"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "case": "lan",
+      "execution_states": [],
+      "timing": [],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.80s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANAppHTTP",
+          "22.18s"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "case": "manual",
+      "execution_states": [
+        [
+          "rolled-back",
+          "true"
+        ]
+      ],
+      "timing": [
+        "2026/11/17 08:18:03 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=52847",
+        "2026/11/17 08:18:03 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.11s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "61.36s"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "case": "preledger",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:21:30 Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=47847",
+        "2026/11/17 08:21:30 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.25s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPreLedgerRecovery",
+          "57.11s"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "case": "prepared-active",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:22:31 Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=41901",
+        "2026/11/17 08:22:31 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply/prepared.active"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.76s"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPreparedActiveRecovery",
+          "50.82s"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "case": "never-issued-intent",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:19:14 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=OPERATION_BUSY total_ms=52373",
+        "2026/11/17 08:19:14 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.31s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "60.05s"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "case": "never-issued-settlement-sync",
+      "execution_states": [],
+      "timing": [
+        "2026/11/17 08:20:24 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=52838",
+        "2026/11/17 08:20:24 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply"
+      ],
+      "invalid_measurement": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.97s"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "60.88s"
+        ]
+      ]
+    }
+  ],
+  "failure_attribution": {
+    "forward": "prepared.policy-apply / lan-preflight-inventory-consumer-close remains over the original deadline",
+    "production_full_lan_cleanup": "NFQ rollback completed but LAN packet.cleanup reached its original 24s physical deadline; rollback-failed/false",
+    "manual": "normal and race show rolled-back/true after failed Apply; not route readiness",
+    "race_core": "successful service response without required owned NFQUEUE packet proof is refused",
+    "race_lan": "fails probe0 before Apply; empty active counters are not a missing Apply measurement",
+    "cpu_profile_limit": "Go1.26.5 CPU stacks bounded at64frames; missing outer frames cannot establish waiting time"
+  }
+}

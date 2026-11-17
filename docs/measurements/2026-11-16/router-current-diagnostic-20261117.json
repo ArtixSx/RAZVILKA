@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "date": "2026-11-17",
+  "code_revision": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+  "status": "COLLECTED_WITH_GAPS_DIAGNOSTIC_ONLY",
+  "production_admission": false,
+  "router_modified": false,
+  "private_raw_directory": "C:/RAZVILKA-backups/router-current-diagnostic-20261117-1110",
+  "collector": {
+    "script_sha256": "d2d32f6c658383db2b1c1eff50a2bcd0f766091b353e46f1ddd4df92faeb925e",
+    "transport_sha256": "5fd5b903c378ae603e66ead1d9035132f9f82dc8cc4bb4e4886cd1493111bb03",
+    "independent_source_review": "APPROVE_DIAGNOSTIC_ONLY",
+    "local_tests_passed": 14,
+    "ssh_commands": 4,
+    "all_commands_exit_zero_with_eof_and_drain": true,
+    "forced_stop": false,
+    "local_worker_joined": true,
+    "remote_process_join_proven": false
+  },
+  "observations": {
+    "tool_hash_opening_closing_count": 43,
+    "tool_hashes_exact_and_bookends_equal": true,
+    "package_elf_images_matching": 40,
+    "extension_names_matching": 30,
+    "elf_graph_raw_links_matching": 9,
+    "loader_preload_and_variant_paths_absent": 20,
+    "arm64_hwcap_numeric": 255,
+    "arm64_cpuid_hwcap": false,
+    "read_sections": 441,
+    "failed_read_sections": 0,
+    "truncated_read_sections": 0,
+    "unavailable_namespace_links": 6,
+    "namespace_proof": false,
+    "samebirth_process_observations": 143,
+    "queue_socket_process_diagnostic_associations": 2,
+    "custody_proven": false,
+    "ip_full_installed": false,
+    "uid_1001_directories": ["/opt", "/opt/etc", "/opt/etc/init.d", "/opt/usr", "/opt/usr/bin"],
+    "boot_mount_registered_tables_queue_netlink_bookends_equal": true
+  },
+  "raw_digests": {
+    "snapshot.private.bin": "9a3252e8b5e240d45dada5e7e70114c17a60015b160b14a53cc1a60711dc94ba",
+    "collection.json": "db205d93548975ad67f9f46a0a4f4f8ba64adc58fa128bef9a36ef540ecd6786",
+    "tools-opening.private.bin": "64f4b4c9794ba35e9f97f96bdc7615f32eacc1c967c0abb74c01a7feae0abee8",
+    "tools-closing.private.bin": "64f4b4c9794ba35e9f97f96bdc7615f32eacc1c967c0abb74c01a7feae0abee8"
+  },
+  "preserved_first_attempt": {
+    "private_directory": "C:/RAZVILKA-backups/router-current-diagnostic-20261117-1100",
+    "status": "INCOMPLETE",
+    "script_exit": 71,
+    "cause": "First namespace readlink returned no target and no errno; not proven ENOENT. Closing hashes NOT_RUN."
+  },
+  "limitations": [
+    "Authenticated-root diagnostic through existing Entware is not protected ancestry or retained-descriptor admission.",
+    "Consistent bookends are not an atomic snapshot or proof of kernel queue custody.",
+    "Unavailable namespace links do not bypass the original single-init provider checks.",
+    "The update interpreter is /opt/bin/sh; the NDMS service environment and /opt/usr fallback require separate review. Repairing three directories does not establish complete boot closure.",
+    "Exact package hashes do not admit a new profile, prove mapped runtime DSOs or verify LAN routing.",
+    "No repair, installation, rule mutation, queue bind, reboot or packet-generation test was performed."
+  ]
+}

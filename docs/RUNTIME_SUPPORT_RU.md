@@ -1,27 +1,26 @@
 # Сборки и поддержка запуска
 
-Актуальный код `973afdba`, native стенд `d60ca908`; полный CI133b SUCCESS,
-push/PR CI38a SUCCESS. [Единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
-На38a Mihomo LAN, StrategyLab, modern rollback, legacy empty/draft/history,
-probe comparison и exact xtables normal/race PASS; strict DNS и managed NFQWS2 FAIL.
-DNS d88 source-only ABBA уменьшил sampled allocations2465,18→1978,18МиБ,
-но все4 selected4с FAIL. Это подтверждение экономии памяти, не готовности DNS.
-NFQ c200 удалил scope308, не действовавший в actual Apply; все прежние проверки
-и полезный7419 сохранены. b6d переиспользует очищаемый proc scratch: normal/race контракты PASS,
-allocation −16,45%; fullApply4FAIL с rollback4PASS, full race NOT_RUN: helper>16МиБ. Единичный GC crash не воспроизведён,
-его причина не установлена; неуспешные Apply и rollback результаты сохранены.
-Отдельный малый helper5727 наe337 прошёл4 normal/race контракта; это устраняет
-ошибку prerequisite, но ещё не подтверждает fullApply/race. ARM64 cpuid guard973
-не расширяет допуск профиля; первый native test отказал на host /opt ownership,
-изолированный тестовый /opt наd60 прошёл4 loader и4 WG контракта normal/race.
-Синтетические ELF проверены на LinuxAMD64, ARM64 execution не заявляется.
+Текущая интеграция `49c25e20`: push CI SUCCESS, PR CI SUCCESS.
+Mihomo4jobs, probe comparison, StrategyLab7cuts/restored panel, modern и
+legacy update/rollback PASS. Native lifecycle FAILURE: strict DNS selected
+и canceled-ready, managed NFQWS normal/race остаются открытыми.
+[Единая актуальная матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 
-Приватный backup роутера69files проверен. В изолированном Linux совпали925
-элементов namespace/types,578file payloads и263link targets, первый tmpfs strict restore INCOMPLETE сохранён. Новый ext4 drill воспроизвёл
-все925metadata/payload включая symlink0755; это не router boot/firmware acceptance.
-Требуются UID0 у /opt,/opt/etc,/opt/etc/init.d, ip-full и свежий outside-/opt/NDM
-профиль.40ELF совпали с пакетами; новый Entware профиль ещё не допущен.
-Установок RAZVILKA и изменений живого роутера не выполнялось.
+Новый pinned profile `5031d70d` относится к нынешним40ELF/30extension names
+NC-1812/Entware2026.11. Старые constructors и pins сохранены, static-version
+и classic-save shortcuts не расширены. Independent source review/Windows
+PASS; Linux native normal/race также PASS:4 package closure +4 loader +4 helper tests в каждом режиме. [Точные результаты](measurements/2026-11-16/entware-profile-5031d70d.json). Public selection497a9e4b подключён, native normal/race PASS; ARM64 полный acquire ещё не проверен.
+Это не разрешение установки и не результат ARM64 исполнения.
+
+Свежая [read-only диагностика роутера](measurements/2026-11-16/router-current-diagnostic-20261117.json)
+WITH_GAPS: opening/closing43tool hashes совпали,6 namespace links недоступны.
+UID1001 у /opt,/opt/etc,/opt/etc/init.d,/opt/usr,/opt/usr/bin; ip-full отсутствует.
+СменаUID трёх каталогов не доказывает целый NDMS service boot closure.
+Protected ancestry/custody допускает только исходный production provider.
+[Offline ext4 restore](measurements/2026-11-16/router-offline-ext4-20261117.json)
+точно воспроизвёл925entries/payload/metadata; это не live untar, router boot,
+firmware/ACL/xattrs acceptance. Установки и изменения роутера не выполнялись.
+
 Generic CI, native fixture, public asset delivery и router/LAN acceptance
 не заменяют друг друга. Старые таблицы ниже — история отдельных сценариев.
 

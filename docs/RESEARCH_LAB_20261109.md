@@ -1375,3 +1375,55 @@ Read-only source audit обнаружил, что static-version path уже и�
 пар через существующий exact-profile механизм. Оставшиеся564 пары пока не
 разделены на новый original scope, обычную Check и invalidation после ошибки.
 Расширение whitelist или отключение настоящего IP Start/Wait не выполнено.
+
+#### Sealed executable: решение по сохранению исходных гарантий
+
+Независимый аудит кода49c25e20, Linux4.9
+`69973b830859bc6529a7a0468ba0d80ee5117826` и Go1.26.5 отклонил прозрачную
+замену Xray/Mihomo на executable memfd ради устранения свежего source hash.
+WRITE/GROW/SHRINK/SEAL действительно фиксируют байты отдельного shmem inode,
+но не исходного именованного файла. Actual `/proc/PID/exe` также показывает
+новый inode. Текущие source/runtime association и fresh named-source reads
+останутся обязательными; их удаление меняет контракт. Seals не сохраняют
+исходные mount/noexec/LSM/xattrs/capability условия. PT_INTERP, DSO и assets
+отдельны; дополнительная копия требует примерно34–59МиБ на процесс.
+
+Решение: **NO-GO для этой оптимизации при текущем контракте**, production и
+роутер не менялись. Это анализ исходников, не результат executable эксперимента.
+Закреплённые исходники сохранены вне production tree в
+`C:/RAZVILKA-research-20261117/sealed-executable-4.9`.
+Первичные источники: [seals/shmem](https://github.com/torvalds/linux/blob/69973b830859bc6529a7a0468ba0d80ee5117826/mm/shmem.c),
+[exec policy](https://github.com/torvalds/linux/blob/69973b830859bc6529a7a0468ba0d80ee5117826/fs/exec.c),
+[actual proc exe](https://github.com/torvalds/linux/blob/69973b830859bc6529a7a0468ba0d80ee5117826/fs/proc/base.c),
+[ELF interpreter](https://github.com/torvalds/linux/blob/69973b830859bc6529a7a0468ba0d80ee5117826/fs/binfmt_elf.c).
+
+#### Точный текущий Entware профиль и интеграция startup
+
+5031d70d закрепляет отдельный набор40ELF/30имён расширений из проверенных
+пакетов, с точными SHA и двумя буквальными module links. Ожидаемый набор
+сравнивается после прежнего полного capture; старые профили сохраняют свой
+контракт. Новый профиль не получает static-version/classic-save shortcuts.
+[Происхождение пакетов и закреплённые исходники](measurements/2026-11-16/entware-profile-sources-20261117.json).
+
+497a9e4b подключает выбор одного старого/нового профиля в panel startup и
+CLI inactivity. Защищённый fixed-path read основного image выдаёт только
+SHA hint. После закрытия FD выбранный factory независимо повторяет полный
+capture/identity/version child path. Ошибка не запускает другой профиль.
+Hint и первая фаза acquire делят исходный абсолютный2с deadline; lifetime
+остаётся исходным panel context. Отдельная WG-фаза сохраняет прежние2с.
+
+Independent source review, Windows whole startuptools, targeted app/CLI и
+vet PASS; Linux compile/vet и ARM64 compile PASS. На503 native normal/race
+4package+4CPUID+4helper PASS; на497 дополнительно4selector, всего16 в каждом
+режиме безSKIP. Используется прежний isolated /opt runner, synthetic ARM64
+ELF никогда не исполняются. Реальный ARM64 version child/fullvendor acquire
+и аппаратный LAN остаются отдельными: текущие UID1001 и missing ip-full
+по-прежнему отказывают. Роутер не изменялся.
+[503 точные результаты](measurements/2026-11-16/entware-profile-5031d70d.json),
+[497 точные результаты](measurements/2026-11-16/entware-selection-497a9e4b.json).
+
+Все пять runs49 завершены: push/PR CI, Mihomo и probe SUCCESS; native
+lifecycle11/15jobs PASS. Strict DNS и managed NFQWS failures сохранены,
+включая fullLAN rollback-failed при исходном24с cleanup. Успешные profiles
+не закрывают эти направления. [26 independently verified rawfiles](measurements/2026-11-16/integrated-49c25e20.json),
+[managed33rawfiles/8profiles и исходы](measurements/2026-11-16/managed-phases-49c25e20.json).

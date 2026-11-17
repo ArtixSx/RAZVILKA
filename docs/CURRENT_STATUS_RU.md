@@ -2,46 +2,43 @@
 
 <a id="current-release-checkpoint"></a>
 
-## Текущая сверка: 17.11.2026, код `973afdba`, native стенд `d60ca908`
+## Текущая сверка: 17.11.2026, интеграция `49c25e20`
 
-Релиз ещё не принят. Полный CI `133b89c3` ([44031025183](https://github.com/ArtixSx/RAZVILKA/actions/runs/44031025183)) завершён SUCCESS.
-Полные push и PR CI `38a9833c` (44034309197/44034314348) SUCCESS; его native lifecycle [44034309027](https://github.com/ArtixSx/RAZVILKA/actions/runs/44034309027) завершён FAIL:
-StrategyLab, modern rollback, legacy empty/draft/history и exact xtables normal/race PASS;
-строгий DNS и полный managed NFQWS2 FAIL. Mihomo actual LAN [44034309021](https://github.com/ArtixSx/RAZVILKA/actions/runs/44034309021)
-и probe comparison [44034309114](https://github.com/ArtixSx/RAZVILKA/actions/runs/44034309114) SUCCESS.
-Новые изменения `d88fd384` и `b6d15c1b` проверяются отдельно. Результаты старых SHA
-не подтверждают новый код или готовность физического роутера.
+Релиз ещё не принят. Полный push CI [44044228489](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228489) — SUCCESS на точной ревизии
+`49c25e2063dfda053a7f345e3489ce610fcec19f`; PR CI44044236307 также SUCCESS. [Проверены точные SHA, jobs и26rawfiles](measurements/2026-11-16/integrated-49c25e20.json).
+Native lifecycle [44044228410](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228410) — FAILURE:11 успешных jobs и4 failed
+(strict DNS selected/canceled-ready и managed NFQWS production/race).
+Mihomo [44044228550](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228550) и probe comparison [44044228436](https://github.com/ArtixSx/RAZVILKA/actions/runs/44044228436) — SUCCESS.
 
-Дополнение `973afdba`: ARM64 glibc2.27 `cpuid` добавлен в сохранённые проверки
-отсутствия и closing; independent review APPROVE. Первый Linux запуск
-44040544781 отказал на владельце host `/opt`; изолированный native fixture
-`d60ca908` прошёл все четыре loader и четыре WG теста normal/race без SKIP
-([44041702644](https://github.com/ArtixSx/RAZVILKA/actions/runs/44041702644)).
-AMD64 и прежние profile pins сохранены. Это Linux AMD64 с синтетическими ELF,
-не запуск ARM64-кода на роутере. [Точные результаты и исходные отказы](measurements/2026-11-16/startup-loader-d60ca908.json).
+Следующий коммит `5031d70d` добавляет отдельный закреплённый профиль нынешних
+пакетов NC-1812/Entware. Independent source review и Windows проверки PASS;
+Linux native normal/race PASS:4 новых package closure +4 loader +4 helper tests в каждом режиме, без SKIP. [Доказательства](measurements/2026-11-16/entware-profile-5031d70d.json). Public selection подключён в497a9e4b; native normal/race PASS:4selector+4closure+4CPUID+4helper в каждом режиме. [Доказательства](measurements/2026-11-16/entware-selection-497a9e4b.json).
+Это не готовность роутера; результат CI49 не переносится на новые изменения.
 
-Root владеет интеграцией, общими документами и workflow. Независимое lifecycle
-review проверяет рискованные изменения; исходные worktrees и неопубликованная работа сохранены.
+Root владеет интеграцией, общими документами и workflow. catalog_network_analysis
+исправляет полный managed NFQWS; catalog_product_analysis — точный Entware
+профиль и startup integration. catalog_lifecycle_review независимо проверяет
+изменения и результаты. Исходные worktrees и неопубликованная работа сохранены.
 
 | Направление / владелец | Работающий сценарий и доказательство | Оставшееся действие / конкретный блокер |
 | --- | --- | --- |
-| DNS / catalog_network_analysis; lifecycle review | d88fd384 устраняет повторное построение постоянного каталога; свежие настройки и независимые копии сохранены. Пять контрактных тестов normal/race PASS. Same-source ABBA: sampled allocation 2465,18→1978,18 МиБ (−19,75%). [Источник и microbench](measurements/2026-11-16/domain-catalog-allocations-38a9833c.json), [полный эксперимент](measurements/2026-11-16/domain-provider-catalog-3a9b0e1c.json) | Все четыре full mixed arms FAIL на selected HTTPS 4с, mismatch/opaque не достигнуты; уменьшение allocation не ускорило завершённые стадии существенно. Исправить стоимость fresh proc/metadata observations, затем original 12/4с, direct-deny и canceled-ready. Профили и joined cleanup сохранены; guard не ослаблен |
-| Managed NFQWS2 / Root; lifecycle review | Recovery cuts normal/race PASS. WG7419 уменьшает стоимость observer примерно на33%. Неиспользуемый actual Apply scope308 удалён c2000d43; исходные проверки/metadata fixture сохранены. [Исходный crash](measurements/2026-11-16/wg-memory-9c88e034.json), [диагностика](measurements/2026-11-16/wg-memory-diagnostic-133b89c3.json), [повтор ABBA](measurements/2026-11-16/wg-tools-abba-9c88e034-attempt2.json) | Повтор: production4/4 Apply FAIL, rollback4/4 PASS; race4 NOT_RUN из-за oversized debug fixture HASH_INPUT. Уточнение: startup helper ограничен16МиБ, controller64МиБ — другой лимит. Stripped race helper всё ещё превышает16МиБ; Отдельный малый helper5727 проверен наe337: четыре original producer/ABI/refusal контракта normal/race PASS; production лимит16МиБ сохранён. [Данные](measurements/2026-11-16/wg-small-helper-e3377c67.json). FullApply/race acceptance остаётся отдельной задачей. GC crash не повторился, причина не доказана. b6d15c1b переиспользует только очищаемый proc scratch; шесть контрактов normal/race PASS. [ABBA](measurements/2026-11-16/proc-scratch-a6dece77.json): sampled allocation1961,96→1639,18MB (−16,45%), production4Apply FAIL с rollback4PASS; race4NOT_RUN из-за helper16МиБ. Full latency gain не доказан |
-| Mihomo / Root; lifecycle review | db0 full LAN4/4 PASS: Apply99,115/98,935с, Stop7,091/6,926с. [Данные](measurements/2026-11-16/default-lan-db0c08bc.json). ac6 focused parent/completed retry6/6 PASS при исходных120с; [результат](measurements/2026-11-16/mihomo-sameboot-ac6ce6fb.json). На38a actual LAN снова SUCCESS | Прежний bcc ACK9/10: empty-cmdline non-kthread отказ не воспроизведён, guard сохранён. Итоговая ACK матрица и аппаратный LAN на точном кандидате |
-| Binary + StrategyLab / Root | ba5 compatibility, normal/race,7/7 stopped cuts и restored panel PASS; история/ручной выбор/unknown fences сохранены. [Данные](measurements/2026-11-16/strategy-cuts-ba5ffd02.json). На38a strategy-pair, modern public rollback, legacy empty/draft/history снова PASS | Итоговый CI точного кандидата и аппаратная проверка; физическое отключение питания отдельный сценарий |
-| VLESS и очередь / Root | 8ab182строки: live Check311,549→220,1895мс, selected group1527,3895→1329,274мс, cleanup verified,N12. [Данные](measurements/2026-11-16/probe-comparison-33de2dde.json). На38a probe comparison снова SUCCESS | Частная Linux-сеть и фиксированный порядок; WAN/LAN на роутере отдельно |
-| HEV / Root | ec62 default AMD64 install и actual HTTP replacement normal/race по10 PASS; [данные](measurements/2026-11-16/hev-default-ec62ac2a.json) | ARM64 pin прежний; будущая публичная доставка v0.20.0 ещё не проверена; выпущенный tag не перемещён |
-| Панель/API/AUTO / Root |13разделов/21страница,118 Node checks, Chromium desktop/mobile и keyboard проверки; оформление по референсам NetZapret | Actual backend flow на принятом router/LAN-профиле; unknown не превращать в availability |
-| Роутер / catalog_product_analysis; lifecycle review | Read-only NC-1812/5.01.C.6.0-1/Entware2026.11-1; RAZVILKA отсутствует.69 backupfiles независимо сверены; две одинаковые /opt copies925members +startup-config+firmware.40 ELF совпали с пакетами. Offline Linux10synthetic PASS; ext4925namespace/types,578payload hashes,263link targets, uid/gid/mode/mtime совпали; fsck и cleanup PASS. [Точная граница](measurements/2026-11-16/router-offline-ext4-20261117.json) | Первый tmpfs restore INCOMPLETE сохранён; отдельный reviewed ext4 drill прошёл исходный verifier. Это offline image reconstruction, не обычный live untar или проверка router boot/firmware/ACL/xattrs. UID1001 у /opt,/opt/etc,/opt/etc/init.d и missing ip-full препятствуют admission; план обратимого исправления подготовлен, не выполнен. Нужны fresh outside-/opt/NDM custody и отдельный допуск нового профиля. Router writes не выполнялись |
-| Bootstrap / Root; lifecycle review | 16817239 унифицирует Go opkg discovery: /opt/bin|sbin; отсутствие отказывает до Runner/state/feed writes. Windows3packages/vet/crosscompile и review PASS; полный LinuxCI133b SUCCESS. 686 shell canonical discovery и actual BusyBox/read-only cwd PASS | Actual package install на текущем роутере после software readiness и backup acceptance |
-| GitHub / Root | Backup51tags/14releases/140assets и исторические source archives проверены; GitHub не удалялся | После software/router acceptance: свежий refs/local backup, публичная доставка и пересоздание. OAuth delete_repo отсутствует; требуется разрешение удаления в настроенной авторизации |
+| DNS / Root; lifecycle review | d88 сохраняет свежие настройки и независимые копии каталога. [Same-source ABBA](measurements/2026-11-16/domain-provider-catalog-3a9b0e1c.json): sampled allocation2465,18→1978,18МиБ (−19,75%), все4 selected4с FAIL. На49 direct-deny PASS17,12с: zero-SYN, same-FD positive control, восстановление и join; diagnostic30 recovery-pair PASS94,49/88,00с | Strict49 selected FAIL21,25с: первоначальная DNS публикация не достигнута за12с; canceled-ready FAIL32,63с: GEN2 readiness не достигнута. Diagnostic30/10с не закрывает original12/4с. Исправить полную стоимость, проверить selected/mismatch/opaque/cancel; программная задача |
+| Managed NFQWS2 / catalog_network_analysis; lifecycle review | На49 original producer/helper и два numeric measurement контракта normal/race PASS; preledger/prepared-active recovery PASS. Полные профили8 файлов проверены вместе с33rawfiles. [Точные исходы](measurements/2026-11-16/managed-phases-49c25e20.json). [b6d ABBA](measurements/2026-11-16/proc-scratch-a6dece77.json): sampled allocation −16,45%, без доказанного full latency gain | Full Apply/manual FAIL на lan-preflight-inventory-consumer-close. Normal fullLAN также rollback-failed: LAN packet.cleanup24с; NFQ rollback завершён. Manual normal/race rolled-back/true. Race core отказал без owned NFQUEUE packet proof, raceLAN остановился на probe0 доApply. Исправить повторную работу и cleanup, не увеличивая deadlines. Единичный прежний GC crash не воспроизведён, причина не установлена |
+| Mihomo / Root; lifecycle review | На49 все4jobs SUCCESS: actual lifecycle Apply/Stop/freshApply230,73с, manual HTTP261,44с, failed-Check settlement114,22с, post-CAS failure79,94с. Это полное время тестов, не отдельныхApply. [Прежние адресные ACK проверки](measurements/2026-11-16/mihomo-sameboot-ac6ce6fb.json) | Итоговая ACK матрица и физический LAN на точном кандидате. Same-host historical4cc имел другие HEV inputs и fixed order, поэтому не является изолированным сравнением ускорения |
+| Binary + StrategyLab / Root | На49 strategy-pair SUCCESS:7 отдельных stopped completion cuts и restored-panel boot PASS; modern rollback, legacy empty/draft/history PASS. [Исходные сценарии](measurements/2026-11-16/strategy-cuts-ba5ffd02.json) сохраняют историю, ручной выбор и unknown/finalizing fences | Аппаратная приёмка финальной ревизии; физическое отключение питания отдельно. Произвольный downgrade не разрешён |
+| VLESS и очередь / Root | На49 probe comparison SUCCESS. [Ранее182строки,N12](measurements/2026-11-16/probe-comparison-33de2dde.json): live Check311,549→220,1895мс, selected group1527,3895→1329,274мс, cleanup verified | Частная Linux-сеть и fixed order; WAN/LAN/flash на роутере отдельно |
+| Панель/API/AUTO / Root |13разделов/21страница,118 Node checks, Chromium desktop/mobile/keyboard проверки; оформление по референсам NetZapret | Actual backend flow на принятом router/LAN-профиле; unknown не превращать в availability |
+| HEV / Root | [ec62](measurements/2026-11-16/hev-default-ec62ac2a.json): AMD64 install и actual HTTP replacement normal/race по10PASS | ARM64 pin прежний; будущая публичная доставка0.20.0 не проверена; выпущенный tag не перемещён |
+| Роутер / catalog_product_analysis; lifecycle review |69backupfiles verified; две /opt copies925members +startup-config+firmware. [Offline ext4](measurements/2026-11-16/router-offline-ext4-20261117.json): exact925entries/578payloads/263links/metadata,fsck иcleanup PASS. [Свежая диагностика](measurements/2026-11-16/router-current-diagnostic-20261117.json):43 tool hashes opening/closing совпали,40ELF/30extension names сверены | Диагностика WITH_GAPS:6 namespace links недоступны; protected custody и service boot closure не доказаны. UID1001 у5каталогов, ip-full отсутствует.503 новый pinned profile прошёл native normal/race; selection497a9e4b подключён, native normal/race PASS; ARM64 полный acquire ещё не проверен. До software acceptance установки нет. Offline restore не router boot/firmware/ACL/xattrs proof |
+| Bootstrap / Root; lifecycle review |168 canonical opkg discovery /opt/bin|sbin; отсутствие отказывает до Runner/state/feed writes. ARM64 cpuid отсутствие сохраняется вcapture/digest/closing; на49 loader4 normal/race PASS | Полная startup selection и действительный package install после software readiness и backup acceptance. Synthetic ARM64 ELF наLinuxAMD64 не подтверждает ARM64 execution |
+| GitHub / Root | Backup51tags/14releases/140assets и historical source archives проверены; draft PR25 обновлён, GitHub не удалялся | После software/router acceptance: свежий refs/local backup, пересоздание и публичная доставка. OAuth delete_repo отсутствует; требуется разрешение удаления в настроенной авторизации |
 
-Вложенные интервалы не складываются; latency неуспешного запроса не равна
-скорости работающего маршрута. Неуспешные программные проверки требуют
-исправления и не являются внешними блокерами. Generic CI, native fixture,
-публичная доставка и аппаратная приёмка показываются отдельно.
-[Roadmap с владельцами](ROADMAP.md), [платформенные ограничения](RUNTIME_SUPPORT_RU.md),
-[источники и команды](RESEARCH_LAB_20261109.md).
+Вложенные интервалы не складываются. CPU profile ограничен64frames, поэтому
+отсутствие внешнего frame не доказывает ожидание. Latency неуспешного запроса
+не равна скорости работающего маршрута. Неуспешные программные проверки
+требуют исправления и не являются внешними блокерами. Generic CI, native
+fixture, публичная доставка и аппаратная приёмка показываются отдельно.
+[Roadmap](ROADMAP.md), [платформы](RUNTIME_SUPPORT_RU.md), [источники и команды](RESEARCH_LAB_20261109.md).
 
 <a id="текущая-контрольная-точка-16112026-fc5bcc6c"></a>
 ## Предыдущая контрольная точка: 16.11.2026, `fc5bcc6c`

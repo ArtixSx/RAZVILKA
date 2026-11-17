@@ -53,6 +53,20 @@ ACL/xattrs/capabilities, NDMS import, firmware recovery и физический 
 Нужны fresh outside-/opt loader и NDM custody, ip-full и независимый допуск
 нового профиля; старые pins не заменяются. Установок и изменений роутера нет.
 
+Свежая read-only диагностика17.11: четыре SSH-команды завершились с exit0,
+EOF и дочитанными потоками;43 opening/closing SHA совпали.40 ELF,30 имён
+расширений,9 внутренних links и отсутствие20 loader/preload вариантов сверены.
+Из441 bounded read sections нет ошибок или усечения; шесть namespace links
+недоступны. Это `COLLECTED_WITH_GAPS_DIAGNOSTIC_ONLY`, не допуск или custody.
+Первый неполный запуск с exit71 сохранён отдельно. [Доказательства и ограничения](measurements/2026-11-16/router-current-diagnostic-20261117.json).
+
+UID1001 также обнаружен у `/opt/usr` и `/opt/usr/bin`. `/opt/bin/sh` и
+`/opt/usr/bin/sh` ведут к разным путям BusyBox; NDMS wrapper учитывает SHELL,
+а service PATH допускает `/opt/usr` fallback. Проверенный update interpreter
+не доказывает весь service boot closure. Поэтому подготовленный repair трёх
+каталогов не объявляется достаточным для установки; актуальный NDMS entrypoint
+и его окружение требуют отдельной проверки. На роутере ничего не исправлялось.
+
 ### Изменение стенда 16.11.2026
 
 Получен отдельный отчёт `C:/Projects/RAZVILKA/artifacts/entware-review-2026-11-16.txt`,

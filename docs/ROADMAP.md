@@ -7,11 +7,11 @@
 
 | Приоритет | Владелец | Рабочий сценарий / доказательство | Следующее действие и условие завершения |
 | --- | --- | --- | --- |
-| P0 DNS | catalog_network_analysis; lifecycle review | d88 catalog: full ABBA allocation −19,75%, normal/race5контрактов PASS; full mixed4/4 FAIL selected4с | Оптимизировать подтверждённую стоимость свежих proc observations без пропуска проверок. Закрыть selected/mismatch/opaque/deny/cancel при original12/4с; microbench и память не равны readiness |
-| P0 NFQWS2 | Root; lifecycle review | Recovery normal/race PASS; repeat4Apply FAIL, rollback4PASS. c200 убрал неиспользуемую оптимизацию308, сохранил7419 и guards | b6d source ABBA: allocation −16,45%, fullApply4FAIL/rollback4PASS, six contracts normal/racePASS. Малый helper5727 наe337:4 normal/race контракта PASS без изменения startup16МиБ. Подключить проверенный helper в основной gate и выполнить ранее NOT_RUN race arms; затем стоимость inventory. Причина единичного GC crash открыта; normal/checkptr/race diagnostics не воспроизвели |
+| P0 DNS | Root; lifecycle review | d88 catalog: full ABBA allocation −19,75%, normal/race5контрактов PASS; full mixed4/4 FAIL selected4с | Оптимизировать подтверждённую стоимость свежих proc observations без пропуска проверок. Закрыть selected/mismatch/opaque/deny/cancel при original12/4с; microbench и память не равны readiness |
+| P0 NFQWS2 | catalog_network_analysis; lifecycle review | Recovery normal/race PASS; repeat4Apply FAIL, rollback4PASS. c200 убрал неиспользуемую оптимизацию308, сохранил7419 и guards | b6d source ABBA: allocation −16,45%, fullApply4FAIL/rollback4PASS, six contracts normal/racePASS. Малый helper5727 наe337:4 normal/race контракта PASS без изменения startup16МиБ. На49 малый helper подключён, original normal/race prerequisite PASS. Full managed теперь действительно выполнен: Apply/manual FAIL, normalLAN cleanup24с FAIL; manual rollback verified. Далее устранить повторную работу inventory/consumer checks и проверить cleanup в исходных пределах. Причина единичного GC crash открыта; normal/checkptr/race diagnostics не воспроизвели |
 | P0 Mihomo | Root; lifecycle review | db0 fullLAN4/4 PASS, ac6 parent/completed6/6 PASS;38a actualLAN SUCCESS | Итоговые ACK cuts при120с и router/LAN. bcc empty-cmdline отказ не воспроизведён, guard сохранён |
 | P0 update/restore | Root; product/lifecycle review | ba5 все7cuts+restored panel PASS;38a strategy-pair/modern rollback/legacy history PASS | Итоговая точная ревизия и аппаратные прерывания; произвольный downgrade не допускается |
-| P1 роутер | product backup/restore; Root profile |69backupfiles verified; offline10synthetic и ext4 exact925metadata/payload PASS | Первый tmpfs INCOMPLETE сохранён, ext4 drill PASS; не router boot/firmware/ACL/xattrs. Далее fresh outside-/opt/NDM, обратимое UID исправление3каталогов и ip-full, independent profile review. До software acceptance live install не делать |
+| P1 роутер | product backup/restore; Root profile |69backupfiles verified; offline10synthetic и ext4 exact925metadata/payload PASS | Первый tmpfs INCOMPLETE сохранён, ext4 drill PASS; не router boot/firmware/ACL/xattrs. Далее fresh outside-/opt/NDM, проверка service boot closure для5каталогов UID1001 и ip-full.503 новый exact package profile прошёл native normal/race; public selection в работе, independent review обязателен. До software acceptance live install не делать |
 | P1 панель/API/AUTO | Root после P0 |13разделов/21страница,118 Node и Chromium PASS | Полный backend flow на принятом LAN-профиле; unknown не выдавать за availability |
 | P1 GitHub | Root после router acceptance |51tags/14releases/140assets сохранены | Финальный refs/local backup; scope delete_repo, пересоздание и публичная доставка assets. Старую локальную работу сохранить |
 | P2 платформы | Root после выпуска | Сборки отдельно от готовности маршрута | Физические MIPS/MIPSel/OpenWrt устройства и отдельные профили; отсутствие оборудования блокирует только аппаратную приёмку |
@@ -19,7 +19,7 @@
 Неуспешный программный сценарий — оставшаяся реализация, а не внешний блокер.
 Конкретные внешние условия: OAuth delete_repo для удаления GitHub, выделенный
 LAN-клиент и согласованные условия физических power-loss/reboot испытаний.
-Точные runs и ссылки: [единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+На49 Mihomo4/4, probe comparison, StrategyLab7cuts/restored panel, modern/legacy rollback PASS; strict DNS selected/canceled-ready FAIL. Push CI49 SUCCESS, PR CI SUCCESS. Точные runs и ссылки: [единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 
 Приёмка кандидата 0.20.0 продолжается. Состав и ограничения описаны в
 [примечаниях к выпуску](releases/0.20.0.md); результаты проверок и оставшиеся
