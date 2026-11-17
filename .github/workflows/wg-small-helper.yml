@@ -57,7 +57,7 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/native.log; then status=1; fi
           printf 'exit_status=%s\n' "$status" > artifacts/status.txt
           exit "$status"
-      - name: Loader CPU search variants with actual protected filesystem capture
+      - name: Loader search and package closure with actual protected filesystem capture
         shell: bash
         run: |
           set -euo pipefail
@@ -66,8 +66,8 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             bash scripts/test-startup-loader-native.sh '${{ matrix.parent }}' \
             2>&1 | tee artifacts/loader.log || status=$?
-          for name in TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing TestARM64LoaderCPUIDPreexistingRefusedEveryRoot TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing TestAMD64LoaderCPUIDDoesNotChangeVariantContract; do
-            if ! grep -F -- "--- PASS: $name " artifacts/loader.log; then status=1; fi
+          for name in TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing TestARM64LoaderCPUIDPreexistingRefusedEveryRoot TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing TestAMD64LoaderCPUIDDoesNotChangeVariantContract TestNC1812Entware202611NativeCaptureDigestAndClosing TestNC1812Entware202611NativePackageRefusals TestNC1812Entware202611NativeFreshClosingRefusesDrift TestNC1812Entware202611NativeNilExpectationKeepsOldScan; do
+            if test "$(grep -Ec "^--- PASS: $name \([0-9.]+s\)$" artifacts/loader.log)" != 1; then status=1; fi
           done
           if grep -F -- '--- SKIP:' artifacts/loader.log; then status=1; fi
           printf 'exit_status=%s\n' "$status" > artifacts/loader-status.txt

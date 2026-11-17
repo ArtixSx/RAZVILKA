@@ -8,12 +8,19 @@ type profile struct {
 	main, loader, extension    string
 	libraries                  []string
 	pins                       map[string][]string
+	extensionExpectations      map[string]extensionExpectation
 	stock                      bool
 	classicSaveABI             bool
 	ipAlias, ipMain, ipSHA     string
 	ipVersion                  string
 	wgAliases                  [2]string
 	wgEngine                   string
+}
+
+// Optional fixed package closure, keyed by the exact case-sensitive module
+// name. An empty link denotes a regular file; target is its canonical path.
+type extensionExpectation struct {
+	target, sha256, link string
 }
 
 func ubuntuPolicyProfile() profile {

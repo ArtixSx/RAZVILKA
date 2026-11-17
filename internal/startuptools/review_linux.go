@@ -344,6 +344,9 @@ func (r *heldReview) capture(ctx context.Context) error {
 		}
 	}
 	slices.Sort(r.extensions)
+	if err := r.checkExtensionExpectations(canonical); err != nil {
+		return err
+	}
 	for _, path := range []string{"/etc/ld.so.preload", "/opt/etc/ld.so.preload"} {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return at("LOADER_PRELOAD", err)
@@ -353,6 +356,36 @@ func (r *heldReview) capture(ctx context.Context) error {
 		}
 	}
 	return r.captureWG(ctx)
+}
+
+// Compare only after the original complete scan has retained each image,
+// link, ownership and ELF role. This does not add an ELF search directory.
+// Subsequent original checks rehash these images and recheck the full node
+// graph and exact directory membership; no package bytes are cached here.
+func (r *heldReview) checkExtensionExpectations(canonical string) error {
+	expected := r.profile.extensionExpectations
+	if expected == nil {
+		return nil
+	}
+	if canonical != r.profile.extension || len(expected) == 0 || !slices.Equal(sortedKeys(expected), r.extensions) {
+		return at("EXTENSION_PACKAGE_SET", nil)
+	}
+	for name, want := range expected {
+		path := filepath.Join(canonical, name)
+		n, ok := r.nodes[path]
+		image := r.images[want.target]
+		if !libraryName(name) || !strings.HasSuffix(name, ".so") || !ok || n.info == nil || n.link != want.link || image == nil || image.path != want.target || hex.EncodeToString(image.hash[:]) != want.sha256 {
+			return at("EXTENSION_PACKAGE_PIN", nil)
+		}
+		if want.link == "" {
+			if !n.info.Mode().IsRegular() || want.target != path {
+				return at("EXTENSION_PACKAGE_PIN", nil)
+			}
+		} else if n.info.Mode()&os.ModeSymlink == 0 || filepath.Base(want.link) != want.link || want.link == "." || want.link == ".." || want.target != filepath.Join(canonical, want.link) {
+			return at("EXTENSION_PACKAGE_PIN", nil)
+		}
+	}
+	return nil
 }
 
 func (r *heldReview) unchanged(ctx context.Context) error {

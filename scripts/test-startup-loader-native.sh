@@ -38,4 +38,4 @@ unshare --mount --propagation private bash -euo pipefail -c '
   trap cleanup EXIT
   "$@"
 ' loader-fixture "$trial/startup.test" -test.count=1 -test.v -test.timeout=90s \
-  -test.run '^Test(ARM64LoaderCPUID|AMD64LoaderCPUID)'
+  -test.run '^Test(ARM64LoaderCPUID|AMD64LoaderCPUID|NC1812Entware202611Native)'

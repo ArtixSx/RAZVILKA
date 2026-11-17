@@ -72,7 +72,7 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             bash scripts/test-startup-loader-native.sh '${{ matrix.mode }}' \
             2>&1 | tee artifacts/startup-loader/native.log
-          for name in TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing TestARM64LoaderCPUIDPreexistingRefusedEveryRoot TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing TestAMD64LoaderCPUIDDoesNotChangeVariantContract; do
+          for name in TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing TestARM64LoaderCPUIDPreexistingRefusedEveryRoot TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing TestAMD64LoaderCPUIDDoesNotChangeVariantContract TestNC1812Entware202611NativeCaptureDigestAndClosing TestNC1812Entware202611NativePackageRefusals TestNC1812Entware202611NativeFreshClosingRefusesDrift TestNC1812Entware202611NativeNilExpectationKeepsOldScan; do
             test "$(grep -Ec "^--- PASS: $name \([0-9.]+s\)$" artifacts/startup-loader/native.log)" = 1
           done
           if grep -F -- '--- SKIP:' artifacts/startup-loader/native.log; then exit 1; fi
