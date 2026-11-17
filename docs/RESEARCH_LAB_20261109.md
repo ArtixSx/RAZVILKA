@@ -1462,3 +1462,26 @@ FreshProfile/guard/resolver могут быть внешними callbacks. [Р�
 На997 generic push+PR CI PASS; наd1 full managed44053982264 FAIL, loader2PASS.
 Программные отказы остаются задачами реализации. Установленный роутер не изменён;
 проверки Windows, genericCI, privileged Linux native и router/LAN не подменяют друг друга.
+
+
+## 17.11.2026 — namespace fixed-FD scratch и проверка измерителя
+
+00fcfec348ec2f7063f9e786545fe996f50ac7b2 сохраняет generic callback reader с
+его отдельным буфером и вводит fixed syscall.ReadDirent путь с4KiB stack-buffer.
+Один общий parser сохраняет partial names, cookies, DT_UNKNOWN, errors и границы;
+два original callers и те же два callers capacity comparator переведены вместе.
+Windows package/vet и LinuxAMD64/ARM64 compilation прошли; независимое source review APPROVE.
+
+Actual [namespace-reader44059135619](https://github.com/ArtixSx/RAZVILKA/actions/runs/44059135619):
+7exactPASS/noSKIP и8пар×512calls в каждом normal/race. Net allocated bytes
+5200→1360 normal,5312→1472 race (−3840Б); allocation count23→24 normal.
+Paired median wall delta−1008,644ns normal (6/8 faster),−1658,927ns race (7/8).
+Это полный leaf с fresh open/read/close, а не полный Provider/DNS или router/LAN.
+Исходный CPU selector−1 был RUSAGE_CHILDREN: thread_cpu_ns недействителен.
+Исправленный analysis-v2 исключает этот столбец из пригодных метрик, сохраняя
+оригинальный artifact. Вe6122870 две test-only строки исправлены на
+syscall.RUSAGE_THREAD; production reader не менялся. [Отчёт](measurements/2026-11-16/namespace-reader-00fcfec3.json).
+
+Полный generic CI44053143961 завершился SUCCESS дляd1e44b1d, до namespace изменения.
+[Точная ревизия и raw log SHA](measurements/2026-11-16/ci-d1e44b1d.json). Это не закрывает
+последующие изменения или strict full managed/DNS отказы.

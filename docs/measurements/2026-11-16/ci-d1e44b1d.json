@@ -1,0 +1,13 @@
+{
+  "run": 44053143961,
+  "source": "d1e44b1d0c49f7708247a2fffd1fe717787926cb",
+  "conclusion": "success",
+  "raw": [
+    {
+      "file": "ci-job-133935668667.log",
+      "bytes": 468320,
+      "sha256": "81a79640255c82250ebc095167b205e2c15e30c2346a151a365dc8a5f34309b5"
+    }
+  ],
+  "limits": "Generic CI success does not override failed original managed acceptance."
+}

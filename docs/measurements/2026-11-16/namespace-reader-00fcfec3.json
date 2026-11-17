@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "revision": "00fcfec348ec2f7063f9e786545fe996f50ac7b2",
+  "run_id": "44059135619",
+  "zip_sha256": "e81d77a3af1316a4ddcbc2e9e43d2f1bf5e7f0269c2784b307653017b56d920e",
+  "modes": {
+    "normal": {
+      "pass_count": 7,
+      "skips": 0,
+      "paired_rows": 16,
+      "log_sha256": "113d28bbc957b7e2eb5b0b807b4464202ef65a8747d37b0b857cad0a8abea169",
+      "quantitative": {
+        "wall_ns": {
+          "original_mean_per_call": 10208.233642578125,
+          "fixed_mean_per_call": 9487.982666015625,
+          "original_median_per_call": 10091.65625,
+          "fixed_median_per_call": 9104.044921875,
+          "paired_median_delta_per_call": -1008.6435546875,
+          "paired_delta_range_per_call": [
+            -1882.1953125,
+            1339.2109375
+          ],
+          "pairs_fixed_lower": 6
+        },
+        "process_cpu_ns": {
+          "original_mean_per_call": 11045.41015625,
+          "fixed_mean_per_call": 9789.794921875,
+          "original_median_per_call": 10898.4375,
+          "fixed_median_per_call": 9471.6796875,
+          "paired_median_delta_per_call": -1858.3984375,
+          "paired_delta_range_per_call": [
+            -2544.921875,
+            2832.03125
+          ],
+          "pairs_fixed_lower": 7
+        },
+        "allocated_bytes": {
+          "original_mean_per_call": 5201.376953125,
+          "fixed_mean_per_call": 1362.380859375,
+          "original_median_per_call": 5200.046875,
+          "fixed_median_per_call": 1360.0,
+          "paired_median_delta_per_call": -3840.046875,
+          "paired_delta_range_per_call": [
+            -3850.421875,
+            -3820.984375
+          ],
+          "pairs_fixed_lower": 8
+        },
+        "allocations": {
+          "original_mean_per_call": 23.002197265625,
+          "fixed_mean_per_call": 24.005126953125,
+          "original_median_per_call": 23.0,
+          "fixed_median_per_call": 24.0,
+          "paired_median_delta_per_call": 1.0,
+          "paired_delta_range_per_call": [
+            0.98828125,
+            1.041015625
+          ],
+          "pairs_fixed_lower": 0
+        }
+      },
+      "invalid_mislabeled_children_cpu_statistics": {
+        "original_mean_per_call": 0.0,
+        "fixed_mean_per_call": 0.0,
+        "original_median_per_call": 0.0,
+        "fixed_median_per_call": 0.0,
+        "paired_median_delta_per_call": 0.0,
+        "paired_delta_range_per_call": [
+          0.0,
+          0.0
+        ],
+        "pairs_fixed_lower": 0
+      },
+      "mislabeled_children_cpu_zero_rows": 16
+    },
+    "race": {
+      "pass_count": 7,
+      "skips": 0,
+      "paired_rows": 16,
+      "log_sha256": "05bf4379bb72bce1978696f81dda100704485718c1c91699e5c141e9e255ffde",
+      "quantitative": {
+        "wall_ns": {
+          "original_mean_per_call": 19089.739501953125,
+          "fixed_mean_per_call": 17464.755859375,
+          "original_median_per_call": 18601.19140625,
+          "fixed_median_per_call": 16938.2333984375,
+          "paired_median_delta_per_call": -1658.9267578125,
+          "paired_delta_range_per_call": [
+            -3480.986328125,
+            92.341796875
+          ],
+          "pairs_fixed_lower": 7
+        },
+        "process_cpu_ns": {
+          "original_mean_per_call": 20715.33203125,
+          "fixed_mean_per_call": 18574.951171875,
+          "original_median_per_call": 21016.6015625,
+          "fixed_median_per_call": 18256.8359375,
+          "paired_median_delta_per_call": -2583.0078125,
+          "paired_delta_range_per_call": [
+            -6441.40625,
+            1933.59375
+          ],
+          "pairs_fixed_lower": 5
+        },
+        "allocated_bytes": {
+          "original_mean_per_call": 5312.07421875,
+          "fixed_mean_per_call": 1475.875,
+          "original_median_per_call": 5312.0,
+          "fixed_median_per_call": 1472.0,
+          "paired_median_delta_per_call": -3840.0,
+          "paired_delta_range_per_call": [
+            -3840.4375,
+            -3809.65625
+          ],
+          "pairs_fixed_lower": 8
+        },
+        "allocations": {
+          "original_mean_per_call": 23.0009765625,
+          "fixed_mean_per_call": 24.0078125,
+          "original_median_per_call": 23.0,
+          "fixed_median_per_call": 24.0,
+          "paired_median_delta_per_call": 1.0,
+          "paired_delta_range_per_call": [
+            0.99609375,
+            1.056640625
+          ],
+          "pairs_fixed_lower": 0
+        }
+      },
+      "invalid_mislabeled_children_cpu_statistics": {
+        "original_mean_per_call": 0.0,
+        "fixed_mean_per_call": 0.0,
+        "original_median_per_call": 0.0,
+        "fixed_median_per_call": 0.0,
+        "paired_median_delta_per_call": 0.0,
+        "paired_delta_range_per_call": [
+          0.0,
+          0.0
+        ],
+        "pairs_fixed_lower": 0
+      },
+      "mislabeled_children_cpu_zero_rows": 16
+    }
+  },
+  "conclusions": [
+    "Both normal/race complete all seven contracts and all eight paired comparisons on same hosted job.",
+    "The fixed buffer is stack allocated, but shared parser overhead means observed net byte reduction is about 3840B per leaf, not full4096B; allocations count increases about one per call.",
+    "Wall results must be interpreted per mode and with paired variance; this is only fresh directory enumeration, not full identity/DNS or route proof.",
+    "Global allocation/process CPU counters may include runtime work; no router or DNS deadline acceptance claimed.",
+    "Historical thread_cpu_ns is INVALID: selector -1 actually requests child CPU. All raw measurements remain unchanged; corrected test selector is required for future thread CPU reports."
+  ],
+  "supersedes_analysis_sha256": "7ca774c2c495e6234f8f200a243909b4e33c202edabd0cb6c4bb7299e9359592",
+  "measurement_defect": {
+    "field": "thread_cpu_ns",
+    "status": "INVALID_FOR_THREAD_CPU",
+    "actual_selector": -1,
+    "actual_meaning": "RUSAGE_CHILDREN: waited child process CPU",
+    "required_selector": "syscall.RUSAGE_THREAD (1 on Linux)",
+    "raw_preserved": true,
+    "unaffected_metrics": [
+      "wall_ns",
+      "process_cpu_ns",
+      "allocated_bytes",
+      "allocations"
+    ],
+    "correction": "Prior claim that zeros reflected thread CPU resolution was incorrect."
+  }
+}

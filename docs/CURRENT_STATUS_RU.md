@@ -2,7 +2,7 @@
 
 <a id="current-release-checkpoint"></a>
 
-## Текущая сверка: 17.11.2026, кандидат `d1e44b1d`
+## Текущая сверка: 17.11.2026, кандидат `00fcfec3` + measurement fix `e6122870`
 
 Релиз ещё не принят. На `9971aa1bdb4f4daf3afd65b85ebe7e1cdae4156c` полный
 [push CI44049645961](https://github.com/ArtixSx/RAZVILKA/actions/runs/44049645961)
@@ -14,10 +14,19 @@ Probe comparison — SUCCESS. [Точные исходы и raw SHA](measurement
 
 В `d1e44b1d0c49f7708247a2fffd1fe717787926cb` интегрированы независимо проверенные
 WG cleanup scope (`e3297ff1`), DNS prepared read (`76378802`) и два source-only ABBA
-стенда. Общий CI44053143961 ещё выполняется; результат997 на него не переносится.
+стенда. Общий [CI44053143961](https://github.com/ArtixSx/RAZVILKA/actions/runs/44053143961) — SUCCESS на точномd1. [Raw hash](measurements/2026-11-16/ci-d1e44b1d.json).
 Windows focused contract tests точногоd1 PASS. Полный managed native
 [44053982264](https://github.com/ArtixSx/RAZVILKA/actions/runs/44053982264) — FAILURE:
 loader normal/race PASS, managed normal/race FAIL. [Доказательства](measurements/2026-11-16/managed-full-d1e44b1d.json).
+
+Следующий00fc добавляет fixed-FD namespace reader со stack-buffer и тем же raw parser.
+Actual Linux [44059135619](https://github.com/ArtixSx/RAZVILKA/actions/runs/44059135619):
+7PASS и16paired rows в каждом режиме. Медианная память на leaf−3840Б, count+1;
+paired wall примерно−1,01мкс normal/−1,66мкс race. [Проверенный отчёт](measurements/2026-11-16/namespace-reader-00fcfec3.json).
+Первоначальное поле thread CPU ошибочно измеряло RUSAGE_CHILDREN и признано
+недействительным; исходные данные сохранены. Вe612 исправлен selector на
+RUSAGE_THREAD. Wall/processCPU/alloc подтверждены отдельно; это не исправление
+DNS4с и не полный новый CI. Итоговый CI верхнегоHEAD требуется отдельно.
 
 Текущие Entware package closure503 и public selection497 уже входят в этот
 кандидат; прежние pins и shortcuts сохранены. Их normal/race проверки прошли,
