@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"slices"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
@@ -39,7 +40,11 @@ func (r *heldReview) captureWG(ctx context.Context) error {
 }
 
 func acquireWG(ctx context.Context, provider *netidentity.Provider, p profile) (*Lease, error) {
-	l, err := acquire(ctx, provider, p)
+	return acquireWGWithDeadline(ctx, provider, p, time.Time{})
+}
+
+func acquireWGWithDeadline(ctx context.Context, provider *netidentity.Provider, p profile, deadline time.Time) (*Lease, error) {
+	l, err := acquireWithDeadline(ctx, provider, p, deadline)
 	if err != nil {
 		return nil, err
 	}

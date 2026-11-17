@@ -176,11 +176,11 @@ func runtimeManagerSourcesBoundTools(ctx, lifetime context.Context, create func(
 	if fixture != nil {
 		tools, err = fixture.Acquire(lifetime, provider)
 	} else if coldIP && platform == selfUpdateRuntimeStockNC1812 {
-		tools, err = startuptools.AcquireReviewedStockNC1812Policy(lifetime, provider)
+		tools, err = startuptools.AcquireReviewedNC1812Policy(lifetime, provider)
 	} else if coldIP {
 		tools, err = startuptools.AcquireUbuntuLegacyPolicy(lifetime, provider)
 	} else if platform == selfUpdateRuntimeStockNC1812 {
-		tools, err = startuptools.AcquireReviewedStockNC1812(lifetime, provider)
+		tools, err = startuptools.AcquireReviewedNC1812(lifetime, provider)
 	} else {
 		tools, err = startuptools.AcquireUbuntuLegacy(lifetime, provider)
 	}

@@ -13,11 +13,16 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 func acquire(ctx context.Context, provider *netidentity.Provider, p profile) (*Lease, error) {
+	return acquireWithDeadline(ctx, provider, p, time.Time{})
+}
+
+func acquireWithDeadline(ctx context.Context, provider *netidentity.Provider, p profile, deadline time.Time) (*Lease, error) {
 	if ctx == nil || ctx.Err() != nil || provider == nil || os.Geteuid() != 0 || runtime.GOARCH != p.arch {
 		return nil, at("ACQUIRE_PLATFORM", nil)
 	}
@@ -25,7 +30,7 @@ func acquire(ctx context.Context, provider *netidentity.Provider, p profile) (*L
 	l := &Lease{provider: provider, profile: p, lifetime: lifetime, cancel: lifetimeCancel, gate: make(chan struct{}, 1), closeDone: make(chan struct{})}
 	l.gate <- struct{}{}
 	l.review = &heldReview{profile: p, images: map[string]*heldImage{}, nodes: map[string]heldNode{}, absent: map[string]bool{}, roles: map[string]map[imageRole]bool{}}
-	c, cancel := context.WithTimeout(lifetime, operationTimeout)
+	c, cancel := acquisitionContext(lifetime, deadline)
 	defer cancel()
 	err := provider.WithCurrent(c, func(held context.Context, identity netidentity.Identity) error {
 		if !p.acceptsIdentity(identity) {
