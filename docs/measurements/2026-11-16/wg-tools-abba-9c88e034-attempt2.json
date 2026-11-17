@@ -164,5 +164,6 @@
     "Failure latency is not successful Apply latency; no speed claim.",
     "Race prerequisite uses default debug go-test linking and refused its test executable under unchanged64MiB image bound; check stripped gate build separately.",
     "Source/prod candidate tests are not router acceptance."
-  ]
+  ],
+  "fixture_limit_correction": "Startup hashImage maxImageBytes is16MiB, not the native controller64MiB limit. Actual gate file length was not logged; HASH_INPUT at this positive-file/non-nil-ctx call proves it exceeded16MiB. Stripping alone did not solve the later race prerequisite."
 }

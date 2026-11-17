@@ -1300,3 +1300,58 @@ Offline router backup в отдельной diskless VM:10synthetic PASS,925cont
 совпали, strict metadata INCOMPLETE из-за реальных symlink0755. Не меняем
 исходный manifest на777. Reviewed ext4 drill отдельно; original verifier
 и raw failed result сохраняются. Роутер не изменён. [Данные](measurements/2026-11-16/router-offline-restore-20261117.json).
+
+
+#### Завершение native измерений и offline restore17.11
+
+Оба полных CI38a (44034309197/44034314348) SUCCESS. Scratch source ABBA44036930470:
+шесть normal/race контрактов PASS; production4Apply FAIL/4rollback PASS,
+sampled allocation median1961,96→1639,18MB (−16,45%); Apply37,2655→37,243с
+на неуспешных запусках не является успешным latencygain. Full race4NOT_RUN:
+малый metadata fixture фактически копировал весь startup.test, превышающий
+startup maxImageBytes16МиБ даже после stripping. Controller64МиБ — отдельный
+лимит; прежнее общее объяснение64МиБ было неточным. Production предел не меняем;
+готовится отдельный небольшой diagnostic helper. [Исходные данные](measurements/2026-11-16/proc-scratch-a6dece77.json).
+
+Offline ext4 restore завершён: synthetic14+4badmap+3uncertainattach PASS,
+actual925entries/578files/263symlinks с exact namespace/uid/gid/mode/mtime и
+исходным payload/target PASS; fsck чистый, owned loop отключён. Bundle297entries
+22,386B проверен независимо; private payload/config не публиковались.
+Изолированная VM выключена/снята с регистрации. RAM image не экспортировался:
+его SHA получен внутри гостя, а не повторным host readback. Это не live untar,
+не router boot/firmware и не ACL/xattrs/capability proof.
+[Результат](measurements/2026-11-16/router-offline-ext4-20261117.json).
+
+Pinned Go1.26.5 ReadDir-аудит отклонил production raw getdents replacement:
+сохранить DT_UNKNOWN/fstatat/ENOENT budget/EINTR/close-error поведение требует
+слишком большого нового reader. Readdirnames пропускает исходный stat и не
+эквивалентен. Вероятный allocation gain не является measured fullflow gain;
+production stdlib/toolchain не менялись. Первичные исходники:
+[dir_unix.go](https://github.com/golang/go/blob/go1.26.5/src/os/dir_unix.go),
+[statat_unix.go](https://github.com/golang/go/blob/go1.26.5/src/os/statat_unix.go),
+[poll fd](https://github.com/golang/go/blob/go1.26.5/src/internal/poll/fd_unixjs.go).
+
+
+#### Малый WG helper и ARM64 loader search
+
+5727f217 выделяет только существующий diagnostic child protocol в отдельный
+ordinary stripped CLI1,700,002B; maxImageBytes16МиБ не менялся. Наe3377c67
+run44039785005 original producer/kernel-source/ABI/refusal четыре контракта
+normal/race PASS, SKIP нет. Родительский race включён; helper моделирует обычный
+внешний CLI, не fullApply consumer. Не устанавливались GORACE overrides.
+[Проверенные результаты](measurements/2026-11-16/wg-small-helper-e3377c67.json).
+
+973afdba сохраняет отсутствие ARM64 cpuid variant по трём library roots в
+существующих capture/digest/closing. Профиль и статические факты не расширены.
+Независимое source review APPROVE. Первый полный native capture отказал на
+host /opt ownership; это корректная production проверка. Native fixture
+изолируется через private mount namespace/tmpfs, без chmod/chown host paths.
+
+Завершение loader gate: d60ca908/run44041702644 — все4 CPUID +4 WG normal/race
+PASS без SKIP. a901 сначала скрыл установленный Go вместе с /opt и завершился
+до тестов; d60 компилирует исходный normal/race test binary до unshare в
+новой защищённой /root папке, затем выполняет его при тех же90с в private
+mount namespace. Umount и удаление только собственного binary/каталога входят
+в результат. Production guard и старые pins неизменны. Команда:
+`sudo env PATH="$PATH" GOTOOLCHAIN=local bash scripts/test-startup-loader-native.sh race`.
+[Результаты](measurements/2026-11-16/startup-loader-d60ca908.json).

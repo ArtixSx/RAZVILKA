@@ -1,0 +1,80 @@
+{
+  "run": 44041702644,
+  "head": "d60ca9083e91c28b71dbc63f1ea6302b0a074a71",
+  "modes": [
+    {
+      "mode": "race",
+      "eight_exact_pass_no_skip": true,
+      "test_seconds": {
+        "TestWGInactivityFixtureImageRefusals": 0.0,
+        "TestWGInactivitySmallHelperABI": 0.03,
+        "TestWGInactivityReadHeldChildDiagnostics": 0.3,
+        "TestNativeWGKernelLinkOriginalHeldSource": 0.1,
+        "TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing": 0.0,
+        "TestARM64LoaderCPUIDPreexistingRefusedEveryRoot": 0.01,
+        "TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing": 0.01,
+        "TestAMD64LoaderCPUIDDoesNotChangeVariantContract": 0.0
+      },
+      "helper": "ordinary stripped1700002B; parent race selected by original matrix",
+      "archive_sha256": "sha256:ca5e5d9791704af0209b3b18640f7ab1177d5e39a385b00191336f4ede762a8a",
+      "raw_sha256": {
+        "loader-status.txt": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04",
+        "loader.log": "be7f8a541f32fd0e1a973973c02b58b8c3754da8aaca906f89323439c6ed3007",
+        "native.log": "f70beb2494f31864570d540b6b229c87e91eba42912b8823bbb6c7f95d5a38fe",
+        "provenance.txt": "eeb783a736731d4ced3155c53a81bca4d17e8342904bbd6a6ef64745c18fbf6a",
+        "status.txt": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+      }
+    },
+    {
+      "mode": "normal",
+      "eight_exact_pass_no_skip": true,
+      "test_seconds": {
+        "TestWGInactivityFixtureImageRefusals": 0.0,
+        "TestWGInactivitySmallHelperABI": 0.02,
+        "TestWGInactivityReadHeldChildDiagnostics": 0.16,
+        "TestNativeWGKernelLinkOriginalHeldSource": 0.09,
+        "TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing": 0.0,
+        "TestARM64LoaderCPUIDPreexistingRefusedEveryRoot": 0.0,
+        "TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing": 0.01,
+        "TestAMD64LoaderCPUIDDoesNotChangeVariantContract": 0.0
+      },
+      "helper": "ordinary stripped1700002B; parent race selected by original matrix",
+      "archive_sha256": "sha256:d0b078e63a6cd6057d0c7f44735890165d955f68815304bfcd3442b08696ffe9",
+      "raw_sha256": {
+        "loader-status.txt": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04",
+        "loader.log": "b4292515231fa50ba81a7117634bc9c7b46c25160f5d2fbc2bd1f65a5f2afe98",
+        "native.log": "0b6a53b83c4219647391a881385b2a595c039e00ff07e53f7d8e076eb7f21b23",
+        "provenance.txt": "0e4565fc16a194223373331c0cfeff468c377573471c7f779c7c2e32efd81591",
+        "status.txt": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+      }
+    }
+  ],
+  "historical": [
+    {
+      "run": 44040544781,
+      "head": "973afdbaf2d488cb6d2d10be9f49b4eede973d7e",
+      "mode": "race",
+      "outcome": "FAIL",
+      "boundary": "PATH_OWNER_OPT_WRITE_MODE",
+      "archive_sha256": "sha256:8cd8f68ad281dc73e7a4afb0996098d2b5b77e7b9ffc6576fd6ab051bf9c0dbc",
+      "loader_sha256": "081282e66cc9f03380c5937cda258c3680498b0da5c375c010ea2c13edc293f3"
+    },
+    {
+      "run": 44040544781,
+      "head": "973afdbaf2d488cb6d2d10be9f49b4eede973d7e",
+      "mode": "normal",
+      "outcome": "FAIL",
+      "boundary": "PATH_OWNER_OPT_WRITE_MODE",
+      "archive_sha256": "sha256:fed0e7ca6cc579e45a57336a9fcc5155943a45cd8c264625cae16c5fbf8aad05",
+      "loader_sha256": "49beed5393a7d9c180d0924bc06570930d9309182c843c11770230c47a0bb195"
+    }
+  ],
+  "limits": [
+    "Production capture/ownership guard unchanged. Isolated mount namespace supplies fresh root-owned opt tmpfs; compiler runs before mounting.",
+    "Synthetic ARM64/AMD64 ELF files parsed and hashed on LinuxAMD64, never executed; not router ARM64 runtime acceptance.",
+    "Helper models external CLI only, not factory/complete WG or fullApply acceptance.",
+    "Intermediate a901 compiler-hidden failure retained separately in wg-loader-a901beb4."
+  ],
+  "outcome": "PASS",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44041702644"
+}

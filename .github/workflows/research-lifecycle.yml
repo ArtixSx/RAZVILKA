@@ -33,6 +33,8 @@ on:
       - 'scripts/test-classic-save-pinned-native.sh'
       - 'scripts/check-classic-save-pinned-fixture.py'
       - 'scripts/fixtures/classic-save-1.8.11.json'
+      - 'scripts/fixtures/wg-inactivity-child/**'
+      - 'scripts/test-startup-loader-native.sh'
       - 'scripts/fixtures/domain-preparation-baseline.patch'
       - '.github/workflows/research-lifecycle.yml'
 
@@ -44,6 +46,44 @@ concurrency:
 env:
   GOTOOLCHAIN: local
 jobs:
+  startup-loader-closure:
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'managed' || inputs.focus == 'domain' }}
+    name: Startup loader closure (${{ matrix.mode }})
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Synthetic ARM64 and AMD64 ELF loader closure without execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/startup-loader
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            bash scripts/test-startup-loader-native.sh '${{ matrix.mode }}' \
+            2>&1 | tee artifacts/startup-loader/native.log
+          for name in TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing TestARM64LoaderCPUIDPreexistingRefusedEveryRoot TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing TestAMD64LoaderCPUIDDoesNotChangeVariantContract; do
+            test "$(grep -Ec "^--- PASS: $name \([0-9.]+s\)$" artifacts/startup-loader/native.log)" = 1
+          done
+          if grep -F -- '--- SKIP:' artifacts/startup-loader/native.log; then exit 1; fi
+      - name: Preserve loader closure outcomes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: startup-loader-closure-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/startup-loader/
+          if-no-files-found: error
+
   strategy-pair:
     if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'strategy-pair' }}
     runs-on: ubuntu-latest
@@ -536,9 +576,22 @@ jobs:
             grep -F -- "--- PASS: TestWGInactivityEmptyTable$name " artifacts/managed/wg-measurement-contracts.log
           done
           if grep -F -- '--- SKIP:' artifacts/managed/wg-measurement-contracts.log; then exit 1; fi
+          # The parent package keeps its selected race mode. This separate
+          # ordinary executable models an external CLI, not a native consumer.
+          go build -ldflags='-s -w' -o "$RUNNER_TEMP/wg-inactivity-child" ./scripts/fixtures/wg-inactivity-child
+          helper_bytes=$(stat -c %s "$RUNNER_TEMP/wg-inactivity-child")
+          test "$helper_bytes" -gt 0 && test "$helper_bytes" -le 16777216
+          {
+            git rev-parse HEAD
+            go version
+            printf 'parent=%s helper=ordinary-stripped bytes=%s startup_limit=16777216\n' '${{ matrix.build-mode }}' "$helper_bytes"
+            sha256sum scripts/fixtures/wg-inactivity-child/main.go internal/startuptools/wg_inactivity_run_linux_test.go "$RUNNER_TEMP/wg-inactivity-child"
+            go version -m "$RUNNER_TEMP/wg-inactivity-child"
+          } > artifacts/managed/wg-helper-provenance.txt
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_WG_INACTIVITY_READ_CHILD=1 \
+            RAZVILKA_WG_INACTIVITY_HELPER="$RUNNER_TEMP/wg-inactivity-child" \
             go test "${race_flag[@]}" -ldflags='-s -w' -count=1 -v ./internal/startuptools \
             -run '^TestNativeWGKernelLinkOriginalHeldSource$' | tee artifacts/managed/wg-tool-observation.log
           grep -F -- '--- PASS: TestNativeWGKernelLinkOriginalHeldSource ' artifacts/managed/wg-tool-observation.log

@@ -1,19 +1,24 @@
 # Сборки и поддержка запуска
 
-Актуальный код `b6d15c1b`, стенд `a6dece77`; полный CI133b SUCCESS,
-CI38a ещё выполняется. [Единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+Актуальный код `973afdba`, native стенд `d60ca908`; полный CI133b SUCCESS,
+push/PR CI38a SUCCESS. [Единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 На38a Mihomo LAN, StrategyLab, modern rollback, legacy empty/draft/history,
 probe comparison и exact xtables normal/race PASS; strict DNS и managed NFQWS2 FAIL.
 DNS d88 source-only ABBA уменьшил sampled allocations2465,18→1978,18МиБ,
 но все4 selected4с FAIL. Это подтверждение экономии памяти, не готовности DNS.
 NFQ c200 удалил scope308, не действовавший в actual Apply; все прежние проверки
-и полезный7419 сохранены. b6d переиспользует очищаемый proc scratch, native
-fullApply/race измерения ожидаются. Единичный GC crash не воспроизведён,
+и полезный7419 сохранены. b6d переиспользует очищаемый proc scratch: normal/race контракты PASS,
+allocation −16,45%; fullApply4FAIL с rollback4PASS, full race NOT_RUN: helper>16МиБ. Единичный GC crash не воспроизведён,
 его причина не установлена; неуспешные Apply и rollback результаты сохранены.
+Отдельный малый helper5727 наe337 прошёл4 normal/race контракта; это устраняет
+ошибку prerequisite, но ещё не подтверждает fullApply/race. ARM64 cpuid guard973
+не расширяет допуск профиля; первый native test отказал на host /opt ownership,
+изолированный тестовый /opt наd60 прошёл4 loader и4 WG контракта normal/race.
+Синтетические ELF проверены на LinuxAMD64, ARM64 execution не заявляется.
 
 Приватный backup роутера69files проверен. В изолированном Linux совпали925
-элементов namespace/types,578file payloads и263link targets, но strict restore
-INCOMPLETE из-за symlink0755. Новый ext4 drill отдельно; это не router acceptance.
+элементов namespace/types,578file payloads и263link targets, первый tmpfs strict restore INCOMPLETE сохранён. Новый ext4 drill воспроизвёл
+все925metadata/payload включая symlink0755; это не router boot/firmware acceptance.
 Требуются UID0 у /opt,/opt/etc,/opt/etc/init.d, ip-full и свежий outside-/opt/NDM
 профиль.40ELF совпали с пакетами; новый Entware профиль ещё не допущен.
 Установок RAZVILKA и изменений живого роутера не выполнялось.

@@ -36,8 +36,11 @@ symlink0755; последующая metadata проверка не объявл�
 [Результаты и16проверенных rawfiles](measurements/2026-11-16/router-offline-restore-20261117.json).
 Исходные архивы не нормализованы. Для отдельного ext4 drill подготовлены
 новый128МиБ RAM-образ, signed e2fsprogs, проверяемая правка только numeric
-symlink inode на отключённой ФС, e2fsck и неизменённый verifier. До выполнения
-synthetic negatives и exact925 эта процедура не считается проверенным restore.
+symlink inode на отключённой ФС, e2fsck и неизменённый verifier. Этот отдельный drill завершён: synthetic14entries,4ошибочных inode-map и3неопределённых
+attach случая PASS; далее exact925metadata/payload, e2fsck и отключение owned loop PASS.
+[Проверенные результаты](measurements/2026-11-16/router-offline-ext4-20261117.json).
+Это восстановление нового offline образа, не проверка live untar на исходный /opt.
+VM выключена и снята с регистрации, исходные рабочие папки/архивы сохранены.
 ACL/xattrs/capabilities, NDMS import, firmware recovery и физический возврат
 проверяются отдельно; basic tar их не подтвердил.
 
