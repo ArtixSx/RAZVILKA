@@ -227,6 +227,12 @@ func (r *domainTCPCaptureExecutionResource) checkPreparedWithFiles(ctx context.C
 	if err != nil || !status.Complete || status.Unknown || status.Removed || status.Promoted || status.Added != len(r.effects.Effects) || status.Pending != 0 || status.Cleaned != 0 {
 		return errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
+	if original, err := r.readOriginalPreparedWithFiles(ctx, files); original {
+		if err != nil {
+			return err
+		}
+		return errors.Join(receipt.current(), ctx.Err())
+	}
 	view, err := r.readWithFiles(ctx, files)
 	if err != nil {
 		return err
@@ -235,6 +241,111 @@ func (r *domainTCPCaptureExecutionResource) checkPreparedWithFiles(ctx context.C
 		return err
 	}
 	return errors.Join(r.currentWithFiles(ctx, files), receipt.current())
+}
+
+// Only the already-bound original kernel owner selects this pure read. Early
+// preparation (before that owner exists), custom sources and all cleanup paths
+// keep the original sequence. Malformed original associations never fall back.
+func (r *domainTCPCaptureExecutionResource) originalPreparedReadSources(ctx context.Context) (*domainTCPBaselineCurrentSources, *domainTCPBaselineKernelOwner, bool, error) {
+	if ctx == nil || ctx.Value(domainTCPBaselineCleanupKey{}) != nil || ctx.Value(domainTCPCaptureCleanupKey{}) != nil || ctx.Value(domainTCPFailureCleanupKey{}) != nil {
+		return nil, nil, false, nil
+	}
+	if r == nil || r.self != r || r.capture == nil {
+		return nil, nil, true, ErrDomainPolicyTCPConsumer
+	}
+	owner, original := r.capture.owner.(*DomainTCPOriginalScope)
+	if !original {
+		return nil, nil, false, nil
+	}
+	if owner == nil || owner.self != owner {
+		return nil, nil, true, ErrDomainPolicyTCPConsumer
+	}
+	owner.mu.Lock()
+	kernel, closed := owner.kernel, owner.closed
+	same := owner.captureResource == r && owner.capture == r.capture && owner.process == r.process
+	owner.mu.Unlock()
+	if closed || !same {
+		return nil, nil, true, ErrDomainPolicyTCPConsumer
+	}
+	if kernel == nil {
+		return nil, nil, false, nil
+	}
+	if kernel.self != kernel || kernel.capture != r {
+		return nil, nil, true, ErrDomainPolicyTCPConsumer
+	}
+	sources, supported, err := kernel.originalCurrentSources(ctx)
+	if err != nil {
+		return nil, nil, true, errors.Join(ErrDomainPolicyTCPConsumer, err)
+	}
+	if !supported {
+		return nil, nil, false, nil
+	}
+	if sources == nil || sources.resource != r || sources.owner != owner {
+		return nil, nil, true, ErrDomainPolicyTCPConsumer
+	}
+	return sources, kernel, true, nil
+}
+
+// Comparison inputs only, not a current-process or source proof.
+func (r *domainTCPCaptureExecutionResource) preparedReadInputsMatch(definition ExecutionDomainTCPCaptureDefinition, plan PolicyEffectPlan, digest, root, relative string, anchor os.FileInfo) bool {
+	return r != nil && reflect.DeepEqual(r.definition, definition) && reflect.DeepEqual(r.effects, plan) && r.digest == digest && r.root == root && r.relative == relative && anchor != nil && r.anchor != nil && os.SameFile(anchor, r.anchor)
+}
+
+// This fixed variant moves only the pure row/plan predicate before the read's
+// final full Current. It never shares a process observation across a callback.
+// The preceding initial Current/receipt read and this read's opening remain
+// separate. Generic readWithFiles is unchanged. No effect, publication, native
+// Start or observer callback is introduced, and no comparison escapes this call.
+func (r *domainTCPCaptureExecutionResource) readOriginalPreparedWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (bool, error) {
+	sources, kernel, original, err := r.originalPreparedReadSources(ctx)
+	if err != nil || !original {
+		return original, err
+	}
+	defer domainTCPMeasure("capture-prepared-read")(0) // Completed interval, not success.
+	definition := r.definition.Clone()
+	plan, err := compileDomainTCPCaptureEffects(definition.Process.Capture, definition.Process.Mapping)
+	if err != nil {
+		return true, err
+	}
+	digest, err := PolicyEffectPlanDigest(plan)
+	if err != nil {
+		return true, err
+	}
+	root, relative, anchor := r.root, r.relative, r.anchor
+	association := func() error {
+		if sources.resource != r || sources.current(ctx, kernel) != nil || !r.preparedReadInputsMatch(definition, plan, digest, root, relative, anchor) {
+			return ErrDomainPolicyTCPConsumer
+		}
+		return ctx.Err()
+	}
+	if err := association(); err != nil {
+		return true, err
+	}
+	// Keep the original read opening/backend/coverage/counterfactual ordering.
+	if err := r.currentWithFiles(ctx, files); err != nil {
+		return true, err
+	}
+	view, err := r.backend.Read(ctx, r.tools.Identity)
+	if err != nil {
+		return true, err
+	}
+	if err := view.requireLANBackendCoverage(); err != nil {
+		return true, err
+	}
+	if view.Scope.Network != r.tools.Identity {
+		return true, ErrDomainPolicyTCPConsumer
+	}
+	if c := r.process.scope.domainSuccessor; c != nil {
+		view.Rows, err = c.counterfactualRows(ctx, r.backend, view.Rows)
+		if err != nil {
+			return true, err
+		}
+	}
+	// Even invalid rows or association drift must retain the original full
+	// closing; only earlier read failures had the original short-circuit.
+	prepared := errors.Join(association(), domainTCPCapturePreparedInventory(view.Rows, plan))
+	closing := r.currentWithFiles(ctx, files)
+	return true, errors.Join(prepared, closing, association(), ctx.Err())
 }
 
 type domainTCPCaptureEffectRunner struct {
