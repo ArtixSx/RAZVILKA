@@ -259,6 +259,12 @@ func (r *heldReview) image(ctx context.Context, path string, role imageRole) (*h
 }
 
 func (r *heldReview) capture(ctx context.Context) error {
+	variants := []string{"glibc-hwcaps", "tls", "haswell", "x86_64", "aarch64"}
+	if r.profile.arch == "arm64" {
+		// glibc 2.27 AArch64 uses HWCAP_CPUID for library search. Retain
+		// absence even when the current CPU does not advertise that bit.
+		variants = append(variants, "cpuid")
+	}
 	for _, dir := range r.profile.libraries {
 		canonical, err := r.resolve(dir)
 		if err != nil || !r.nodes[canonical].info.IsDir() {
@@ -266,7 +272,7 @@ func (r *heldReview) capture(ctx context.Context) error {
 		}
 		r.directories = append(r.directories, canonical)
 		// This fixed review does not admit loader CPU/TLS search variants.
-		for _, name := range []string{"glibc-hwcaps", "tls", "haswell", "x86_64", "aarch64"} {
+		for _, name := range variants {
 			path := filepath.Join(dir, name)
 			if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 				return at("LOADER_VARIANT", err)

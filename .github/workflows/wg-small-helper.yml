@@ -57,6 +57,24 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/native.log; then status=1; fi
           printf 'exit_status=%s\n' "$status" > artifacts/status.txt
           exit "$status"
+      - name: Loader CPU search variants with actual protected filesystem capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags=()
+          if test '${{ matrix.parent }}' = race; then flags=(-race); fi
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test "${flags[@]}" -count=1 -v -timeout=90s ./internal/startuptools \
+            -run '^Test(ARM64LoaderCPUID|AMD64LoaderCPUID)' \
+            2>&1 | tee artifacts/loader.log || status=$?
+          for name in TestARM64LoaderCPUIDAbsenceInCaptureDigestAndClosing TestARM64LoaderCPUIDPreexistingRefusedEveryRoot TestARM64LoaderCPUIDAppearsAfterCaptureRefusesClosing TestAMD64LoaderCPUIDDoesNotChangeVariantContract; do
+            if ! grep -F -- "--- PASS: $name " artifacts/loader.log; then status=1; fi
+          done
+          if grep -F -- '--- SKIP:' artifacts/loader.log; then status=1; fi
+          printf 'exit_status=%s\n' "$status" > artifacts/loader-status.txt
+          exit "$status"
       - name: Preserve all results including failures
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
