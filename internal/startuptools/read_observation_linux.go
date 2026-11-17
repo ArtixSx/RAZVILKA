@@ -117,9 +117,25 @@ func (l *Lease) readObservationBytesCurrent(ctx context.Context) error {
 // Context cancellation/sole Wait retain the original Cmd. The scope mutex
 // linearizes ONLY actual Start with revocation, never Wait or user callbacks.
 func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
+	return l.runObservedReadMeasured(ctx, command, nil)
+}
+
+func (l *Lease) runObservedReadMeasured(ctx context.Context, command *exec.Cmd, timing *domainBaselineReadMeasurement) error {
 	o, present := readObservationMarker(ctx)
 	if !present {
-		return command.Run()
+		if !domainBaselineReadTimingEnabled || timing == nil {
+			return command.Run()
+		}
+		// The native-only timing follows os/exec.Cmd.Run's Start then Wait.
+		start := timing.now()
+		startErr := command.Start()
+		timing.startResult(start, startErr != nil)
+		if startErr != nil {
+			return startErr
+		}
+		waitErr := command.Wait()
+		timing.waitResult(command.ProcessState, waitErr != nil)
+		return waitErr
 	}
 	if o == nil {
 		return at("READ_OBSERVATION_SCOPE", nil)
@@ -132,7 +148,9 @@ func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
 		o.mu.Unlock()
 		return err
 	}
+	start := timing.now()
 	startErr := command.Start()
+	timing.startResult(start, startErr != nil)
 	var stop func() bool
 	var cancelled chan struct{}
 	var cancelErr error
@@ -150,6 +168,7 @@ func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
 		return startErr
 	}
 	waitErr := command.Wait()
+	timing.waitResult(command.ProcessState, waitErr != nil)
 	if !stop() {
 		<-cancelled
 	}
