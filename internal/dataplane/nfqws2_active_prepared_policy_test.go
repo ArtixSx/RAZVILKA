@@ -5,8 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 )
@@ -158,43 +157,76 @@ func TestNFQWSPreparedPolicyHeldAbsenceRefusesForeignAndClosed(t *testing.T) {
 	}
 }
 
+type nfqPreparedPolicyPausedDeadline struct {
+	context.Context
+	entered func()
+	release <-chan struct{}
+}
+
+func (c nfqPreparedPolicyPausedDeadline) Deadline() (time.Time, bool) {
+	c.entered()
+	<-c.release
+	return c.Context.Deadline()
+}
+
 func TestNFQWSPreparedPolicyJoinsBorrowedAbsenceBeforeReturn(t *testing.T) {
 	_, c, s, ctx := nfqPreparedPolicyFixture(t)
-	borrow := c.session.borrow
-	var held atomic.Bool
-	unlock := func() {
-		if held.Swap(false) {
-			borrow.mu.Unlock()
-		}
-	}
-	defer unlock()
+	readerEntered := make(chan struct{})
+	enterReader := sync.OnceFunc(func() { close(readerEntered) })
+	releaseReader := make(chan struct{})
+	release := sync.OnceFunc(func() { close(releaseReader) })
+	defer release()
 	readerDone := make(chan error, 1)
+	readerStarted := make(chan struct{})
+	readerJoined := make(chan struct{})
 	bodyReturned := make(chan struct{})
+	var preparedRead context.Context
 	cut := errors.New("prepared body failed with entered reader")
 	s.resource.activeReadback = func(read context.Context, p *NFQWSScopedPlan, root string, _ nfqwsExecutionActiveReadbackMode, _ NFQWSActiveObservation) error {
-		borrow.mu.Lock()
-		held.Store(true)
+		preparedRead = read
+		close(readerStarted)
 		go func() {
-			present, err := nfqwsPreparedHeldAbsence(read, s.binding, p, root)
+			defer close(readerJoined)
+			// Deadline is read after the original RLock. Pause there, not at
+			// borrow.mu: cancellation may legitimately refuse before that lock.
+			paused := nfqPreparedPolicyPausedDeadline{Context: read, entered: enterReader, release: releaseReader}
+			present, err := nfqwsPreparedHeldAbsence(paused, s.binding, p, root)
 			if !present {
 				err = errors.New("reader silently fell back")
 			}
 			readerDone <- err
 		}()
-		limit := time.Now().Add(time.Second)
-		for s.mu.TryLock() {
-			s.mu.Unlock()
-			if time.Now().After(limit) {
-				unlock()
-				return errors.New("reader did not enter bounded absence comparison")
-			}
-			runtime.Gosched()
+		select {
+		case <-readerEntered:
+		case <-time.After(time.Second):
+			return errors.New("reader did not enter bounded absence comparison")
 		}
 		close(bodyReturned)
 		return cut
 	}
 	preparedDone := make(chan error, 1)
-	go func() { preparedDone <- s.prepare(ctx, c) }()
+	preparedJoined := make(chan struct{})
+	go func() {
+		defer close(preparedJoined)
+		preparedDone <- s.prepare(ctx, c)
+	}()
+	defer func() {
+		release()
+		select {
+		case <-preparedJoined:
+		case <-time.After(2 * time.Second):
+			t.Error("preparation did not join after releasing paused reader")
+		}
+		select {
+		case <-readerStarted:
+			select {
+			case <-readerJoined:
+			case <-time.After(2 * time.Second):
+				t.Error("paused reader did not join")
+			}
+		default:
+		}
+	}()
 	select {
 	case <-bodyReturned:
 	case err := <-preparedDone:
@@ -202,15 +234,30 @@ func TestNFQWSPreparedPolicyJoinsBorrowedAbsenceBeforeReturn(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("prepared body did not reach entered reader")
 	}
+	// Observe the real closing cancellation before checking its reader join.
+	select {
+	case <-preparedRead.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("preparation did not reach closing cancellation")
+	}
 	select {
 	case err := <-preparedDone:
 		t.Fatal("preparation escaped reader ownership", err)
 	default:
 	}
-	unlock()
-	<-readerDone // Closing may cancel this joined comparison; never publish it.
-	if err := <-preparedDone; !errors.Is(err, cut) || s.open {
-		t.Fatal("joined preparation did not preserve failure/revocation", err)
+	release()
+	select {
+	case <-readerDone: // Closing may cancel this comparison; never publish it.
+	case <-time.After(2 * time.Second):
+		t.Fatal("reader did not return after release")
+	}
+	select {
+	case err := <-preparedDone:
+		if !errors.Is(err, cut) || s.open {
+			t.Fatal("joined preparation did not preserve failure/revocation", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("preparation did not return after joined reader")
 	}
 }
 
