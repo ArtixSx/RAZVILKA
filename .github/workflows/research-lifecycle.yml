@@ -7,7 +7,7 @@ on:
       focus:
         description: 'All acceptance jobs or one independent acceptance direction'
         type: choice
-        options: [all, strategy-pair, public-history, modern-pair, managed, managed-recovery, domain]
+        options: [all, release-core, strategy-pair, public-history, modern-pair, managed, managed-recovery, domain]
         default: all
       domain_runner:
         description: 'Hosted image for domain admission; all guards remain active'
@@ -47,7 +47,7 @@ env:
   GOTOOLCHAIN: local
 jobs:
   startup-loader-closure:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'managed' || inputs.focus == 'domain' }}
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'release-core' || inputs.focus == 'managed' || inputs.focus == 'domain' }}
     name: Startup loader closure (${{ matrix.mode }})
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -76,6 +76,20 @@ jobs:
             test "$(grep -Ec "^--- PASS: $name \([0-9.]+s\)$" artifacts/startup-loader/native.log)" = 1
           done
           if grep -F -- '--- SKIP:' artifacts/startup-loader/native.log; then exit 1; fi
+      - name: Native domain baseline read timing contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/startup-loader
+          race_flag=()
+          if [ '${{ matrix.mode }}' = race ]; then race_flag=(-race); fi
+          go test "${race_flag[@]}" -count=1 -timeout=60s -tags razvilka_native_fixture ./internal/startuptools \
+            -run '^TestDomainBaselineReadTiming(FixedLabelsAndEpoch|OriginalStartAndWait|OverflowSeparateFromExit)$' -v \
+            2>&1 | tee artifacts/startup-loader/read-timing-contracts.log
+          for name in TestDomainBaselineReadTimingFixedLabelsAndEpoch TestDomainBaselineReadTimingOriginalStartAndWait TestDomainBaselineReadTimingOverflowSeparateFromExit; do
+            test "$(grep -Ec "^--- PASS: $name \([0-9.]+s\)$" artifacts/startup-loader/read-timing-contracts.log)" = 1
+          done
+          if grep -F -- '--- SKIP:' artifacts/startup-loader/read-timing-contracts.log; then exit 1; fi
       - name: Preserve loader closure outcomes
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -85,7 +99,7 @@ jobs:
           if-no-files-found: error
 
   strategy-pair:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'strategy-pair' }}
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'release-core' || inputs.focus == 'strategy-pair' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -155,7 +169,7 @@ jobs:
           path: artifacts/strategy-cuts/*.log
           if-no-files-found: warn
   paired-public-cli:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'public-history' }}
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'release-core' || inputs.focus == 'public-history' }}
     name: Configured old193 public paired restore / ${{ matrix.history }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -192,7 +206,7 @@ jobs:
           path: artifacts/paired-public/native.log
           if-no-files-found: error
   modern-paired-public:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'modern-pair' }}
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'release-core' || inputs.focus == 'modern-pair' }}
     name: Modern public update and known rollback (isolated lab)
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -224,7 +238,7 @@ jobs:
           path: artifacts/modern-pair/native.log
           if-no-files-found: error
   classic-save-pinned:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' }}
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'release-core' }}
     name: Exact iptables 1.8.11 / ${{ matrix.build-mode }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
@@ -626,6 +640,37 @@ jobs:
             grep -F -- "--- PASS: TestNFQWSBoundaryMeasurement$name " artifacts/managed/boundary-contracts.log
           done
           if grep -F -- '--- SKIP:' artifacts/managed/boundary-contracts.log; then exit 1; fi
+      - name: NFQ counter suffix and expired cleanup contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          race_flag=()
+          if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
+          go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 ./internal/dataplane \
+            -run '^TestNFQWSProbeCounter' -v | tee artifacts/managed/counter-suffix-contracts.log
+          for name in \
+            TestNFQWSProbeCounterParserRejectsForeignQueueAndRows \
+            TestNFQWSProbeCounterSuffixOriginalErrorsAndFallback \
+            TestNFQWSProbeCounterSuffixFrozenAssociations \
+            TestNFQWSProbeCounterSuffixOnceClosingAndMisuse \
+            TestNFQWSProbeCounterSuffixJoinsObserverAbort \
+            TestNFQWSProbeCounterSuffixParentCancelAndContext \
+            TestNFQWSProbeCounterSuffixDeadlineAndClosingAssociation \
+            TestNFQWSProbeCounterSuffixContextInitializationJoins; do
+            grep -F -- "--- PASS: $name " artifacts/managed/counter-suffix-contracts.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/managed/counter-suffix-contracts.log; then exit 1; fi
+          go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 ./internal/operationgate ./internal/app \
+            -run '^(TestExclusiveCleanupExpiredDeadlineBeforeContextDelivery|TestExclusiveCleanupLiveBusyAndCallerErrorsUnchanged|TestManagedNFQRuntimeDiagnosticExpiredCleanupBeforeContextDelivery)$' \
+            -v | tee artifacts/managed/cleanup-deadline-contracts.log
+          for name in \
+            TestExclusiveCleanupExpiredDeadlineBeforeContextDelivery \
+            TestExclusiveCleanupLiveBusyAndCallerErrorsUnchanged \
+            TestManagedNFQRuntimeDiagnosticExpiredCleanupBeforeContextDelivery; do
+            grep -F -- "--- PASS: $name " artifacts/managed/cleanup-deadline-contracts.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/managed/cleanup-deadline-contracts.log; then exit 1; fi
       - name: Actual path metadata parity and paired allocation benchmark
         if: ${{ !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         run: |
