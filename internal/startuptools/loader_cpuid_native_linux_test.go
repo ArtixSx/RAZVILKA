@@ -1,4 +1,4 @@
-//go:build linux && (amd64 || arm64)
+//go:build linux && (amd64 || arm64) && razvilka_native_fixture
 
 package startuptools
 
@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -17,6 +18,18 @@ import (
 // scratch roots stand for the profile's three ordered library roots.
 func cpuidCaptureFixture(t *testing.T, arch string) *heldReview {
 	t.Helper()
+	// capture also checks global preload paths. Never repair the host's /opt
+	// ownership for a test: the native harness supplies a private empty tmpfs.
+	opt, err := os.Stat("/opt")
+	hostOpt, hostErr := os.Stat("/proc/1/root/opt")
+	ns, nsErr := os.Stat("/proc/self/ns/mnt")
+	hostNS, hostNSErr := os.Stat("/proc/1/ns/mnt")
+	var fs syscall.Statfs_t
+	if err != nil || hostErr != nil || nsErr != nil || hostNSErr != nil ||
+		os.SameFile(opt, hostOpt) || os.SameFile(ns, hostNS) || !protectedInfo(opt) ||
+		syscall.Statfs("/opt", &fs) != nil || fs.Type != 0x01021994 {
+		t.Fatal("private root-owned /opt tmpfs and mount namespace required; use scripts/test-startup-loader-native.sh")
+	}
 	dir, r := rootReviewFixture(t)
 	r.profile.arch = arch
 	r.profile.libraries = nil
