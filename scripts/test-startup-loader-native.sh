@@ -13,6 +13,19 @@ if [[ $(id -u) != 0 ]]; then
 fi
 flags=()
 if [[ "$mode" == race ]]; then flags=(-race); fi
+# setup-go may live under /opt/hostedtoolcache, which the fixture must hide.
+# Compile before entering the namespace; the test executable needs no compiler.
+trial=$(mktemp -d /root/razvilka-loader-native.XXXXXX)
+cleanup_trial() {
+  status=$?
+  trap - EXIT
+  if ! rm -f -- "$trial/startup.test"; then status=1; fi
+  if ! rmdir -- "$trial"; then status=1; fi
+  exit "$status"
+}
+trap cleanup_trial EXIT
+go test "${flags[@]}" -tags razvilka_native_fixture -c \
+  -o "$trial/startup.test" ./internal/startuptools
 unshare --mount --propagation private bash -euo pipefail -c '
   test -d /opt && test ! -L /opt
   mount -t tmpfs -o mode=0755,size=8m,nosuid,nodev,noexec tmpfs /opt
@@ -24,6 +37,5 @@ unshare --mount --propagation private bash -euo pipefail -c '
   }
   trap cleanup EXIT
   "$@"
-' loader-fixture go test "${flags[@]}" -tags razvilka_native_fixture \
-  -count=1 -v -timeout=90s ./internal/startuptools \
-  -run '^Test(ARM64LoaderCPUID|AMD64LoaderCPUID)'
+' loader-fixture "$trial/startup.test" -test.count=1 -test.v -test.timeout=90s \
+  -test.run '^Test(ARM64LoaderCPUID|AMD64LoaderCPUID)'
