@@ -170,8 +170,10 @@ func TestReleaseWorkflowLimitsAndBundleContents(t *testing.T) {
 	}
 	release := readFile(t, root, ".github/workflows/release.yml")
 	for _, required := range []string{
-		`rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/scripts/diagnostics"`,
-		`const internalMaterial = /^(?:docs\/(?:delivery|research|implementation)-|scripts\/diagnostics(?:\/|$))/i;`,
+		`rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/docs/measurements" "$STAGE/scripts/diagnostics"`,
+		`const internalMaterial = /^(?:docs\/(?:(?:delivery|research|implementation)-|measurements(?:\/|$))|scripts\/diagnostics(?:\/|$))/i;`,
+		`https://github.com/%s/tree/%s/docs/measurements`,
+		`"$GITHUB_REPOSITORY" "$GITHUB_SHA" > "$STAGE/docs/MEASUREMENTS_SOURCE.md"`,
 		`(cd dist && sha256sum razvilka-linux-amd64 razvilka-linux-arm64 razvilka-linux-mips razvilka-linux-mipsle) > SHA256SUMS`,
 		`sed 's#^\([0-9a-f]\{64\}\) \([ *]\)#\1 \2dist/#' SHA256SUMS | cmp -s - dist/SHA256SUMS`,
 		`(cd dist && sha256sum -c ../SHA256SUMS)`,
