@@ -139,13 +139,24 @@ func (h *MihomoSameBootRetirement) Retry(ctx context.Context) (Execution, error)
 		if n < 0 || n > 1 || !c.owner.effectsClosed || !c.terminalPending[n] || c.terminalCloseErr != nil {
 			return h.failRetryLocked(ErrMihomoLiveRetirement)
 		}
-		return h.runLocked()
+		resume, err := h.retainedACKResume()
+		if err != nil {
+			return h.failRetryLocked(err)
+		}
+		return h.runAtRetainedACKLocked(resume)
 	}
 	if c.archive == nil || c.archive.records[h.retryArchive] == nil {
 		return h.failRetryLocked(ErrMihomoLiveRetirement)
 	}
 	if err := c.archive.current(); err != nil {
 		return h.failRetryLocked(err)
+	}
+	if h.retryArchive == "completed.json" {
+		resume, err := h.retainedACKResume()
+		if err != nil {
+			return h.failRetryLocked(err)
+		}
+		return h.runAtRetainedACKLocked(resume)
 	}
 	return h.runLocked()
 }
@@ -159,10 +170,25 @@ func (h *MihomoSameBootRetirement) failRetryLocked(err error) (Execution, error)
 }
 
 func (h *MihomoSameBootRetirement) runLocked() (Execution, error) {
+	return h.runAtRetainedACKLocked(nil)
+}
+
+func (h *MihomoSameBootRetirement) runAtRetainedACKLocked(resume *mihomoSameBootACKResume) (Execution, error) {
 	c := h.cursor
 	c.retryArchive = ""
 	c.retryTerminal = 0
-	result, err := c.run()
+	var result Execution
+	var err error
+	if resume == nil {
+		result, err = c.run()
+	} else {
+		result, err = resume.run(h)
+		if err != nil && c.retryArchive == "" && c.retryTerminal == 0 {
+			// A fresh source/history/Close loss permanently consumes this
+			// classified opportunity; restoring apparent bytes cannot revive it.
+			return h.failRetryLocked(err)
+		}
+	}
 	h.retryArchive = c.retryArchive
 	h.retryTerminal = c.retryTerminal
 	h.retrySidecar = false

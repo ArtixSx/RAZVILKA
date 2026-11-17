@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/netresolve"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
@@ -97,7 +98,9 @@ func resolveNodeServiceIPv4(ctx context.Context, rawURL string, resolver PrefixR
 	if err := checkNodeResource(ctx, target.Hostname(), netip.Addr{}); err != nil {
 		return nil, err
 	}
+	observeDNS := probecheck.BeginLocalServiceDNS(ctx)
 	addresses, err := resolver(ctx, target.Hostname())
+	observeDNS(err)
 	if err != nil {
 		return nil, nodeIPProbeFailure{nodeIPDNSError}
 	}

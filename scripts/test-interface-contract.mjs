@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createRequire} from 'node:module';
+const navigationModel=createRequire(import.meta.url)('../cmd/razvilka/web/interface-model.js');
 const read=name=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
 const root='cmd/razvilka/web/',html=read(root+'index.html');
 const version=read('VERSION').trim();
@@ -9,7 +11,17 @@ let count=0;function test(name,fn){fn();count++;console.log('PASS '+name);}
 test('unique DOM IDs',()=>assert.equal(new Set(ids).size,ids.length));
 const baseline=JSON.parse(read('scripts/fixtures/interface-ui2-ids.json'));
 test('all inherited controls retain IDs',()=>assert.deepEqual(baseline.filter(id=>!ids.includes(id)),[]));
-test('8 primary destinations',()=>assert.equal([...html.matchAll(/data-main-nav="/g)].length,8));
+test('all navigation owners have one directly reachable menu destination',()=>{
+ const actual=[...html.matchAll(/data-main-nav="([^"]+)"/g)].map(m=>m[1]);
+ assert.deepEqual(actual.slice().sort(),Object.keys(navigationModel.taskSections).sort());
+ for(const view of ['dns','diagnostics','strategylab','testlab','updates'])assert.equal(navigationModel.navigation(view).owner,view);
+ const views=Object.values(navigationModel.taskSections).flatMap(s=>s.children.map(([id])=>id));
+ assert.deepEqual(views.slice().sort(),ids.filter(id=>id.startsWith('view-')).map(id=>id.slice(5)).sort());
+});
+test('recovery controls belong only to the diagnostics workspace',()=>{
+ const diagnostics=html.slice(html.indexOf('id="view-diagnostics"'),html.indexOf('id="view-settings"'));
+ for(const id of ['hevRecoveryRead','hevRecoveryRepair','mihomoRecoveryRead','mihomoRecoveryRepair'])assert.ok(diagnostics.includes(`id="${id}"`),id);
+});
 test('21 retained views',()=>assert.equal(ids.filter(id=>id.startsWith('view-')).length,21));
 test('quick setup does not announce a working connection before checking',()=>{
   assert.match(html,/<h2>Быстрая настройка автопилота<\/h2>/);

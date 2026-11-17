@@ -17,6 +17,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
@@ -38,6 +39,7 @@ type nodeCheckJobRequest struct {
 }
 
 type nodeCheckItem struct {
+	NetworkTimings       []probecheck.NetworkTiming  `json:"network_timings,omitempty"`
 	ServiceErrorCategory string                      `json:"service_error_category,omitempty"`
 	DirectEgressError    string                      `json:"direct_egress_error,omitempty"`
 	ProxyEgressError     string                      `json:"proxy_egress_error,omitempty"`
@@ -159,6 +161,9 @@ func (a *App) nodeCheckSnapshot() map[string]any {
 	if a.nodeChecks.job != nil {
 		copy := *a.nodeChecks.job
 		copy.Results = append([]nodeCheckItem{}, copy.Results...)
+		for i := range copy.Results {
+			copy.Results[i].NetworkTimings = closedNodeNetworkTimings(copy.Results[i].NetworkTimings)
+		}
 		if copy.Fetch != nil {
 			fetch := *copy.Fetch
 			fetch.NodeIDs = append([]string{}, fetch.NodeIDs...)
@@ -465,8 +470,17 @@ func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service cat
 		defer cancel()
 		// These rows never lead to Apply; check with the engine the node requires.
 		engine := a.checkOnlyNodeEngine(checkContext, id)
+		observation := nodeCheckObservation{ServiceID: service.ID, StartedAt: time.Now().UTC()}
+		if profile == "" {
+			var err error
+			profile, err = a.freshNetworkProfile(checkContext)
+			if err != nil {
+				return nodeCheckItemFromResult(id, profile, dataplane.NodeCheckResult{}, err, engine, observation)
+			}
+		}
 		result, _, err := a.checkAndRecordNodeForEngine(checkContext, engine, id, service, profile, 0)
-		return nodeCheckItemFromResult(id, profile, result, err, engine)
+		observation.FinishedAt = time.Now().UTC()
+		return nodeCheckItemFromResult(id, profile, result, err, engine, observation)
 	}
 	current, err := a.freshNetworkProfile(ctx)
 	if err != nil || current != profile {

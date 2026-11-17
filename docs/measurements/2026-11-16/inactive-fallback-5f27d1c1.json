@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "revision": "5f27d1c1b88df6f6c23b7ef0f6e6e53dc25bd08e",
+  "run": 43946926414,
+  "result": "PASS",
+  "raw_artifact_root": "C:\\RAZVILKA-research-20261116\\inactive-fallback-5f27d1c1",
+  "modes": [
+    {
+      "mode": "normal",
+      "result": "PASS",
+      "actual_statx_unavailable": true,
+      "full_scenarios": 2,
+      "same_inode_mount_cases_per_scenario": 5,
+      "raw_sha256": {
+        "environment.txt": "67457f94e474768635c4e10052b8929e3f97b708fc002a0f995a249178ff4c46",
+        "models.log": "3b506ade4e7e973dd9a42db43edf540e9780b5b7b177b3b11ceab1a02d20f2a4",
+        "mount-id-pair.log": "c7b13ac04f4b2c864c627dbed73234a3f20881310a849fe5b8560db6690fb298",
+        "native.log": "8bd776f500487303fe0bdf00bf05e258d58f29696d65d3f0a7b09300d700b5b0",
+        "source.sha256": "e29e4b9f7abb6a320de0660334458155b28d8b3e132fa350c68d980b626566b0"
+      }
+    },
+    {
+      "mode": "race",
+      "result": "PASS",
+      "actual_statx_unavailable": true,
+      "full_scenarios": 2,
+      "same_inode_mount_cases_per_scenario": 5,
+      "raw_sha256": {
+        "environment.txt": "67457f94e474768635c4e10052b8929e3f97b708fc002a0f995a249178ff4c46",
+        "models.log": "f3dbb467747d09e334463796ce27993e58170cbd13086af71db0697565b6807d",
+        "mount-id-pair.log": "10b1bffd7103ecfa18a06051ea3fa6084d53c72cfc96526f931b7c5aed180836",
+        "native.log": "2f57bf3b50a41f45f9307defc26559b80b8d6b93c71ce2271c437a10c01cbb57",
+        "source.sha256": "e29e4b9f7abb6a320de0660334458155b28d8b3e132fa350c68d980b626566b0"
+      }
+    }
+  ],
+  "limits": [
+    "Actual seccomp ENOSYS only within test process tree on current Linux, not an old kernel or router.",
+    "Each complete scenario keeps original Go45s/external60s bounds.",
+    "All production authority, freshness, thread, mount and closing checks unchanged."
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "xray": {
+    "go_version": "go1.27.0",
+    "vcs": [
+      "build\tvcs.revision=af8f9673afe8533390e0200637ad30508de803a5",
+      "build\tvcs.time=2026-11-09T02:44:42Z",
+      "build\tvcs.modified=false"
+    ]
+  },
+  "toxiproxy-server": {
+    "go_version": "go1.27.0",
+    "vcs": [
+      "build\tvcs.revision=49299d8838525126e09c85ebe0ba89940a3261e5",
+      "build\tvcs.time=2026-10-14T19:10:11Z",
+      "build\tvcs.modified=false"
+    ]
+  },
+  "mihomo": {
+    "go_version": "go1.26.5",
+    "vcs": [
+      "build\tvcs.revision=3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8",
+      "build\tvcs.time=2026-10-21T15:51:58Z",
+      "build\tvcs.modified=false"
+    ]
+  }
+}

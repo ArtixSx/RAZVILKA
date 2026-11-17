@@ -1646,8 +1646,8 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
   .interface-ui .sidebar{height:calc(100dvh - var(--ui3-mobile-nav-height));bottom:var(--ui3-mobile-nav-height);}
 }
 .sd-wg-profile{margin:12px 0;color:var(--muted);font-size:12px;line-height:1.6}.sd-wg-profile p{margin:0 0 8px}.sd-wg-profile summary{cursor:pointer}.sd-wg-profile small{display:block;margin-top:6px;overflow-wrap:anywhere}
-/* Simple mode: services only; advanced sections stay one switch away. */
-body.rz-simple .nav-list [data-main-nav=autopilot],body.rz-simple .nav-list [data-main-nav=services],body.rz-simple .nav-list [data-main-nav=nodes],body.rz-simple .nav-list [data-main-nav=engines],body.rz-simple .nav-list [data-main-nav=activity],body.rz-simple .ui3-mobile-nav [data-mobile-nav=services],body.rz-simple .ui3-mobile-nav [data-mobile-nav=nodes],body.rz-simple #view-overview>:not(#rzSimpleHome),body.rz-simple #draftBar{display:none!important}
+/* Compact presentation changes home/settings, never task navigation or drafts. */
+body.rz-simple #view-overview>:not(#rzSimpleHome){display:none!important}
 body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-simple-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-top:8px;text-align:left}
 .rz-simple-toggle span:first-child{display:grid;gap:2px}.rz-simple-toggle small{color:var(--muted);font-size:12px}
@@ -1704,9 +1704,6 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-doc-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .rz-doc-actions .link-button,.rz-simple-settings .link-button{background:none;border:0;padding:0;color:var(--blue);cursor:pointer;text-decoration:underline;font:inherit}
 body:not(.rz-simple) #rzSimpleSettings{display:none}
-/* Simple mode devices: names and presence only; scope editing, technical
-   notes and per-device routes stay in advanced mode. */
-body.rz-simple #contextNavigation,body.rz-simple #interfaceSubnav,body.rz-simple #listScopeContent,body.rz-simple #view-devices .ui3-workspace-lead,body.rz-simple #view-devices .device-note,body.rz-simple #deviceDraftBar,body.rz-simple .device-card .device-meta,body.rz-simple .device-card .device-policy-preview,body.rz-simple .device-card .device-policy,body.rz-simple .device-addresses code:nth-of-type(n+2),body.rz-simple .device-addresses .device-more-addresses{display:none!important}
 body:not(.rz-simple) #rzDevicesScope{display:none}
 .rz-devices-scope{margin:12px 20px 0;color:var(--muted)}
 body.rz-simple #view-settings>:not(#rzSimpleSettings):not(.account-grid){display:none!important}
@@ -1717,10 +1714,9 @@ body.rz-simple #view-settings>:not(#rzSimpleSettings):not(.account-grid){display
 .rz-set-card h3+.rz-set-row{border-top:0}
 .rz-set-row>span{display:grid;gap:2px;min-width:0}.rz-set-row small{color:var(--muted)}
 .rz-set-row input[type=checkbox]{flex:none;width:22px;height:22px}
-/* Simple mode keeps only banners that need the owner: no answer from the
-   router or a journal review. Routine "busy" and "updating" notes are shown
-   as one quiet line in the status card instead. */
-body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailability[data-state=idle],body.rz-simple #notice.review.panel-load,body.rz-simple .console-autonomy-availability{display:none!important}
+/* The compact home includes availability in its status card. Other workspaces
+   retain the shared banners because they have no equivalent summary. */
+body.rz-simple:has(#view-overview.active) #panelAvailability[data-state=busy],body.rz-simple:has(#view-overview.active) #panelAvailability[data-state=idle],body.rz-simple:has(#view-overview.active) #notice.review.panel-load,body.rz-simple:has(#view-overview.active) .console-autonomy-availability{display:none!important}
 .rz-sh-activity{display:block;margin-top:6px;color:var(--muted);font-size:12px}
 .rz-sh-icon{position:relative;flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--soft);font-weight:700;font-size:12px;overflow:visible}
 .rz-sh-icon svg{width:22px;height:22px}
@@ -1821,3 +1817,61 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 #view-nodes .node-batch-actions{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
 #view-nodes .node-batch-actions>select{flex:1 1 220px;min-width:0}
 #view-nodes .node-batch-actions>button{white-space:normal}
+
+/* Task-oriented console, inspired by the owner's NetZapret 1.5.3 screenshots.
+   Original CSS; routing, evidence and action admission remain in their owners. */
+html[data-theme=dark]{--bg:#0d1117;--sidebar:#0d1117;--panel:#161b22;--panel2:#1c2128;--text:#e6edf3;--muted:#a0aab6;--line:#30363d;--line2:#48515c;--green:#56c76e;--green2:#75d48a;--blue:#8ab7e9;--amber:#e5bb54;--red:#f28c88;--soft:#21262d;--accent-wash:#1b3424;--r3-teal-wash:#1b3025;--r3-purple-wash:#2c2638;--r3-rose-wash:#342326;--r3-hero:#161b22;--radius:12px;--shadow:none}
+body.interface-ui{font-family:'Segoe UI',ui-sans-serif,system-ui,sans-serif}
+.interface-ui .sidebar{padding:22px 12px 12px}
+.interface-ui .brand{padding:0 8px 18px;gap:12px}
+.interface-ui .brand b{font-size:18px;letter-spacing:.035em}
+.interface-ui .brand-glyph,.interface-ui .brand-glyph img{width:38px;height:38px}
+.interface-ui .nav-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.interface-ui .nav-group{margin:0 0 12px}
+.interface-ui .nav-caption{padding:12px 12px 7px;font-size:11px;letter-spacing:.02em;font-weight:400;text-transform:none}
+.interface-ui .nav-group:first-of-type .nav-caption{padding-top:3px}
+.interface-ui .nav{position:relative;min-height:38px;height:auto;margin:2px 0;padding:10px 12px;gap:12px;border-radius:8px;color:var(--text)}
+.interface-ui .nav b{font-size:13px;font-weight:600;line-height:1.25}
+.interface-ui .nav svg{width:18px;height:18px;color:var(--muted)}
+.interface-ui .nav.active,.interface-ui .nav.active:hover{background:var(--soft);color:var(--text);box-shadow:none}
+.interface-ui .nav.active::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--text)}
+.interface-ui .nav.active svg{color:var(--text)}
+.interface-ui .nav .nav-count{font-size:10px;padding:2px 6px;background:var(--panel2)}
+.interface-ui .sidebar-foot{margin:8px 0 0;padding:11px 10px;border-radius:9px;background:var(--panel)}
+.interface-ui #projectLog{margin-top:7px;font-size:11px;min-height:34px}
+.interface-ui .topbar{min-height:90px;padding-top:20px;padding-bottom:20px;border-bottom:0;align-items:center}
+.interface-ui .page-title h1{font-size:26px;font-weight:650;letter-spacing:-.02em;margin:0}
+.interface-ui .ui3-breadcrumb{display:none}
+.interface-ui .page-title p{display:block;margin:6px 0 0;font-size:12px;max-width:620px;color:var(--muted)}
+.interface-ui .search-launch{background:var(--panel2);border-color:var(--line)}
+.interface-ui .ui3-auto-chip{border-radius:8px;background:var(--panel);color:var(--muted)}
+.interface-ui .ui3-subnav{padding:0 0 18px;gap:6px}
+.interface-ui .ui3-subnav button{border:1px solid transparent;font-size:12px}
+.interface-ui .ui3-subnav button.active{background:var(--panel2);border-color:var(--line);box-shadow:none}
+.interface-ui .panel,.interface-ui .ui3-service-card,.interface-ui .ui3-service-group,.interface-ui .rz-sh-status,.interface-ui .rz-sh-engines{border:1px solid var(--line);border-radius:12px;box-shadow:none;background:var(--panel)}
+.interface-ui .ui3-service-card{padding:16px;transition:border-color .15s}
+.interface-ui .ui3-service-card:hover{box-shadow:none;border-color:var(--line2)}
+.interface-ui .ui3-page-intro{margin:8px 0 20px;gap:16px}
+.interface-ui .ui3-page-intro h2{font-size:22px;margin:5px 0 6px}
+.interface-ui .ui3-eyebrow{font-size:10px;letter-spacing:.06em}
+.interface-ui button.primary,.interface-ui .button.primary{box-shadow:none;border-radius:9px}
+html[data-theme=dark] .interface-ui button.primary,html[data-theme=dark] .interface-ui .button.primary{background:#35b34f;border-color:#35b34f;color:#06110a}
+html[data-theme=dark] .interface-ui button.primary:hover,html[data-theme=dark] .interface-ui .button.primary:hover{background:#50c566;border-color:#50c566}
+.interface-ui button.secondary,.interface-ui .secondary{background:var(--panel2);border-color:var(--line);border-radius:9px;box-shadow:none}
+.interface-ui input:not([type=checkbox]):not([type=radio]),.interface-ui select,.interface-ui textarea{background:var(--panel2);border-color:var(--line);border-radius:8px}
+.interface-ui .rz-simple-home{max-width:1280px;gap:18px;padding-top:6px}
+.interface-ui .rz-sh-status{padding:22px;min-height:116px}
+.interface-ui .rz-sh-status h2{font-size:24px;font-weight:650}
+.interface-ui .rz-sh-status.rz-sh-problem{border-left:3px solid var(--red)}
+.interface-ui .rz-sh-status.rz-sh-progress{border-left:3px solid var(--blue)}
+.interface-ui .rz-sh-status.rz-sh-ok{border-left:3px solid var(--green)}
+.interface-ui .rz-sh-list li,.interface-ui .rz-sh-catalog li{border-radius:10px;padding:13px 15px}
+.interface-ui .rz-sh-head h3{font-size:16px;font-weight:600}
+.interface-ui .recovery-tools details{border-top:1px solid var(--line);padding:14px 0;margin:0}
+.interface-ui .recovery-tools summary{font-size:14px;font-weight:600;cursor:pointer}
+.interface-ui .recovery-tools details p{font-size:12px;max-width:760px}
+.interface-ui .recovery-tools button{margin:4px 8px 4px 0}
+@media(min-width:981px){.interface-ui .app-shell{grid-template-columns:236px minmax(0,1fr)}.interface-ui .sidebar{width:236px}.interface-ui .main{padding-left:32px;padding-right:32px}.interface-ui .topbar{margin-left:-32px;margin-right:-32px;padding-left:32px;padding-right:32px}}
+@media(min-width:1100px){.interface-ui .rz-simple-home.rz-sh-with-engines{grid-template-columns:minmax(0,1fr) 300px}.interface-ui .rz-sh-with-engines>.rz-sh-main{grid-column:1}.interface-ui .rz-sh-with-engines>.rz-sh-engines{grid-column:2;grid-row:2 / span 2}}
+@media(max-width:980px){.interface-ui .nav{min-height:44px}.interface-ui .sidebar{padding-top:16px}.interface-ui .page-title h1{font-size:23px}.interface-ui .topbar{min-height:82px}}
+@media(max-width:760px){.interface-ui .topbar{align-items:flex-start}.interface-ui .page-title p{max-width:100%;font-size:11px}.interface-ui .rz-sh-status{padding:18px;min-height:100px}.interface-ui .rz-sh-status h2{font-size:21px}.interface-ui .ui3-page-intro h2{font-size:21px}.interface-ui .nav-group{margin-bottom:8px}}

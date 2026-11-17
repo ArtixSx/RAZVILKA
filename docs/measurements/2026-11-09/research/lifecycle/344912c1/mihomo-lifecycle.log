@@ -1,0 +1,1702 @@
+﻿2026-11-09T17:00:34.7461953Z Current runner version: '2.338.2'
+2026-11-09T17:00:34.7493430Z ##[group]Runner Image Provisioner
+2026-11-09T17:00:34.7494916Z Hosted Compute Agent
+2026-11-09T17:00:34.7495738Z Version: 20261028.624
+2026-11-09T17:00:34.7496815Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T17:00:34.7497928Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T17:00:34.7498864Z Worker ID: {e5ea31a6-6e60-4b92-a535-1536fe360dc1}
+2026-11-09T17:00:34.7500075Z Region: eastus2
+2026-11-09T17:00:34.7500902Z Cloud: Azure
+2026-11-09T17:00:34.7501870Z ##[endgroup]
+2026-11-09T17:00:34.7504107Z ##[group]Operating System
+2026-11-09T17:00:34.7505175Z Ubuntu
+2026-11-09T17:00:34.7505962Z 24.04.5
+2026-11-09T17:00:34.7506672Z LTS
+2026-11-09T17:00:34.7507368Z ##[endgroup]
+2026-11-09T17:00:34.7508335Z ##[group]Runner Image
+2026-11-09T17:00:34.7509277Z Image: ubuntu-24.04
+2026-11-09T17:00:34.7510106Z Version: 20261101.360.1
+2026-11-09T17:00:34.7512387Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T17:00:34.7514945Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T17:00:34.7516527Z ##[endgroup]
+2026-11-09T17:00:34.7518278Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T17:00:34.7521463Z Contents: read
+2026-11-09T17:00:34.7522436Z Metadata: read
+2026-11-09T17:00:34.7523236Z ##[endgroup]
+2026-11-09T17:00:34.7526275Z Secret source: Actions
+2026-11-09T17:00:34.7527615Z Cache mode: write
+2026-11-09T17:00:34.7529070Z Prepare workflow directory
+2026-11-09T17:00:34.7943481Z Prepare all required actions
+2026-11-09T17:00:34.8015372Z Getting action download info
+2026-11-09T17:00:35.1502702Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T17:00:35.2532477Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T17:00:35.4867949Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-09T17:00:35.8405425Z Complete job name: live-native (lifecycle)
+2026-11-09T17:00:35.9459017Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T17:00:35.9460798Z with:
+2026-11-09T17:00:35.9461970Z   persist-credentials: false
+2026-11-09T17:00:35.9463155Z   repository: ArtixSx/RAZVILKA
+2026-11-09T17:00:35.9473101Z   token: ***
+2026-11-09T17:00:35.9474126Z   ssh-strict: true
+2026-11-09T17:00:35.9475146Z   ssh-user: git
+2026-11-09T17:00:35.9476104Z   clean: true
+2026-11-09T17:00:35.9477129Z   sparse-checkout-cone-mode: true
+2026-11-09T17:00:35.9478285Z   fetch-depth: 1
+2026-11-09T17:00:35.9479252Z   fetch-tags: false
+2026-11-09T17:00:35.9480274Z   show-progress: true
+2026-11-09T17:00:35.9481436Z   lfs: false
+2026-11-09T17:00:35.9482383Z   submodules: false
+2026-11-09T17:00:35.9483433Z   set-safe-directory: true
+2026-11-09T17:00:35.9484556Z   allow-unsafe-pr-checkout: false
+2026-11-09T17:00:35.9486111Z ##[endgroup]
+2026-11-09T17:00:36.1986572Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T17:00:36.1989549Z ##[group]Getting Git version info
+2026-11-09T17:00:36.1991185Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T17:00:36.1993704Z [command]/usr/bin/git version
+2026-11-09T17:00:36.2058409Z git version 2.56.0
+2026-11-09T17:00:36.2083927Z ##[endgroup]
+2026-11-09T17:00:36.2099965Z Temporarily overriding HOME='/home/runner/work/_temp/4b294b0c-b23f-409e-9e78-7d01e7d1ab6f' before making global git config changes
+2026-11-09T17:00:36.2104589Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T17:00:36.2108528Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T17:00:36.2156270Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T17:00:36.2160239Z ##[group]Determining repository object format
+2026-11-09T17:00:36.2163989Z ##[endgroup]
+2026-11-09T17:00:36.2166831Z ##[group]Initializing the repository
+2026-11-09T17:00:36.2169030Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T17:00:36.2348738Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T17:00:36.2352212Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T17:00:36.2355831Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T17:00:36.2358594Z hint: call:
+2026-11-09T17:00:36.2360139Z hint:
+2026-11-09T17:00:36.2362078Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T17:00:36.2364473Z hint:
+2026-11-09T17:00:36.2366578Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T17:00:36.2369591Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T17:00:36.2372052Z hint:
+2026-11-09T17:00:36.2373962Z hint: 	git branch -m <name>
+2026-11-09T17:00:36.2375410Z hint:
+2026-11-09T17:00:36.2377402Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T17:00:36.2380231Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T17:00:36.2384789Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T17:00:36.2433053Z ##[endgroup]
+2026-11-09T17:00:36.2435547Z ##[group]Disabling automatic garbage collection
+2026-11-09T17:00:36.2437609Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T17:00:36.2474081Z ##[endgroup]
+2026-11-09T17:00:36.2476695Z ##[group]Setting up auth
+2026-11-09T17:00:36.2478710Z Removing SSH command configuration
+2026-11-09T17:00:36.2481510Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T17:00:36.2520303Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T17:00:36.2861754Z Removing HTTP extra header
+2026-11-09T17:00:36.2867598Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T17:00:36.2907553Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T17:00:36.3102516Z Removing includeIf entries pointing to credentials config files
+2026-11-09T17:00:36.3106596Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T17:00:36.3145402Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T17:00:36.3338499Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T17:00:36.3375788Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:36.3409533Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:36.3442691Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:36.3475367Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:36.3508345Z ##[endgroup]
+2026-11-09T17:00:36.3510946Z ##[group]Fetching the repository
+2026-11-09T17:00:36.3517697Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +344912c11f285a4c2dc0ac0eadd8ab64e6110160:refs/remotes/origin/work/research-build-20261109
+2026-11-09T17:00:43.3274004Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T17:00:43.3275007Z  * [new ref]         344912c11f285a4c2dc0ac0eadd8ab64e6110160 -> origin/work/research-build-20261109
+2026-11-09T17:00:43.3282529Z [command]/usr/bin/git branch --list --remote origin/work/research-build-20261109
+2026-11-09T17:00:43.3310708Z   origin/work/research-build-20261109
+2026-11-09T17:00:43.3317839Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-build-20261109
+2026-11-09T17:00:43.3342410Z 344912c11f285a4c2dc0ac0eadd8ab64e6110160
+2026-11-09T17:00:43.3345033Z ##[endgroup]
+2026-11-09T17:00:43.3346069Z ##[group]Determining the checkout info
+2026-11-09T17:00:43.3347311Z ##[endgroup]
+2026-11-09T17:00:43.3352194Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T17:00:43.3408462Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T17:00:43.3443507Z ##[group]Checking out the ref
+2026-11-09T17:00:43.3447412Z [command]/usr/bin/git checkout --progress --force -B work/research-build-20261109 refs/remotes/origin/work/research-build-20261109
+2026-11-09T17:00:43.7313478Z Switched to a new branch 'work/research-build-20261109'
+2026-11-09T17:00:43.7320802Z branch 'work/research-build-20261109' set up to track 'origin/work/research-build-20261109'.
+2026-11-09T17:00:43.7381968Z ##[endgroup]
+2026-11-09T17:00:43.7386437Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T17:00:43.7415940Z 344912c11f285a4c2dc0ac0eadd8ab64e6110160
+2026-11-09T17:00:43.7427238Z ##[group]Removing auth
+2026-11-09T17:00:43.7428045Z Removing SSH command configuration
+2026-11-09T17:00:43.7429671Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T17:00:43.7463970Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T17:00:43.7680397Z Removing HTTP extra header
+2026-11-09T17:00:43.7684809Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T17:00:43.7720801Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T17:00:43.7920975Z Removing includeIf entries pointing to credentials config files
+2026-11-09T17:00:43.7925596Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T17:00:43.7956364Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T17:00:43.7957528Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T17:00:43.7958395Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T17:00:43.7959131Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T17:00:43.7965407Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T17:00:43.7988354Z /home/runner/work/_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:43.8004018Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-141f3df9\-0d86\-44cf\-8fa8\-ad41224320e9\.config
+2026-11-09T17:00:43.8040654Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T17:00:43.8063749Z /home/runner/work/_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:43.8071771Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-141f3df9\-0d86\-44cf\-8fa8\-ad41224320e9\.config
+2026-11-09T17:00:43.8109307Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T17:00:43.8135097Z /github/runner_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:43.8142566Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-141f3df9\-0d86\-44cf\-8fa8\-ad41224320e9\.config
+2026-11-09T17:00:43.8179609Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T17:00:43.8201851Z /github/runner_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config
+2026-11-09T17:00:43.8208183Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-141f3df9\-0d86\-44cf\-8fa8\-ad41224320e9\.config
+2026-11-09T17:00:43.8241899Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T17:00:43.8439548Z Removing credentials config '/home/runner/work/_temp/git-credentials-141f3df9-0d86-44cf-8fa8-ad41224320e9.config'
+2026-11-09T17:00:43.8450646Z ##[endgroup]
+2026-11-09T17:00:43.8689403Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T17:00:43.8689904Z with:
+2026-11-09T17:00:43.8690259Z   go-version: 1.26.5
+2026-11-09T17:00:43.8690586Z   cache: false
+2026-11-09T17:00:43.8690912Z   check-latest: false
+2026-11-09T17:00:43.8693895Z   token: ***
+2026-11-09T17:00:43.8694232Z ##[endgroup]
+2026-11-09T17:00:43.9873989Z Setup go version spec 1.26.5
+2026-11-09T17:00:43.9888885Z Attempting to download 1.26.5...
+2026-11-09T17:00:44.5869867Z matching 1.26.5...
+2026-11-09T17:00:44.5945366Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T17:00:45.0067890Z Extracting Go...
+2026-11-09T17:00:45.0184364Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/efc5c88b-5c57-40bc-94a2-5a5ccf70dbc1 -f /home/runner/work/_temp/1e4d31c8-ffff-4bed-9664-1dd6a58b275f
+2026-11-09T17:00:46.6830991Z Successfully extracted go to /home/runner/work/_temp/efc5c88b-5c57-40bc-94a2-5a5ccf70dbc1
+2026-11-09T17:00:46.6832536Z Adding to the cache ...
+2026-11-09T17:00:51.1953027Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T17:00:51.1953929Z Added go to the path
+2026-11-09T17:00:51.1957306Z Successfully set up Go version 1.26.5
+2026-11-09T17:00:51.2168996Z go version go1.26.5 linux/amd64
+2026-11-09T17:00:51.2169329Z 
+2026-11-09T17:00:51.2170349Z ##[group]go env
+2026-11-09T17:00:51.3833360Z AR='ar'
+2026-11-09T17:00:51.3833928Z CC='gcc'
+2026-11-09T17:00:51.3834245Z CGO_CFLAGS='-O2 -g'
+2026-11-09T17:00:51.3834573Z CGO_CPPFLAGS=''
+2026-11-09T17:00:51.3834908Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T17:00:51.3835271Z CGO_ENABLED='1'
+2026-11-09T17:00:51.3835614Z CGO_FFLAGS='-O2 -g'
+2026-11-09T17:00:51.3835940Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T17:00:51.3836251Z CXX='g++'
+2026-11-09T17:00:51.3836602Z GCCGO='gccgo'
+2026-11-09T17:00:51.3836903Z GO111MODULE=''
+2026-11-09T17:00:51.3837213Z GOAMD64='v1'
+2026-11-09T17:00:51.3837537Z GOARCH='amd64'
+2026-11-09T17:00:51.3837847Z GOAUTH='netrc'
+2026-11-09T17:00:51.3838149Z GOBIN=''
+2026-11-09T17:00:51.3838487Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T17:00:51.3838913Z GOCACHEPROG=''
+2026-11-09T17:00:51.3839319Z GODEBUG=''
+2026-11-09T17:00:51.3839665Z GOENV='/home/runner/.config/go/env'
+2026-11-09T17:00:51.3840021Z GOEXE=''
+2026-11-09T17:00:51.3840327Z GOEXPERIMENT=''
+2026-11-09T17:00:51.3840660Z GOFIPS140='off'
+2026-11-09T17:00:51.3840968Z GOFLAGS=''
+2026-11-09T17:00:51.3841946Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build1892382176=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T17:00:51.3842695Z GOHOSTARCH='amd64'
+2026-11-09T17:00:51.3843094Z GOHOSTOS='linux'
+2026-11-09T17:00:51.3843433Z GOINSECURE=''
+2026-11-09T17:00:51.3843849Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T17:00:51.3844493Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T17:00:51.3844837Z GONOPROXY=''
+2026-11-09T17:00:51.3845173Z GONOSUMDB=''
+2026-11-09T17:00:51.3845505Z GOOS='linux'
+2026-11-09T17:00:51.3845825Z GOPATH='/home/runner/go'
+2026-11-09T17:00:51.3846163Z GOPRIVATE=''
+2026-11-09T17:00:51.3846539Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T17:00:51.3847032Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T17:00:51.3847419Z GOSUMDB='sum.golang.org'
+2026-11-09T17:00:51.3847750Z GOTELEMETRY='local'
+2026-11-09T17:00:51.3848126Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T17:00:51.3848518Z GOTMPDIR=''
+2026-11-09T17:00:51.3848834Z GOTOOLCHAIN='local'
+2026-11-09T17:00:51.3849262Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T17:00:51.3849678Z GOVCS=''
+2026-11-09T17:00:51.3850106Z GOVERSION='go1.26.5'
+2026-11-09T17:00:51.3850461Z GOWORK=''
+2026-11-09T17:00:51.3850814Z PKG_CONFIG='pkg-config'
+2026-11-09T17:00:51.3851051Z 
+2026-11-09T17:00:51.3851845Z ##[endgroup]
+2026-11-09T17:00:51.4007251Z ##[group]Run set -euo pipefail
+2026-11-09T17:00:51.4007804Z [36;1mset -euo pipefail[0m
+2026-11-09T17:00:51.4008264Z [36;1msudo apt-get update[0m
+2026-11-09T17:00:51.4009194Z [36;1msudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0[0m
+2026-11-09T17:00:51.4010216Z [36;1msh scripts/fetch-native-fixture.sh xray-26.10.31 /tmp/xray.zip[0m
+2026-11-09T17:00:51.4010939Z [36;1mecho 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict[0m
+2026-11-09T17:00:51.4011906Z [36;1munzip /tmp/xray.zip xray -d /tmp/xray-extracted[0m
+2026-11-09T17:00:51.4012452Z [36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures[0m
+2026-11-09T17:00:51.4013014Z [36;1msudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray[0m
+2026-11-09T17:00:51.4013724Z [36;1m/usr/local/lib/razvilka-fixtures/xray version[0m
+2026-11-09T17:00:51.4014216Z [36;1m# The real local CA fixture uses the compiler's reviewed 26.3.27.[0m
+2026-11-09T17:00:51.4014745Z [36;1m# 26.10.31 defaults to a bundled CA pool instead of system roots.[0m
+2026-11-09T17:00:51.4015351Z [36;1msh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip[0m
+2026-11-09T17:00:51.4016070Z [36;1mecho '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict[0m
+2026-11-09T17:00:51.4016779Z [36;1munzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture[0m
+2026-11-09T17:00:51.4017316Z [36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27[0m
+2026-11-09T17:00:51.4017978Z [36;1msudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray[0m
+2026-11-09T17:00:51.4018663Z [36;1msh scripts/fetch-native-fixture.sh hev-2.17.1 /tmp/hev-socks5-tunnel[0m
+2026-11-09T17:00:51.4019534Z [36;1mecho 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict[0m
+2026-11-09T17:00:51.4020364Z [36;1msudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel[0m
+2026-11-09T17:00:51.4020989Z [36;1msh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/mihomo.gz[0m
+2026-11-09T17:00:51.4021929Z [36;1mecho '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict[0m
+2026-11-09T17:00:51.4022726Z [36;1msudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz[0m
+2026-11-09T17:00:51.4044796Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T17:00:51.4045300Z env:
+2026-11-09T17:00:51.4045645Z   GOTOOLCHAIN: local
+2026-11-09T17:00:51.4045992Z ##[endgroup]
+2026-11-09T17:00:51.4803070Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T17:00:51.5196683Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T17:00:51.5298862Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T17:00:51.5309044Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T17:00:51.5365825Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T17:00:51.5376825Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T17:00:51.5986101Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [675 kB]
+2026-11-09T17:00:51.6140149Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [743 kB]
+2026-11-09T17:00:51.6907605Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T17:00:51.6985129Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T17:00:51.7006747Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T17:00:51.7102078Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T17:00:51.7124830Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T17:00:51.7223829Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T17:00:51.7249006Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T17:00:51.7256813Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T17:00:51.7785832Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T17:00:51.7838953Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T17:00:51.8282292Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T17:00:51.8352048Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T17:00:51.8362524Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T17:00:51.8444766Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T17:00:51.8469100Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T17:00:51.8478943Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T17:00:55.4021915Z Fetched 13.0 MB in 1s (9223 kB/s)
+2026-11-09T17:00:56.5669504Z Reading package lists...
+2026-11-09T17:00:56.6054306Z Reading package lists...
+2026-11-09T17:00:56.8509138Z Building dependency tree...
+2026-11-09T17:00:56.8516319Z Reading state information...
+2026-11-09T17:00:57.0248813Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+2026-11-09T17:00:57.0249982Z iptables is already the newest version (1.8.10-3ubuntu2).
+2026-11-09T17:00:57.0250928Z iptables set to manually installed.
+2026-11-09T17:00:57.0251845Z nftables is already the newest version (1.0.9-1ubuntu0.1).
+2026-11-09T17:00:57.0252673Z kmod is already the newest version (31+20240202-2ubuntu7.2).
+2026-11-09T17:00:57.0253371Z kmod set to manually installed.
+2026-11-09T17:00:57.0254057Z curl is already the newest version (8.5.0-2ubuntu10.16).
+2026-11-09T17:00:57.0254847Z openssl is already the newest version (3.0.13-0ubuntu3.16).
+2026-11-09T17:00:57.0255730Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+2026-11-09T17:00:57.0256686Z unzip is already the newest version (6.0-28ubuntu4.1).
+2026-11-09T17:00:57.0257618Z busybox-static is already the newest version (1:1.36.1-6ubuntu3.1).
+2026-11-09T17:00:57.0258542Z busybox-static set to manually installed.
+2026-11-09T17:00:57.0259402Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+2026-11-09T17:00:57.0261018Z libnfnetlink0 is already the newest version (1.0.2-2build1).
+2026-11-09T17:00:57.0262136Z libnfnetlink0 set to manually installed.
+2026-11-09T17:00:57.0263032Z zlib1g is already the newest version (1:1.3.dfsg-3.1ubuntu2.3).
+2026-11-09T17:00:57.0263689Z libmnl0 is already the newest version (1.0.5-2build1).
+2026-11-09T17:00:57.0264274Z libmnl0 set to manually installed.
+2026-11-09T17:00:57.0264760Z The following additional packages will be installed:
+2026-11-09T17:00:57.0265257Z   libipset13 libluajit-5.1-common
+2026-11-09T17:00:57.0449340Z The following NEW packages will be installed:
+2026-11-09T17:00:57.0453023Z   conntrack ipset libipset13 libluajit-5.1-2 libluajit-5.1-common
+2026-11-09T17:00:57.0459179Z   libnetfilter-queue1
+2026-11-09T17:00:57.0647370Z 0 upgraded, 6 newly installed, 0 to remove and 27 not upgraded.
+2026-11-09T17:00:57.0648262Z Need to get 472 kB of archives.
+2026-11-09T17:00:57.0648924Z After this operation, 1391 kB of additional disk space will be used.
+2026-11-09T17:00:57.0650389Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T17:00:57.2478645Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 conntrack amd64 1:1.4.8-1ubuntu1 [37.9 kB]
+2026-11-09T17:00:57.7093486Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libipset13 amd64 7.19-1ubuntu2 [61.5 kB]
+2026-11-09T17:00:58.3606322Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-common all 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [49.5 kB]
+2026-11-09T17:00:59.2619746Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-2 amd64 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [276 kB]
+2026-11-09T17:01:01.5084117Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnetfilter-queue1 amd64 1.0.5-4build1 [15.1 kB]
+2026-11-09T17:01:01.7583897Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 ipset amd64 7.19-1ubuntu2 [32.6 kB]
+2026-11-09T17:01:02.2631407Z Fetched 472 kB in 5s (95.7 kB/s)
+2026-11-09T17:01:02.2900592Z Selecting previously unselected package conntrack.
+2026-11-09T17:01:02.3164261Z (Reading database ... 
+2026-11-09T17:01:02.3164751Z (Reading database ... 5%
+2026-11-09T17:01:02.3165356Z (Reading database ... 10%
+2026-11-09T17:01:02.3165741Z (Reading database ... 15%
+2026-11-09T17:01:02.3166128Z (Reading database ... 20%
+2026-11-09T17:01:02.3166462Z (Reading database ... 25%
+2026-11-09T17:01:02.3166780Z (Reading database ... 30%
+2026-11-09T17:01:02.3167149Z (Reading database ... 35%
+2026-11-09T17:01:02.3167480Z (Reading database ... 40%
+2026-11-09T17:01:02.3167843Z (Reading database ... 45%
+2026-11-09T17:01:02.3168185Z (Reading database ... 50%
+2026-11-09T17:01:02.3215769Z (Reading database ... 55%
+2026-11-09T17:01:02.4840143Z (Reading database ... 60%
+2026-11-09T17:01:02.6720612Z (Reading database ... 65%
+2026-11-09T17:01:02.8819463Z (Reading database ... 70%
+2026-11-09T17:01:03.0324312Z (Reading database ... 75%
+2026-11-09T17:01:03.1928411Z (Reading database ... 80%
+2026-11-09T17:01:03.3206247Z (Reading database ... 85%
+2026-11-09T17:01:03.4429282Z (Reading database ... 90%
+2026-11-09T17:01:03.5886475Z (Reading database ... 95%
+2026-11-09T17:01:03.5887162Z (Reading database ... 100%
+2026-11-09T17:01:03.5888107Z (Reading database ... 215960 files and directories currently installed.)
+2026-11-09T17:01:03.5936001Z Preparing to unpack .../0-conntrack_1%3a1.4.8-1ubuntu1_amd64.deb ...
+2026-11-09T17:01:03.6601568Z Unpacking conntrack (1:1.4.8-1ubuntu1) ...
+2026-11-09T17:01:03.8612188Z Selecting previously unselected package libipset13:amd64.
+2026-11-09T17:01:03.8753066Z Preparing to unpack .../1-libipset13_7.19-1ubuntu2_amd64.deb ...
+2026-11-09T17:01:03.9278189Z Unpacking libipset13:amd64 (7.19-1ubuntu2) ...
+2026-11-09T17:01:04.0023021Z Selecting previously unselected package libluajit-5.1-common.
+2026-11-09T17:01:04.0161794Z Preparing to unpack .../2-libluajit-5.1-common_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_all.deb ...
+2026-11-09T17:01:04.0363993Z Unpacking libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T17:01:04.2253010Z Selecting previously unselected package libluajit-5.1-2:amd64.
+2026-11-09T17:01:04.2386453Z Preparing to unpack .../3-libluajit-5.1-2_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_amd64.deb ...
+2026-11-09T17:01:04.2719898Z Unpacking libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T17:01:04.4223894Z Selecting previously unselected package libnetfilter-queue1:amd64.
+2026-11-09T17:01:04.4362323Z Preparing to unpack .../4-libnetfilter-queue1_1.0.5-4build1_amd64.deb ...
+2026-11-09T17:01:04.4678559Z Unpacking libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T17:01:04.8483771Z Selecting previously unselected package ipset.
+2026-11-09T17:01:04.8628624Z Preparing to unpack .../5-ipset_7.19-1ubuntu2_amd64.deb ...
+2026-11-09T17:01:04.8668658Z Unpacking ipset (7.19-1ubuntu2) ...
+2026-11-09T17:01:05.0989642Z Setting up conntrack (1:1.4.8-1ubuntu1) ...
+2026-11-09T17:01:05.4410642Z Setting up libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T17:01:05.8422445Z Setting up libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T17:01:06.2040302Z Setting up libipset13:amd64 (7.19-1ubuntu2) ...
+2026-11-09T17:01:06.2089387Z Setting up ipset (7.19-1ubuntu2) ...
+2026-11-09T17:01:06.2113763Z Setting up libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T17:01:06.2143895Z Processing triggers for man-db (2.12.0-4build2) ...
+2026-11-09T17:01:06.2172158Z Not building database; man-db/auto-update is not 'true'.
+2026-11-09T17:01:06.2187670Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+2026-11-09T17:01:06.8424058Z 
+2026-11-09T17:01:06.8425256Z Running kernel seems to be up-to-date.
+2026-11-09T17:01:06.8425735Z 
+2026-11-09T17:01:06.8425977Z No services need to be restarted.
+2026-11-09T17:01:06.8426316Z 
+2026-11-09T17:01:06.8426803Z No containers need to be restarted.
+2026-11-09T17:01:06.8427092Z 
+2026-11-09T17:01:06.8427372Z No user sessions are running outdated binaries.
+2026-11-09T17:01:06.8427790Z 
+2026-11-09T17:01:06.8428125Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-11-09T17:01:08.1992161Z /tmp/xray.zip.download.CKO8XP: OK
+2026-11-09T17:01:08.2169220Z /tmp/xray.zip: OK
+2026-11-09T17:01:08.2698594Z Archive:  /tmp/xray.zip
+2026-11-09T17:01:08.5674041Z   inflating: /tmp/xray-extracted/xray  
+2026-11-09T17:01:08.6023426Z Xray 26.10.31 (Xray, Penetrates Everything.) a4a3dff (go1.27.3 linux/amd64)
+2026-11-09T17:01:08.6026888Z A unified platform for anti-censorship.
+2026-11-09T17:01:08.9687558Z /tmp/xray-node.zip.download.mOThjn: OK
+2026-11-09T17:01:08.9911931Z /tmp/xray-node.zip: OK
+2026-11-09T17:01:08.9927951Z Archive:  /tmp/xray-node.zip
+2026-11-09T17:01:09.2973478Z   inflating: /tmp/xray-node-fixture/xray  
+2026-11-09T17:01:09.7657135Z /tmp/hev-socks5-tunnel.download.EIoHuJ: OK
+2026-11-09T17:01:09.7696206Z /tmp/hev-socks5-tunnel: OK
+2026-11-09T17:01:10.1490579Z /tmp/mihomo.gz.download.ySbwkN: OK
+2026-11-09T17:01:10.1717956Z /tmp/mihomo.gz: OK
+2026-11-09T17:01:10.1909866Z ##[group]Run set -euo pipefail
+2026-11-09T17:01:10.1910305Z [36;1mset -euo pipefail[0m
+2026-11-09T17:01:10.1910667Z [36;1msudo modprobe tun[0m
+2026-11-09T17:01:10.1911510Z [36;1mmkdir -p artifacts/mihomo-live-profile[0m
+2026-11-09T17:01:10.1911938Z [36;1mchmod 700 artifacts/mihomo-live-profile[0m
+2026-11-09T17:01:10.1912474Z [36;1mtrap 'sudo chown -R "$(id -u):$(id -g)" artifacts/mihomo-live-profile' EXIT[0m
+2026-11-09T17:01:10.1912981Z [36;1msudo env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T17:01:10.1913467Z [36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T17:01:10.1914114Z [36;1m  RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/mihomo-live-profile" \[0m
+2026-11-09T17:01:10.1914757Z [36;1m  RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \[0m
+2026-11-09T17:01:10.1915401Z [36;1m  RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \[0m
+2026-11-09T17:01:10.1916062Z [36;1m  RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \[0m
+2026-11-09T17:01:10.1916810Z [36;1m  sh scripts/test-mihomo-live-native.sh[0m
+2026-11-09T17:01:10.1931373Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T17:01:10.1931927Z env:
+2026-11-09T17:01:10.1932277Z   GOTOOLCHAIN: local
+2026-11-09T17:01:10.1932646Z ##[endgroup]
+2026-11-09T17:01:10.3181565Z CI-only platform classification; original protected tool closure: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T17:01:10.4124219Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T17:01:10.4729161Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T17:01:10.6949416Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T17:01:10.7029875Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T17:01:10.9236633Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T17:01:10.9600903Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T17:01:11.3394886Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T17:02:12.9176962Z === RUN   TestMihomoLiveOriginalApplyStopAndFreshApply
+2026-11-09T17:02:12.9179206Z     mihomo_live_native_linux_test.go:66: native_fixture_budgets rounds=2 aggregate=10m0s round=5m0s operation=1m50s production_apply=8m0s
+2026-11-09T17:02:25.2571903Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:25.5637293Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:25.7691845Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:25.7692707Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:25.8498910Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:25.8500530Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:25.8508892Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:25.8510087Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:26.4633838Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:27.0747092Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:28.8310957Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:28.8320561Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:36.6568924Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:36.9628605Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+2026-11-09T17:02:36.9629393Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+2026-11-09T17:04:01.9978512Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=snapshot state=passed duration_ms=2639.251
+2026-11-09T17:04:01.9979791Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=stage state=passed duration_ms=1844.622
+2026-11-09T17:04:01.9980739Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=validate state=passed duration_ms=3165.059
+2026-11-09T17:04:01.9982006Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=canary state=passed duration_ms=2640.777
+2026-11-09T17:04:01.9983250Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=activate state=passed duration_ms=11706.757
+2026-11-09T17:04:01.9984847Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=health state=passed duration_ms=40726.147
+2026-11-09T17:04:01.9985958Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=commit-adapter state=passed duration_ms=3576.905
+2026-11-09T17:04:01.9987262Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m47.038269892s mandatory_probes=2
+2026-11-09T17:04:49.3540020Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=6.272790472s closing_retry=false
+2026-11-09T17:04:49.4059519Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=2m34.446950827s fixture_elapsed=2m36.487981375s restored_physical_baseline=true
+2026-11-09T17:04:59.5759557Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+2026-11-09T17:04:59.8804632Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:00.0963739Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:00.0964914Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:00.1788097Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:00.1789321Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:00.1798034Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:00.1799192Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:00.7923887Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:01.4041788Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:03.1555292Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:03.1565211Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:10.9587340Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:11.2620933Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+2026-11-09T17:05:11.2622303Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+2026-11-09T17:06:36.2947881Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=snapshot state=passed duration_ms=2546.624
+2026-11-09T17:06:36.2949452Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=stage state=passed duration_ms=1833.025
+2026-11-09T17:06:36.2951194Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=validate state=passed duration_ms=3172.368
+2026-11-09T17:06:36.2952759Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=canary state=passed duration_ms=2609.896
+2026-11-09T17:06:36.2953820Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=activate state=passed duration_ms=11687.114
+2026-11-09T17:06:36.2955043Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=health state=passed duration_ms=40768.048
+2026-11-09T17:06:36.2956395Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=commit-adapter state=passed duration_ms=3582.670
+2026-11-09T17:06:36.2957393Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m46.888851734s mandatory_probes=2
+2026-11-09T17:07:23.7990706Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=6.285674035s closing_retry=true
+2026-11-09T17:07:23.8500273Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=2m34.44404781s fixture_elapsed=5m10.932079058s restored_physical_baseline=true
+2026-11-09T17:07:24.3250412Z --- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (311.41s)
+2026-11-09T17:07:24.3251953Z PASS
+2026-11-09T17:07:24.6806247Z File: app.test
+2026-11-09T17:07:24.6807133Z Build ID: 1b8e0c5b0be41ff39e0cb341c778e54bdffae8b0
+2026-11-09T17:07:24.6807863Z Type: cpu
+2026-11-09T17:07:24.6808328Z Time: 2026-11-09 17:02:12 UTC
+2026-11-09T17:07:24.6808922Z Duration: 311.41s, Total samples = 403560ms (129.59%)
+2026-11-09T17:07:24.6809678Z Showing nodes accounting for 396130ms, 98.16% of 403560ms total
+2026-11-09T17:07:24.6810349Z Dropped 1155 nodes (cum <= 2017.80ms)
+2026-11-09T17:07:24.6810888Z Showing top 35 nodes out of 186
+2026-11-09T17:07:24.6811813Z       flat  flat%   sum%        cum   cum%
+2026-11-09T17:07:24.6812359Z   324640ms 80.44% 80.44%   324640ms 80.44%  crypto/internal/fips140/sha256.blockSHANI
+2026-11-09T17:07:24.6813031Z    70940ms 17.58% 98.02%    70940ms 17.58%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T17:07:24.6813639Z      100ms 0.025% 98.05%    70830ms 17.55%  syscall.RawSyscall6
+2026-11-09T17:07:24.6814211Z       50ms 0.012% 98.06%    53470ms 13.25%  syscall.Syscall6
+2026-11-09T17:07:24.6815003Z       40ms 0.0099% 98.07%    44600ms 11.05%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+2026-11-09T17:07:24.6815683Z       40ms 0.0099% 98.08%   262810ms 65.12%  io.copyBuffer
+2026-11-09T17:07:24.6816304Z       30ms 0.0074% 98.09%   324690ms 80.46%  crypto/internal/fips140/sha256.(*Digest).Write
+2026-11-09T17:07:24.6817064Z       30ms 0.0074% 98.09%    11370ms  2.82%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+2026-11-09T17:07:24.6817690Z       30ms 0.0074% 98.10%    32880ms  8.15%  io.(*SectionReader).Read
+2026-11-09T17:07:24.6818250Z       30ms 0.0074% 98.11%    18220ms  4.51%  syscall.Syscall
+2026-11-09T17:07:24.6818863Z       20ms 0.005% 98.11%   324660ms 80.45%  crypto/internal/fips140/sha256.block
+2026-11-09T17:07:24.6819569Z       20ms 0.005% 98.12%   112400ms 27.85%  github.com/ArtixSx/razvilka/internal/components.originHash
+2026-11-09T17:07:24.6820415Z       20ms 0.005% 98.12%    12900ms  3.20%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+2026-11-09T17:07:24.6821049Z       20ms 0.005% 98.13%    50930ms 12.62%  os.(*File).ReadAt
+2026-11-09T17:07:24.6822081Z       10ms 0.0025% 98.13%    41220ms 10.21%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).openReadFingerprint
+2026-11-09T17:07:24.6823058Z       10ms 0.0025% 98.13%   111720ms 27.68%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveSource).currentPrefixLocked
+2026-11-09T17:07:24.6824516Z       10ms 0.0025% 98.14%    71260ms 17.66%  github.com/ArtixSx/razvilka/internal/dataplane.(*nodeTransitLease).presence
+2026-11-09T17:07:24.6825443Z       10ms 0.0025% 98.14%     4550ms  1.13%  github.com/ArtixSx/razvilka/internal/dataplane.observeOriginalMihomoProcessInNetwork
+2026-11-09T17:07:24.6826724Z       10ms 0.0025% 98.14%   193540ms 47.96%  github.com/ArtixSx/razvilka/internal/restorejournal.(*ArtifactFileTarget).withExpectedReadComparison.func2.1
+2026-11-09T17:07:24.6827763Z       10ms 0.0025% 98.14%    12770ms  3.16%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).runMihomoLiveRead
+2026-11-09T17:07:24.6828440Z       10ms 0.0025% 98.15%    13130ms  3.25%  internal/poll.(*FD).Read
+2026-11-09T17:07:24.6829032Z       10ms 0.0025% 98.15%    13580ms  3.37%  io.(*LimitedReader).Read
+2026-11-09T17:07:24.6829597Z       10ms 0.0025% 98.15%   260960ms 64.66%  io.CopyBuffer
+2026-11-09T17:07:24.6830081Z       10ms 0.0025% 98.15%    13140ms  3.26%  os.(*File).Read
+2026-11-09T17:07:24.6830678Z       10ms 0.0025% 98.16%    50900ms 12.61%  os.(*File).pread (inline)
+2026-11-09T17:07:24.6831352Z       10ms 0.0025% 98.16%    13600ms  3.37%  syscall.Read (inline)
+2026-11-09T17:07:24.6832403Z          0     0% 98.16%   142570ms 35.33%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+2026-11-09T17:07:24.6833268Z          0     0% 98.16%   142580ms 35.33%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplaneOriginal
+2026-11-09T17:07:24.6834252Z          0     0% 98.16%   142580ms 35.33%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+2026-11-09T17:07:24.6835210Z          0     0% 98.16%    12280ms  3.04%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime
+2026-11-09T17:07:24.6836177Z          0     0% 98.16%    12280ms  3.04%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime.func4
+2026-11-09T17:07:24.6837081Z          0     0% 98.16%    49630ms 12.30%  github.com/ArtixSx/razvilka/internal/app.(*App).observeCommittedMihomo
+2026-11-09T17:07:24.6838039Z          0     0% 98.16%    63390ms 15.71%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply
+2026-11-09T17:07:24.6839000Z          0     0% 98.16%    63390ms 15.71%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow
+2026-11-09T17:07:24.6840030Z          0     0% 98.16%    12280ms  3.04%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.func8
+2026-11-09T17:07:24.7127117Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-09T17:07:24.7127599Z with:
+2026-11-09T17:07:24.7128084Z   name: mihomo-live-cpu-344912c11f285a4c2dc0ac0eadd8ab64e6110160
+2026-11-09T17:07:24.7128588Z   path: artifacts/mihomo-live-profile
+2026-11-09T17:07:24.7128960Z   if-no-files-found: warn
+2026-11-09T17:07:24.7129312Z   compression-level: 6
+2026-11-09T17:07:24.7129637Z   overwrite: false
+2026-11-09T17:07:24.7130022Z   include-hidden-files: false
+2026-11-09T17:07:24.7130391Z env:
+2026-11-09T17:07:24.7130685Z   GOTOOLCHAIN: local
+2026-11-09T17:07:24.7131014Z ##[endgroup]
+2026-11-09T17:07:24.8858825Z (node:7749) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T17:07:24.8860157Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T17:07:24.8911662Z With the provided path, there will be 3 files uploaded
+2026-11-09T17:07:24.8941049Z Artifact name is valid!
+2026-11-09T17:07:24.8942226Z Root directory input is valid!
+2026-11-09T17:07:25.1351840Z Beginning upload of artifact content to blob storage
+2026-11-09T17:07:25.1715396Z (node:7749) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T17:07:25.2871115Z Uploaded bytes 244001
+2026-11-09T17:07:25.3071838Z Finished uploading artifact content to blob storage!
+2026-11-09T17:07:25.3072812Z SHA256 digest of uploaded artifact zip is 555a32de37b904a074625e1ee7ded5d2c333245a6ebc97dca0366f22e5c159da
+2026-11-09T17:07:25.3073798Z Finalizing artifact upload
+2026-11-09T17:07:25.7313677Z Artifact mihomo-live-cpu-344912c11f285a4c2dc0ac0eadd8ab64e6110160.zip successfully finalized. Artifact ID 13694202213
+2026-11-09T17:07:25.7316008Z Artifact mihomo-live-cpu-344912c11f285a4c2dc0ac0eadd8ab64e6110160 has been successfully uploaded! Final size is 244001 bytes. Artifact ID is 13694202213
+2026-11-09T17:07:25.7320700Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42660394432/artifacts/13694202213
+2026-11-09T17:07:25.7523671Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T17:07:25.7524209Z with:
+2026-11-09T17:07:25.7524600Z   ref: 4cc9f869974713c9cebd833fccca383c03c102b7
+2026-11-09T17:07:25.7525022Z   path: baseline4cc
+2026-11-09T17:07:25.7525379Z   persist-credentials: false
+2026-11-09T17:07:25.7525759Z   repository: ArtixSx/RAZVILKA
+2026-11-09T17:07:25.7528527Z   token: ***
+2026-11-09T17:07:25.7528846Z   ssh-strict: true
+2026-11-09T17:07:25.7529244Z   ssh-user: git
+2026-11-09T17:07:25.7529568Z   clean: true
+2026-11-09T17:07:25.7529924Z   sparse-checkout-cone-mode: true
+2026-11-09T17:07:25.7530337Z   fetch-depth: 1
+2026-11-09T17:07:25.7530732Z   fetch-tags: false
+2026-11-09T17:07:25.7531377Z   show-progress: true
+2026-11-09T17:07:25.7531732Z   lfs: false
+2026-11-09T17:07:25.7532073Z   submodules: false
+2026-11-09T17:07:25.7532446Z   set-safe-directory: true
+2026-11-09T17:07:25.7532867Z   allow-unsafe-pr-checkout: false
+2026-11-09T17:07:25.7533259Z env:
+2026-11-09T17:07:25.7533737Z   GOTOOLCHAIN: local
+2026-11-09T17:07:25.7534113Z ##[endgroup]
+2026-11-09T17:07:25.8412516Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T17:07:25.8415234Z ##[group]Getting Git version info
+2026-11-09T17:07:25.8416371Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc'
+2026-11-09T17:07:25.8453583Z [command]/usr/bin/git version
+2026-11-09T17:07:25.8494820Z git version 2.56.0
+2026-11-09T17:07:25.8513106Z ##[endgroup]
+2026-11-09T17:07:25.8523275Z Temporarily overriding HOME='/home/runner/work/_temp/7e15d8ea-57b4-4916-a2a3-62519da9c687' before making global git config changes
+2026-11-09T17:07:25.8524659Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T17:07:25.8560276Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc
+2026-11-09T17:07:25.8595474Z ##[group]Determining repository object format
+2026-11-09T17:07:25.8596894Z ##[endgroup]
+2026-11-09T17:07:25.8603024Z ##[group]Initializing the repository
+2026-11-09T17:07:25.8603744Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc
+2026-11-09T17:07:25.8651836Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T17:07:25.8653154Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T17:07:25.8654150Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T17:07:25.8655073Z hint: call:
+2026-11-09T17:07:25.8655685Z hint:
+2026-11-09T17:07:25.8656364Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T17:07:25.8657023Z hint:
+2026-11-09T17:07:25.8657788Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T17:07:25.8658833Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T17:07:25.8659749Z hint:
+2026-11-09T17:07:25.8660364Z hint: 	git branch -m <name>
+2026-11-09T17:07:25.8660981Z hint:
+2026-11-09T17:07:25.8661935Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T17:07:25.8663072Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/
+2026-11-09T17:07:25.8665191Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T17:07:25.8704451Z ##[endgroup]
+2026-11-09T17:07:25.8705452Z ##[group]Disabling automatic garbage collection
+2026-11-09T17:07:25.8707171Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T17:07:25.8740230Z ##[endgroup]
+2026-11-09T17:07:25.8740963Z ##[group]Setting up auth
+2026-11-09T17:07:25.8741760Z Removing SSH command configuration
+2026-11-09T17:07:25.8744953Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T17:07:25.8775555Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T17:07:25.9000758Z Removing HTTP extra header
+2026-11-09T17:07:25.9007325Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T17:07:25.9048607Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T17:07:25.9270868Z Removing includeIf entries pointing to credentials config files
+2026-11-09T17:07:25.9278469Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T17:07:25.9313313Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T17:07:25.9537020Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T17:07:25.9585991Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path /home/runner/work/_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:25.9625562Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:25.9663864Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/baseline4cc/.git.path /github/runner_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:25.9703289Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path /github/runner_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:25.9736894Z ##[endgroup]
+2026-11-09T17:07:25.9737413Z ##[group]Fetching the repository
+2026-11-09T17:07:25.9745948Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin 4cc9f869974713c9cebd833fccca383c03c102b7
+2026-11-09T17:07:28.7712007Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T17:07:28.7713175Z  * branch            4cc9f869974713c9cebd833fccca383c03c102b7 -> FETCH_HEAD
+2026-11-09T17:07:28.7723089Z [command]/usr/bin/git rev-parse --verify --quiet 4cc9f869974713c9cebd833fccca383c03c102b7^{object}
+2026-11-09T17:07:28.7752274Z 4cc9f869974713c9cebd833fccca383c03c102b7
+2026-11-09T17:07:28.7762462Z ##[endgroup]
+2026-11-09T17:07:28.7763028Z ##[group]Determining the checkout info
+2026-11-09T17:07:28.7763643Z ##[endgroup]
+2026-11-09T17:07:28.7765152Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T17:07:28.7814457Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T17:07:28.7848038Z ##[group]Checking out the ref
+2026-11-09T17:07:28.7852216Z [command]/usr/bin/git checkout --progress --force 4cc9f869974713c9cebd833fccca383c03c102b7
+2026-11-09T17:07:29.1026383Z Note: switching to '4cc9f869974713c9cebd833fccca383c03c102b7'.
+2026-11-09T17:07:29.1026808Z 
+2026-11-09T17:07:29.1027104Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-09T17:07:29.1027660Z changes and commit them, and you can discard any commits you make in this
+2026-11-09T17:07:29.1028261Z state without impacting any branches by switching back to a branch.
+2026-11-09T17:07:29.1028619Z 
+2026-11-09T17:07:29.1028888Z If you want to create a new branch to retain commits you create, you may
+2026-11-09T17:07:29.1029442Z do so (now or later) by using -c with the switch command. Example:
+2026-11-09T17:07:29.1029746Z 
+2026-11-09T17:07:29.1029922Z   git switch -c <new-branch-name>
+2026-11-09T17:07:29.1030172Z 
+2026-11-09T17:07:29.1030373Z Or undo this operation with:
+2026-11-09T17:07:29.1030583Z 
+2026-11-09T17:07:29.1030785Z   git switch -
+2026-11-09T17:07:29.1030988Z 
+2026-11-09T17:07:29.1031454Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-09T17:07:29.1031966Z 
+2026-11-09T17:07:29.1033028Z HEAD is now at 4cc9f86 Validate public recovery and pinned tools with reviewed allocation measurements
+2026-11-09T17:07:29.1044475Z ##[endgroup]
+2026-11-09T17:07:29.1088573Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T17:07:29.1116196Z 4cc9f869974713c9cebd833fccca383c03c102b7
+2026-11-09T17:07:29.1124667Z ##[group]Removing auth
+2026-11-09T17:07:29.1125100Z Removing SSH command configuration
+2026-11-09T17:07:29.1128383Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T17:07:29.1162868Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T17:07:29.1365595Z Removing HTTP extra header
+2026-11-09T17:07:29.1368486Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T17:07:29.1403002Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T17:07:29.1600569Z Removing includeIf entries pointing to credentials config files
+2026-11-09T17:07:29.1604098Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T17:07:29.1629319Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path
+2026-11-09T17:07:29.1630014Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path
+2026-11-09T17:07:29.1630737Z includeif.gitdir:/github/workspace/baseline4cc/.git.path
+2026-11-09T17:07:29.1631695Z includeif.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path
+2026-11-09T17:07:29.1641661Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path
+2026-11-09T17:07:29.1666188Z /home/runner/work/_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:29.1675983Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-8ecb83ce\-e2a4\-407c\-ba2d\-23e1060a0104\.config
+2026-11-09T17:07:29.1719368Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path
+2026-11-09T17:07:29.1742318Z /home/runner/work/_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:29.1750815Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-8ecb83ce\-e2a4\-407c\-ba2d\-23e1060a0104\.config
+2026-11-09T17:07:29.1788855Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/baseline4cc/.git.path
+2026-11-09T17:07:29.1811690Z /github/runner_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:29.1819002Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/baseline4cc/.git.path \/github\/runner_temp\/git\-credentials\-8ecb83ce\-e2a4\-407c\-ba2d\-23e1060a0104\.config
+2026-11-09T17:07:29.1855013Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path
+2026-11-09T17:07:29.1879844Z /github/runner_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config
+2026-11-09T17:07:29.1886198Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-8ecb83ce\-e2a4\-407c\-ba2d\-23e1060a0104\.config
+2026-11-09T17:07:29.1921195Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T17:07:29.2118558Z Removing credentials config '/home/runner/work/_temp/git-credentials-8ecb83ce-e2a4-407c-ba2d-23e1060a0104.config'
+2026-11-09T17:07:29.2129731Z ##[endgroup]
+2026-11-09T17:07:29.2251995Z ##[group]Run set -euo pipefail
+2026-11-09T17:07:29.2252494Z [36;1mset -euo pipefail[0m
+2026-11-09T17:07:29.2252887Z [36;1mcase "$SCENARIO" in[0m
+2026-11-09T17:07:29.2253398Z [36;1m  lifecycle) expected=TestMihomoLiveOriginalApplyStopAndFreshApply ;;[0m
+2026-11-09T17:07:29.2254080Z [36;1m  manual-http) expected=TestMihomoLiveOriginalManualHTTPApplyStop ;;[0m
+2026-11-09T17:07:29.2254564Z [36;1m  *) exit 2 ;;[0m
+2026-11-09T17:07:29.2254952Z [36;1mesac[0m
+2026-11-09T17:07:29.2255404Z [36;1moutput="$GITHUB_WORKSPACE/baseline4cc/artifacts/mihomo-live-profile"[0m
+2026-11-09T17:07:29.2255868Z [36;1mmkdir -p "$output"[0m
+2026-11-09T17:07:29.2256258Z [36;1mchmod 700 "$output"[0m
+2026-11-09T17:07:29.2256854Z [36;1mtrap 'sudo chown -R "$(id -u):$(id -g)" "$output"' EXIT[0m
+2026-11-09T17:07:29.2257904Z [36;1mprintf 'baseline=4cc9f869974713c9cebd833fccca383c03c102b7 candidate=%s scenario=%s order=candidate-then-baseline diagnostic_only=true\n' "$GITHUB_SHA" "$SCENARIO" > "$output/comparison.txt"[0m
+2026-11-09T17:07:29.2258704Z [36;1mcd baseline4cc[0m
+2026-11-09T17:07:29.2259165Z [36;1mtest "$(git rev-parse HEAD)" = 4cc9f869974713c9cebd833fccca383c03c102b7[0m
+2026-11-09T17:07:29.2259700Z [36;1msudo env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T17:07:29.2260198Z [36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T17:07:29.2260726Z [36;1m  RAZVILKA_MIHOMO_LIVE_TEST_CASE="$SCENARIO" \[0m
+2026-11-09T17:07:29.2261183Z [36;1m  RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$output" \[0m
+2026-11-09T17:07:29.2261948Z [36;1m  RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \[0m
+2026-11-09T17:07:29.2262558Z [36;1m  RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \[0m
+2026-11-09T17:07:29.2263172Z [36;1m  RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \[0m
+2026-11-09T17:07:29.2263811Z [36;1m  sh scripts/test-mihomo-live-native.sh 2>&1 | tee "$output/native.log"[0m
+2026-11-09T17:07:29.2264339Z [36;1mgrep -F -- "--- PASS: $expected " "$output/native.log"[0m
+2026-11-09T17:07:29.2264879Z [36;1mif grep -F -- '--- SKIP:' "$output/native.log"; then exit 1; fi[0m
+2026-11-09T17:07:29.2279389Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T17:07:29.2279824Z env:
+2026-11-09T17:07:29.2280214Z   GOTOOLCHAIN: local
+2026-11-09T17:07:29.2280552Z   SCENARIO: lifecycle
+2026-11-09T17:07:29.2280962Z ##[endgroup]
+2026-11-09T17:07:29.3083235Z CI-only platform classification; original protected tool closure: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T17:08:08.3706566Z === RUN   TestMihomoLiveOriginalApplyStopAndFreshApply
+2026-11-09T17:08:08.3709578Z     mihomo_live_native_linux_test.go:66: native_fixture_budgets rounds=2 aggregate=10m0s round=5m0s operation=1m50s production_apply=8m0s
+2026-11-09T17:08:20.2612999Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:20.5657173Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:20.7856881Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:20.7857957Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:20.8717786Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:20.8719385Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:20.8727609Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:20.8729326Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:21.4798162Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:22.0867662Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:23.8320011Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:23.8330378Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:31.6006828Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:31.9043572Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+2026-11-09T17:08:31.9044919Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+2026-11-09T17:09:56.7954082Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=snapshot state=passed duration_ms=2617.507
+2026-11-09T17:09:56.7962688Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=stage state=passed duration_ms=1826.376
+2026-11-09T17:09:56.7963790Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=validate state=passed duration_ms=3150.157
+2026-11-09T17:09:56.7964980Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=canary state=passed duration_ms=2598.348
+2026-11-09T17:09:56.7965975Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=activate state=passed duration_ms=11644.101
+2026-11-09T17:09:56.7966798Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=health state=passed duration_ms=40762.975
+2026-11-09T17:09:56.7967710Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=commit-adapter state=passed duration_ms=3569.622
+2026-11-09T17:09:56.7968563Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m46.734729873s mandatory_probes=2
+2026-11-09T17:10:44.2016966Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=6.32036842s closing_retry=false
+2026-11-09T17:10:44.2530428Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=2m34.193180171s fixture_elapsed=2m35.882057037s restored_physical_baseline=true
+2026-11-09T17:10:54.3603221Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:54.6634533Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:54.8678806Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:54.8680398Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:54.9502794Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:54.9504067Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:54.9512668Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:54.9513844Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:55.5594822Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:56.1669218Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:57.9050107Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+2026-11-09T17:10:57.9059788Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+2026-11-09T17:11:05.6676655Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+2026-11-09T17:11:05.9708679Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+2026-11-09T17:11:05.9709970Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+2026-11-09T17:12:30.6684173Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=snapshot state=passed duration_ms=2548.882
+2026-11-09T17:12:30.6685396Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=stage state=passed duration_ms=1823.159
+2026-11-09T17:12:30.6686931Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=validate state=passed duration_ms=3125.873
+2026-11-09T17:12:30.6687977Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=canary state=passed duration_ms=2601.382
+2026-11-09T17:12:30.6689457Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=activate state=passed duration_ms=11611.243
+2026-11-09T17:12:30.6690639Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=health state=passed duration_ms=40585.021
+2026-11-09T17:12:30.6691962Z     mihomo_live_native_linux_test.go:362: native_apply_stage phase=commit-adapter state=passed duration_ms=3558.253
+2026-11-09T17:12:30.6700231Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m46.416222256s mandatory_probes=2
+2026-11-09T17:13:18.0093342Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=6.302887666s closing_retry=true
+2026-11-09T17:13:18.0601846Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=2m33.807005768s fixture_elapsed=5m9.689111707s restored_physical_baseline=true
+2026-11-09T17:13:18.5353135Z --- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (310.16s)
+2026-11-09T17:13:18.5353980Z PASS
+2026-11-09T17:13:18.9038109Z File: app.test
+2026-11-09T17:13:18.9038970Z Build ID: 0ff875c0d5c60a4db51b50a23b37938ce017bb1c
+2026-11-09T17:13:18.9039506Z Type: cpu
+2026-11-09T17:13:18.9196936Z Time: 2026-11-09 17:08:08 UTC
+2026-11-09T17:13:18.9197742Z Duration: 310.17s, Total samples = 401520ms (129.45%)
+2026-11-09T17:13:18.9198364Z Showing nodes accounting for 393880ms, 98.10% of 401520ms total
+2026-11-09T17:13:18.9198927Z Dropped 1118 nodes (cum <= 2007.60ms)
+2026-11-09T17:13:18.9199368Z Showing top 35 nodes out of 187
+2026-11-09T17:13:18.9199950Z       flat  flat%   sum%        cum   cum%
+2026-11-09T17:13:18.9200510Z   327100ms 81.47% 81.47%   327100ms 81.47%  crypto/internal/fips140/sha256.blockSHANI
+2026-11-09T17:13:18.9201048Z    66280ms 16.51% 97.97%    66280ms 16.51%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T17:13:18.9202051Z       80ms  0.02% 97.99%   260420ms 64.86%  io.copyBuffer
+2026-11-09T17:13:18.9202728Z       70ms 0.017% 98.01%   327180ms 81.49%  crypto/internal/fips140/sha256.(*Digest).Write
+2026-11-09T17:13:18.9203241Z       60ms 0.015% 98.03%    66140ms 16.47%  syscall.RawSyscall6
+2026-11-09T17:13:18.9203689Z       50ms 0.012% 98.04%    49020ms 12.21%  syscall.Syscall6
+2026-11-09T17:13:18.9204213Z       40ms  0.01% 98.05%    46640ms 11.62%  os.(*File).ReadAt
+2026-11-09T17:13:18.9205134Z       30ms 0.0075% 98.05%    13170ms  3.28%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+2026-11-09T17:13:18.9205897Z       30ms 0.0075% 98.06%    29930ms  7.45%  io.(*SectionReader).Read
+2026-11-09T17:13:18.9206697Z       20ms 0.005% 98.07%   112490ms 28.02%  github.com/ArtixSx/razvilka/internal/components.originHash
+2026-11-09T17:13:18.9207428Z       20ms 0.005% 98.07%    13070ms  3.26%  io.(*LimitedReader).Read
+2026-11-09T17:13:18.9208022Z       20ms 0.005% 98.08%    46450ms 11.57%  syscall.pread
+2026-11-09T17:13:18.9208706Z       10ms 0.0025% 98.08%   327110ms 81.47%  crypto/internal/fips140/sha256.block
+2026-11-09T17:13:18.9209735Z       10ms 0.0025% 98.08%    62920ms 15.67%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithReadObservation
+2026-11-09T17:13:18.9211836Z       10ms 0.0025% 98.08%   103400ms 25.75%  github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).runRegisteredNodeRouterProbe.func1
+2026-11-09T17:13:18.9213232Z       10ms 0.0025% 98.09%    71280ms 17.75%  github.com/ArtixSx/razvilka/internal/dataplane.(*nodeTransitLease).presence
+2026-11-09T17:13:18.9214479Z       10ms 0.0025% 98.09%     3350ms  0.83%  github.com/ArtixSx/razvilka/internal/dataplane.xraySelectedTCPReadBoundedFD
+2026-11-09T17:13:18.9215597Z       10ms 0.0025% 98.09%    41240ms 10.27%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+2026-11-09T17:13:18.9217006Z       10ms 0.0025% 98.09%    11420ms  2.84%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+2026-11-09T17:13:18.9217646Z       10ms 0.0025% 98.10%    12660ms  3.15%  os.(*File).Read
+2026-11-09T17:13:18.9218788Z          0     0% 98.10%   142400ms 35.47%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+2026-11-09T17:13:18.9219906Z          0     0% 98.10%   142400ms 35.47%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplaneOriginal
+2026-11-09T17:13:18.9221177Z          0     0% 98.10%   142400ms 35.47%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+2026-11-09T17:13:18.9222631Z          0     0% 98.10%    12330ms  3.07%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime
+2026-11-09T17:13:18.9224041Z          0     0% 98.10%    12330ms  3.07%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime.func4
+2026-11-09T17:13:18.9225379Z          0     0% 98.10%    49600ms 12.35%  github.com/ArtixSx/razvilka/internal/app.(*App).observeCommittedMihomo
+2026-11-09T17:13:18.9226799Z          0     0% 98.10%    63410ms 15.79%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply
+2026-11-09T17:13:18.9228244Z          0     0% 98.10%    63410ms 15.79%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow
+2026-11-09T17:13:18.9229639Z          0     0% 98.10%    12330ms  3.07%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.func8
+2026-11-09T17:13:18.9232099Z          0     0% 98.10%   142390ms 35.46%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.runMihomoLiveOriginalNativeWorkflow.func7.(*App).operationMiddleware.func11
+2026-11-09T17:13:18.9234519Z          0     0% 98.10%   142390ms 35.46%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.runMihomoLiveOriginalNativeWorkflow.func7.func10
+2026-11-09T17:13:18.9236199Z          0     0% 98.10%    27180ms  6.77%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithCleanupReadObservation
+2026-11-09T17:13:18.9237797Z          0     0% 98.10%    13090ms  3.26%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithCleanupReadObservation.func1
+2026-11-09T17:13:18.9239391Z          0     0% 98.10%    28490ms  7.10%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithReadObservation.func1
+2026-11-09T17:13:18.9240918Z          0     0% 98.10%    41580ms 10.36%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).closeReadFingerprint
+2026-11-09T17:13:18.9242343Z --- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (310.16s)
+2026-11-09T17:13:18.9294954Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-09T17:13:18.9295380Z with:
+2026-11-09T17:13:18.9295763Z   name: mihomo-baseline4cc-lifecycle-344912c11f285a4c2dc0ac0eadd8ab64e6110160
+2026-11-09T17:13:18.9296238Z   path: baseline4cc/artifacts/mihomo-live-profile
+2026-11-09T17:13:18.9296591Z   if-no-files-found: error
+2026-11-09T17:13:18.9296861Z   compression-level: 6
+2026-11-09T17:13:18.9297112Z   overwrite: false
+2026-11-09T17:13:18.9297364Z   include-hidden-files: false
+2026-11-09T17:13:18.9297643Z env:
+2026-11-09T17:13:18.9297861Z   GOTOOLCHAIN: local
+2026-11-09T17:13:18.9298094Z ##[endgroup]
+2026-11-09T17:13:19.1000838Z (node:9781) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T17:13:19.1001778Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T17:13:19.1134118Z With the provided path, there will be 5 files uploaded
+2026-11-09T17:13:19.1135222Z Artifact name is valid!
+2026-11-09T17:13:19.1135725Z Root directory input is valid!
+2026-11-09T17:13:19.3551996Z Beginning upload of artifact content to blob storage
+2026-11-09T17:13:19.3901933Z (node:9781) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T17:13:19.4730164Z Uploaded bytes 246617
+2026-11-09T17:13:19.4936610Z Finished uploading artifact content to blob storage!
+2026-11-09T17:13:19.4938566Z SHA256 digest of uploaded artifact zip is 4ffe116c6bcf4c04747d69c48c5ce0e1d534411f85b8e377a10a56cdb98b12ce
+2026-11-09T17:13:19.4939654Z Finalizing artifact upload
+2026-11-09T17:13:19.9195367Z Artifact mihomo-baseline4cc-lifecycle-344912c11f285a4c2dc0ac0eadd8ab64e6110160.zip successfully finalized. Artifact ID 13694387791
+2026-11-09T17:13:19.9197255Z Artifact mihomo-baseline4cc-lifecycle-344912c11f285a4c2dc0ac0eadd8ab64e6110160 has been successfully uploaded! Final size is 246617 bytes. Artifact ID is 13694387791
+2026-11-09T17:13:19.9203564Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42660394432/artifacts/13694387791
+2026-11-09T17:13:19.9332576Z ##[group]Run set -euo pipefail
+2026-11-09T17:13:19.9332940Z [36;1mset -euo pipefail[0m
+2026-11-09T17:13:19.9333305Z [36;1mwork=$(mktemp -d /tmp/razvilka-mihomo-observation.XXXXXX)[0m
+2026-11-09T17:13:19.9333685Z [36;1mchmod 700 "$work"[0m
+2026-11-09T17:13:19.9333959Z [36;1mtrap 'sudo rm -rf "$work"' EXIT[0m
+2026-11-09T17:13:19.9334345Z [36;1mfor package in components dataplane restorejournal; do[0m
+2026-11-09T17:13:19.9334780Z [36;1m  go test -c -o "$work/$package-normal.test" "./internal/$package"[0m
+2026-11-09T17:13:19.9335242Z [36;1m  go test -race -c -o "$work/$package-race.test" "./internal/$package"[0m
+2026-11-09T17:13:19.9335610Z [36;1mdone[0m
+2026-11-09T17:13:19.9335846Z [36;1mchmod 555 "$work/"*.test[0m
+2026-11-09T17:13:19.9336120Z [36;1mfailed=0[0m
+2026-11-09T17:13:19.9336419Z [36;1mfor package in components dataplane restorejournal; do[0m
+2026-11-09T17:13:19.9336766Z [36;1m  case "$package" in[0m
+2026-11-09T17:13:19.9337606Z [36;1m    components) pattern='^TestMihomoLiveOriginal(ReadFingerprintNativeMutation|ChildSurvivesApplyAndNeedsFreshCleanup)$|^TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime$' ;;[0m
+2026-11-09T17:13:19.9339111Z [36;1m    dataplane) pattern='^TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease$|^TestNodeTransitSharedOwner|^TestNodeTransitPolicyRuntime|^TestMihomoHealthHandoff|^TestMihomoActiveChecking|^TestMihomoRetainedCheck|^TestMihomoTransitArchive' ;;[0m
+2026-11-09T17:13:19.9340301Z [36;1m    restorejournal) pattern='^TestArtifactComparison|^TestArtifactExpectedReadComparison' ;;[0m
+2026-11-09T17:13:19.9340767Z [36;1m  esac[0m
+2026-11-09T17:13:19.9341024Z [36;1m  for mode in normal race; do[0m
+2026-11-09T17:13:19.9341890Z [36;1m    echo "actual_original_observation_package=$package mode=$mode fixture_budget_components=30s fixture_budget_dataplane=45s"[0m
+2026-11-09T17:13:19.9342656Z [36;1m    timeout 90s sudo env \[0m
+2026-11-09T17:13:19.9343081Z [36;1m      RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \[0m
+2026-11-09T17:13:19.9343515Z [36;1m      RAZVILKA_ARTIFACT_EXPECTED_TIMING=1 \[0m
+2026-11-09T17:13:19.9343926Z [36;1m      unshare --mount --net --fork --kill-child=KILL sh -eu -c '[0m
+2026-11-09T17:13:19.9344306Z [36;1m        mount --make-rprivate /[0m
+2026-11-09T17:13:19.9344614Z [36;1m        ip link set lo up[0m
+2026-11-09T17:13:19.9345003Z [36;1m        exec "$1" -test.run "$2" -test.v -test.timeout 75s[0m
+2026-11-09T17:13:19.9345403Z [36;1m      ' sh "$work/$package-$mode.test" "$pattern" || failed=1[0m
+2026-11-09T17:13:19.9345746Z [36;1m  done[0m
+2026-11-09T17:13:19.9345973Z [36;1mdone[0m
+2026-11-09T17:13:19.9346199Z [36;1mexit "$failed"[0m
+2026-11-09T17:13:19.9359945Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T17:13:19.9360297Z env:
+2026-11-09T17:13:19.9360538Z   GOTOOLCHAIN: local
+2026-11-09T17:13:19.9360790Z ##[endgroup]
+2026-11-09T17:15:20.0731857Z actual_original_observation_package=components mode=normal fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-09T17:15:20.0893731Z === RUN   TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup
+2026-11-09T17:15:24.7846283Z     mihomo_live_process_linux_test.go:176: actual_mihomo_live_scratch name=".razvilka-origin-v1.json" mode=-rw------- bytes=768
+2026-11-09T17:15:26.5704602Z     mihomo_live_process_linux_test.go:245: actual held-FD config validation, native listener across Apply release/cancel, stale cleanup refusal, fresh same-Gate kill/sole Wait/thread join and component leases: PASS; no TUN/routing/service claim
+2026-11-09T17:15:26.5785570Z --- PASS: TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup (6.49s)
+2026-11-09T17:15:26.5786564Z === RUN   TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime
+2026-11-09T17:15:26.5789817Z --- PASS: TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime (0.00s)
+2026-11-09T17:15:26.5790640Z === RUN   TestMihomoLiveOriginalReadFingerprintNativeMutation
+2026-11-09T17:15:30.7442456Z --- PASS: TestMihomoLiveOriginalReadFingerprintNativeMutation (4.17s)
+2026-11-09T17:15:30.7502242Z PASS
+2026-11-09T17:15:30.7551184Z actual_original_observation_package=components mode=race fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-09T17:15:30.7957910Z === RUN   TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup
+2026-11-09T17:15:41.8932880Z     mihomo_live_process_linux_test.go:176: actual_mihomo_live_scratch name=".razvilka-origin-v1.json" mode=-rw------- bytes=768
+2026-11-09T17:15:44.3089954Z     mihomo_live_process_linux_test.go:245: actual held-FD config validation, native listener across Apply release/cancel, stale cleanup refusal, fresh same-Gate kill/sole Wait/thread join and component leases: PASS; no TUN/routing/service claim
+2026-11-09T17:15:44.3170234Z --- PASS: TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup (13.52s)
+2026-11-09T17:15:44.3175385Z === RUN   TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime
+2026-11-09T17:15:44.3180150Z --- PASS: TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime (0.00s)
+2026-11-09T17:15:44.3182844Z === RUN   TestMihomoLiveOriginalReadFingerprintNativeMutation
+2026-11-09T17:15:55.4911764Z --- PASS: TestMihomoLiveOriginalReadFingerprintNativeMutation (11.17s)
+2026-11-09T17:15:55.5313640Z PASS
+2026-11-09T17:15:56.5419257Z actual_original_observation_package=dataplane mode=normal fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-09T17:15:56.5794517Z === RUN   TestMihomoActiveCheckingOriginalDocumentaryCompletion
+2026-11-09T17:15:56.5925330Z --- PASS: TestMihomoActiveCheckingOriginalDocumentaryCompletion (0.01s)
+2026-11-09T17:15:56.5926210Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition
+2026-11-09T17:15:56.5955793Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/missing_header
+2026-11-09T17:15:56.5992702Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/future_header
+2026-11-09T17:15:56.6018085Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/unknown_phase
+2026-11-09T17:15:56.6045101Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_nonce
+2026-11-09T17:15:56.6070987Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/finished
+2026-11-09T17:15:56.6104655Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/duplicate_live
+2026-11-09T17:15:56.6132399Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/premature_settled
+2026-11-09T17:15:56.6156907Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_anchor
+2026-11-09T17:15:56.6183270Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/nonactive_phase
+2026-11-09T17:15:56.6215890Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_plan
+2026-11-09T17:15:56.6243862Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/untyped_row
+2026-11-09T17:15:56.6331170Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/receipt_missing
+2026-11-09T17:15:56.6358099Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/mixed_DNS_owner
+2026-11-09T17:15:56.6452114Z --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition (0.05s)
+2026-11-09T17:15:56.6453050Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/missing_header (0.00s)
+2026-11-09T17:15:56.6453892Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/future_header (0.00s)
+2026-11-09T17:15:56.6455091Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/unknown_phase (0.00s)
+2026-11-09T17:15:56.6455736Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_nonce (0.00s)
+2026-11-09T17:15:56.6456352Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/finished (0.00s)
+2026-11-09T17:15:56.6456985Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/duplicate_live (0.00s)
+2026-11-09T17:15:56.6457649Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/premature_settled (0.00s)
+2026-11-09T17:15:56.6458317Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_anchor (0.00s)
+2026-11-09T17:15:56.6463031Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/nonactive_phase (0.00s)
+2026-11-09T17:15:56.6464099Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_plan (0.00s)
+2026-11-09T17:15:56.6464967Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/untyped_row (0.01s)
+2026-11-09T17:15:56.6465879Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/receipt_missing (0.00s)
+2026-11-09T17:15:56.6466764Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/mixed_DNS_owner (0.00s)
+2026-11-09T17:15:56.6467517Z === RUN   TestMihomoActiveCheckingArchivePreservesHeaderAndRejectsDowngrade
+2026-11-09T17:15:56.6726218Z --- PASS: TestMihomoActiveCheckingArchivePreservesHeaderAndRejectsDowngrade (0.03s)
+2026-11-09T17:15:56.6726918Z === RUN   TestMihomoActiveCheckingFirstPublicationPanicRetainsOriginalCursor
+2026-11-09T17:15:56.6919183Z --- PASS: TestMihomoActiveCheckingFirstPublicationPanicRetainsOriginalCursor (0.02s)
+2026-11-09T17:15:56.6919992Z === RUN   TestMihomoRetainedCheckNestedCleanupNeverReplacesForwardToken
+2026-11-09T17:15:56.7057439Z --- PASS: TestMihomoRetainedCheckNestedCleanupNeverReplacesForwardToken (0.01s)
+2026-11-09T17:15:56.7058215Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter
+2026-11-09T17:15:56.7058863Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/checking
+2026-11-09T17:15:56.7132438Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/settled
+2026-11-09T17:15:56.7209145Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retiring
+2026-11-09T17:15:56.7284521Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retired
+2026-11-09T17:15:56.7354131Z --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter (0.03s)
+2026-11-09T17:15:56.7355012Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/checking (0.01s)
+2026-11-09T17:15:56.7355802Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/settled (0.01s)
+2026-11-09T17:15:56.7356547Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retiring (0.01s)
+2026-11-09T17:15:56.7357260Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retired (0.01s)
+2026-11-09T17:15:56.7357909Z === RUN   TestMihomoActiveCheckingZeroTransitRequiresReader9InRetainedHistory
+2026-11-09T17:15:56.7663269Z --- PASS: TestMihomoActiveCheckingZeroTransitRequiresReader9InRetainedHistory (0.03s)
+2026-11-09T17:15:56.7664319Z === RUN   TestMihomoActiveCheckingUnusedSettlementResumesOnlyOriginalACK
+2026-11-09T17:15:56.7894092Z --- PASS: TestMihomoActiveCheckingUnusedSettlementResumesOnlyOriginalACK (0.02s)
+2026-11-09T17:15:56.7894794Z === RUN   TestMihomoActiveCheckingUnusedReadbackClosingCancellationKeepsACK
+2026-11-09T17:15:56.8100613Z --- PASS: TestMihomoActiveCheckingUnusedReadbackClosingCancellationKeepsACK (0.02s)
+2026-11-09T17:15:56.8101459Z === RUN   TestMihomoActiveCheckingPartialACKKeepsOriginalWriter
+2026-11-09T17:15:56.8299168Z --- PASS: TestMihomoActiveCheckingPartialACKKeepsOriginalWriter (0.02s)
+2026-11-09T17:15:56.8300006Z === RUN   TestMihomoActiveCheckingClosingFailureRetainsReader9
+2026-11-09T17:15:56.8513239Z --- PASS: TestMihomoActiveCheckingClosingFailureRetainsReader9 (0.02s)
+2026-11-09T17:15:56.8539161Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage
+2026-11-09T17:15:56.8813993Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/schema
+2026-11-09T17:15:56.8815110Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/origin
+2026-11-09T17:15:56.8816095Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-hash
+2026-11-09T17:15:56.8818405Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/after-hash
+2026-11-09T17:15:56.8892484Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-bytes
+2026-11-09T17:15:56.8899564Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/duplicate
+2026-11-09T17:15:56.8972538Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/unsettled
+2026-11-09T17:15:56.9041385Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/cohort
+2026-11-09T17:15:56.9118520Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/row-data
+2026-11-09T17:15:56.9187344Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/too-few
+2026-11-09T17:15:56.9188490Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/state
+2026-11-09T17:15:56.9190672Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/plan
+2026-11-09T17:15:56.9197847Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/time
+2026-11-09T17:15:56.9202707Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/step
+2026-11-09T17:15:56.9204398Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/mixed
+2026-11-09T17:15:56.9206323Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/different-marker
+2026-11-09T17:15:56.9216942Z --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage (0.07s)
+2026-11-09T17:15:56.9218007Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/schema (0.00s)
+2026-11-09T17:15:56.9218704Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/origin (0.00s)
+2026-11-09T17:15:56.9219412Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-hash (0.00s)
+2026-11-09T17:15:56.9220100Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/after-hash (0.01s)
+2026-11-09T17:15:56.9220839Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-bytes (0.00s)
+2026-11-09T17:15:56.9221794Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/duplicate (0.01s)
+2026-11-09T17:15:56.9222470Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/unsettled (0.01s)
+2026-11-09T17:15:56.9223140Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/cohort (0.01s)
+2026-11-09T17:15:56.9224009Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/row-data (0.01s)
+2026-11-09T17:15:56.9224944Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/too-few (0.00s)
+2026-11-09T17:15:56.9225618Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/state (0.00s)
+2026-11-09T17:15:56.9226274Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/plan (0.00s)
+2026-11-09T17:15:56.9226926Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/time (0.00s)
+2026-11-09T17:15:56.9227560Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/step (0.00s)
+2026-11-09T17:15:56.9228209Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/mixed (0.00s)
+2026-11-09T17:15:56.9228989Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/different-marker (0.00s)
+2026-11-09T17:15:56.9229798Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize
+2026-11-09T17:15:56.9262904Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/recursive
+2026-11-09T17:15:56.9318664Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/duplicate
+2026-11-09T17:15:56.9361730Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/unknown
+2026-11-09T17:15:56.9433753Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/noncanonical
+2026-11-09T17:15:56.9516193Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/embedded-oversize
+2026-11-09T17:15:57.1207579Z --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize (0.20s)
+2026-11-09T17:15:57.1209386Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/recursive (0.01s)
+2026-11-09T17:15:57.1211656Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/duplicate (0.00s)
+2026-11-09T17:15:57.1214184Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/unknown (0.01s)
+2026-11-09T17:15:57.1215777Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/noncanonical (0.01s)
+2026-11-09T17:15:57.1217321Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/embedded-oversize (0.17s)
+2026-11-09T17:15:57.1218687Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations
+2026-11-09T17:15:57.1219964Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/valid
+2026-11-09T17:15:57.1379084Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/no-owner
+2026-11-09T17:15:57.1426753Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-joined
+2026-11-09T17:15:57.1479439Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-admitted
+2026-11-09T17:15:57.1527970Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/changed-spec
+2026-11-09T17:15:57.1574765Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/too-few
+2026-11-09T17:15:57.1618801Z --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations (0.04s)
+2026-11-09T17:15:57.1620098Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/valid (0.02s)
+2026-11-09T17:15:57.1621626Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/no-owner (0.00s)
+2026-11-09T17:15:57.1623038Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-joined (0.01s)
+2026-11-09T17:15:57.1624412Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-admitted (0.00s)
+2026-11-09T17:15:57.1625781Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/changed-spec (0.00s)
+2026-11-09T17:15:57.1627105Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/too-few (0.00s)
+2026-11-09T17:15:57.1628094Z === RUN   TestMihomoTransitArchivePreservesOtherOriginalCohorts
+2026-11-09T17:15:57.1894873Z --- PASS: TestMihomoTransitArchivePreservesOtherOriginalCohorts (0.03s)
+2026-11-09T17:15:57.1895688Z === RUN   TestMihomoTransitArchiveUnusedRowsNeedOriginalSettlementProvenance
+2026-11-09T17:15:57.2057692Z --- PASS: TestMihomoTransitArchiveUnusedRowsNeedOriginalSettlementProvenance (0.02s)
+2026-11-09T17:15:57.2058438Z === RUN   TestMihomoTransitArchiveOriginalWriterRetiresOnlyAfterAllACKs
+2026-11-09T17:15:57.2587529Z --- PASS: TestMihomoTransitArchiveOriginalWriterRetiresOnlyAfterAllACKs (0.05s)
+2026-11-09T17:15:57.2588543Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks
+2026-11-09T17:15:57.2589528Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/archive
+2026-11-09T17:15:57.2878492Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/origin
+2026-11-09T17:15:57.3156630Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/cancel
+2026-11-09T17:15:57.3415792Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/copied
+2026-11-09T17:15:57.3691941Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/closed-file
+2026-11-09T17:15:57.3977041Z --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks (0.14s)
+2026-11-09T17:15:57.3978500Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/archive (0.03s)
+2026-11-09T17:15:57.3979570Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/origin (0.03s)
+2026-11-09T17:15:57.3980411Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/cancel (0.03s)
+2026-11-09T17:15:57.3981472Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/copied (0.03s)
+2026-11-09T17:15:57.3982679Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/closed-file (0.03s)
+2026-11-09T17:15:57.3983361Z === RUN   TestMihomoTransitArchiveOriginalSlotPartialPublicationRetry
+2026-11-09T17:15:57.4374857Z --- PASS: TestMihomoTransitArchiveOriginalSlotPartialPublicationRetry (0.04s)
+2026-11-09T17:15:57.4375833Z === RUN   TestMihomoTransitArchiveNeverClearsUnrelatedScopeFailure
+2026-11-09T17:15:57.4655202Z --- PASS: TestMihomoTransitArchiveNeverClearsUnrelatedScopeFailure (0.03s)
+2026-11-09T17:15:57.4656258Z === RUN   TestMihomoTransitArchiveRecordedCloseFailureRemainsVisibleOnEveryRetry
+2026-11-09T17:15:57.4940855Z --- PASS: TestMihomoTransitArchiveRecordedCloseFailureRemainsVisibleOnEveryRetry (0.03s)
+2026-11-09T17:15:57.4941955Z === RUN   TestMihomoTransitArchiveRequiresReader8AndCannotBecomeLatest
+2026-11-09T17:15:57.5581747Z --- PASS: TestMihomoTransitArchiveRequiresReader8AndCannotBecomeLatest (0.06s)
+2026-11-09T17:15:57.5582634Z === RUN   TestMihomoHealthHandoffIsOriginalAndOneUse
+2026-11-09T17:15:57.5583339Z --- PASS: TestMihomoHealthHandoffIsOriginalAndOneUse (0.00s)
+2026-11-09T17:15:57.5584071Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime
+2026-11-09T17:15:57.5584937Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-marker
+2026-11-09T17:15:57.5585834Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-owner
+2026-11-09T17:15:57.5586682Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope
+2026-11-09T17:15:57.5587728Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope-lifetime
+2026-11-09T17:15:57.5588960Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/control
+2026-11-09T17:15:57.5590012Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-context
+2026-11-09T17:15:57.5590854Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/child
+2026-11-09T17:15:57.5591732Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/sidecar
+2026-11-09T17:15:57.5592528Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/closed
+2026-11-09T17:15:57.5593306Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/active
+2026-11-09T17:15:57.5594095Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/retired
+2026-11-09T17:15:57.5594925Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/deadline-expired
+2026-11-09T17:15:57.5595828Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-original
+2026-11-09T17:15:57.5596750Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-current
+2026-11-09T17:15:57.5597630Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-resource
+2026-11-09T17:15:57.5598484Z --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime (0.00s)
+2026-11-09T17:15:57.5599523Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-marker (0.00s)
+2026-11-09T17:15:57.5600518Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-owner (0.00s)
+2026-11-09T17:15:57.5601176Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope (0.00s)
+2026-11-09T17:15:57.5602136Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope-lifetime (0.00s)
+2026-11-09T17:15:57.5602821Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/control (0.00s)
+2026-11-09T17:15:57.5603804Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-context (0.00s)
+2026-11-09T17:15:57.5604470Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/child (0.00s)
+2026-11-09T17:15:57.5605099Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/sidecar (0.00s)
+2026-11-09T17:15:57.5605745Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/closed (0.00s)
+2026-11-09T17:15:57.5606380Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/active (0.00s)
+2026-11-09T17:15:57.5607011Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/retired (0.00s)
+2026-11-09T17:15:57.5607823Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/deadline-expired (0.00s)
+2026-11-09T17:15:57.5608542Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-original (0.00s)
+2026-11-09T17:15:57.5609262Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-current (0.00s)
+2026-11-09T17:15:57.5610146Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-resource (0.00s)
+2026-11-09T17:15:57.5610844Z === RUN   TestMihomoHealthHandoffRetainsCancellationCause
+2026-11-09T17:15:57.5611515Z --- PASS: TestMihomoHealthHandoffRetainsCancellationCause (0.00s)
+2026-11-09T17:15:57.5612174Z === RUN   TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime
+2026-11-09T17:15:57.5613089Z === RUN   TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/canceled
+2026-11-09T17:15:57.5614043Z === RUN   TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/expired
+2026-11-09T17:15:57.5615007Z --- PASS: TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime (0.00s)
+2026-11-09T17:15:57.5616144Z     --- PASS: TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/canceled (0.00s)
+2026-11-09T17:15:57.5616898Z     --- PASS: TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/expired (0.00s)
+2026-11-09T17:15:57.5617516Z === RUN   TestMihomoHealthHandoffComparisonUsesEarlierIncomingDeadline
+2026-11-09T17:15:57.5618247Z --- PASS: TestMihomoHealthHandoffComparisonUsesEarlierIncomingDeadline (0.00s)
+2026-11-09T17:15:57.5618953Z === RUN   TestMihomoHealthHandoffComparisonJoinsOriginalCancellation
+2026-11-09T17:15:57.5619504Z --- PASS: TestMihomoHealthHandoffComparisonJoinsOriginalCancellation (0.00s)
+2026-11-09T17:15:57.5620028Z === RUN   TestMihomoHealthHandoffDNSRequiresExactEntireAnswerSet
+2026-11-09T17:15:57.5620694Z --- PASS: TestMihomoHealthHandoffDNSRequiresExactEntireAnswerSet (0.00s)
+2026-11-09T17:15:57.5621630Z === RUN   TestMihomoRetainedCheckDefersRepeatedRotation
+2026-11-09T17:15:57.5657187Z --- PASS: TestMihomoRetainedCheckDefersRepeatedRotation (0.01s)
+2026-11-09T17:15:57.5658010Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody
+2026-11-09T17:15:57.5658788Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/missing
+2026-11-09T17:15:57.5700661Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/copied
+2026-11-09T17:15:57.5741931Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/foreign
+2026-11-09T17:15:57.5781430Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/closed
+2026-11-09T17:15:57.5819154Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/failed
+2026-11-09T17:15:57.5863336Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/stopping
+2026-11-09T17:15:57.5899235Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/publishing
+2026-11-09T17:15:57.5944464Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/cleanup
+2026-11-09T17:15:57.5982422Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/header
+2026-11-09T17:15:57.6022868Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/unknown-state
+2026-11-09T17:15:57.6070162Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/pending
+2026-11-09T17:15:57.6110527Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/canceled
+2026-11-09T17:15:57.6156550Z --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody (0.05s)
+2026-11-09T17:15:57.6157303Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/missing (0.00s)
+2026-11-09T17:15:57.6157950Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/copied (0.00s)
+2026-11-09T17:15:57.6158559Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/foreign (0.00s)
+2026-11-09T17:15:57.6159168Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/closed (0.00s)
+2026-11-09T17:15:57.6159752Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/failed (0.00s)
+2026-11-09T17:15:57.6160598Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/stopping (0.00s)
+2026-11-09T17:15:57.6161503Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/publishing (0.00s)
+2026-11-09T17:15:57.6162161Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/cleanup (0.00s)
+2026-11-09T17:15:57.6162793Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/header (0.00s)
+2026-11-09T17:15:57.6163469Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/unknown-state (0.00s)
+2026-11-09T17:15:57.6164095Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/pending (0.00s)
+2026-11-09T17:15:57.6164711Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/canceled (0.00s)
+2026-11-09T17:15:57.6165271Z === RUN   TestMihomoRetainedCheckFullCohortStillRequiresReaderAdmission
+2026-11-09T17:15:57.6377866Z --- PASS: TestMihomoRetainedCheckFullCohortStillRequiresReaderAdmission (0.02s)
+2026-11-09T17:15:57.6388034Z === RUN   TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease
+2026-11-09T17:16:03.3688614Z     mihomo_live_observe_linux_test.go:200: actual official held-FD child/full kernel listener association across Apply release; durable Stop revokes observation, fresh same-owner cleanup joins; no TUN/service/route proof
+2026-11-09T17:16:03.3772785Z --- PASS: TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease (5.74s)
+2026-11-09T17:16:03.4291143Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt
+2026-11-09T17:16:03.4291996Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/guard
+2026-11-09T17:16:03.4295092Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/presence
+2026-11-09T17:16:03.4296707Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/preflight
+2026-11-09T17:16:03.4298537Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/delete
+2026-11-09T17:16:03.4299599Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/runner
+2026-11-09T17:16:03.4301075Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/tool
+2026-11-09T17:16:03.4302820Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/plan
+2026-11-09T17:16:03.4304288Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/root
+2026-11-09T17:16:03.4305597Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-origin
+2026-11-09T17:16:03.4306783Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-owner
+2026-11-09T17:16:03.4307980Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-lease
+2026-11-09T17:16:03.4308952Z --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt (0.00s)
+2026-11-09T17:16:03.4309749Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/guard (0.00s)
+2026-11-09T17:16:03.4310571Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/presence (0.00s)
+2026-11-09T17:16:03.4311551Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/preflight (0.00s)
+2026-11-09T17:16:03.4312388Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/delete (0.00s)
+2026-11-09T17:16:03.4313198Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/runner (0.00s)
+2026-11-09T17:16:03.4314390Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/tool (0.00s)
+2026-11-09T17:16:03.4315561Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/plan (0.00s)
+2026-11-09T17:16:03.4316604Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/root (0.00s)
+2026-11-09T17:16:03.4317458Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-origin (0.00s)
+2026-11-09T17:16:03.4318449Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-owner (0.00s)
+2026-11-09T17:16:03.4319665Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-lease (0.00s)
+2026-11-09T17:16:03.4323314Z === RUN   TestNodeTransitPolicyRuntimeSessionKeepsClosingFailureUnknown
+2026-11-09T17:16:03.4347040Z --- PASS: TestNodeTransitPolicyRuntimeSessionKeepsClosingFailureUnknown (0.00s)
+2026-11-09T17:16:03.4347843Z === RUN   TestNodeTransitPolicyRuntimeSessionCancellationAfterPresenceRefusesBeforeStart
+2026-11-09T17:16:03.4357064Z --- PASS: TestNodeTransitPolicyRuntimeSessionCancellationAfterPresenceRefusesBeforeStart (0.00s)
+2026-11-09T17:16:03.4358148Z === RUN   TestNodeTransitPolicyRuntimeSessionOnlyRemovesTwoAdjacentChecks
+2026-11-09T17:16:03.4423915Z --- PASS: TestNodeTransitPolicyRuntimeSessionOnlyRemovesTwoAdjacentChecks (0.01s)
+2026-11-09T17:16:03.4424700Z === RUN   TestNodeTransitPolicyRuntimeConstructorSealsOriginalRoles
+2026-11-09T17:16:03.4426938Z --- PASS: TestNodeTransitPolicyRuntimeConstructorSealsOriginalRoles (0.00s)
+2026-11-09T17:16:03.4427995Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks
+2026-11-09T17:16:03.4429042Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/guard
+2026-11-09T17:16:03.4430166Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/presence
+2026-11-09T17:16:03.4431960Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/preflight
+2026-11-09T17:16:03.4433992Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/delete
+2026-11-09T17:16:03.4435941Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/runner
+2026-11-09T17:16:03.4437783Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/tool
+2026-11-09T17:16:03.4453243Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/extra-tool
+2026-11-09T17:16:03.4454485Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/root
+2026-11-09T17:16:03.4455587Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/plan
+2026-11-09T17:16:03.4458889Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/origin-copy
+2026-11-09T17:16:03.4462037Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/lease-copy
+2026-11-09T17:16:03.4463340Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/owner-copy
+2026-11-09T17:16:03.4464630Z --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks (0.00s)
+2026-11-09T17:16:03.4465565Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/guard (0.00s)
+2026-11-09T17:16:03.4466401Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/presence (0.00s)
+2026-11-09T17:16:03.4467227Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/preflight (0.00s)
+2026-11-09T17:16:03.4468066Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/delete (0.00s)
+2026-11-09T17:16:03.4468874Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/runner (0.00s)
+2026-11-09T17:16:03.4469671Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/tool (0.00s)
+2026-11-09T17:16:03.4470759Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/extra-tool (0.00s)
+2026-11-09T17:16:03.4472013Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/root (0.00s)
+2026-11-09T17:16:03.4473071Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/plan (0.00s)
+2026-11-09T17:16:03.4474309Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/origin-copy (0.00s)
+2026-11-09T17:16:03.4475688Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/lease-copy (0.00s)
+2026-11-09T17:16:03.4476934Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/owner-copy (0.00s)
+2026-11-09T17:16:03.4477638Z === RUN   TestNodeTransitPolicyRuntimeBindingCannotBeReplacedByPublicCallbacks
+2026-11-09T17:16:03.4478346Z --- PASS: TestNodeTransitPolicyRuntimeBindingCannotBeReplacedByPublicCallbacks (0.00s)
+2026-11-09T17:16:03.4479415Z === RUN   TestNodeTransitPolicyRuntimeRunnerComparisonRefusesNonComparableAndNil
+2026-11-09T17:16:03.4480453Z --- PASS: TestNodeTransitPolicyRuntimeRunnerComparisonRefusesNonComparableAndNil (0.00s)
+2026-11-09T17:16:03.4481619Z === RUN   TestNodeTransitPolicyRuntimeBindingKeepsFreshContextAndPlanChecks
+2026-11-09T17:16:03.4482621Z --- PASS: TestNodeTransitPolicyRuntimeBindingKeepsFreshContextAndPlanChecks (0.00s)
+2026-11-09T17:16:03.4492005Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries
+2026-11-09T17:16:03.4492939Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/default
+2026-11-09T17:16:03.4494660Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/original-shared
+2026-11-09T17:16:03.4496197Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/default
+2026-11-09T17:16:03.4497567Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/original-shared
+2026-11-09T17:16:03.4498729Z --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries (0.00s)
+2026-11-09T17:16:03.4499596Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/default (0.00s)
+2026-11-09T17:16:03.4500511Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/original-shared (0.00s)
+2026-11-09T17:16:03.4501896Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/default (0.00s)
+2026-11-09T17:16:03.4503365Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/original-shared (0.00s)
+2026-11-09T17:16:03.4504403Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse
+2026-11-09T17:16:03.4505227Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/closing-failure
+2026-11-09T17:16:03.4506172Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-owner
+2026-11-09T17:16:03.4507041Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-lease
+2026-11-09T17:16:03.4507933Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/foreign-presence
+2026-11-09T17:16:03.4508820Z --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse (0.00s)
+2026-11-09T17:16:03.4509904Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/closing-failure (0.00s)
+2026-11-09T17:16:03.4511044Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-owner (0.00s)
+2026-11-09T17:16:03.4512373Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-lease (0.00s)
+2026-11-09T17:16:03.4513543Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/foreign-presence (0.00s)
+2026-11-09T17:16:03.4514493Z === RUN   TestNodeTransitSharedOwnerEffectDiagnosticsRetainCause
+2026-11-09T17:16:03.4515315Z --- PASS: TestNodeTransitSharedOwnerEffectDiagnosticsRetainCause (0.00s)
+2026-11-09T17:16:03.4516435Z === RUN   TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads
+2026-11-09T17:16:03.4517402Z === RUN   TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/independent-default
+2026-11-09T17:16:03.4518484Z === RUN   TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/explicit-same-owner
+2026-11-09T17:16:03.4519524Z --- PASS: TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads (0.00s)
+2026-11-09T17:16:03.4520493Z     --- PASS: TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/independent-default (0.00s)
+2026-11-09T17:16:03.4521784Z     --- PASS: TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/explicit-same-owner (0.00s)
+2026-11-09T17:16:03.4522890Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors
+2026-11-09T17:16:03.4523857Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/closing-owner
+2026-11-09T17:16:03.4524892Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/read
+2026-11-09T17:16:03.4525905Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/canceled
+2026-11-09T17:16:03.4526983Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/foreign-presence
+2026-11-09T17:16:03.4528197Z --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors (0.00s)
+2026-11-09T17:16:03.4528966Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/closing-owner (0.00s)
+2026-11-09T17:16:03.4529949Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/read (0.00s)
+2026-11-09T17:16:03.4530858Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/canceled (0.00s)
+2026-11-09T17:16:03.4531938Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/foreign-presence (0.00s)
+2026-11-09T17:16:03.4532589Z === RUN   TestNodeTransitSharedOwnerIsOriginalOneUseAndCannotMixCallbacks
+2026-11-09T17:16:03.4533179Z --- PASS: TestNodeTransitSharedOwnerIsOriginalOneUseAndCannotMixCallbacks (0.00s)
+2026-11-09T17:16:03.5180189Z PASS
+2026-11-09T17:16:03.5208143Z actual_original_observation_package=dataplane mode=race fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-09T17:16:03.6790979Z === RUN   TestMihomoActiveCheckingOriginalDocumentaryCompletion
+2026-11-09T17:16:03.7171392Z --- PASS: TestMihomoActiveCheckingOriginalDocumentaryCompletion (0.04s)
+2026-11-09T17:16:03.7175707Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition
+2026-11-09T17:16:03.7282983Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/duplicate_live
+2026-11-09T17:16:03.7371156Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/untyped_row
+2026-11-09T17:16:03.7464013Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/receipt_missing
+2026-11-09T17:16:03.7548294Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/mixed_DNS_owner
+2026-11-09T17:16:03.7627841Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/future_header
+2026-11-09T17:16:03.7712249Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/unknown_phase
+2026-11-09T17:16:03.7789666Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/premature_settled
+2026-11-09T17:16:03.7868147Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/finished
+2026-11-09T17:16:03.7956913Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_plan
+2026-11-09T17:16:03.8033079Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/missing_header
+2026-11-09T17:16:03.8109256Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_nonce
+2026-11-09T17:16:03.8228168Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_anchor
+2026-11-09T17:16:03.8314414Z === RUN   TestMihomoActiveCheckingStrictOriginalDefinition/nonactive_phase
+2026-11-09T17:16:03.8530698Z --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition (0.14s)
+2026-11-09T17:16:03.8531774Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/duplicate_live (0.01s)
+2026-11-09T17:16:03.8532738Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/untyped_row (0.01s)
+2026-11-09T17:16:03.8533388Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/receipt_missing (0.01s)
+2026-11-09T17:16:03.8534061Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/mixed_DNS_owner (0.01s)
+2026-11-09T17:16:03.8535159Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/future_header (0.01s)
+2026-11-09T17:16:03.8536008Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/unknown_phase (0.01s)
+2026-11-09T17:16:03.8536835Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/premature_settled (0.01s)
+2026-11-09T17:16:03.8537495Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/finished (0.01s)
+2026-11-09T17:16:03.8538392Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_plan (0.01s)
+2026-11-09T17:16:03.8539298Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/missing_header (0.01s)
+2026-11-09T17:16:03.8539952Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_nonce (0.01s)
+2026-11-09T17:16:03.8543065Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_anchor (0.01s)
+2026-11-09T17:16:03.8543898Z     --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/nonactive_phase (0.01s)
+2026-11-09T17:16:03.8544711Z === RUN   TestMihomoActiveCheckingArchivePreservesHeaderAndRejectsDowngrade
+2026-11-09T17:16:04.0578505Z --- PASS: TestMihomoActiveCheckingArchivePreservesHeaderAndRejectsDowngrade (0.20s)
+2026-11-09T17:16:04.0581728Z === RUN   TestMihomoActiveCheckingFirstPublicationPanicRetainsOriginalCursor
+2026-11-09T17:16:04.1502299Z --- PASS: TestMihomoActiveCheckingFirstPublicationPanicRetainsOriginalCursor (0.09s)
+2026-11-09T17:16:04.1505738Z === RUN   TestMihomoRetainedCheckNestedCleanupNeverReplacesForwardToken
+2026-11-09T17:16:04.2165585Z --- PASS: TestMihomoRetainedCheckNestedCleanupNeverReplacesForwardToken (0.07s)
+2026-11-09T17:16:04.2168921Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter
+2026-11-09T17:16:04.2173222Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/checking
+2026-11-09T17:16:04.2371089Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/settled
+2026-11-09T17:16:04.2552850Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retiring
+2026-11-09T17:16:04.2746643Z === RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retired
+2026-11-09T17:16:04.2975709Z --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter (0.08s)
+2026-11-09T17:16:04.2976584Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/checking (0.02s)
+2026-11-09T17:16:04.2977326Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/settled (0.02s)
+2026-11-09T17:16:04.2978064Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retiring (0.02s)
+2026-11-09T17:16:04.2979190Z     --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retired (0.02s)
+2026-11-09T17:16:04.2979938Z === RUN   TestMihomoActiveCheckingZeroTransitRequiresReader9InRetainedHistory
+2026-11-09T17:16:04.5187703Z --- PASS: TestMihomoActiveCheckingZeroTransitRequiresReader9InRetainedHistory (0.22s)
+2026-11-09T17:16:04.5190679Z === RUN   TestMihomoActiveCheckingUnusedSettlementResumesOnlyOriginalACK
+2026-11-09T17:16:04.6161787Z --- PASS: TestMihomoActiveCheckingUnusedSettlementResumesOnlyOriginalACK (0.10s)
+2026-11-09T17:16:04.6164984Z === RUN   TestMihomoActiveCheckingUnusedReadbackClosingCancellationKeepsACK
+2026-11-09T17:16:04.7064214Z --- PASS: TestMihomoActiveCheckingUnusedReadbackClosingCancellationKeepsACK (0.09s)
+2026-11-09T17:16:04.7067529Z === RUN   TestMihomoActiveCheckingPartialACKKeepsOriginalWriter
+2026-11-09T17:16:04.7940430Z --- PASS: TestMihomoActiveCheckingPartialACKKeepsOriginalWriter (0.09s)
+2026-11-09T17:16:04.7943675Z === RUN   TestMihomoActiveCheckingClosingFailureRetainsReader9
+2026-11-09T17:16:04.8939873Z --- PASS: TestMihomoActiveCheckingClosingFailureRetainsReader9 (0.10s)
+2026-11-09T17:16:04.9086140Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage
+2026-11-09T17:16:05.1397327Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/schema
+2026-11-09T17:16:05.1419042Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/origin
+2026-11-09T17:16:05.1430449Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-hash
+2026-11-09T17:16:05.1443940Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/after-hash
+2026-11-09T17:16:05.2071771Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-bytes
+2026-11-09T17:16:05.2084196Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/duplicate
+2026-11-09T17:16:05.2681169Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/unsettled
+2026-11-09T17:16:05.3293586Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/cohort
+2026-11-09T17:16:05.3900600Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/row-data
+2026-11-09T17:16:05.4513738Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/too-few
+2026-11-09T17:16:05.4527058Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/state
+2026-11-09T17:16:05.4540817Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/plan
+2026-11-09T17:16:05.4555218Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/time
+2026-11-09T17:16:05.4579886Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/step
+2026-11-09T17:16:05.4593069Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/mixed
+2026-11-09T17:16:05.4606682Z === RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/different-marker
+2026-11-09T17:16:05.4626528Z --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage (0.55s)
+2026-11-09T17:16:05.4627661Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/schema (0.00s)
+2026-11-09T17:16:05.4628785Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/origin (0.00s)
+2026-11-09T17:16:05.4629895Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-hash (0.00s)
+2026-11-09T17:16:05.4631018Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/after-hash (0.06s)
+2026-11-09T17:16:05.4632320Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-bytes (0.00s)
+2026-11-09T17:16:05.4633374Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/duplicate (0.06s)
+2026-11-09T17:16:05.4634438Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/unsettled (0.06s)
+2026-11-09T17:16:05.4635733Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/cohort (0.06s)
+2026-11-09T17:16:05.4636805Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/row-data (0.06s)
+2026-11-09T17:16:05.4638263Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/too-few (0.00s)
+2026-11-09T17:16:05.4639263Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/state (0.00s)
+2026-11-09T17:16:05.4640207Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/plan (0.00s)
+2026-11-09T17:16:05.4641115Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/time (0.00s)
+2026-11-09T17:16:05.4642294Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/step (0.00s)
+2026-11-09T17:16:05.4643312Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/mixed (0.00s)
+2026-11-09T17:16:05.4644513Z     --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/different-marker (0.00s)
+2026-11-09T17:16:05.4645724Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize
+2026-11-09T17:16:05.4786792Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/recursive
+2026-11-09T17:16:05.5195102Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/duplicate
+2026-11-09T17:16:05.5527038Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/unknown
+2026-11-09T17:16:05.6052217Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/noncanonical
+2026-11-09T17:16:05.6765404Z === RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/embedded-oversize
+2026-11-09T17:16:07.3070883Z --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize (1.84s)
+2026-11-09T17:16:07.3072254Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/recursive (0.04s)
+2026-11-09T17:16:07.3073800Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/duplicate (0.03s)
+2026-11-09T17:16:07.3074997Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/unknown (0.05s)
+2026-11-09T17:16:07.3076100Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/noncanonical (0.07s)
+2026-11-09T17:16:07.3077410Z     --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/embedded-oversize (1.63s)
+2026-11-09T17:16:07.3078491Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations
+2026-11-09T17:16:07.3082977Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/valid
+2026-11-09T17:16:07.4500306Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/no-owner
+2026-11-09T17:16:07.4749474Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-joined
+2026-11-09T17:16:07.5003006Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-admitted
+2026-11-09T17:16:07.5250247Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/changed-spec
+2026-11-09T17:16:07.5497356Z === RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/too-few
+2026-11-09T17:16:07.5741725Z --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations (0.27s)
+2026-11-09T17:16:07.5743165Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/valid (0.14s)
+2026-11-09T17:16:07.5744508Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/no-owner (0.02s)
+2026-11-09T17:16:07.5745846Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-joined (0.02s)
+2026-11-09T17:16:07.5747130Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-admitted (0.02s)
+2026-11-09T17:16:07.5748438Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/changed-spec (0.02s)
+2026-11-09T17:16:07.5749817Z     --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/too-few (0.02s)
+2026-11-09T17:16:07.5750826Z === RUN   TestMihomoTransitArchivePreservesOtherOriginalCohorts
+2026-11-09T17:16:07.8165635Z --- PASS: TestMihomoTransitArchivePreservesOtherOriginalCohorts (0.24s)
+2026-11-09T17:16:07.8169777Z === RUN   TestMihomoTransitArchiveUnusedRowsNeedOriginalSettlementProvenance
+2026-11-09T17:16:07.9524694Z --- PASS: TestMihomoTransitArchiveUnusedRowsNeedOriginalSettlementProvenance (0.14s)
+2026-11-09T17:16:07.9528660Z === RUN   TestMihomoTransitArchiveOriginalWriterRetiresOnlyAfterAllACKs
+2026-11-09T17:16:08.3499978Z --- PASS: TestMihomoTransitArchiveOriginalWriterRetiresOnlyAfterAllACKs (0.40s)
+2026-11-09T17:16:08.3504324Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks
+2026-11-09T17:16:08.3508799Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/archive
+2026-11-09T17:16:08.5382695Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/origin
+2026-11-09T17:16:08.7345381Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/cancel
+2026-11-09T17:16:08.9201889Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/copied
+2026-11-09T17:16:09.1022628Z === RUN   TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/closed-file
+2026-11-09T17:16:09.3082093Z --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks (0.96s)
+2026-11-09T17:16:09.3083590Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/archive (0.19s)
+2026-11-09T17:16:09.3085049Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/origin (0.20s)
+2026-11-09T17:16:09.3086063Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/cancel (0.19s)
+2026-11-09T17:16:09.3087230Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/copied (0.18s)
+2026-11-09T17:16:09.3088667Z     --- PASS: TestMihomoTransitArchiveForeignReplacementAndCanceledCloseRetainCallbacks/closed-file (0.21s)
+2026-11-09T17:16:09.3089688Z === RUN   TestMihomoTransitArchiveOriginalSlotPartialPublicationRetry
+2026-11-09T17:16:09.5725590Z --- PASS: TestMihomoTransitArchiveOriginalSlotPartialPublicationRetry (0.26s)
+2026-11-09T17:16:09.5741870Z === RUN   TestMihomoTransitArchiveNeverClearsUnrelatedScopeFailure
+2026-11-09T17:16:09.7819872Z --- PASS: TestMihomoTransitArchiveNeverClearsUnrelatedScopeFailure (0.21s)
+2026-11-09T17:16:09.7825245Z === RUN   TestMihomoTransitArchiveRecordedCloseFailureRemainsVisibleOnEveryRetry
+2026-11-09T17:16:09.9964739Z --- PASS: TestMihomoTransitArchiveRecordedCloseFailureRemainsVisibleOnEveryRetry (0.21s)
+2026-11-09T17:16:09.9972371Z === RUN   TestMihomoTransitArchiveRequiresReader8AndCannotBecomeLatest
+2026-11-09T17:16:10.5488932Z --- PASS: TestMihomoTransitArchiveRequiresReader8AndCannotBecomeLatest (0.55s)
+2026-11-09T17:16:10.5492044Z === RUN   TestMihomoHealthHandoffIsOriginalAndOneUse
+2026-11-09T17:16:10.5493374Z --- PASS: TestMihomoHealthHandoffIsOriginalAndOneUse (0.00s)
+2026-11-09T17:16:10.5497779Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime
+2026-11-09T17:16:10.5500812Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-marker
+2026-11-09T17:16:10.5505805Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-owner
+2026-11-09T17:16:10.5510148Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope
+2026-11-09T17:16:10.5514490Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope-lifetime
+2026-11-09T17:16:10.5518055Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/control
+2026-11-09T17:16:10.5522460Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-context
+2026-11-09T17:16:10.5525896Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/child
+2026-11-09T17:16:10.5529725Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/sidecar
+2026-11-09T17:16:10.5534084Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/closed
+2026-11-09T17:16:10.5537747Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/active
+2026-11-09T17:16:10.5541668Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/retired
+2026-11-09T17:16:10.5546249Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/deadline-expired
+2026-11-09T17:16:10.5550580Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-original
+2026-11-09T17:16:10.5554096Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-current
+2026-11-09T17:16:10.5562636Z === RUN   TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-resource
+2026-11-09T17:16:10.5566509Z --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime (0.01s)
+2026-11-09T17:16:10.5582681Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-marker (0.00s)
+2026-11-09T17:16:10.5584010Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-owner (0.00s)
+2026-11-09T17:16:10.5585211Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope (0.00s)
+2026-11-09T17:16:10.5586433Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/scope-lifetime (0.00s)
+2026-11-09T17:16:10.5588124Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/control (0.00s)
+2026-11-09T17:16:10.5589366Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/foreign-context (0.00s)
+2026-11-09T17:16:10.5590561Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/child (0.00s)
+2026-11-09T17:16:10.5591892Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/sidecar (0.00s)
+2026-11-09T17:16:10.5593135Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/closed (0.00s)
+2026-11-09T17:16:10.5594620Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/active (0.00s)
+2026-11-09T17:16:10.5595887Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/retired (0.00s)
+2026-11-09T17:16:10.5597208Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/deadline-expired (0.00s)
+2026-11-09T17:16:10.5598536Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-original (0.00s)
+2026-11-09T17:16:10.5599935Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/canceled-current (0.00s)
+2026-11-09T17:16:10.5601342Z     --- PASS: TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime/copied-resource (0.00s)
+2026-11-09T17:16:10.5602477Z === RUN   TestMihomoHealthHandoffRetainsCancellationCause
+2026-11-09T17:16:10.5603344Z --- PASS: TestMihomoHealthHandoffRetainsCancellationCause (0.00s)
+2026-11-09T17:16:10.5604400Z === RUN   TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime
+2026-11-09T17:16:10.5605508Z === RUN   TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/canceled
+2026-11-09T17:16:10.5606745Z === RUN   TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/expired
+2026-11-09T17:16:10.5607915Z --- PASS: TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime (0.00s)
+2026-11-09T17:16:10.5609329Z     --- PASS: TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/canceled (0.00s)
+2026-11-09T17:16:10.5610718Z     --- PASS: TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime/expired (0.00s)
+2026-11-09T17:16:10.5612038Z === RUN   TestMihomoHealthHandoffComparisonUsesEarlierIncomingDeadline
+2026-11-09T17:16:10.5613077Z --- PASS: TestMihomoHealthHandoffComparisonUsesEarlierIncomingDeadline (0.00s)
+2026-11-09T17:16:10.5614168Z === RUN   TestMihomoHealthHandoffComparisonJoinsOriginalCancellation
+2026-11-09T17:16:10.5615166Z --- PASS: TestMihomoHealthHandoffComparisonJoinsOriginalCancellation (0.00s)
+2026-11-09T17:16:10.5616245Z === RUN   TestMihomoHealthHandoffDNSRequiresExactEntireAnswerSet
+2026-11-09T17:16:10.5617203Z --- PASS: TestMihomoHealthHandoffDNSRequiresExactEntireAnswerSet (0.00s)
+2026-11-09T17:16:10.5618172Z === RUN   TestMihomoRetainedCheckDefersRepeatedRotation
+2026-11-09T17:16:10.5797461Z --- PASS: TestMihomoRetainedCheckDefersRepeatedRotation (0.02s)
+2026-11-09T17:16:10.5801805Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody
+2026-11-09T17:16:10.5806699Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/missing
+2026-11-09T17:16:10.5975852Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/copied
+2026-11-09T17:16:10.6138940Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/foreign
+2026-11-09T17:16:10.6291817Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/closed
+2026-11-09T17:16:10.6491597Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/failed
+2026-11-09T17:16:10.6702482Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/stopping
+2026-11-09T17:16:10.6919499Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/publishing
+2026-11-09T17:16:10.7087644Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/cleanup
+2026-11-09T17:16:10.7241997Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/header
+2026-11-09T17:16:10.7404096Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/unknown-state
+2026-11-09T17:16:10.7525775Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/pending
+2026-11-09T17:16:10.7672718Z === RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/canceled
+2026-11-09T17:16:10.7865617Z --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody (0.21s)
+2026-11-09T17:16:10.7866317Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/missing (0.02s)
+2026-11-09T17:16:10.7866956Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/copied (0.02s)
+2026-11-09T17:16:10.7867764Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/foreign (0.01s)
+2026-11-09T17:16:10.7868373Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/closed (0.02s)
+2026-11-09T17:16:10.7869243Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/failed (0.02s)
+2026-11-09T17:16:10.7869866Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/stopping (0.02s)
+2026-11-09T17:16:10.7870660Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/publishing (0.02s)
+2026-11-09T17:16:10.7871454Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/cleanup (0.01s)
+2026-11-09T17:16:10.7872071Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/header (0.02s)
+2026-11-09T17:16:10.7872705Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/unknown-state (0.01s)
+2026-11-09T17:16:10.7873334Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/pending (0.01s)
+2026-11-09T17:16:10.7873941Z     --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/canceled (0.02s)
+2026-11-09T17:16:10.7874738Z === RUN   TestMihomoRetainedCheckFullCohortStillRequiresReaderAdmission
+2026-11-09T17:16:10.9646944Z --- PASS: TestMihomoRetainedCheckFullCohortStillRequiresReaderAdmission (0.18s)
+2026-11-09T17:16:10.9669041Z === RUN   TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease
+2026-11-09T17:16:24.5565441Z     mihomo_live_observe_linux_test.go:200: actual official held-FD child/full kernel listener association across Apply release; durable Stop revokes observation, fresh same-owner cleanup joins; no TUN/service/route proof
+2026-11-09T17:16:24.5654262Z --- PASS: TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease (13.60s)
+2026-11-09T17:16:24.8929777Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt
+2026-11-09T17:16:24.8932168Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/guard
+2026-11-09T17:16:24.8941512Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/presence
+2026-11-09T17:16:24.8949353Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/preflight
+2026-11-09T17:16:24.8956823Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/delete
+2026-11-09T17:16:24.8963851Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/runner
+2026-11-09T17:16:24.8970535Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/tool
+2026-11-09T17:16:24.8977435Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/plan
+2026-11-09T17:16:24.8985444Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/root
+2026-11-09T17:16:24.8992448Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-origin
+2026-11-09T17:16:24.8998764Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-owner
+2026-11-09T17:16:24.9010896Z === RUN   TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-lease
+2026-11-09T17:16:24.9027691Z --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt (0.01s)
+2026-11-09T17:16:24.9029202Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/guard (0.00s)
+2026-11-09T17:16:24.9029997Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/presence (0.00s)
+2026-11-09T17:16:24.9030757Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/preflight (0.00s)
+2026-11-09T17:16:24.9031835Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/delete (0.00s)
+2026-11-09T17:16:24.9037831Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/runner (0.00s)
+2026-11-09T17:16:24.9038587Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/tool (0.00s)
+2026-11-09T17:16:24.9039519Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/plan (0.00s)
+2026-11-09T17:16:24.9040549Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/root (0.00s)
+2026-11-09T17:16:24.9042027Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-origin (0.00s)
+2026-11-09T17:16:24.9043598Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-owner (0.00s)
+2026-11-09T17:16:24.9044891Z     --- PASS: TestNodeTransitPolicyRuntimeMixedSessionCreatesNoLockOrReceipt/copied-lease (0.00s)
+2026-11-09T17:16:24.9045902Z === RUN   TestNodeTransitPolicyRuntimeSessionKeepsClosingFailureUnknown
+2026-11-09T17:16:24.9086226Z --- PASS: TestNodeTransitPolicyRuntimeSessionKeepsClosingFailureUnknown (0.01s)
+2026-11-09T17:16:24.9088521Z === RUN   TestNodeTransitPolicyRuntimeSessionCancellationAfterPresenceRefusesBeforeStart
+2026-11-09T17:16:24.9103307Z --- PASS: TestNodeTransitPolicyRuntimeSessionCancellationAfterPresenceRefusesBeforeStart (0.00s)
+2026-11-09T17:16:24.9105536Z === RUN   TestNodeTransitPolicyRuntimeSessionOnlyRemovesTwoAdjacentChecks
+2026-11-09T17:16:24.9219037Z --- PASS: TestNodeTransitPolicyRuntimeSessionOnlyRemovesTwoAdjacentChecks (0.01s)
+2026-11-09T17:16:24.9221939Z === RUN   TestNodeTransitPolicyRuntimeConstructorSealsOriginalRoles
+2026-11-09T17:16:24.9227960Z --- PASS: TestNodeTransitPolicyRuntimeConstructorSealsOriginalRoles (0.00s)
+2026-11-09T17:16:24.9230696Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks
+2026-11-09T17:16:24.9233580Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/guard
+2026-11-09T17:16:24.9240347Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/presence
+2026-11-09T17:16:24.9247425Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/preflight
+2026-11-09T17:16:24.9254347Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/delete
+2026-11-09T17:16:24.9261039Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/runner
+2026-11-09T17:16:24.9267578Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/tool
+2026-11-09T17:16:24.9274407Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/extra-tool
+2026-11-09T17:16:24.9280881Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/root
+2026-11-09T17:16:24.9287513Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/plan
+2026-11-09T17:16:24.9295844Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/origin-copy
+2026-11-09T17:16:24.9302621Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/lease-copy
+2026-11-09T17:16:24.9310098Z === RUN   TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/owner-copy
+2026-11-09T17:16:24.9315669Z --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks (0.01s)
+2026-11-09T17:16:24.9317030Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/guard (0.00s)
+2026-11-09T17:16:24.9318387Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/presence (0.00s)
+2026-11-09T17:16:24.9319789Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/preflight (0.00s)
+2026-11-09T17:16:24.9321144Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/delete (0.00s)
+2026-11-09T17:16:24.9322677Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/runner (0.00s)
+2026-11-09T17:16:24.9324263Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/tool (0.00s)
+2026-11-09T17:16:24.9325997Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/extra-tool (0.00s)
+2026-11-09T17:16:24.9327316Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/root (0.00s)
+2026-11-09T17:16:24.9328623Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/plan (0.00s)
+2026-11-09T17:16:24.9329946Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/origin-copy (0.00s)
+2026-11-09T17:16:24.9331709Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/lease-copy (0.00s)
+2026-11-09T17:16:24.9333105Z     --- PASS: TestNodeTransitPolicyRuntimeRejectsMixedAndChangedInputsBeforeCallbacks/owner-copy (0.00s)
+2026-11-09T17:16:24.9334214Z === RUN   TestNodeTransitPolicyRuntimeBindingCannotBeReplacedByPublicCallbacks
+2026-11-09T17:16:24.9335274Z --- PASS: TestNodeTransitPolicyRuntimeBindingCannotBeReplacedByPublicCallbacks (0.00s)
+2026-11-09T17:16:24.9336353Z === RUN   TestNodeTransitPolicyRuntimeRunnerComparisonRefusesNonComparableAndNil
+2026-11-09T17:16:24.9337412Z --- PASS: TestNodeTransitPolicyRuntimeRunnerComparisonRefusesNonComparableAndNil (0.00s)
+2026-11-09T17:16:24.9338437Z === RUN   TestNodeTransitPolicyRuntimeBindingKeepsFreshContextAndPlanChecks
+2026-11-09T17:16:24.9341543Z --- PASS: TestNodeTransitPolicyRuntimeBindingKeepsFreshContextAndPlanChecks (0.00s)
+2026-11-09T17:16:24.9451867Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries
+2026-11-09T17:16:24.9453686Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/default
+2026-11-09T17:16:24.9461803Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/original-shared
+2026-11-09T17:16:24.9468754Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/default
+2026-11-09T17:16:24.9475231Z === RUN   TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/original-shared
+2026-11-09T17:16:24.9479964Z --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries (0.00s)
+2026-11-09T17:16:24.9480794Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/default (0.00s)
+2026-11-09T17:16:24.9482084Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/applied-presence/original-shared (0.00s)
+2026-11-09T17:16:24.9483098Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/default (0.00s)
+2026-11-09T17:16:24.9484280Z     --- PASS: TestNodeTransitSharedOwnerKeepsAppliedPresenceAndDeleteBoundaries/before-delete/original-shared (0.00s)
+2026-11-09T17:16:24.9484950Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse
+2026-11-09T17:16:24.9485712Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/closing-failure
+2026-11-09T17:16:24.9492015Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-owner
+2026-11-09T17:16:24.9503763Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-lease
+2026-11-09T17:16:24.9516866Z === RUN   TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/foreign-presence
+2026-11-09T17:16:24.9520879Z --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse (0.00s)
+2026-11-09T17:16:24.9522157Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/closing-failure (0.00s)
+2026-11-09T17:16:24.9523308Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-owner (0.00s)
+2026-11-09T17:16:24.9524392Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/copied-lease (0.00s)
+2026-11-09T17:16:24.9525415Z     --- PASS: TestNodeTransitSharedOwnerAppliedClosingAndCopyRefuse/foreign-presence (0.00s)
+2026-11-09T17:16:24.9526006Z === RUN   TestNodeTransitSharedOwnerEffectDiagnosticsRetainCause
+2026-11-09T17:16:24.9528204Z --- PASS: TestNodeTransitSharedOwnerEffectDiagnosticsRetainCause (0.00s)
+2026-11-09T17:16:24.9530060Z === RUN   TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads
+2026-11-09T17:16:24.9533076Z === RUN   TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/independent-default
+2026-11-09T17:16:24.9540530Z === RUN   TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/explicit-same-owner
+2026-11-09T17:16:24.9546210Z --- PASS: TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads (0.00s)
+2026-11-09T17:16:24.9547177Z     --- PASS: TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/independent-default (0.00s)
+2026-11-09T17:16:24.9548331Z     --- PASS: TestNodeTransitSharedOwnerKeepsFullGuardAroundBothFamilyReads/explicit-same-owner (0.00s)
+2026-11-09T17:16:24.9549395Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors
+2026-11-09T17:16:24.9550633Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/closing-owner
+2026-11-09T17:16:24.9558858Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/read
+2026-11-09T17:16:24.9567404Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/canceled
+2026-11-09T17:16:24.9574299Z === RUN   TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/foreign-presence
+2026-11-09T17:16:24.9579734Z --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors (0.00s)
+2026-11-09T17:16:24.9580795Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/closing-owner (0.00s)
+2026-11-09T17:16:24.9582125Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/read (0.00s)
+2026-11-09T17:16:24.9583372Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/canceled (0.00s)
+2026-11-09T17:16:24.9584695Z     --- PASS: TestNodeTransitSharedOwnerClosingGuardAndReadFailuresRemainErrors/foreign-presence (0.00s)
+2026-11-09T17:16:24.9585736Z === RUN   TestNodeTransitSharedOwnerIsOriginalOneUseAndCannotMixCallbacks
+2026-11-09T17:16:24.9588494Z --- PASS: TestNodeTransitSharedOwnerIsOriginalOneUseAndCannotMixCallbacks (0.00s)
+2026-11-09T17:16:25.3611759Z PASS
+2026-11-09T17:16:26.3819525Z actual_original_observation_package=restorejournal mode=normal fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-09T17:16:26.3940679Z === RUN   TestArtifactExpectedReadComparisonActualFDsAndRevocation
+2026-11-09T17:16:26.4088021Z --- PASS: TestArtifactExpectedReadComparisonActualFDsAndRevocation (0.01s)
+2026-11-09T17:16:26.4088927Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders
+2026-11-09T17:16:26.4089762Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/error
+2026-11-09T17:16:26.4240827Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/panic
+2026-11-09T17:16:26.4370950Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/cancel
+2026-11-09T17:16:26.4502361Z --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders (0.04s)
+2026-11-09T17:16:26.4503638Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/error (0.02s)
+2026-11-09T17:16:26.4504663Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/panic (0.01s)
+2026-11-09T17:16:26.4505727Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/cancel (0.01s)
+2026-11-09T17:16:26.4506657Z === RUN   TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses
+2026-11-09T17:16:26.4507571Z === RUN   TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/managed
+2026-11-09T17:16:26.4638991Z === RUN   TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/pool
+2026-11-09T17:16:26.4776765Z --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses (0.03s)
+2026-11-09T17:16:26.4778048Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/managed (0.01s)
+2026-11-09T17:16:26.4779173Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/pool (0.01s)
+2026-11-09T17:16:26.4780512Z === RUN   TestArtifactExpectedReadComparisonFreshReopenRejectsEqualByteReplacement
+2026-11-09T17:16:26.4917472Z --- PASS: TestArtifactExpectedReadComparisonFreshReopenRejectsEqualByteReplacement (0.01s)
+2026-11-09T17:16:26.4918676Z === RUN   TestArtifactExpectedReadComparisonExpectedImageNeverSubstitutesForManagedBytes
+2026-11-09T17:16:26.5051888Z --- PASS: TestArtifactExpectedReadComparisonExpectedImageNeverSubstitutesForManagedBytes (0.01s)
+2026-11-09T17:16:26.5052766Z === RUN   TestArtifactExpectedReadComparisonWorkerGoexitJoinsOtherReader
+2026-11-09T17:16:26.5183298Z --- PASS: TestArtifactExpectedReadComparisonWorkerGoexitJoinsOtherReader (0.01s)
+2026-11-09T17:16:26.5183946Z === RUN   TestArtifactExpectedReadComparisonPairedWall
+2026-11-09T17:16:27.1730123Z     artifact_expected_read_timing_linux_test.go:67: paired_artifact_environment bytes_each=67108844 complete_files_per_call=2 samples_each=12 GOMAXPROCS=2 cpu_count=4 reference=sequential_current_comparison optimized=parallel_expected_comparison claim=owned_file_library_only
+2026-11-09T17:16:27.1732433Z     artifact_expected_read_timing_linux_test.go:68: paired_artifact_csv,sample,algorithm,order,elapsed_ms
+2026-11-09T17:16:27.2803046Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,sequential,1,107.342
+2026-11-09T17:16:27.3422326Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,parallel,2,61.883
+2026-11-09T17:16:27.3967861Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,parallel,1,54.506
+2026-11-09T17:16:27.5052113Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,sequential,2,108.377
+2026-11-09T17:16:27.6145704Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,sequential,1,109.352
+2026-11-09T17:16:27.6685852Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,parallel,2,54.059
+2026-11-09T17:16:27.7271407Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,parallel,1,58.518
+2026-11-09T17:16:27.8338882Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,sequential,2,106.744
+2026-11-09T17:16:27.9416831Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,sequential,1,107.659
+2026-11-09T17:16:27.9958343Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,parallel,2,54.030
+2026-11-09T17:16:28.0498918Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,parallel,1,54.155
+2026-11-09T17:16:28.1576817Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,sequential,2,107.759
+2026-11-09T17:16:28.2656560Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,sequential,1,107.879
+2026-11-09T17:16:28.3226575Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,parallel,2,57.079
+2026-11-09T17:16:28.3844043Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,parallel,1,61.642
+2026-11-09T17:16:28.4924318Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,sequential,2,107.992
+2026-11-09T17:16:28.6002457Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,sequential,1,107.813
+2026-11-09T17:16:28.6636542Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,parallel,2,63.352
+2026-11-09T17:16:28.7217807Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,parallel,1,58.130
+2026-11-09T17:16:28.8291642Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,sequential,2,107.283
+2026-11-09T17:16:28.9373004Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,sequential,1,108.136
+2026-11-09T17:16:28.9946729Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,parallel,2,57.362
+2026-11-09T17:16:29.0531152Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,parallel,1,58.400
+2026-11-09T17:16:29.1609181Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,sequential,2,107.739
+2026-11-09T17:16:29.1610166Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=sequential N=12 quantile=nearest_rank p50_ms=107.759 p95_ms=109.352
+2026-11-09T17:16:29.1611200Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=parallel N=12 quantile=nearest_rank p50_ms=57.362 p95_ms=63.352
+2026-11-09T17:16:29.1672024Z --- PASS: TestArtifactExpectedReadComparisonPairedWall (2.65s)
+2026-11-09T17:16:29.1672797Z === RUN   TestArtifactComparisonActualSameFileAndRevokedScopes
+2026-11-09T17:16:29.1841740Z --- PASS: TestArtifactComparisonActualSameFileAndRevokedScopes (0.02s)
+2026-11-09T17:16:29.1842442Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles
+2026-11-09T17:16:29.1843128Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/different-inode
+2026-11-09T17:16:29.1988903Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/replaced-held-fd
+2026-11-09T17:16:29.2137516Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/pool-replaced
+2026-11-09T17:16:29.2293505Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/managed-replaced
+2026-11-09T17:16:29.2459841Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/hardlink-alias
+2026-11-09T17:16:29.2609610Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/restored-mode-ctime
+2026-11-09T17:16:29.2765094Z --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles (0.09s)
+2026-11-09T17:16:29.2766364Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/different-inode (0.01s)
+2026-11-09T17:16:29.2767645Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/replaced-held-fd (0.01s)
+2026-11-09T17:16:29.2768872Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/pool-replaced (0.02s)
+2026-11-09T17:16:29.2769998Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/managed-replaced (0.02s)
+2026-11-09T17:16:29.2771403Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/hardlink-alias (0.01s)
+2026-11-09T17:16:29.2772634Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/restored-mode-ctime (0.02s)
+2026-11-09T17:16:29.2773581Z === RUN   TestArtifactComparisonUnissuedCannotRead
+2026-11-09T17:16:29.2774272Z --- PASS: TestArtifactComparisonUnissuedCannotRead (0.00s)
+2026-11-09T17:16:29.2780610Z PASS
+2026-11-09T17:16:29.2853514Z actual_original_observation_package=restorejournal mode=race fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-09T17:16:29.3056222Z === RUN   TestArtifactExpectedReadComparisonActualFDsAndRevocation
+2026-11-09T17:16:29.3284857Z --- PASS: TestArtifactExpectedReadComparisonActualFDsAndRevocation (0.02s)
+2026-11-09T17:16:29.3287433Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders
+2026-11-09T17:16:29.3289873Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/error
+2026-11-09T17:16:29.3517862Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/panic
+2026-11-09T17:16:29.3733124Z === RUN   TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/cancel
+2026-11-09T17:16:29.3942082Z --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders (0.07s)
+2026-11-09T17:16:29.3942834Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/error (0.02s)
+2026-11-09T17:16:29.3943681Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/panic (0.02s)
+2026-11-09T17:16:29.3944395Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/cancel (0.02s)
+2026-11-09T17:16:29.3945271Z === RUN   TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses
+2026-11-09T17:16:29.3946089Z === RUN   TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/managed
+2026-11-09T17:16:29.4160119Z === RUN   TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/pool
+2026-11-09T17:16:29.4357997Z --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses (0.04s)
+2026-11-09T17:16:29.4358900Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/managed (0.02s)
+2026-11-09T17:16:29.4360053Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/pool (0.02s)
+2026-11-09T17:16:29.4360756Z === RUN   TestArtifactExpectedReadComparisonFreshReopenRejectsEqualByteReplacement
+2026-11-09T17:16:29.4612569Z --- PASS: TestArtifactExpectedReadComparisonFreshReopenRejectsEqualByteReplacement (0.03s)
+2026-11-09T17:16:29.4614522Z === RUN   TestArtifactExpectedReadComparisonExpectedImageNeverSubstitutesForManagedBytes
+2026-11-09T17:16:29.4820251Z --- PASS: TestArtifactExpectedReadComparisonExpectedImageNeverSubstitutesForManagedBytes (0.02s)
+2026-11-09T17:16:29.4821786Z === RUN   TestArtifactExpectedReadComparisonWorkerGoexitJoinsOtherReader
+2026-11-09T17:16:29.5039247Z --- PASS: TestArtifactExpectedReadComparisonWorkerGoexitJoinsOtherReader (0.02s)
+2026-11-09T17:16:29.5040192Z === RUN   TestArtifactExpectedReadComparisonPairedWall
+2026-11-09T17:16:30.5294972Z     artifact_expected_read_timing_linux_test.go:67: paired_artifact_environment bytes_each=67108844 complete_files_per_call=2 samples_each=12 GOMAXPROCS=2 cpu_count=4 reference=sequential_current_comparison optimized=parallel_expected_comparison claim=owned_file_library_only
+2026-11-09T17:16:30.5297117Z     artifact_expected_read_timing_linux_test.go:68: paired_artifact_csv,sample,algorithm,order,elapsed_ms
+2026-11-09T17:16:30.6800153Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,sequential,1,150.639
+2026-11-09T17:16:30.7552702Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,parallel,2,75.162
+2026-11-09T17:16:30.8309609Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,parallel,1,75.647
+2026-11-09T17:16:30.9701057Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,sequential,2,139.046
+2026-11-09T17:16:31.1085135Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,sequential,1,138.362
+2026-11-09T17:16:31.1787459Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,parallel,2,70.182
+2026-11-09T17:16:31.2604263Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,parallel,1,81.607
+2026-11-09T17:16:31.4150512Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,sequential,2,154.553
+2026-11-09T17:16:31.5543189Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,sequential,1,139.198
+2026-11-09T17:16:31.6252665Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,parallel,2,70.896
+2026-11-09T17:16:31.6963934Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,parallel,1,71.052
+2026-11-09T17:16:31.8355264Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,sequential,2,139.086
+2026-11-09T17:16:31.9747186Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,sequential,1,139.161
+2026-11-09T17:16:32.0448033Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,parallel,2,70.016
+2026-11-09T17:16:32.1251151Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,parallel,1,80.242
+2026-11-09T17:16:32.2639889Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,sequential,2,138.800
+2026-11-09T17:16:32.4025946Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,sequential,1,138.529
+2026-11-09T17:16:32.4762787Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,parallel,2,73.609
+2026-11-09T17:16:32.5468751Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,parallel,1,70.563
+2026-11-09T17:16:32.6865099Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,sequential,2,139.568
+2026-11-09T17:16:32.8270526Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,sequential,1,140.466
+2026-11-09T17:16:32.8974238Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,parallel,2,70.375
+2026-11-09T17:16:32.9737763Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,parallel,1,76.290
+2026-11-09T17:16:33.1128697Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,sequential,2,138.993
+2026-11-09T17:16:33.1130045Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=sequential N=12 quantile=nearest_rank p50_ms=139.086 p95_ms=154.553
+2026-11-09T17:16:33.1132005Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=parallel N=12 quantile=nearest_rank p50_ms=71.052 p95_ms=81.607
+2026-11-09T17:16:33.1200340Z --- PASS: TestArtifactExpectedReadComparisonPairedWall (3.62s)
+2026-11-09T17:16:33.1201498Z === RUN   TestArtifactComparisonActualSameFileAndRevokedScopes
+2026-11-09T17:16:33.1467612Z --- PASS: TestArtifactComparisonActualSameFileAndRevokedScopes (0.03s)
+2026-11-09T17:16:33.1468299Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles
+2026-11-09T17:16:33.1468868Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/different-inode
+2026-11-09T17:16:33.1744093Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/replaced-held-fd
+2026-11-09T17:16:33.2008543Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/pool-replaced
+2026-11-09T17:16:33.2298552Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/managed-replaced
+2026-11-09T17:16:33.2583351Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/hardlink-alias
+2026-11-09T17:16:33.2848480Z === RUN   TestArtifactComparisonRejectsActualForeignAndChangedFiles/restored-mode-ctime
+2026-11-09T17:16:33.3119770Z --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles (0.17s)
+2026-11-09T17:16:33.3121112Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/different-inode (0.03s)
+2026-11-09T17:16:33.3122416Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/replaced-held-fd (0.03s)
+2026-11-09T17:16:33.3123346Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/pool-replaced (0.03s)
+2026-11-09T17:16:33.3124094Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/managed-replaced (0.03s)
+2026-11-09T17:16:33.3124829Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/hardlink-alias (0.03s)
+2026-11-09T17:16:33.3125579Z     --- PASS: TestArtifactComparisonRejectsActualForeignAndChangedFiles/restored-mode-ctime (0.03s)
+2026-11-09T17:16:33.3126240Z === RUN   TestArtifactComparisonUnissuedCannotRead
+2026-11-09T17:16:33.3126668Z --- PASS: TestArtifactComparisonUnissuedCannotRead (0.00s)
+2026-11-09T17:16:33.3199053Z PASS
+2026-11-09T17:16:34.3703420Z Post job cleanup.
+2026-11-09T17:16:34.4607776Z [command]/usr/bin/git version
+2026-11-09T17:16:34.4647184Z git version 2.56.0
+2026-11-09T17:16:34.4683424Z Temporarily overriding HOME='/home/runner/work/_temp/de0a33b2-58fa-486d-9ad2-ac408dc65876' before making global git config changes
+2026-11-09T17:16:34.4684750Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T17:16:34.4688373Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc
+2026-11-09T17:16:34.4725715Z Removing SSH command configuration
+2026-11-09T17:16:34.4733406Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T17:16:34.4769292Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T17:16:34.4987511Z Removing HTTP extra header
+2026-11-09T17:16:34.4993486Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T17:16:34.5027460Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T17:16:34.5263279Z Removing includeIf entries pointing to credentials config files
+2026-11-09T17:16:34.5271382Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T17:16:34.5310361Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T17:16:34.5721986Z Post job cleanup.
+2026-11-09T17:16:34.7153588Z Post job cleanup.
+2026-11-09T17:16:34.8276499Z [command]/usr/bin/git version
+2026-11-09T17:16:34.8318775Z git version 2.56.0
+2026-11-09T17:16:34.8356394Z Temporarily overriding HOME='/home/runner/work/_temp/98b13e01-dbe2-495f-974a-dffbc4bce5b6' before making global git config changes
+2026-11-09T17:16:34.8357818Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T17:16:34.8359899Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T17:16:34.8399468Z Removing SSH command configuration
+2026-11-09T17:16:34.8422510Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T17:16:34.8517456Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T17:16:34.8783735Z Removing HTTP extra header
+2026-11-09T17:16:34.8790057Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T17:16:34.8862589Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T17:16:34.9143408Z Removing includeIf entries pointing to credentials config files
+2026-11-09T17:16:34.9144576Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T17:16:34.9204356Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T17:16:34.9769810Z Cleaning up orphan processes
+2026-11-09T17:16:35.0237448Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

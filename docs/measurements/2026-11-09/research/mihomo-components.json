@@ -1,0 +1,83 @@
+{
+  "scope": "Windows loopback Mihomo VLESS TCP: API delay vs HTTP status204; no TLS, RAZVILKA selection, LAN or router claim",
+  "rows": [
+    {
+      "scenario": "healthy",
+      "sample": 0,
+      "api_status": 200,
+      "delay_ms": 1,
+      "global_alive": true,
+      "url_alive": true,
+      "strict_http_status": 204,
+      "strict_pass": true,
+      "wall_ms": 18.576
+    },
+    {
+      "scenario": "healthy",
+      "sample": 1,
+      "api_status": 200,
+      "delay_ms": 1,
+      "global_alive": true,
+      "url_alive": true,
+      "strict_http_status": 204,
+      "strict_pass": true,
+      "wall_ms": 13.087
+    },
+    {
+      "scenario": "healthy",
+      "sample": 2,
+      "api_status": 200,
+      "delay_ms": 1,
+      "global_alive": true,
+      "url_alive": true,
+      "strict_http_status": 204,
+      "strict_pass": true,
+      "wall_ms": 2.744
+    },
+    {
+      "scenario": "unavailable",
+      "sample": 0,
+      "api_status": 200,
+      "delay_ms": 1,
+      "global_alive": true,
+      "url_alive": false,
+      "strict_http_status": 503,
+      "strict_pass": false,
+      "wall_ms": 28.571
+    },
+    {
+      "scenario": "unavailable",
+      "sample": 1,
+      "api_status": 200,
+      "delay_ms": 1,
+      "global_alive": true,
+      "url_alive": false,
+      "strict_http_status": 503,
+      "strict_pass": false,
+      "wall_ms": 2.628
+    },
+    {
+      "scenario": "unavailable",
+      "sample": 2,
+      "api_status": 200,
+      "delay_ms": 1,
+      "global_alive": true,
+      "url_alive": false,
+      "strict_http_status": 503,
+      "strict_pass": false,
+      "wall_ms": 13.73
+    }
+  ],
+  "finished": true,
+  "failure_code": "",
+  "owned_processes_reaped": 2,
+  "listeners_closed": true,
+  "binary_sha256": {
+    "mihomo": "fc84c99e9ada27f29f7b447eab4562e2bdc58bd9acc65b2229187b57e825b0c2",
+    "xray": "27ea09dc340c888025661ce87eea5767aad5ccb374d1e7f2b894171a6bfd79b7"
+  },
+  "mihomo_version": "Mihomo Meta 1.10.0 windows amd64 with go1.26.5 unknown time",
+  "source_commit": "3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8",
+  "controller_and_listener_ready_ms": 526.071,
+  "temporary_workspace_removed": true
+}

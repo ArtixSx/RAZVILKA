@@ -1,0 +1,55 @@
+{
+  "status": "source-approved-runtime-pending",
+  "head": "506153545ad88e73b64caffd23d4f7f73be6226d",
+  "scope": "Original external old193 offline bootstrap, excluded unchanged settled schema1 StrategyLab data",
+  "findings": [
+    "Proof issued only after original external preparation matches/current and real verified candidate metadata probe; exact original helper digest and state bytes retained",
+    "Ordinary StrategyPair and its bootstrap refusal unchanged; schema2 private snapshot excludes StrategyLab",
+    "Fresh state fences, exact bytes, retention absence, control/candidate/installed full hashes checked; forward unknown/finalizing/new schema remains refused",
+    "Explicit live, replace-to-rollback, direct private restore and rollback image denial; public paired offline restore continues preserving current StrategyLab and fences",
+    "Nil optional proof preserves old canonical binding; old strict decoder refuses new contract",
+    "Found and corrected restorePrivateSnapshot redeclaration while preserving fresh later header reload"
+  ],
+  "tests_reviewed": [
+    "Model exact bytes and absent-state default path, known readers5/7",
+    "Source/control/candidate/installed/schema/fence/cancellation/retention drift refusal",
+    "Snapshot2 exclusion and live/direct replay refusal",
+    "Missing original producer and old-reader fail-closed"
+  ],
+  "limitations": [
+    "No local Go build or test run; next focused/full/native CI required",
+    "Actual old HTTP-authored draft public bootstrap/Stop/restore is required for producer acceptance; model fixtures do not mint genuine original custody",
+    "No old binary live compatibility, manual selection or full nonempty history migration claim",
+    "No router or release readiness claim"
+  ],
+  "files": [
+    {
+      "path": "internal/updatecheck/bootstrap_strategy_state.go",
+      "sha256": "1ca2020f6a10e6b2e79340386a81f76e599d582229b78e9f5cc022f9da585d44"
+    },
+    {
+      "path": "internal/updatecheck/bootstrap_strategy_state_test.go",
+      "sha256": "e77f425f24c4f23d7275cd98364d4550eea5eda28eaa6461a0ebb78539d73c43"
+    },
+    {
+      "path": "internal/updatecheck/file_adapter.go",
+      "sha256": "c6fe28d2e3831e3a60b0dcc79d9aa1af89322b50f0e2916f7380e95482cee7fc"
+    },
+    {
+      "path": "internal/updatecheck/file_bootstrap_owner.go",
+      "sha256": "6170370654374de24a48ef8c9ccb2b9b6755266363d965e8b28c313fa986ac43"
+    },
+    {
+      "path": "internal/updatecheck/file_private.go",
+      "sha256": "9233c81a48eacb5f44fc9f6006a29c577107c2d53d387fadbd03d1af5cbc6a6b"
+    },
+    {
+      "path": "internal/updatecheck/strategy_rollback_retention.go",
+      "sha256": "523c616a29c1ae26784e60e5f42bcb223ded6f0e69a1c7340b1d66fbc75269ca"
+    },
+    {
+      "path": "internal/updatecheck/strategy_state_admission.go",
+      "sha256": "651df86dc35e05fc6237fd93de93d1f895ebc354ae61f6b4ff7ede201ee73eb5"
+    }
+  ]
+}

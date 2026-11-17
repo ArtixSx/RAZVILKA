@@ -1,0 +1,33 @@
+{
+  "status": "source_approved_pending_actual_public_old193_native_acceptance",
+  "reviewer": "/root/verification",
+  "failure_sha": "ea36873e28509ff59c626bceb7ded7827b7e23ab",
+  "files_sha256": {
+    "cmd/razvilka/self_update_files.go": "0da4a0e6ffb1fd57e64c48bdb787b2148b2fe336f05cec2647b33dc295d47570",
+    "internal/updatecheck/file_bootstrap_role_linux.go": "0bdf76ad8107ca41adc0c79af8672289b278e3332a4fb5a4ec3958e99af2d2ca",
+    "internal/updatecheck/file_commands_linux.go": "001dcd0feabeddb6bf2b9913e0300faba066dcdb6ddaf574e18136c571ced30c",
+    "internal/updatecheck/file_bootstrap_join.go": "b8e7cfb37941f390de9de548ff4e9ebe208c3e71b107e8757642e47dc56bae3d",
+    "internal/updatecheck/file_bootstrap_join_linux.go": "70a26efbdbed8f458208e8b1d828dfbbaaacd822e48c739948cd72dff2dc00b5",
+    "internal/updatecheck/file_bootstrap_join_other.go": "a8994c1c74ac38865fe68b411c5ebe199b1ff5dfdd19f5812a033d63fdf76dc0",
+    "internal/updatecheck/file_bootstrap_join_test.go": "14d3d6cce6dcf6d9b1d64b61a7a903af375a3f17dc2dbdf2032b40f09d4612b3",
+    "internal/updatecheck/file_bootstrap_join_linux_test.go": "540dcca7d93aff0eb06ea50505df0d31cef5224533b32dab7596123b60d4afb9"
+  },
+  "finding": "Worker observes direct child exit0 and ECHILD before final runtimeInactive, while durable command remains running. Bootstrap reader previously required that already-reaped DirectPID to remain live.",
+  "contract": [
+    "Private original worker witness issued only at actual exit0/ECHILD boundary; exact launched running command and positive actual reaped count.",
+    "Distinct bootstrap key, self identity, original adapter, supervisor caller, finite deadline, cancellation, revocation and mixed-marker refusal.",
+    "Original adapter lookup has closed production roots and existing custom-hook exclusions; missing witness grants nothing, present-invalid cannot fall back.",
+    "Live bootstrap path keeps all actual child checks. Joined path skips only live direct-child read and separately requires fresh actual PID absence opening and closing.",
+    "Fresh helper/caller/supervisor/peer identities, full executable bytes, old-panel absence, control, review/header and command/receipt bookends retained.",
+    "Witness revoked by deferred release even on panic; ordinary adapter path unchanged."
+  ],
+  "tests": [
+    "Portable witness ownership/copy/changed receipt/caller/cancellation/deadline/revocation/mixed-marker negatives.",
+    "Linux live own PID rejection, actual /bin/true Run/Wait then absence, cancellation; foreign adapter root rejection."
+  ],
+  "limitations": [
+    "Tests model private capability boundaries; they do not fabricate successful production custody.",
+    "Actual empty/draft public bootstrap/restore must pass on new commit; no software/hardware readiness inferred from source approval.",
+    "No local Go build or tests; author gofmt and diff-check only."
+  ]
+}

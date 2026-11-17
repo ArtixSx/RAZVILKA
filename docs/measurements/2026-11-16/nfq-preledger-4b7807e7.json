@@ -1,0 +1,62 @@
+{
+  "run_id": "43939877489",
+  "sha": "4b7807e73254d01b5dedf47b15a0a6300084c318",
+  "scope": "original-pre-ledger-recovery-only",
+  "observations": [
+    {
+      "mode": "production",
+      "conclusion": "success",
+      "test_seconds": 26.43,
+      "full_apply_proven": false,
+      "scope_completed": 8,
+      "scope_errors": 0,
+      "contracts_passes": 34,
+      "raw_sha256": "B785D831D32634F26BAE8F4886D8533041655006416084D578E3F19108601ED9",
+      "contracts_sha256": "629EFD5D789270DB5D7FAFA2E666D5C54BB9BD59FC1D2302DA34E092A440A1ED"
+    },
+    {
+      "mode": "race",
+      "conclusion": "success",
+      "test_seconds": 72.08,
+      "full_apply_proven": false,
+      "scope_completed": 8,
+      "scope_errors": 0,
+      "contracts_passes": 34,
+      "raw_sha256": "08CAEF6CB3982BBDBE9EC45FCDD46DEB99767EA7F0EA1950C6E2EF81D4782B8B",
+      "contracts_sha256": "55221AFFD67C295765CB187FFFD8EECB9D3EF789F434B70498157736921D267E"
+    }
+  ],
+  "all_log_sha256": "4965B436E8038D41F6CDCB2807A115FF80C2DCACC1F579A1764F1F0D47E44D0F",
+  "schema": 1,
+  "result": "PASS",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43939877489",
+  "raw_artifact_root": "C:\\RAZVILKA-research-20261116\\managed-recovery-4b7807e7",
+  "raw_sha256_manifest": [
+    {
+      "path": "research-managed-production-4b7807e73254d01b5dedf47b15a0a6300084c318/preledger.log",
+      "bytes": 21215,
+      "sha256": "b785d831d32634f26bae8f4886d8533041655006416084d578e3f19108601ed9"
+    },
+    {
+      "path": "research-managed-production-4b7807e73254d01b5dedf47b15a0a6300084c318/preledger-contracts.log",
+      "bytes": 6106,
+      "sha256": "629efd5d789270db5d7fafa2e666d5c54bb9bd59fc1d2302da34e092a440a1ed"
+    },
+    {
+      "path": "research-managed-race-4b7807e73254d01b5dedf47b15a0a6300084c318/preledger.log",
+      "bytes": 20817,
+      "sha256": "08caef6cb3982bbdbe9ec45fcdd46deb99767ea7f0ea1950c6e2ef81d4782b8b"
+    },
+    {
+      "path": "research-managed-race-4b7807e73254d01b5dedf47b15a0a6300084c318/preledger-contracts.log",
+      "bytes": 6106,
+      "sha256": "55221affd67c295765cb187fffd8eecb9d3ef789f434b70498157736921d267e"
+    }
+  ],
+  "limits": [
+    "Dedicated recovery-only scenario; no positive full Apply claim.",
+    "Private Linux network with real processes, NFQUEUE, both-family rules and two LAN clients; not physical router acceptance.",
+    "Production and race duration are separate test outcomes, not a before/after speed comparison.",
+    "Other workflow directions excluded by focus were skipped, not accepted."
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "run_id": 42687051039,
+  "job_id": 129396561240,
+  "log_sha256": "1bc91e9612a2aece257cc122d32fe55f0b7bbc18e55f57b63494ef40377069fc",
+  "metrics": {
+    "attribution": {
+      "calls": 1782,
+      "seconds": 0.05073054900000001,
+      "raw_elapsed": "50.730549ms"
+    },
+    "held/accepted-guard": {
+      "calls": 96,
+      "seconds": 0.39548758900000003,
+      "raw_elapsed": "395.487589ms"
+    },
+    "held/accepted-lookup": {
+      "calls": 232,
+      "seconds": 1.062890371,
+      "raw_elapsed": "1.062890371s"
+    },
+    "held/accepted-other": {
+      "calls": 126,
+      "seconds": 0.603956628,
+      "raw_elapsed": "603.956628ms"
+    },
+    "held/capture-prepare": {
+      "calls": 321,
+      "seconds": 1.65200462,
+      "raw_elapsed": "1.65200462s"
+    },
+    "held/dns-publication": {
+      "calls": 174,
+      "seconds": 0.8225563419999999,
+      "raw_elapsed": "822.556342ms"
+    },
+    "held/other": {
+      "calls": 746,
+      "seconds": 6.611188893,
+      "raw_elapsed": "6.611188893s"
+    },
+    "held/standby-prepare": {
+      "calls": 87,
+      "seconds": 0.564142366,
+      "raw_elapsed": "564.142366ms"
+    },
+    "wait/accepted-guard/acquired": {
+      "calls": 96,
+      "seconds": 0.000115566,
+      "raw_elapsed": "115.566µs"
+    },
+    "wait/accepted-lookup/acquired": {
+      "calls": 232,
+      "seconds": 0.13152358,
+      "raw_elapsed": "131.52358ms"
+    },
+    "wait/accepted-other/acquired": {
+      "calls": 126,
+      "seconds": 0.000171951,
+      "raw_elapsed": "171.951µs"
+    },
+    "wait/capture-prepare/acquired": {
+      "calls": 321,
+      "seconds": 0.000384399,
+      "raw_elapsed": "384.399µs"
+    },
+    "wait/dns-publication/acquired": {
+      "calls": 174,
+      "seconds": 0.119529843,
+      "raw_elapsed": "119.529843ms"
+    },
+    "wait/other/acquired": {
+      "calls": 746,
+      "seconds": 0.0008502939999999999,
+      "raw_elapsed": "850.294µs"
+    },
+    "wait/standby-prepare/acquired": {
+      "calls": 87,
+      "seconds": 0.00013555099999999998,
+      "raw_elapsed": "135.551µs"
+    }
+  },
+  "total_completed_wait_seconds": 0.252711184,
+  "total_completed_held_seconds": 11.712226808999999,
+  "limitations": [
+    "Completed intervals only; in-flight intervals excluded.",
+    "Wait includes select scheduling; held includes work and release callback before token return.",
+    "Durations overlap domain stages; summed concurrent intervals are not scenario wall time.",
+    "Fixed stack-context labels can be other when bounded64-frame attribution does not reach a recognized caller.",
+    "Diagnostic timing does not establish scope, readiness, cleanup, or a causal optimization gain."
+  ]
+}

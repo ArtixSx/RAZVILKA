@@ -1,0 +1,137 @@
+{
+  "sha": "0f0439020d10e1bbb15a8310be360517bf45581f",
+  "status": "provisional: row parity passed, lock fixture failed; baseline observer delegation corrected in d7622348, rerun required",
+  "versions": "actual CI1.8.10; not actual1.8.11 norstock1.4.21",
+  "production": {
+    "samples": [
+      {
+        "sample": 0,
+        "serial_ms": 68.16,
+        "save_ms": 22.627,
+        "serial_metadata": 48,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 1,
+        "serial_ms": 63.462,
+        "save_ms": 22.322,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 2,
+        "serial_ms": 62.812,
+        "save_ms": 22.198,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 3,
+        "serial_ms": 63.295,
+        "save_ms": 21.562,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 4,
+        "serial_ms": 62.174,
+        "save_ms": 22.266,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 5,
+        "serial_ms": 63.325,
+        "save_ms": 22.015,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      }
+    ],
+    "steady_samples1to5_serial_median_ms": 63.295,
+    "steady_samples1to5_save_median_ms": 22.198
+  },
+  "race": {
+    "samples": [
+      {
+        "sample": 0,
+        "serial_ms": 85.105,
+        "save_ms": 30.385,
+        "serial_metadata": 48,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 1,
+        "serial_ms": 81.386,
+        "save_ms": 29.915,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 2,
+        "serial_ms": 84.205,
+        "save_ms": 29.768,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 3,
+        "serial_ms": 80.66,
+        "save_ms": 29.478,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 4,
+        "serial_ms": 81.293,
+        "save_ms": 29.876,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      {
+        "sample": 5,
+        "serial_ms": 81.874,
+        "save_ms": 30.215,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      }
+    ],
+    "steady_samples1to5_serial_median_ms": 81.386,
+    "steady_samples1to5_save_median_ms": 29.876
+  }
+}

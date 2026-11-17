@@ -1,0 +1,133 @@
+{
+  "sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "run_id": 42687050631,
+  "conclusion": "failure",
+  "actual_jobs": 14,
+  "success_jobs": 10,
+  "failed_jobs": 4,
+  "cases": [
+    {
+      "failure_labels": [],
+      "sha256": "c443f21d9d43e2443223a60cbad6ffb153bae86fc3952a0102cf2999514cc1d8",
+      "file": "sameboot-normal-completed.json.log",
+      "elapsed_s": 84.69,
+      "result": "PASS",
+      "original_ack_retry": true,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [],
+      "sha256": "ad92c97b733fa14d879403e1ac90d9968fcb899ccdcd5c193e59261322965037",
+      "file": "sameboot-normal-retirement.json.log",
+      "elapsed_s": 64.47,
+      "result": "PASS",
+      "original_ack_retry": true,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [],
+      "sha256": "61fc58a0eda594a0fadd984d6f67b6114daa37558be72deb004bafb2821d1881",
+      "file": "sameboot-normal-runtime-history.log",
+      "elapsed_s": 46.75,
+      "result": "PASS",
+      "original_ack_retry": true,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [],
+      "sha256": "a43d77a46232f9bc42b5bdef0f01f2b027c5c8b305d6d02d540e3cff95e88d2f",
+      "file": "sameboot-normal-terminal-global.log",
+      "elapsed_s": 87.79,
+      "result": "PASS",
+      "original_ack_retry": true,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [],
+      "sha256": "93a90deb0deb1451c0f7502732343798f916095452685e5c22e55de20b2c5e3d",
+      "file": "sameboot-normal-terminal-transaction.log",
+      "elapsed_s": 83.01,
+      "result": "PASS",
+      "original_ack_retry": true,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [],
+      "sha256": "876dfd1c855f214d2c8404b5b8362badf1f1684b201b01db6117f5d408255777",
+      "file": "sameboot-parent-normal.log",
+      "elapsed_s": 49.12,
+      "result": "PASS",
+      "original_ack_retry": false,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [],
+      "sha256": "7d80f7a172ed9daab45a0e0bdfbee837e7c86f754a3ea3a941154d40ebb25d7e",
+      "file": "sameboot-parent-race.log",
+      "elapsed_s": 110.87,
+      "result": "PASS",
+      "original_ack_retry": false,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [],
+      "sha256": "d8e83dd55137bb4979c48948abd288de3cb23b5540263eb8802bc7a556f80ecf",
+      "file": "sameboot-race-completed.json.log",
+      "elapsed_s": 120.01,
+      "result": "FAIL",
+      "original_ack_retry": true,
+      "final_stage": "absence-process-kernel"
+    },
+    {
+      "failure_labels": [],
+      "sha256": "06f6f6a04a7c37c949654d25cc974de4007d033152d593f979aaf13b22845d4a",
+      "file": "sameboot-race-retirement.json.log",
+      "elapsed_s": 111.01,
+      "result": "PASS",
+      "original_ack_retry": true,
+      "final_stage": ""
+    },
+    {
+      "failure_labels": [
+        "failure-process-inventory-proc.pid-shape",
+        "failure-process-provider",
+        "failure-processes"
+      ],
+      "sha256": "097569c58720267a40761ea70170e62f6c57af1f5554d5273f74c12d019671b7",
+      "file": "sameboot-race-runtime-history.log",
+      "elapsed_s": 120.0,
+      "result": "FAIL",
+      "original_ack_retry": true,
+      "final_stage": "absence-source-closing"
+    },
+    {
+      "failure_labels": [],
+      "sha256": "b1fc88a638c8fb84ad2d3a51957ab3cfec15eccf88942ad5e7f5e222f8ace919",
+      "file": "sameboot-race-terminal-global.log",
+      "elapsed_s": 120.0,
+      "result": "FAIL",
+      "original_ack_retry": true,
+      "final_stage": "absence-process-kernel"
+    },
+    {
+      "failure_labels": [],
+      "sha256": "4da55d60b232280dd4bee0fffaf507642f7b1af0898aeb56aecead9c08721644",
+      "file": "sameboot-race-terminal-transaction.log",
+      "elapsed_s": 120.0,
+      "result": "FAIL",
+      "original_ack_retry": true,
+      "final_stage": "absence-process-kernel"
+    }
+  ],
+  "critical_findings": [
+    "All five normal ACK cuts PASS; prior50bd early process refusal did not reproduce, no production fix claimed",
+    "Race history/completed/terminal-transaction/terminal-global each original ACK retry then120s deadlineFAIL",
+    "Race runtime-history labels proc.pid-shape/provider/processes at deadline; scanner sets pid-shape BEFORE ctx.Err, not proof of malformed PID or churn",
+    "Actual all three diagnostic tests PASS normal/race; original source/check/deadline contracts unchanged"
+  ],
+  "limits": [
+    "Full ACK matrix remainsFAIL",
+    "No deadline split/widen or processparser relaxation justified",
+    "No physical router or release readiness"
+  ]
+}

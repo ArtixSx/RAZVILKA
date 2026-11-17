@@ -1,7 +1,36 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
+    # Dedicated disposable experiments run their own exact native gates.
+    # PRs and the primary development/release branches retain the full gate;
+    # final acceptance always requires this workflow on the integrated SHA.
+    branches-ignore:
+      - 'work/metadata-parent-*'
+      - 'work/nfq-ndm-graph-*'
+      - 'work/runtime-scratch-*'
+      - 'work/hev-altstack-lab-*'
+      - 'work/domain-cgroup-proof-*'
+      - 'work/identity-contract-*'
+      - 'work/mihomo-self-image-*'
+      - 'work/backend-proc-io-20261116'
+      - 'work/inactive-proc-threadgroup-20261116'
+      - 'work/netidentity-metadata-experiment-*'
+      - 'work/mihomo-hash-buffer-experiment-*'
+      - 'work/hev-default-delivery-*'
+      - 'work/nfq-prepared-active-recovery-*'
+      - 'work/inactive-proc-fallback-*'
+      - 'work/domain-baseline-tuple-collision-*'
+      - 'work/nfq-wait-cleanup-*'
+      - 'work/expected-pair-stream-experiment-*'
+      - 'work/wg-tool-comparison-*'
+      - 'work/wg-memory-diagnostic-*'
+      - 'work/domain-accepted-prefix-*'
+      - 'work/domain-alloc-profile-*'
+      - 'work/domain-provider-catalog-*'
+      - 'work/proc-scratch-*'
+      - 'work/wg-small-helper-*'
   pull_request:
 
 permissions:
@@ -39,6 +68,82 @@ jobs:
 
       - name: Install native parser fixture
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static
+
+      - name: Bootstrap from actual read-only cwd with BusyBox early tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --mount --propagation private sh -eu <<'SH'
+          command -v busybox >/dev/null
+          command -v touch >/dev/null
+          trial=$(mktemp -d /tmp/razvilka-bootstrap-readonly.XXXXXX)
+          mounted=0
+          cleanup() {
+            result=$?
+            if test "$mounted" = 1; then umount "$trial/cwd" || result=1; fi
+            rmdir "$trial/cwd" "$trial" || result=1
+            exit "$result"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' HUP TERM
+          mkdir "$trial/cwd"
+          touch "$trial/cwd/write-before-remount"
+          rm "$trial/cwd/write-before-remount"
+          mount --bind "$trial/cwd" "$trial/cwd"
+          mounted=1
+          mount -o remount,bind,ro "$trial/cwd"
+          if touch "$trial/cwd/write-must-fail" 2>/dev/null; then
+            echo 'Readonly mount was not enforced' >&2
+            exit 1
+          fi
+          RAZVILKA_BOOTSTRAP_TEST_CWD="$trial/cwd" sh scripts/test-bootstrap.sh
+          echo 'ACTUAL_READONLY_CWD_BUSYBOX_BOOTSTRAP_PASS'
+          SH
+
+      - name: Original unpublished intent with actual denied write
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          go test -count=1 ./internal/dataplane -run '^TestNFQWSUnpublished' -v | tee /tmp/nfq-unpublished-intent.log
+          if grep -F -- '--- SKIP:' /tmp/nfq-unpublished-intent.log; then exit 1; fi
+
+      - name: Focused ownership and recovery regressions
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -count=1 ./internal/dataplane ./internal/netidentity ./internal/app ./internal/probecheck ./internal/startuptools ./internal/updatecheck ./cmd/nodeeval ./cmd/razvilka \
+              -run '^TestModernPairNormalBuildHooksAreNoOps$|^TestNFQLANRPDB|^TestNFQWSActiveRPDB|^TestBootstrapQuiesceJoin|^TestBootstrapJoinedChild|^TestBootstrapOriginalAdapter|^TestXrayImageScope|^TestXrayDomainFile|^TestExternalBootstrapFileDiagnostic|^TestBootstrapOfflineStrategy|^TestBootstrapImage|^TestOrdinaryImage|^TestExternalBootstrapDiagnostic|^TestNativePairedRestoreOutput|^TestBackendClassicSave|^TestClassicSave|^TestFreshHeldNode|^TestFreshPathNode|^TestNetworkTiming|^TestNodeNetworkTimings|^TestOutputReader|^TestSyntheticBaselineCoordinatorRead|^TestMihomoSameBootAbsenceRead|^TestMihomoSameBootObservedTableRead|^TestExternalBootstrapSourceConfig|^TestNFQWSManagedCopy|^TestPinnedServiceNetworkTiming|^TestNFQWSQuarantine|^TestMihomoLiveStartContext|^TestMihomoManualPlanning|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestNFQWS(NeverIssued|Recovery|Unpublished|ActivePurePredicates|ScopedExactPresenceObservation|ActivePreAdd|PreAddGenericAndProbe)|^Test(XraySelectedTCP|Proc)MountID|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
+
+      - name: Repeat positive Cloudflare scan fixture boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              go test "${race_flag[@]}" -count=10 ./internal/dataplane \
+                -run '^TestCloudflareScanRunner(OwnsTemporaryInterfacePolicyAndCleanup|FailsClosedWhenCleanupIsUnconfirmed)$' -v
+          done
+
+      - name: Repeat original physical cancellation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -count=30 ./internal/physicalscope \
+              -run '^TestPhysicalPrimaryIPv4(OriginalBookendsAndStickyRefusal|PreCanceledCallerDoesNotPoisonOriginal)$' -v | tee "/tmp/physical-cancel-$mode.log"
+            for name in OriginalBookendsAndStickyRefusal PreCanceledCallerDoesNotPoisonOriginal; do
+              test "$(grep -Fc -- "--- PASS: TestPhysicalPrimaryIPv4$name " "/tmp/physical-cancel-$mode.log")" -eq 30
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "/tmp/physical-cancel-$mode.log"; then exit 1; fi
+          done
 
       - name: Full project checks
         shell: bash

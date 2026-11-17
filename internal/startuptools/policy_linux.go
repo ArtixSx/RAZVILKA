@@ -48,10 +48,17 @@ func (l *Lease) runPolicy(ctx context.Context, name string, args ...string) ([]b
 }
 
 func (l *Lease) policyRead(ctx context.Context, index int, args []string) ([]byte, error) {
+	return l.policyReadMeasured(ctx, index, args, nil)
+}
+
+func (l *Lease) policyReadMeasured(ctx context.Context, index int, args []string, timing *domainBaselineReadMeasurement) ([]byte, error) {
 	c, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	if err := l.lock(c); err != nil {
-		return nil, err
+	queueStart := timing.now()
+	lockErr := l.lock(c)
+	timing.phase(domainBaselineReadQueue, queueStart)
+	if lockErr != nil {
+		return nil, lockErr
 	}
 	defer l.unlock()
 	stop := context.AfterFunc(l.lifetime, cancel)
@@ -63,17 +70,26 @@ func (l *Lease) policyRead(ctx context.Context, index int, args []string) ([]byt
 		args = []string{args[0], "rule", "show"}
 	}
 	var data []byte
+	providerStart := timing.now()
 	err := l.provider.WithCurrent(c, func(held context.Context, actual netidentity.Identity) error {
+		if domainBaselineReadTimingEnabled && timing != nil {
+			defer timing.phase(domainBaselineReadProviderBody, timing.now())
+		}
 		if actual != l.identity || !l.profile.acceptsIdentity(actual) {
 			return at("READ_IDENTITY", nil)
 		}
 		var err error
-		data, err = l.execute(held, index, maxOutputBytes, args...)
+		if scope, present := nfqLANRPDBMarker(held); present && index == 2 {
+			data, err = l.executeNFQWSLANRPDB(held, scope, args)
+		} else {
+			data, err = l.executeMeasured(held, index, maxOutputBytes, timing, args...)
+		}
 		if err == nil && stockRules {
 			data, err = stockNumericRules(data)
 		}
 		return err
 	})
+	timing.phase(domainBaselineReadProvider, providerStart)
 	if err != nil || c.Err() != nil || l.closed.Load() || l.lifetime.Err() != nil {
 		return nil, at("READ", errors.Join(err, c.Err()))
 	}

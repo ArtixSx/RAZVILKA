@@ -1,6 +1,7 @@
 package dnscontrol
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -215,7 +216,7 @@ func newNetworkPolicyDNSSyntheticResolver(ctx, lifetime context.Context, resolve
 
 func decodeSyntheticDNSLedger(wire []byte) (syntheticDNSLedger, error) {
 	var ledger syntheticDNSLedger
-	decoder := json.NewDecoder(strings.NewReader(string(wire)))
+	decoder := json.NewDecoder(bytes.NewReader(wire))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&ledger) != nil || decoder.Decode(&struct{}{}) != io.EOF || validateSyntheticDNSLedger(ledger) != nil {
 		return ledger, ErrSyntheticDNSMapping

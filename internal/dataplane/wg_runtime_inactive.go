@@ -18,14 +18,29 @@ var errWGInactiveUnknown = errors.New("WireGuard runtime inactivity is not confi
 // The caller must already own the common operation admission. Retained private
 // intent is allowed only with its exact, settled removal receipt; absence of a
 // process or an old successful Deactivate is insufficient.
-func (a *WARPWireGuardAdapter) VerifyRuntimeInactive(ctx context.Context) error {
+func (a *WARPWireGuardAdapter) VerifyRuntimeInactive(ctx context.Context) (result error) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	err := a.verifyRuntimeInactive(ctx, verifyWGProcessesInactive)
-	return errors.Join(err, ctx.Err())
+	measurement := beginWGRuntimeInactiveMeasurement()
+	completed := false
+	defer func() { measurement.finish(result, completed) }()
+	err := a.verifyRuntimeInactiveMeasured(ctx, verifyWGProcessesInactive, &measurement)
+	// Preserve the original final context check before diagnostic output.
+	result = errors.Join(err, ctx.Err())
+	completed = true
+	return result
 }
 
-func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, processes func(context.Context, []string) error) error {
+func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, processes func(context.Context, []string) error) (err error) {
+	measurement := beginWGRuntimeInactiveMeasurement()
+	completed := false
+	defer func() { measurement.finish(err, completed) }()
+	err = a.verifyRuntimeInactiveMeasured(ctx, processes, &measurement)
+	completed = true
+	return err
+}
+
+func (a *WARPWireGuardAdapter) verifyRuntimeInactiveMeasured(ctx context.Context, processes func(context.Context, []string) error, measurement *wgRuntimeInactiveMeasurement) error {
 	if a == nil || processes == nil || !filepath.IsAbs(a.StateRoot) || filepath.Clean(a.StateRoot) != a.StateRoot || !filepath.IsAbs(a.RuntimeConfigPath) {
 		return errWGInactiveUnknown
 	}
@@ -34,7 +49,8 @@ func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, proces
 		return err
 	}
 	interfaces := []string{a.interfaceName(), a.interfaceName() + "-canary"}
-	observe := func() error {
+	pass := 0
+	observeBody := func() error {
 		if err := errors.Join(ctx.Err(), a.checkWGPolicyOperation()); err != nil {
 			return err
 		}
@@ -66,10 +82,12 @@ func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, proces
 				return errors.Join(err, errWGInactiveUnknown)
 			}
 		}
+		measurement.begin(pass, "links", 0, 0)
 		if err := a.verifyWGInactiveLinks(ctx, interfaces); err != nil {
 			return err
 		}
 		for _, family := range []int{4, 6} {
+			measurement.begin(pass, "rules", 0, family)
 			args := []string{"-N"}
 			if family == 6 {
 				args = append(args, "-6")
@@ -94,17 +112,29 @@ func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, proces
 		}
 		// A foreign route in an owned namespace is an unknown outcome. Never
 		// adopt or remove it to make inactivity appear true.
-		for _, table := range []int{spec.Table, spec.EndpointTable, 219} {
+		for slot, table := range []int{spec.Table, spec.EndpointTable, 219} {
 			for _, family := range []int{4, 6} {
+				measurement.begin(pass, "table-reference", slot, family)
 				if err := AssertPolicyDefaultUnreferenced(ctx, a.Runner, a.ip(), PolicyState{Table: table}, family); err != nil {
 					return err
 				}
+				measurement.begin(pass, "table-empty", slot, family)
 				if err := a.verifyWGEmptyNumericTable(ctx, table, family); err != nil {
 					return err
 				}
 			}
 		}
+		measurement.begin(pass, "processes", 0, 0)
 		return processes(ctx, interfaces)
+	}
+	observe := func() (err error) {
+		pass++
+		measurement.begin(pass, "ownership", 0, 0)
+		completed := false
+		defer func() { measurement.end(err, completed) }()
+		err = observeBody()
+		completed = true
+		return err
 	}
 	if err := observe(); err != nil {
 		return err

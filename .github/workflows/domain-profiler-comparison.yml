@@ -1,0 +1,120 @@
+name: Matched DNS profiler comparison
+run-name: DNS profiler / ${{ inputs.plan || 'abba' }} / ${{ github.sha }}
+on:
+  workflow_dispatch:
+    inputs:
+      plan:
+        description: 'Matched ABBA or one original selected failure diagnosis'
+        type: choice
+        options: [abba, single-selected-off]
+        default: abba
+      runner:
+        description: 'Disposable hosted image; admission checks stay unchanged'
+        type: choice
+        options: [ubuntu-latest, ubuntu-24.04, ubuntu-22.04]
+        default: ubuntu-latest
+  push:
+    branches: ['work/dns-profiler-*']
+    paths:
+      - '.github/workflows/domain-profiler-comparison.yml'
+      - 'scripts/test-domain-original-native.sh'
+      - 'internal/dataplane/domain_tcp_original_coordinator.go'
+permissions:
+  contents: read
+concurrency:
+  group: dns-profiler-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  matched:
+    name: Same runner profiler / ${{ matrix.scenario }}
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(inputs.plan == 'single-selected-off' && '["selected"]' || '["selected","canceled-ready"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Pinned engine and isolated namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Same scenario and deadlines, profiler on off off on
+        shell: bash
+        env:
+          GOTOOLCHAIN: local
+          SCENARIO: ${{ matrix.scenario }}
+          SAMPLE_PLAN: ${{ inputs.plan || 'abba' }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/profiler
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/profiler' EXIT
+          git rev-parse HEAD > artifacts/profiler/source.txt
+          go version >> artifacts/profiler/source.txt
+          uname -a >> artifacts/profiler/source.txt
+          lscpu > artifacts/profiler/cpu.txt
+          case "$SCENARIO" in
+            selected) expected_case=TestDomainTCPOriginalNativeAcceptedFlows ;;
+            canceled-ready)
+              expected_case=TestDomainTCPOriginalNativeCanceledReadyRetirement
+              export RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1
+              export RAZVILKA_DOMAIN_CANCELED_CHILD=1 RAZVILKA_DOMAIN_CANCELED_READY=1 ;;
+            *) exit 2 ;;
+          esac
+          overall=0
+          case "$SAMPLE_PLAN" in
+            abba) samples='1:1 2:0 3:0 4:1' ;;
+            single-selected-off) test "$SCENARIO" = selected; samples='1:0' ;;
+            *) exit 2 ;;
+          esac
+          printf 'plan=%s\n' "$SAMPLE_PLAN" >> artifacts/profiler/source.txt
+          for sample in $samples; do
+            slot=${sample%:*}; profile=${sample#*:}
+            directory="$GITHUB_WORKSPACE/artifacts/profiler/$slot-$profile"
+            mkdir -p -m 700 "$directory"
+            result=0
+            sudo --preserve-env=RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \
+              env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+              RAZVILKA_DOMAIN_PROFILE_ENABLED="$profile" RAZVILKA_DOMAIN_PROFILE_OUTPUT="$directory" \
+              sh scripts/test-domain-original-native.sh >"$directory/native.log" 2>&1 || result=$?
+            # Failed native scenarios are retained, never turned into acceptance.
+            # Stop on an incomplete harness; otherwise finish the matched pair.
+            grep -Fx "=== RUN   $expected_case" "$directory/native.log"
+            if grep -F -- '--- SKIP:' "$directory/native.log"; then exit 1; fi
+            grep -Fx "child_exit_status=$result" "$directory/status.txt"
+            grep -Fx "native_case=$expected_case" "$directory/status.txt"
+            grep -Fx 'publication_budget_seconds=12' "$directory/status.txt"
+            grep -Fx 'diagnostic_only=false' "$directory/status.txt"
+            grep -Fx "profile_enabled=$profile" "$directory/status.txt"
+            find "$directory" -type f -name '*.pprof' -printf '%f\n' > "$directory/profiles.txt"
+            if [ "$profile" -eq 0 ]; then test ! -s "$directory/profiles.txt"; fi
+            if [ "$result" -eq 0 ]; then
+              grep -F -- "--- PASS: $expected_case " "$directory/native.log"
+            else
+              overall=1
+            fi
+            printf 'sample=%s profiler=%s native_exit=%s\n' "$slot" "$profile" "$result" | tee -a artifacts/profiler/results.txt
+          done
+          exit "$overall"
+      - name: Preserve all bounded evidence, including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dns-profiler-${{ matrix.scenario }}-${{ github.sha }}
+          path: artifacts/profiler/
+          if-no-files-found: error

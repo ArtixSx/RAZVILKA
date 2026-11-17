@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 4086c6894de5a18d28fbdf4ecc5019284cadc1ca
+Type: cpu
+Time: 2026-11-09 05:49:06 UTC
+Duration: 15.18s, Total samples = 15080ms (99.35%)
+Showing nodes accounting for 14670ms, 97.28% of 15080ms total
+Dropped 257 nodes (cum <= 75.40ms)
+Showing top 35 nodes out of 176
+      flat  flat%   sum%        cum   cum%
+   12050ms 79.91% 79.91%    12050ms 79.91%  crypto/internal/fips140/sha256.blockSHANI
+    2400ms 15.92% 95.82%     2400ms 15.92%  internal/runtime/syscall/linux.Syscall6
+     170ms  1.13% 96.95%      210ms  1.39%  compress/flate.(*decompressor).huffSym
+      40ms  0.27% 97.21%      330ms  2.19%  compress/flate.(*decompressor).huffmanBlock
+      10ms 0.066% 97.28%     1410ms  9.35%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+         0     0% 97.28%      350ms  2.32%  compress/flate.(*decompressor).Read
+         0     0% 97.28%      150ms  0.99%  compress/flate.(*decompressor).nextBlock
+         0     0% 97.28%      350ms  2.32%  compress/gzip.(*Reader).Read
+         0     0% 97.28%    12050ms 79.91%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0% 97.28%    12050ms 79.91%  crypto/internal/fips140/sha256.block
+         0     0% 97.28%    11090ms 73.54%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+         0     0% 97.28%    11090ms 73.54%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+         0     0% 97.28%     1240ms  8.22%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply
+         0     0% 97.28%     1240ms  8.22%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow
+         0     0% 97.28%    11090ms 73.54%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.(*App).operationMiddleware.func9
+         0     0% 97.28%      790ms  5.24%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.func3
+         0     0% 97.28%    11090ms 73.54%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.func7
+         0     0% 97.28%      980ms  6.50%  github.com/ArtixSx/razvilka/internal/components.(*Manager).ApplyMihomoGuarded (inline)
+         0     0% 97.28%      400ms  2.65%  github.com/ArtixSx/razvilka/internal/components.(*Manager).OpenMihomoLiveSource
+         0     0% 97.28%      980ms  6.50%  github.com/ArtixSx/razvilka/internal/components.(*Manager).applyMihomoGuarded
+         0     0% 97.28%      560ms  3.71%  github.com/ArtixSx/razvilka/internal/components.(*Manager).applyMihomoGuarded.func2
+         0     0% 97.28%      310ms  2.06%  github.com/ArtixSx/razvilka/internal/components.(*Manager).installMihomoImageWithReplacement
+         0     0% 97.28%       80ms  0.53%  github.com/ArtixSx/razvilka/internal/components.(*Manager).openMihomoRelease
+         0     0% 97.28%      560ms  3.71%  github.com/ArtixSx/razvilka/internal/components.(*Manager).stageMihomoArtifact
+         0     0% 97.28%      170ms  1.13%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).Current
+         0     0% 97.28%      170ms  1.13%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).NativeHomeReference
+         0     0% 97.28%      420ms  2.79%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).PrepareNative
+         0     0% 97.28%      170ms  1.13%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).StartAdmitted
+         0     0% 97.28%      730ms  4.84%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithReadObservation
+         0     0% 97.28%      350ms  2.32%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithReadObservation.func1
+         0     0% 97.28%      350ms  2.32%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).closeReadFingerprint
+         0     0% 97.28%      710ms  4.71%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).currentNativeReadComparison
+         0     0% 97.28%      710ms  4.71%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).currentReadBoundary (inline)
+         0     0% 97.28%      360ms  2.39%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).openReadFingerprint
+         0     0% 97.28%     5250ms 34.81%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveSource).Current

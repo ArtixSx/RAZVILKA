@@ -1,0 +1,103 @@
+{
+  "sha": "d7cb22d729367c85311a77804ab71b9613eba952",
+  "run": 42689671795,
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "databaseId": 129405767004,
+      "name": "live-native (lifecycle)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 129405767510,
+      "name": "live-native (manual-http)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "databaseId": 129405767611,
+      "name": "live-native (postcas-failure)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 129405767699,
+      "name": "live-native (check-settlement)",
+      "status": "completed",
+      "conclusion": "failure"
+    }
+  ],
+  "lifecycle": {
+    "baseline_stop_s": [
+      6.268032282,
+      6.190151759
+    ],
+    "candidate_stop_s": [
+      6.061698452,
+      5.934853412
+    ],
+    "baseline4cc": "PASS 303.91s",
+    "candidate": "PASS 300.79s",
+    "normal_race_original_child_and_mutation_bookends": "PASS",
+    "baseline_apply_s": [
+      104.532671162,
+      104.535941199
+    ],
+    "candidate_apply_s": [
+      104.159828057,
+      103.169604246
+    ]
+  },
+  "manual_http": {
+    "candidate_stop_s": [
+      6.196515668,
+      6.314984592
+    ],
+    "baseline4cc": "FAIL first HTTP Apply deadline 114.83s",
+    "second_closing_retry": true,
+    "both_candidate_baselines_restored": true,
+    "candidate": "PASS 315.52s",
+    "candidate_apply_s": [
+      109.556822752,
+      109.686835467
+    ]
+  },
+  "postcas": {
+    "original_pending": false,
+    "rollback_verified": true,
+    "desired_exact_restored": true,
+    "result": "PASS 92.34s",
+    "http": 503
+  },
+  "settlement": {
+    "activation_stages": "all passed including sidecar-start and policy-ack",
+    "failure": "HTTP Apply deadline before settlement assertions",
+    "native_deadline_exceeded": false,
+    "result": "FAIL 118.75s",
+    "native_canceled": true
+  },
+  "limitations": [
+    "Workflow failure retained; candidate lifecycle/manual/postcas successes do not erase settlement failure",
+    "Manual candidate Apply near110s cap; no stable readiness margin or universal speed claim",
+    "Fixed candidate-then-baseline order, no causal cross-host comparison"
+  ],
+  "raw_hashes": [
+    {
+      "Path": "C:\\RAZVILKA-research-20261109\\lifecycle-d7cb22d7\\mihomo-lifecycle.log",
+      "Hash": "BCE30528B7174ECFA9E0634891E2947FB426FC4776D5214A8A0D6F9836B7B596"
+    },
+    {
+      "Path": "C:\\RAZVILKA-research-20261109\\lifecycle-d7cb22d7\\mihomo-manual-http.log",
+      "Hash": "0D56183430A4CCF51345CF9CC635C7079FBBBF942AEA0DB4567470DC5B88B15F"
+    },
+    {
+      "Path": "C:\\RAZVILKA-research-20261109\\lifecycle-d7cb22d7\\mihomo-postcas-failure.log",
+      "Hash": "8F726A52461C57CE7350366B170990EC61D0A3D89359FE5F19FEA15C412CAC56"
+    },
+    {
+      "Path": "C:\\RAZVILKA-research-20261109\\lifecycle-d7cb22d7\\mihomo-check-settlement.log",
+      "Hash": "E35F47FF481C41E002602F5291325A0F033CF32F903ED5A908A7C306AB81D17B"
+    }
+  ]
+}

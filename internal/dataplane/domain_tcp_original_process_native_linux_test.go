@@ -148,6 +148,38 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 		if err := resource.Current(active); err != nil {
 			return err
 		}
+		// A standalone original listener can borrow the existing image slot.
+		// Contention must retain the original full-SHA path without waiting,
+		// allocating another backing or releasing another reader's storage.
+		heldImage := domainTCPImageScratch.borrow(1)
+		if heldImage == nil {
+			return errors.New("standalone listener retained image storage")
+		}
+		fallbackErr := resource.Current(active)
+		stillHeld := domainTCPImageScratch.busy.Load()
+		heldImage.release()
+		if fallbackErr != nil || !stillHeld {
+			return errors.Join(errors.New("original listener contention fallback changed ownership"), fallbackErr)
+		}
+		if err := resource.Current(active); err != nil {
+			return err
+		}
+
+		// An already invalid opening cannot run any later comparison callback.
+		// This is actual-process coverage, not a fabricated capture authority.
+		canceledEntry, cancelEntry := context.WithCancel(active)
+		cancelEntry()
+		laterEntered := false
+		entryErr := resource.withFileObservation(canceledEntry, func(files *xrayDomainTCPFileObservation) error {
+			if err := resource.currentWithFiles(canceledEntry, files); err != nil {
+				return err
+			}
+			laterEntered = true
+			return nil
+		})
+		if entryErr == nil || laterEntered {
+			return errors.New("invalid original process opening entered later comparison")
+		}
 
 		// Real source/child/kernel opening+closing, with explicit nested readonly
 		// views only. Callback failures and panic cannot become successful evidence.
@@ -181,8 +213,19 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 			return errors.New("panic retained live Guard view")
 		}
 		entered = true
-		cancelRequest()
-		<-active.Done()
+		// The pre-Add file loan never replaces the real child's closing Current.
+		// Cancel from its last callback, after a successful actual process read;
+		// no successful read may escape, and the existing cleanup still joins it.
+		loanErr := domainPreAddFileLoan(t, active, resource, func(scoped context.Context, baseline *syntheticBaselineExecutionResource, _ *domainTCPPreAddLoan) error {
+			return withDomainTCPPreAddFiles(scoped, resource, baseline, nil, true, func(*xrayDomainTCPFileObservation) error {
+				cancelRequest()
+				<-active.Done()
+				return nil
+			})
+		})
+		if loanErr == nil || !errors.Is(loanErr, context.Canceled) {
+			return errors.Join(errors.New("cancelled original child escaped pre-Add closing read"), loanErr)
+		}
 		return active.Err()
 	})
 	cancelRequest()

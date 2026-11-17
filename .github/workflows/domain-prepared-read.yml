@@ -1,0 +1,103 @@
+name: DNS prepared read full mixed source ABBA
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/domain-prepared-read-20261117']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Prepared read parity, ownership and refusal contracts normal and race
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'b80c574a6221a07d6b4bc91a53acbe648bebc50a56b7abe11985566d279a83f1  internal/dataplane/domain_tcp_capture_execution_effects.go' | sha256sum --check --strict
+          for mode in normal race; do
+            flags=()
+            if test "$mode" = race; then flags=(-race); fi
+            go test "${flags[@]}" -count=1 -timeout=90s -v ./internal/dataplane -run '^TestDomainCapturePreparedRead' | tee "$RUNNER_TEMP/prepared-read-$mode.log"
+            for name in SourceParity EligibilityAndFallback FrozenAssociationsAndInputs CannotMintCurrent; do
+              grep -F -- "--- PASS: TestDomainCapturePreparedRead$name " "$RUNNER_TEMP/prepared-read-$mode.log"
+            done
+            if grep -F -- '--- SKIP:' "$RUNNER_TEMP/prepared-read-$mode.log"; then exit 1; fi
+          done
+      - name: Joined same-host ABBA with every original outcome retained
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 $RUNNER_TEMP/domain-prepared-read
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_PREPARED_REPO="$GITHUB_WORKSPACE" \
+            RAZVILKA_DOMAIN_PREPARED_OUTPUT="$RUNNER_TEMP/domain-prepared-read/abba" \
+            bash scripts/compare-domain-prepared-read.sh
+      - name: Hand bounded public evidence back to the runner even after failure
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo python3 - "$RUNNER_TEMP" "$(id -u)" "$(id -g)" <<'PY'
+          import json,os,pathlib,stat,sys
+          parent=pathlib.Path(sys.argv[1]); out=parent/'domain-prepared-read'
+          if not parent.is_absolute() or parent!=parent.resolve():raise SystemExit('canonical runner temp required')
+          if not out.exists():raise SystemExit(0)
+          if out.is_symlink() or out!=out.resolve() or not out.is_dir():raise SystemExit('foreign evidence root')
+          # Any started actor must have completed the original descendant join.
+          # A mere failed/absent comparison.json never authorizes handoff.
+          abba=out/'abba'
+          if abba.exists():
+              for actor in abba.iterdir():
+                  if actor.name not in ['control-clean','control-failure','control-orphan','01-baseline','02-candidate','03-candidate','04-baseline']:continue
+                  if actor.is_symlink() or not actor.is_dir():raise SystemExit('foreign actor directory')
+                  if (actor/'not-run.txt').is_file():continue
+                  state=actor/'supervisor.json'
+                  if state.is_symlink() or not state.is_file() or state.stat().st_size>8192:raise SystemExit('missing joined actor proof')
+                  if json.loads(state.read_text()).get('descendants_absent') is not True:raise SystemExit('actor descendants not joined; retain root-owned evidence')
+          entries=[out,*out.rglob('*')]
+          if len(entries)>192:raise SystemExit('evidence entry bound')
+          total=0
+          for p in entries:
+              s=p.lstat()
+              if not (stat.S_ISDIR(s.st_mode) or stat.S_ISREG(s.st_mode)):raise SystemExit('foreign evidence entry')
+              if stat.S_ISREG(s.st_mode):
+                  if s.st_nlink!=1:raise SystemExit('linked evidence file')
+                  total+=s.st_size
+          if total>320<<20:raise SystemExit('evidence byte bound')
+          uid,gid=int(sys.argv[2]),int(sys.argv[3])
+          if uid<=0 or gid<=0:raise SystemExit('nonroot runner identity required')
+          for p in entries:os.chown(p,uid,gid,follow_symlinks=False)
+          PY
+      - name: Preserve original result including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-prepared-read-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/domain-prepared-read/
+            ${{ runner.temp }}/prepared-read-normal.log
+            ${{ runner.temp }}/prepared-read-race.log
+          if-no-files-found: error
+          retention-days: 14

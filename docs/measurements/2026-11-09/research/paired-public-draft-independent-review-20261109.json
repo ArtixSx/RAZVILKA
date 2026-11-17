@@ -1,0 +1,32 @@
+{
+  "decision": "APPROVE explicit draft-state native fixture; runtime pending",
+  "validation": [
+    "Source review; git diff --check PASS; no local Go builds."
+  ],
+  "limitations": [
+    "This covers only an authored unvalidated draft, not completed history/manual selections or restored old runtime readiness.",
+    "Actual native public pipeline remains pending; no production code or router change."
+  ],
+  "files": [
+    {
+      "path": "cmd/razvilka/paired_public_draft_native_linux_test.go",
+      "sha256": "f7936bbd60a6716c2c50105d1dd1d9c989a62ff02f912377522b23f838e38e26"
+    },
+    {
+      "path": "cmd/razvilka/paired_public_lifecycle_native_linux_test.go",
+      "sha256": "72de4a549c900311452ecf235866ca4d7af81f92ad124e84235369f10d2e05ef"
+    },
+    {
+      "path": "scripts/test-paired-public-native.sh",
+      "sha256": "fe6d8013012b47eeb0d151c0d0edc62c4ff311a8aa2cdaadd7257bab314a0e20"
+    }
+  ],
+  "findings": [
+    "Opt-in draft mode uses genuine old817 HTTP AddCandidate writer on fixed loopback after unchanged disposable namespace checks; empty default remains unchanged.",
+    "Actual old endpoint/schema/201/expert origin confirmed from pinned817 source.",
+    "Private bounded token is held only in memory, no argv/log output; HTTP has fixed target, no proxy/redirect and bounded5s/64KiB response.",
+    "Public bootstrap/real durable Stop/paired restore remain unchanged. Final full state SHA matches pre-bootstrap; actual current New/Snapshot reads exact Candidate with full validation/incarnation comparison and no evidence/selection/eligible summary.",
+    "Original journal/fence verification retained; marker explicitly denies old live-reader and manual-selection proof."
+  ],
+  "reviewer": "verification"
+}

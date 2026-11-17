@@ -33,12 +33,12 @@ func TestManagedNFQOrdinaryPlanAndApplyDoNotAdoptDesiredRouteOrReviewDTO(t *test
 		method, path, code string
 		body               any
 	}{
-		{"GET", "/api/v1/plan", "NETWORK_POLICY_EXECUTOR_REQUIRED", nil},
-		{"POST", "/api/v1/apply", "MANAGED_NFQWS_REVIEW_REQUIRED", map[string]any{"expected_revision": before.Revision, "reviewed_digest": "1111111111111111111111111111111111111111111111111111111111111111"}},
-		{"POST", "/api/v1/apply", "MANAGED_NFQWS_REVIEW_REQUIRED", map[string]any{}},
+		{"GET", "/api/v1/plan", capabilityManagedNFQDeferred, nil},
+		{"POST", "/api/v1/apply", capabilityManagedNFQDeferred, map[string]any{"expected_revision": before.Revision, "reviewed_digest": "1111111111111111111111111111111111111111111111111111111111111111"}},
+		{"POST", "/api/v1/apply", capabilityManagedNFQDeferred, map[string]any{}},
 	} {
 		status, data := componentHTTP(t, server, request.method, request.path, request.body, componentRecoveryToken, server.URL)
-		if status != http.StatusConflict || !bytes.Contains(data, []byte(request.code)) || bytes.Contains(data, []byte(`"live_applied":true`)) || bytes.Contains(data, []byte(`"ready":true`)) || bytes.Contains(data, []byte(`"working_routes_changed":false`)) {
+		if status != http.StatusConflict || !bytes.Contains(data, []byte(request.code)) || bytes.Contains(data, []byte(`"live_applied":true`)) || bytes.Contains(data, []byte(`"ready":true`)) || !bytes.Contains(data, []byte(`"working_routes_changed":false`)) {
 			t.Fatal("normal caller adopted metadata/review", status, string(data))
 		}
 		if !reflect.DeepEqual(a.Store.Get(), before) || a.managedNFQList != nil || a.Operations.Snapshot().Active != 0 {

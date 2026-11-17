@@ -186,6 +186,11 @@ func launchInstallerHelper(ctx context.Context, id string, admission func(func()
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
+	closeNativeSource, bindErr := bindNativeModernInstaller(ctx, cmd, id)
+	if bindErr != nil {
+		return 0, bindErr
+	}
+	defer closeNativeSource()
 	// Reap preflight refusals while the original daemon remains alive. When
 	// the daemon exits during an actual install, init inherits the helper.
 	pid, _, err := startInstallerHelperCommand(ctx, cmd, admission)

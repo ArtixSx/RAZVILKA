@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "revision": "b86af84d7e9b2083e87bb303392c257605d604c9",
+  "run": 43953680219,
+  "job": 133602485990,
+  "result": "SUCCESS: diagnostic counterexample reproduced",
+  "production_changed": false,
+  "test": "TestDomainBaselineTupleCollisionNative",
+  "test_elapsed_seconds": 1.17,
+  "no_effect_direct_echo": true,
+  "actual_client_same_port_distinct_destinations": true,
+  "adjacent_source_port_echo": true,
+  "adjacent_source_port_did_not_increment_counters": true,
+  "exact_existing_compiler_effects": 5,
+  "remote_reply_sent": true,
+  "direct_reply_failed_after_effects": true,
+  "raw_prerouting_packet_delta": 7,
+  "mangle_prerouting_packet_delta": 7,
+  "exact_effects_removed": true,
+  "children_joined": true,
+  "test_binary_sha256": "2032553cedf8af65631abc659d39124fd54f0b1c8b8d8ed89e0daed000a794b1",
+  "limits": [
+    "Disposable Ubuntu24 kernel/compiler diagnostic, not actual application owner admission or full lifecycle proof.",
+    "Shows legitimate direct LAN reply matches existing exact five-effect packet predicates; does not test a proposed ipset implementation.",
+    "No production or real router changes. No performance claim.",
+    "No transparent outgoing router TCP connection is established: the diagnostic retains actual synthetic accepted FD and applies exact compiler effects to expose reply interception independently."
+  ],
+  "raw_files": [
+    {
+      "path": "domain-tuple-collision-b86af84d7e9b2083e87bb303392c257605d604c9/collision.log",
+      "bytes": 1180,
+      "sha256": "389302ee346a04ec636ff9f27bdb2412b7955f164aacc8f2108ed76b5e53a42e"
+    },
+    {
+      "path": "domain-tuple-collision-b86af84d7e9b2083e87bb303392c257605d604c9/platform.txt",
+      "bytes": 3352,
+      "sha256": "65f778db74db86234d90fee49a7070bad796b1507b7be758d13125040baba395"
+    }
+  ]
+}

@@ -1,0 +1,1511 @@
+{
+  "sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+  "run_id": 42642470617,
+  "workflow_conclusion": "failure",
+  "normal_and_race_baseline": "PASS",
+  "normal_ack_pass": [
+    "retirement.json",
+    "runtime-history",
+    "completed.json"
+  ],
+  "failed_at_120s": [
+    "normal terminal-transaction",
+    "normal terminal-global",
+    "all five race ACK cuts"
+  ],
+  "limitations": [
+    "isolated original native source with modeled Ubuntu classification; not router",
+    "inclusive phase clocks overlap; not summed",
+    "three ACK successes do not cover remaining cuts or earlier restart points"
+  ],
+  "rows": [
+    {
+      "case": "sameboot-normal-completed",
+      "sha256": "326391c49a67a0df4dc36f15dab73ffba96fb15cbaa64d2f368c1d2d5d114869",
+      "pass": true,
+      "failed": false,
+      "actor_ms": [
+        94210.922
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 122,
+          "wall_ms": 82221.991
+        },
+        {
+          "phase": "home-current",
+          "calls": 38,
+          "wall_ms": 51209.187
+        },
+        {
+          "phase": "native-stage",
+          "calls": 12,
+          "wall_ms": 19719.744
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 12,
+          "wall_ms": 97.232
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 2,
+          "wall_ms": 43868.951
+        },
+        {
+          "phase": "phase-completed",
+          "calls": 2,
+          "wall_ms": 16309.635
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 2,
+          "wall_ms": 9940.909
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 217.406
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 213.058
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 2,
+          "wall_ms": 2258.809
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 2,
+          "wall_ms": 591.814
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 2,
+          "wall_ms": 20316.569
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 204.333
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 93717.165
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 54,
+          "wall_ms": 1062.824
+        },
+        {
+          "phase": "source-current",
+          "calls": 334,
+          "wall_ms": 31939.17
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ],
+        [
+          "terminal-global",
+          "guard=open"
+        ],
+        [
+          "intent",
+          "guard=open"
+        ],
+        [
+          "sidecar",
+          "guard=open"
+        ],
+        [
+          "policy",
+          "guard=open"
+        ],
+        [
+          "forwarding",
+          "guard=open"
+        ],
+        [
+          "archive",
+          "guard=open"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-normal-global",
+      "sha256": "dd9f0802cb8af12d6bb516bc192782ab42daebe9bbe1af866e54888b2fbafcd2",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        119998.233
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 107,
+          "wall_ms": 103283.746
+        },
+        {
+          "phase": "home-current",
+          "calls": 33,
+          "wall_ms": 63382.011
+        },
+        {
+          "phase": "native-stage",
+          "calls": 12,
+          "wall_ms": 27951.911
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 12,
+          "wall_ms": 152.21
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 2,
+          "wall_ms": 62848.056
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 2,
+          "wall_ms": 14010.004
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 317.458
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 299.733
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 2,
+          "wall_ms": 3155.577
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 2,
+          "wall_ms": 855.895
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 2,
+          "wall_ms": 37938.302
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 290.602
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 119425.037
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 49,
+          "wall_ms": 1391.044
+        },
+        {
+          "phase": "source-current",
+          "calls": 303,
+          "wall_ms": 40906.418
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ],
+        [
+          "intent",
+          "guard=open"
+        ],
+        [
+          "sidecar",
+          "guard=open"
+        ],
+        [
+          "policy",
+          "guard=open"
+        ],
+        [
+          "forwarding",
+          "guard=open"
+        ],
+        [
+          "archive",
+          "guard=open"
+        ],
+        [
+          "terminal-global",
+          "guard=open"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-normal-history",
+      "sha256": "7c66f77a5e5757faa26c845f823847f9185e7e9866000d13c04b8ed87af091aa",
+      "pass": true,
+      "failed": false,
+      "actor_ms": [
+        114703.914
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 98,
+          "wall_ms": 97628.447
+        },
+        {
+          "phase": "home-current",
+          "calls": 30,
+          "wall_ms": 59768.62
+        },
+        {
+          "phase": "native-stage",
+          "calls": 11,
+          "wall_ms": 23477.828
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 11,
+          "wall_ms": 140.959
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 2,
+          "wall_ms": 49407.819
+        },
+        {
+          "phase": "phase-completed",
+          "calls": 1,
+          "wall_ms": 15055.649
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 2,
+          "wall_ms": 14410.176
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 334.37
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 314.962
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 2,
+          "wall_ms": 3226.59
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 2,
+          "wall_ms": 881.607
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 30347.846
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 301.997
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 113979.04
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 46,
+          "wall_ms": 1360.463
+        },
+        {
+          "phase": "source-current",
+          "calls": 286,
+          "wall_ms": 39693.854
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ],
+        [
+          "terminal-global",
+          "guard=open"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-normal-retirement",
+      "sha256": "df77f48bb1e29c4bca63acbc4a6f3d992c250c04e09387adc378ff8852116ab7",
+      "pass": true,
+      "failed": false,
+      "actor_ms": [
+        87478.298
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 86,
+          "wall_ms": 72521.913
+        },
+        {
+          "phase": "home-current",
+          "calls": 27,
+          "wall_ms": 45560.449
+        },
+        {
+          "phase": "native-stage",
+          "calls": 7,
+          "wall_ms": 17560.253
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 7,
+          "wall_ms": 76.806
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 1,
+          "wall_ms": 33452.016
+        },
+        {
+          "phase": "phase-completed",
+          "calls": 1,
+          "wall_ms": 12647.298
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 1,
+          "wall_ms": 11334.465
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 227.039
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 320.208
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 1,
+          "wall_ms": 2712.261
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 1,
+          "wall_ms": 410.154
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 25686.916
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 275.873
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 86790.375
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 42,
+          "wall_ms": 968.664
+        },
+        {
+          "phase": "source-current",
+          "calls": 257,
+          "wall_ms": 33202.717
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ],
+        [
+          "terminal-global",
+          "guard=open"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-normal-transaction",
+      "sha256": "622f6fa8f6ea4cce4c89151b2ea7ffa1d5ebfa05979a2436e0de51e13690dc8c",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        119997.978
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 103,
+          "wall_ms": 102772.865
+        },
+        {
+          "phase": "home-current",
+          "calls": 32,
+          "wall_ms": 62606.683
+        },
+        {
+          "phase": "native-stage",
+          "calls": 12,
+          "wall_ms": 25036.549
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 11,
+          "wall_ms": 139.209
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 2,
+          "wall_ms": 65045.539
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 2,
+          "wall_ms": 14428.951
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 327.039
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 310.599
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 2,
+          "wall_ms": 3302.497
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 2,
+          "wall_ms": 872.947
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 2,
+          "wall_ms": 35108.896
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 306.233
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 119396.485
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 48,
+          "wall_ms": 1411.194
+        },
+        {
+          "phase": "source-current",
+          "calls": 295,
+          "wall_ms": 40684.903
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-normal",
+      "sha256": "00c666090c4feb6c03417843157b41880db965ba0cec6013c6211d09a6895d19",
+      "pass": true,
+      "failed": false,
+      "actor_ms": [
+        96525.4
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 80,
+          "wall_ms": 80539.858
+        },
+        {
+          "phase": "home-current",
+          "calls": 25,
+          "wall_ms": 50462.445
+        },
+        {
+          "phase": "native-stage",
+          "calls": 7,
+          "wall_ms": 20990.939
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 7,
+          "wall_ms": 89.929
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 1,
+          "wall_ms": 36728.094
+        },
+        {
+          "phase": "phase-completed",
+          "calls": 1,
+          "wall_ms": 12081.65
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 1,
+          "wall_ms": 12436.833
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 1,
+          "wall_ms": 172.691
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 1,
+          "wall_ms": 156.202
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 1,
+          "wall_ms": 2973.772
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 1,
+          "wall_ms": 448.82
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 30825.188
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 308.155
+        },
+        {
+          "phase": "run",
+          "calls": 1,
+          "wall_ms": 95823.259
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 34,
+          "wall_ms": 1016.848
+        },
+        {
+          "phase": "source-current",
+          "calls": 245,
+          "wall_ms": 34145.955
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ],
+        [
+          "terminal-global",
+          "guard=open"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-race-completed",
+      "sha256": "602cbba3af331109877f5fe25ba16c05e0903d66303042ec0abaa801aee0013d",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        119993.845
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 47,
+          "wall_ms": 85250.714
+        },
+        {
+          "phase": "home-current",
+          "calls": 14,
+          "wall_ms": 50531.279
+        },
+        {
+          "phase": "native-stage",
+          "calls": 5,
+          "wall_ms": 21220.131
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 5,
+          "wall_ms": 5242.102
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 1,
+          "wall_ms": 73077.927
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 1,
+          "wall_ms": 24699.968
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 1,
+          "wall_ms": 1401.362
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 1,
+          "wall_ms": 348.208
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 1,
+          "wall_ms": 6680.391
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 1,
+          "wall_ms": 1888.344
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 10712.058
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 638.253
+        },
+        {
+          "phase": "run",
+          "calls": 1,
+          "wall_ms": 118808.284
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 24,
+          "wall_ms": 1321.095
+        },
+        {
+          "phase": "source-current",
+          "calls": 178,
+          "wall_ms": 47898.626
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-race-global",
+      "sha256": "d4a1000a83e3acfd8a3c7895be2e9c9b3a28b408a21fdc796edc137410c49b53",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        119993.639
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 57,
+          "wall_ms": 87722.069
+        },
+        {
+          "phase": "home-current",
+          "calls": 17,
+          "wall_ms": 52522.678
+        },
+        {
+          "phase": "native-stage",
+          "calls": 6,
+          "wall_ms": 29106.036
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 6,
+          "wall_ms": 6254.487
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 1,
+          "wall_ms": 61728.526
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 1,
+          "wall_ms": 21680.363
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 1,
+          "wall_ms": 1329.141
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 1,
+          "wall_ms": 322.709
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 1,
+          "wall_ms": 5967.787
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 1,
+          "wall_ms": 1776.655
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 26144.639
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 556.968
+        },
+        {
+          "phase": "run",
+          "calls": 1,
+          "wall_ms": 118949.843
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 28,
+          "wall_ms": 1253.999
+        },
+        {
+          "phase": "source-current",
+          "calls": 198,
+          "wall_ms": 47009.78
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-race-history",
+      "sha256": "431db0378ee4b218aab066a674f3bfa5fa65233466f43cb831fb6072722dce34",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        119991.542
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 46,
+          "wall_ms": 81617.376
+        },
+        {
+          "phase": "home-current",
+          "calls": 13,
+          "wall_ms": 44051.015
+        },
+        {
+          "phase": "native-stage",
+          "calls": 8,
+          "wall_ms": 17844.424
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 8,
+          "wall_ms": 8383.0
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 2,
+          "wall_ms": 75220.17
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 2,
+          "wall_ms": 28360.081
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 2670.493
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 671.947
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 2,
+          "wall_ms": 8202.31
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 2,
+          "wall_ms": 3677.959
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 602.117
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 118803.0
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 29,
+          "wall_ms": 1583.855
+        },
+        {
+          "phase": "source-current",
+          "calls": 181,
+          "wall_ms": 46774.857
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-race-retirement",
+      "sha256": "ddd53b4c6dcfc7c34a49d46a6362710dfbb2e2da723e9274d52cdea1eaa3716b",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        119998.111
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 53,
+          "wall_ms": 86834.763
+        },
+        {
+          "phase": "home-current",
+          "calls": 16,
+          "wall_ms": 52483.437
+        },
+        {
+          "phase": "native-stage",
+          "calls": 6,
+          "wall_ms": 25264.971
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 6,
+          "wall_ms": 5945.696
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 1,
+          "wall_ms": 65507.939
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 1,
+          "wall_ms": 22307.231
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 1513.006
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 639.37
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 1,
+          "wall_ms": 6164.201
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 1,
+          "wall_ms": 1813.105
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 20930.978
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 570.819
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 118875.866
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 32,
+          "wall_ms": 1522.849
+        },
+        {
+          "phase": "source-current",
+          "calls": 191,
+          "wall_ms": 46386.276
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-race-transaction",
+      "sha256": "228692e7df91d803368f1987372efce6bf9b5c0cb9ed2293020ac469d8a629f1",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        119992.863
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 62,
+          "wall_ms": 86079.615
+        },
+        {
+          "phase": "home-current",
+          "calls": 18,
+          "wall_ms": 49812.406
+        },
+        {
+          "phase": "native-stage",
+          "calls": 9,
+          "wall_ms": 25263.167
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 9,
+          "wall_ms": 9345.662
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 2,
+          "wall_ms": 65379.14
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 2,
+          "wall_ms": 23177.569
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 2,
+          "wall_ms": 2514.022
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 2,
+          "wall_ms": 553.343
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 2,
+          "wall_ms": 6853.582
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 2,
+          "wall_ms": 3341.99
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 17195.79
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 493.685
+        },
+        {
+          "phase": "run",
+          "calls": 2,
+          "wall_ms": 119015.471
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 34,
+          "wall_ms": 1408.523
+        },
+        {
+          "phase": "source-current",
+          "calls": 213,
+          "wall_ms": 44487.802
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-race",
+      "sha256": "1c672da348b850eb3e88e3dc7a7084f152ccf60684732e1547969c8d650c2977",
+      "pass": true,
+      "failed": false,
+      "actor_ms": [
+        113119.143
+      ],
+      "actual_parent_death": true,
+      "phases": [
+        {
+          "phase": "absence",
+          "calls": 80,
+          "wall_ms": 87272.441
+        },
+        {
+          "phase": "home-current",
+          "calls": 25,
+          "wall_ms": 54487.954
+        },
+        {
+          "phase": "native-stage",
+          "calls": 7,
+          "wall_ms": 29850.383
+        },
+        {
+          "phase": "native-witness-callback",
+          "calls": 7,
+          "wall_ms": 7205.985
+        },
+        {
+          "phase": "phase-archive",
+          "calls": 1,
+          "wall_ms": 40359.154
+        },
+        {
+          "phase": "phase-completed",
+          "calls": 1,
+          "wall_ms": 13866.384
+        },
+        {
+          "phase": "phase-forwarding",
+          "calls": 1,
+          "wall_ms": 15389.281
+        },
+        {
+          "phase": "phase-intent",
+          "calls": 1,
+          "wall_ms": 1202.181
+        },
+        {
+          "phase": "phase-opening",
+          "calls": 1,
+          "wall_ms": 205.868
+        },
+        {
+          "phase": "phase-policy",
+          "calls": 1,
+          "wall_ms": 4464.926
+        },
+        {
+          "phase": "phase-sidecar",
+          "calls": 1,
+          "wall_ms": 1535.068
+        },
+        {
+          "phase": "phase-terminal",
+          "calls": 1,
+          "wall_ms": 35234.156
+        },
+        {
+          "phase": "prepare",
+          "calls": 1,
+          "wall_ms": 370.827
+        },
+        {
+          "phase": "run",
+          "calls": 1,
+          "wall_ms": 112257.045
+        },
+        {
+          "phase": "source-before-sidecar",
+          "calls": 34,
+          "wall_ms": 1102.472
+        },
+        {
+          "phase": "source-current",
+          "calls": 245,
+          "wall_ms": 39900.78
+        }
+      ],
+      "updater_guards": [
+        [
+          "intent",
+          "guard=fenced"
+        ],
+        [
+          "sidecar",
+          "guard=fenced"
+        ],
+        [
+          "policy",
+          "guard=fenced"
+        ],
+        [
+          "forwarding",
+          "guard=fenced"
+        ],
+        [
+          "archive",
+          "guard=fenced"
+        ],
+        [
+          "terminal-transaction",
+          "guard=fenced"
+        ],
+        [
+          "terminal-global",
+          "guard=open"
+        ]
+      ]
+    }
+  ]
+}

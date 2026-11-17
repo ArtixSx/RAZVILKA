@@ -47,14 +47,20 @@ func (r *mihomoColdReadRunner) current(ctx context.Context) error {
 	return ctx.Err()
 }
 func (r *mihomoColdReadRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if err := r.current(ctx); err != nil {
+	finishReadTools := mihomoSameBootMeasureContext(ctx, "source-lease-read-tool")
+	currentErr := r.current(ctx)
+	finishReadTools()
+	if err := currentErr; err != nil {
 		return nil, err
 	}
 	if name != r.tools.IP && name != r.tools.IPTables && name != r.ip6 {
 		return nil, ErrMihomoLiveRetirement
 	}
 	data, err := r.source.RunMihomoColdRead(ctx, name, args...)
-	if closing := r.current(ctx); closing != nil {
+	finishReadTools = mihomoSameBootMeasureContext(ctx, "source-lease-read-tool")
+	closing := r.current(ctx)
+	finishReadTools()
+	if closing != nil {
 		return nil, errors.Join(err, closing)
 	}
 	return data, err

@@ -164,6 +164,9 @@ func (a *SelfUpdateFileAdapter) strategyRollbackImages(ctx context.Context, id s
 	if err != nil {
 		return nil, err
 	}
+	if hasBootstrapOfflineStrategy(review) {
+		return nil, ErrStrategyStateAdmission
+	}
 	retained, present, err := a.strategyRetention(ctx, review)
 	if err != nil {
 		return nil, err

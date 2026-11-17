@@ -1,0 +1,130 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673420969,
+  "attempt": 2,
+  "workflow_conclusion": "failure",
+  "jobs": [
+    {
+      "name": "original-private-set (race)",
+      "id": 129354452922,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-private-set (normal)",
+      "id": 129354453111,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native (normal)",
+      "id": 129354453152,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native (race)",
+      "id": 129354453323,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "id": 129356854170,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "id": 129356854192,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "id": 129356854197,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "id": 129356854211,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "id": 129356854272,
+      "conclusion": "failure"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "id": 129356854287,
+      "conclusion": "failure"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "id": 129356854294,
+      "conclusion": "failure"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "id": 129356854308,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "id": 129356854363,
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "id": 129356854496,
+      "conclusion": "success"
+    }
+  ],
+  "actual_parent_baselines_s": {
+    "normal": 39.18,
+    "race": 105.19
+  },
+  "normal_ack_cuts_s": {
+    "retirement.json": 57.93,
+    "runtime-history": 58.63,
+    "completed.json": 58.81,
+    "terminal-transaction": 55.55,
+    "terminal-global": 89.53
+  },
+  "race_ack_cuts": {
+    "completed.json": {
+      "pass_s": 108.04
+    },
+    "runtime-history": {
+      "pass_s": 111.17
+    },
+    "retirement.json": {
+      "fail_s": 120,
+      "stage": "absence-source-opening"
+    },
+    "terminal-transaction": {
+      "fail_s": 120,
+      "stage": "absence-source-opening"
+    },
+    "terminal-global": {
+      "fail_s": 120,
+      "stage": "absence-process-kernel"
+    }
+  },
+  "contract": "One production CLI2min aggregate covers original Run and atmostone original-owner Retry within samefiveleases; no deadline changes",
+  "raw": {
+    "sameboot-normal-completed.log": "5c5791fc0b0cfd3501474444b2a7c6b9e2689457ab0d3fd5cd83401c2b7e9264",
+    "sameboot-normal-retirement.log": "eeab24ddc006550bc33297dbe64487fcd9355605019c7fdbf81d8b58fe5b3fb2",
+    "sameboot-normal-runtime-history.log": "5f3f5e243009c5db4188c52ab9bb9cec0e2a3e4cabcd4c4b711c9ff1cf7787de",
+    "sameboot-normal-terminal-global.log": "0a0eeebf1ae8bc9ac6040b956cd02164ff5cc3e67382606cdcd25cba447e67bf",
+    "sameboot-normal-terminal-transaction.log": "0546495af278d2befb537233551be69ae02b00b86df03db35afcf1b945b8ce42",
+    "sameboot-parent-normal.log": "2821fbd568007fcfa2fddb67bbdabadd90ea4edfca7118b11e07f1729c157410",
+    "sameboot-parent-race.log": "51559e9e3a0c8cde358a15f6d9bbf840986c317f8217c3f6d98001f0fa77443e",
+    "sameboot-race-completed.log": "74eb4613fdbe1ebb8ff2176aeb86fd4af5449305786374c9c36c0333530329b9",
+    "sameboot-race-retirement.log": "ea56169eced97d7ef4cda17b8aa218dde387ecc45f0eb435eed24abe263f5d3c",
+    "sameboot-race-runtime-history.log": "c513f7dd01d1f0cb9a827fd830980e673e8ae520dc2f9c609ff10d15d086577a",
+    "sameboot-race-terminal-global.log": "3a3bb314412645a5cba9f09d61a5b0857c34b56df51049621455ccf657d620cd",
+    "sameboot-race-terminal-transaction.log": "d8d7f485ca6e13b4b0f99f145f2833c69df2665ba52335f46b2cfd3e38655caa"
+  },
+  "limitations": [
+    "Ubuntu native modeled classification, not physical router",
+    "Race3cuts failed true original deadline; no full sameboot readiness",
+    "Different runners and fixed order prohibit causal cross-run acceleration claim",
+    "Native updater guard subprocess overhead is included; it does not turn one original retry into two independent commands"
+  ]
+}

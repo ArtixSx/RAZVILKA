@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "sha": "6cba005b798d031e77c3f6934dc46ea399de03ea",
+  "run_id": 43948051402,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43948051402",
+  "result": "PASS",
+  "scope": "Private Linux original pre-ledger and earlier prepared-active recovery, production and race",
+  "full_apply_proven": false,
+  "router_proven": false,
+  "review": "Independent source review plus root raw hash, exact 16 contracts per mode and complete recovery markers readback",
+  "seconds": {
+    "production": {
+      "preledger": 29.95,
+      "prepared_active": 26.78
+    },
+    "race": {
+      "preledger": 62.59,
+      "prepared_active": 56.95
+    }
+  },
+  "raw": [
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\managed-recovery-6cba005b\\artifacts\\research-managed-production-6cba005b798d031e77c3f6934dc46ea399de03ea\\preledger-contracts.log",
+      "sha256": "ACCB76DB16B18E96414B4660BE66BC2E3A2FC1D49CD266728628B4B5A4924E16",
+      "bytes": 11418,
+      "pass": [
+        "--- PASS: TestNFQWSPreparedPolicyHeldWriterLifetimeAndOriginalTransition (0.03s)",
+        "--- PASS: TestNFQWSPreparedPolicyFailureRetainsSamePreLedgerCustody (0.03s)",
+        "--- PASS: TestNFQWSPreparedPolicyHeldAbsenceRefusesForeignAndClosed (0.14s)",
+        "--- PASS: TestNFQWSPreparedPolicyJoinsBorrowedAbsenceBeforeReturn (0.01s)",
+        "--- PASS: TestNFQWSPreparedPolicyOriginalEntryBeforeFirstGuard (0.02s)",
+        "--- PASS: TestNFQWSPreparedPolicyNoMarkerDoesNotAdmitHeldLock (0.01s)",
+        "--- PASS: TestNFQWSPreparedPolicyCustomRuntimeCannotAdoptPreparation (0.02s)",
+        "--- PASS: TestNFQWSPreparedPolicyHonorsActualCallerCancellation (0.02s)",
+        "--- PASS: TestNFQWSPreparedPolicyAlsoHonorsOriginalParentCancellation (0.01s)",
+        "--- PASS: TestNFQWSPreparedPolicyFaultRunsAfterBothComparisonLocks (0.01s)",
+        "--- PASS: TestNFQWSOriginalPreLedgerFailureLosesCleanupCustody (0.00s)",
+        "--- PASS: TestNFQWSPreLedgerOriginalWriterPublishesOnlyPlannedAndClosesStrictly (0.01s)",
+        "--- PASS: TestNFQWSPreLedgerRefusesForeignOrLostOriginalWitness (0.10s)",
+        "--- PASS: TestNFQWSPreLedgerPublicationRetainsSameFDAndNeverRearms (0.08s)",
+        "--- PASS: TestNFQWSPreLedgerDriftKeepsOriginalWriterFenced (0.04s)",
+        "--- PASS: TestNFQWSPreLedgerPublishingCannotAdoptForeignPathOrDocument (0.06s)",
+        "PASS"
+      ],
+      "failure": [],
+      "markers": []
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\managed-recovery-6cba005b\\artifacts\\research-managed-production-6cba005b798d031e77c3f6934dc46ea399de03ea\\preledger.log",
+      "sha256": "A4B605A98A0F91B48462DD647B6651DE74B98E9A054134F88005956CB65B31A2",
+      "bytes": 21193,
+      "pass": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "PASS",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.16s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreLedgerRecovery (29.95s)",
+        "PASS"
+      ],
+      "failure": [],
+      "markers": [
+        "2026/11/16 20:18:15 actual_preledger_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false",
+        "    strategy_managed_probe_native_linux_test.go:485: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+      ]
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\managed-recovery-6cba005b\\artifacts\\research-managed-production-6cba005b798d031e77c3f6934dc46ea399de03ea\\prepared-active.log",
+      "sha256": "B7152DC077ED66D1D5C75FF67C7ACBE8892B277B1B10F6BB98AEF8F9C127A450",
+      "bytes": 21132,
+      "pass": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "PASS",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.08s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreparedActiveRecovery (26.78s)",
+        "PASS"
+      ],
+      "failure": [],
+      "markers": [
+        "2026/11/16 20:18:47 actual_prepared_active_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false prepared_used=true capture_ready=false",
+        "    strategy_managed_probe_native_linux_test.go:485: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+      ]
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\managed-recovery-6cba005b\\artifacts\\research-managed-race-6cba005b798d031e77c3f6934dc46ea399de03ea\\preledger-contracts.log",
+      "sha256": "0E81CB8D619331DAC4F33FBAC5F7CCAD736C0D3C9E3A5A33114DD2B96B887F72",
+      "bytes": 11418,
+      "pass": [
+        "--- PASS: TestNFQWSPreparedPolicyHeldWriterLifetimeAndOriginalTransition (0.04s)",
+        "--- PASS: TestNFQWSPreparedPolicyFailureRetainsSamePreLedgerCustody (0.10s)",
+        "--- PASS: TestNFQWSPreparedPolicyHeldAbsenceRefusesForeignAndClosed (0.32s)",
+        "--- PASS: TestNFQWSPreparedPolicyJoinsBorrowedAbsenceBeforeReturn (0.02s)",
+        "--- PASS: TestNFQWSPreparedPolicyOriginalEntryBeforeFirstGuard (0.05s)",
+        "--- PASS: TestNFQWSPreparedPolicyNoMarkerDoesNotAdmitHeldLock (0.02s)",
+        "--- PASS: TestNFQWSPreparedPolicyCustomRuntimeCannotAdoptPreparation (0.05s)",
+        "--- PASS: TestNFQWSPreparedPolicyHonorsActualCallerCancellation (0.04s)",
+        "--- PASS: TestNFQWSPreparedPolicyAlsoHonorsOriginalParentCancellation (0.02s)",
+        "--- PASS: TestNFQWSPreparedPolicyFaultRunsAfterBothComparisonLocks (0.02s)",
+        "--- PASS: TestNFQWSOriginalPreLedgerFailureLosesCleanupCustody (0.00s)",
+        "--- PASS: TestNFQWSPreLedgerOriginalWriterPublishesOnlyPlannedAndClosesStrictly (0.03s)",
+        "--- PASS: TestNFQWSPreLedgerRefusesForeignOrLostOriginalWitness (0.21s)",
+        "--- PASS: TestNFQWSPreLedgerPublicationRetainsSameFDAndNeverRearms (0.13s)",
+        "--- PASS: TestNFQWSPreLedgerDriftKeepsOriginalWriterFenced (0.09s)",
+        "--- PASS: TestNFQWSPreLedgerPublishingCannotAdoptForeignPathOrDocument (0.16s)",
+        "PASS"
+      ],
+      "failure": [],
+      "markers": []
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\managed-recovery-6cba005b\\artifacts\\research-managed-race-6cba005b798d031e77c3f6934dc46ea399de03ea\\preledger.log",
+      "sha256": "8779415E1D4C92CA74C734439A48082F27F0A8AE53C1B7EA74D16A7651874DC1",
+      "bytes": 21034,
+      "pass": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "PASS",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.01s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreLedgerRecovery (62.59s)",
+        "PASS"
+      ],
+      "failure": [],
+      "markers": [
+        "2026/11/16 20:20:08 actual_preledger_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false",
+        "    strategy_managed_probe_native_linux_test.go:485: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+      ]
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\managed-recovery-6cba005b\\artifacts\\research-managed-race-6cba005b798d031e77c3f6934dc46ea399de03ea\\prepared-active.log",
+      "sha256": "511A09DD1CAF6493DD6554B427D311F7A97E99D44134BDD37EE7DC0F0CA36520",
+      "bytes": 20991,
+      "pass": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "PASS",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.10s)",
+        "PASS",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreparedActiveRecovery (56.95s)",
+        "PASS"
+      ],
+      "failure": [],
+      "markers": [
+        "2026/11/16 20:21:15 actual_prepared_active_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false prepared_used=true capture_ready=false",
+        "    strategy_managed_probe_native_linux_test.go:485: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+      ]
+    }
+  ]
+}

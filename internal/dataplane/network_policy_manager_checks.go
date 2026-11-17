@@ -37,7 +37,7 @@ type NetworkPolicyChecks struct {
 	proxies      map[string]ProxyTunnelAdapter
 	ids          []string
 	generation   uint64
-	read         func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error)
+	readSource   networkPolicyInventoryReader
 	inventory    *BackendInventory // SAME startup collector, never a supplied capture.
 	closed       atomic.Bool
 	wgInactivity map[string]*WGInactivityRead // Frozen once by original startup.
@@ -56,6 +56,7 @@ func (m *Manager) BindNetworkPolicyChecks(gate *NetworkPolicyAdapter, inventory 
 	c, err := m.bindNetworkPolicyChecks(gate, frozen.Read)
 	if err == nil {
 		c.inventory = &frozen
+		c.readSource = &networkPolicyOriginalInventoryReader{inventory: c.inventory}
 	}
 	return c, err
 }
@@ -74,7 +75,7 @@ func (m *Manager) bindNetworkPolicyChecks(gate *NetworkPolicyAdapter, read func(
 		return nil, ErrNetworkPolicyConsumers
 	}
 	r := gate.Binding.Runtime
-	c := &NetworkPolicyChecks{manager: m, gate: gate, binding: gate.Binding, runtime: r, tools: [3]string{r.IP, r.IPTables, r.IP6Tables}, identity: gate.identity, network: gate.identity.value, root: m.StateRoot, anchor: anchor, owner: owner, read: read, adapters: map[string]Adapter{}, roots: map[string]string{}, dependencies: map[string][2]any{}, proxies: map[string]ProxyTunnelAdapter{}}
+	c := &NetworkPolicyChecks{manager: m, gate: gate, binding: gate.Binding, runtime: r, tools: [3]string{r.IP, r.IPTables, r.IP6Tables}, identity: gate.identity, network: gate.identity.value, root: m.StateRoot, anchor: anchor, owner: owner, readSource: networkPolicyInventoryCallback(read), adapters: map[string]Adapter{}, roots: map[string]string{}, dependencies: map[string][2]any{}, proxies: map[string]ProxyTunnelAdapter{}}
 	m.registryMu.RLock()
 	c.generation = m.registryGeneration
 	for id, adapter := range m.Adapters {

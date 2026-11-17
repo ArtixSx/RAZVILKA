@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "sha": "5419a28e5d0b84e4d53616498f577eee468a977f",
+  "run_id": 43950697699,
+  "overall_result": "FAIL",
+  "scope": "Manual managed production diagnostic; four original WG observations completed",
+  "contract_mode": "normal",
+  "race_contract_runtime": "not_run",
+  "router_proven": false,
+  "original_wg_budget_seconds": 8,
+  "calls": [
+    {
+      "stage_ms": {
+        "table-reference": 771.666444,
+        "rules": 255.58817900000003,
+        "ownership": 0.025047,
+        "table-empty": 2331.6666269999996,
+        "links": 190.780315,
+        "processes": 4.82838
+      },
+      "total_ms": 3554.570496,
+      "outcome": "completed",
+      "records": 34
+    },
+    {
+      "stage_ms": {
+        "table-reference": 778.2663600000001,
+        "rules": 265.578843,
+        "ownership": 0.029863999999999998,
+        "table-empty": 2317.1460799999995,
+        "links": 208.211415,
+        "processes": 4.783262
+      },
+      "total_ms": 3574.032999,
+      "outcome": "completed",
+      "records": 34
+    },
+    {
+      "stage_ms": {
+        "table-reference": 779.7287279999999,
+        "rules": 255.35423500000002,
+        "ownership": 0.024246,
+        "table-empty": 2344.0547800000004,
+        "links": 188.79460799999998,
+        "processes": 4.8171479999999995
+      },
+      "total_ms": 3572.790186,
+      "outcome": "completed",
+      "records": 34
+    },
+    {
+      "stage_ms": {
+        "table-reference": 777.4061650000001,
+        "rules": 260.150916,
+        "ownership": 0.028603,
+        "table-empty": 2342.058125,
+        "links": 195.219929,
+        "processes": 5.087591
+      },
+      "total_ms": 3579.967882,
+      "outcome": "completed",
+      "records": 34
+    }
+  ],
+  "actual_result": [
+    "2026/11/16 20:35:43 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=38594",
+    "    strategy_managed_probe_native_linux_test.go:485: actual original LAN execution state=rolled-back rollback_verified=true",
+    "    strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true",
+    "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (41.89s)"
+  ],
+  "raw": {
+    "path": "C:\\RAZVILKA-research-20261116\\wg-stage-5419a28e\\artifacts\\research-managed-production-5419a28e5d0b84e4d53616498f577eee468a977f\\manual.log",
+    "sha256": "aa5914e6fec7883bd84b60f05458f8f29007a5ff4d498b90091bfeae24d3c60e"
+  },
+  "limitations": [
+    "Observed WG bodies did not exhaust their 8 second deadline.",
+    "The full manual apply failed at inventory-consumer-close.",
+    "Verified rollback and independent empty cleanup do not make Apply successful."
+  ]
+}

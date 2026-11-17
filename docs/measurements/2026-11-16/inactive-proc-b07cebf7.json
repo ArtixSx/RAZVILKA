@@ -1,0 +1,175 @@
+{
+  "schema": 1,
+  "kind": "native_process_terminal_correctness",
+  "recorded_date": "2026-11-16",
+  "baseline": {
+    "revision": "541764f56d02ab76ba3ffb15f93200622d352f94",
+    "run_id": 43928445140,
+    "job_id": 133514086545,
+    "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43928445140",
+    "workflow_result": "success",
+    "meaning": "Diagnostic reproduced the defect: actual zombie leader, two threads, responsive worker incorrectly passed both proxy and scoped-DNS inactive observers. This baseline PASS means successful bug reproduction, not safe behavior."
+  },
+  "candidate": {
+    "revision": "b07cebf7295239921f63b5c9639e413d8db4ba07",
+    "run_id": 43934484415,
+    "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43934484415",
+    "workflow_result": "success",
+    "jobs": [
+      {
+        "mode": "normal",
+        "job_id": 133535360912,
+        "model_and_actual_self_gate": "PASS",
+        "native_gate": "PASS",
+        "selected_skips": 0
+      },
+      {
+        "mode": "race",
+        "job_id": 133535361674,
+        "model_and_actual_self_gate": "PASS",
+        "native_gate": "PASS",
+        "selected_skips": 0
+      }
+    ]
+  },
+  "environment": {
+    "os": "Ubuntu 24.04 hosted disposable CI",
+    "kernel": "Linux 7.0.0-1017-azure x86_64",
+    "go": "go1.26.5 linux/amd64",
+    "cc": "Ubuntu GCC 13.3.0-6ubuntu2~24.04.1",
+    "isolation": "private PID1, network and mount namespaces; recursive-private mounts; fresh procfs; no host/router changes"
+  },
+  "actual_cases": [
+    {
+      "case": "zombie-leader-live-worker",
+      "evidence": "state Z, threads 2, successful worker pipe ping before/after observers",
+      "baseline": "incorrectly admitted",
+      "candidate_normal": "REFUSED",
+      "candidate_race": "REFUSED",
+      "observers": [
+        "proxyInactiveProc",
+        "scopedDNSInactiveProc"
+      ]
+    },
+    {
+      "case": "worker-exec",
+      "evidence": "same original PID and start ticks after worker exec; both live observers refuse",
+      "candidate_normal": "PASS",
+      "candidate_race": "PASS"
+    },
+    {
+      "case": "single-thread-zombie-then-gone",
+      "evidence": "Z/1 accepted after fresh proof; sole original Wait; retained PID stat absent and same anchored named PID absent",
+      "candidate_normal": "PASS",
+      "candidate_race": "PASS"
+    },
+    {
+      "case": "same-inode-different-mount",
+      "count": 5,
+      "targets": [
+        "PID directory",
+        "stat leaf",
+        "cmdline leaf",
+        "self ns directory",
+        "self fdinfo directory"
+      ],
+      "evidence": "unchanged device/inode, different mount ID, mandatory refusal, unmount and original read recovery per case",
+      "candidate_normal": "PASS",
+      "candidate_race": "PASS"
+    }
+  ],
+  "model_cases": [
+    "live to final Z/1 accepted only after exact terminal proof",
+    "live to final Z/>1 or X/x refused",
+    "known NFQ terminal names remain refused",
+    "except PID and self never receive terminal exemption",
+    "birth/inode drift, cancellation, malformed threads and copied handles refused",
+    "closing terminal state cannot skip proof",
+    "fixed diagnostic labels and error unwrapping preserved"
+  ],
+  "intermediate": {
+    "revision": "d8ffc8c0dafcbac79e798e75f8f4f67f56406bab",
+    "run_id": 43932721248,
+    "workflow_result": "failure",
+    "meaning": "Go model tests passed but workflow selected two unrelated opt-in native tests and rejected their SKIP; corrected explicit skip selection in candidate; physical native step did not execute on intermediate revision"
+  },
+  "limitations": [
+    "No before/after speed claim: this is correctness evidence; test durations are not performance measurements.",
+    "Rewritten stat transitions are explicit ordinary-file models; physical leader/worker, exec, zombie, gone and bind-mount cases use actual Linux processes/procfs.",
+    "No runtime proof on Linux 4.9, ARM64 or the physical router. Implementation uses Linux 4.9-compatible held descriptors/fdinfo and no pidfd dependency; compatibility still needs target execution.",
+    "This does not prove full route, service, LAN, Stop or sameboot acceptance; their exact-revision gates remain separate.",
+    "Procfs state/thread counts are sampled observations, not an atomic kernel process freeze."
+  ],
+  "raw_artifact_roots": {
+    "baseline": "C:/RAZVILKA-research-20261116/inactive-proc-541/artifacts",
+    "candidate": "C:/RAZVILKA-research-20261116/inactive-proc-b07/artifacts"
+  },
+  "raw_sha256_manifest": [
+    {
+      "set": "baseline",
+      "path": "inactive-proc-threadgroup-541764f56d02ab76ba3ffb15f93200622d352f94/environment.txt",
+      "bytes": 439,
+      "sha256": "b3957431c2379642238e3202ef005b397740bcbe0d420d3eccc817db8e4fd561"
+    },
+    {
+      "set": "baseline",
+      "path": "inactive-proc-threadgroup-541764f56d02ab76ba3ffb15f93200622d352f94/native.log",
+      "bytes": 1154,
+      "sha256": "b2b627a8059797c1fe2d01c3ae45f8499a3e86507ec7e805105c82f38ee07b24"
+    },
+    {
+      "set": "baseline",
+      "path": "inactive-proc-threadgroup-541764f56d02ab76ba3ffb15f93200622d352f94/source.sha256",
+      "bytes": 214,
+      "sha256": "ebe3e295f6e6c24c3b3b5d07f7fad960843ed2cd798b25ed900a5ed9ac365c1a"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-normal-b07cebf7295239921f63b5c9639e413d8db4ba07/environment.txt",
+      "bytes": 439,
+      "sha256": "dfeb758be6d102f6cf5ba6d96acf34da76e1eae02d7cd02a7b23432f11f015ee"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-normal-b07cebf7295239921f63b5c9639e413d8db4ba07/models.log",
+      "bytes": 81259,
+      "sha256": "4ba30c1ef73363ff06c0a760fd52c623e6178674c5fc2e5cd35d6ccd057bce6f"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-normal-b07cebf7295239921f63b5c9639e413d8db4ba07/native.log",
+      "bytes": 1852,
+      "sha256": "fc0436017e36b983e1ba44868040f7639735802fccf5f9ca57759debeaf4d8cb"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-normal-b07cebf7295239921f63b5c9639e413d8db4ba07/source.sha256",
+      "bytes": 214,
+      "sha256": "271dc5b56ce4506864361646e901b58df4a272fb57ebf0946ac44d4d406ae5b7"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-race-b07cebf7295239921f63b5c9639e413d8db4ba07/environment.txt",
+      "bytes": 439,
+      "sha256": "dfeb758be6d102f6cf5ba6d96acf34da76e1eae02d7cd02a7b23432f11f015ee"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-race-b07cebf7295239921f63b5c9639e413d8db4ba07/models.log",
+      "bytes": 81259,
+      "sha256": "da4937f380c9208cb708adfeb25cb050d44ff8ab2bc28641ace256f2b4eb3943"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-race-b07cebf7295239921f63b5c9639e413d8db4ba07/native.log",
+      "bytes": 1852,
+      "sha256": "ea994c4567d4277c2cb8e92dd89b6460589364743e6fab59f83aa133c4976116"
+    },
+    {
+      "set": "candidate",
+      "path": "inactive-proc-threadgroup-race-b07cebf7295239921f63b5c9639e413d8db4ba07/source.sha256",
+      "bytes": 214,
+      "sha256": "271dc5b56ce4506864361646e901b58df4a272fb57ebf0946ac44d4d406ae5b7"
+    }
+  ]
+}

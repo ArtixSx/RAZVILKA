@@ -1,0 +1,82 @@
+{
+  "run": 43927533589,
+  "sha": "8ab8f1007c492823a337a211cd7b2452193a8d5d",
+  "checked_at": "2026-11-16T18:22:23.247266+00:00",
+  "conclusion": "success",
+  "scope": "Same-host paired complete proc leaf; normal/race hosts separate; not full route/router proof",
+  "modes": {
+    "normal": {
+      "original_median_ms": 0.0797054296875,
+      "production_median_ms": 0.07608539843750001,
+      "median_change_percent": -4.541762417181605,
+      "paired_changes_percent": [
+        7.6875146855587495,
+        -7.063986890079943,
+        -3.634524504113257,
+        -0.006211571029313134,
+        -10.000419764506363,
+        -1.047831363412266,
+        -11.591912578994457,
+        3.356629112552567
+      ],
+      "pairs": 8,
+      "calls_per_sample": 64,
+      "baseline_revision": "60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4",
+      "raw_implementation": "actual-production"
+    },
+    "race": {
+      "original_median_ms": 0.35074153124999996,
+      "production_median_ms": 0.2848198046875,
+      "median_change_percent": -18.794958876858114,
+      "paired_changes_percent": [
+        -25.148400644675096,
+        -15.158668353595361,
+        -16.227889823796648,
+        -17.73466864415082,
+        -23.12989256390291,
+        -16.96438472293089,
+        -20.666888326785106,
+        -13.454540612583731
+      ],
+      "pairs": 8,
+      "calls_per_sample": 64,
+      "baseline_revision": "60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4",
+      "raw_implementation": "actual-production"
+    }
+  },
+  "independent_verification": {
+    "file_hashes": 28,
+    "medians_recomputed": true
+  },
+  "raw_artifact_caption_erratum": "syscall-counts.json retains the earlier experiment caption No production code changed; this caption is stale at8ab. Actual source-parity/implementation markers prove raw=actual-production. Caption corrected in a20146de; original artifacts and their hashes preserved.",
+  "file_sha256": {
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/environment.txt": "9b838eb0f84f3fb562693004f1acb32702dba95a2aff9fc37eecf08ee5c422ac",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/pairs.json": "744a0b46a948dceca4eaaa6ddc096d5cfe8f75c486ff2d7d12047315dd81f531",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/pairs.log": "75152415c3b2f0a2943d5eeeb5ff6616c57f4a0fe0b73db03c75af71058bed6a",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/source-tools.sha256": "76c013645e7213ee13b67df290124c79daacbbf8c57afd41ed28c51155d211c6",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/syscall-counts.json": "668ce5c5767292e890e2475fcfa3e1067c243ea6a145ad4e03e98ecadea02847",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/syscall.5933": "052a4a36783211342dccb75c9ffacdd6419121a3b8f8709d36ada7ad36141656",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/syscall.5934": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/syscall.5935": "0c039ec707a5b3ab72f166e2d324770142601060d0a414298952a0050130d3b9",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/syscall.5936": "e284f1604733564e346c01b6a6edcb09b803939716bf25397101e1061dc9a304",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/syscall.5937": "39c28aeccf48cbb60153f5eab0abad8466bed92b146c5a39a75986996fbb9714",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/syscall.5938": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/syscall.5939": "f21b138bffff966e1e8c810172c6db5281dff05895629b12c7ef5aecb6a950ab",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-original/test.log": "d2f5dae7970b5ee05c8cb3051fd7fd64404683d38bd1ef9384b897a9b083bd7d",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/syscall.5947": "b6354380f23488fdfa8968ef6e5ea0632bd111d3d2fdcf67abb062483b1181a9",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/syscall.5948": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/syscall.5949": "63ad666c7ca4ee33a792ec5826061457fbaf51a385e177d8e31ed2b2446b20e4",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/syscall.5950": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/syscall.5951": "fbc17dd354c3c040c0969d18faaf5bfab1a1ef2581f66c83692d774c9aeec2d9",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/syscall.5952": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/syscall.5953": "eb70ff3dda4515a7e45962be47e979d36d63b479bf70283f8ee651eac32a201f",
+    "paired-artifacts/backend-proc-io-normal-8ab8f1007c492823a337a211cd7b2452193a8d5d/trace-raw/test.log": "d2f5dae7970b5ee05c8cb3051fd7fd64404683d38bd1ef9384b897a9b083bd7d",
+    "paired-artifacts/backend-proc-io-race-8ab8f1007c492823a337a211cd7b2452193a8d5d/environment.txt": "e01115fd9b4e00d04d45f1c2b7f1b3596d9829a8a461b784d6d560f8a22916a3",
+    "paired-artifacts/backend-proc-io-race-8ab8f1007c492823a337a211cd7b2452193a8d5d/pairs.json": "1c980e33b3712478906f974b30740c733b73464b1f3de95b5ec000ddad60f813",
+    "paired-artifacts/backend-proc-io-race-8ab8f1007c492823a337a211cd7b2452193a8d5d/pairs.log": "461f4a16a558ceaaa83c8042e0e75eabae14a549835a5a32585cb7768b39ce1e",
+    "paired-artifacts/backend-proc-io-race-8ab8f1007c492823a337a211cd7b2452193a8d5d/source-tools.sha256": "31e8a5c4a4e1324f77636af8de95f7de2b775f6201082b3d2ed63c32bcc38a88",
+    "paired-status.json": "980c2dc8061e3c81ee37c8e42be6cc1232decca317d3f1796fd6e23c328a28d4",
+    "paired.log": "f2bb2b674435496273d3eca5834d24c79635b455464e56b13994655fa12da6a6",
+    "verified-paired-result.json": "14b0c79ab947926f31cfb2b2e1b26010e144d5f09c0826b4ba6e68f2de89d78c"
+  }
+}

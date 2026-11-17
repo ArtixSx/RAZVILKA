@@ -124,7 +124,7 @@ func newMihomoLiveSidecar(ctx context.Context, r *mihomoLiveResource, spec Proce
 	n.command.Args[0], n.command.Dir = spec.Binary, spec.Dir
 	n.command.Env = []string{}
 	n.command.ExtraFiles = []*os.File{n.binary, n.profile}
-	n.command.Stdout, n.command.Stderr = io.Discard, io.Discard
+	mihomoLiveSidecarConfigureOutput(n)
 	return n, nil
 }
 
@@ -135,23 +135,28 @@ func (n *mihomoLiveSidecar) start(ctx context.Context) error {
 		return errMihomoLiveMaterial
 	}
 	if err := n.owner.currentBeforeStart(ctx); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-start-owner", err)
 	}
 	if err := n.owner.control.WithStart(ctx, func() error {
 		if err := n.command.Start(); err != nil {
 			return err
 		}
 		n.started = true
-		go func() { n.waitErr = n.command.Wait(); n.state = n.command.ProcessState; close(n.done) }()
+		go func() {
+			n.waitErr = n.command.Wait()
+			n.state = n.command.ProcessState
+			mihomoLiveSidecarFinishOutput(n)
+			close(n.done)
+		}()
 		return nil
 	}); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-start-control", err)
 	}
 	n.pidRaw = []byte(strconv.Itoa(n.command.Process.Pid) + "\n")
 	var err error
 	n.receiptRaw, err = routeidentity.RecordStart(n.command.Process.Pid, n.spec.Binary, n.spec.Args, n.spec.MatchArg, n.owner.definition.Sidecar.ConfigSHA256)
 	if err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-start-receipt", err)
 	}
 	for index, entry := range []struct {
 		path string
@@ -164,7 +169,10 @@ func (n *mihomoLiveSidecar) start(ctx context.Context) error {
 		}
 		err = n.publishIdentity(ctx, index, name, entry.data)
 		if err != nil {
-			return err
+			if index == 0 {
+				return mihomoLiveSidecarDiagnostic("sidecar-start-pid-publish", err)
+			}
+			return mihomoLiveSidecarDiagnostic("sidecar-start-receipt-publish", err)
 		}
 		*entry.info, err = n.root.Stat(name)
 		if err != nil {
@@ -221,13 +229,14 @@ func (n *mihomoLiveSidecar) currentLocked(ctx context.Context) error {
 	}
 	select {
 	case <-n.done:
-		return errMihomoLiveMaterial
+		mihomoLiveSidecarExitDiagnostic(n)
+		return mihomoLiveSidecarDiagnostic("sidecar-child-exited", errMihomoLiveMaterial)
 	default:
 	}
-	if err := errors.Join(n.metadata(ctx), n.owner.control.ObserveCurrent(ctx)); err != nil {
+	if err := errors.Join(mihomoLiveSidecarDiagnostic("sidecar-metadata", n.metadata(ctx)), mihomoLiveSidecarDiagnostic("sidecar-control", n.owner.control.ObserveCurrent(ctx))); err != nil {
 		return err
 	}
-	return n.kernelCurrent(ctx)
+	return mihomoLiveSidecarDiagnostic("sidecar-kernel", n.kernelCurrent(ctx))
 }
 
 func (n *mihomoLiveSidecar) kernelCurrent(ctx context.Context) error {
@@ -344,6 +353,9 @@ func (n *mihomoLiveSidecar) cleanup(ctx context.Context, review *operationgate.E
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	// The original join is already complete, including a child that exited
+	// before its start receipt could be recorded. Normal builds are a no-op.
+	mihomoLiveSidecarExitDiagnostic(n)
 	if !xraySelectedTCPWaitResult(n.command.Process.Pid, n.state, n.waitErr) || originalProcessPIDAbsent(n.command.Process.Pid) != nil {
 		return errMihomoLiveMaterial
 	}

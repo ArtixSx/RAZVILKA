@@ -1,0 +1,57 @@
+{
+  "commit": "53fd786e6ab49bc470657943a5c0b1229d7a3b07",
+  "run_id": 43906655885,
+  "source_lab": "PASS",
+  "official_default_pin_changed": false,
+  "physical_router_tested": false,
+  "high_minimum_native_host_tested": false,
+  "same_boot_qualification": "pending",
+  "source_population": [
+    {
+      "runner": "24.04",
+      "platform": "hev_runtime_altstack_lab_native_linux_test.go:121: hev_altstack_lab_platform at_minsigstksz_bytes=3376 original_compatibility_failure_expected=false production_pin_unchanged=true",
+      "artifacts": {
+        "hev-socks5-tunnel-2.17.1.tar.xz": "a7b86050091c5a268d81de70b95d3bb0871ba4136160662b6496596761c2f9a7",
+        "x86_64-unknown-linux-musl.tar.xz": "5f20e367608d6e547c04534d37d00ecedbaa0c2e82730df12957b3332fa36a2d",
+        "hev-runtime-altstack.patch": "30dcee28f54a82305dd2da9b0b640a0dc54550d865bc2cf86cdafb404b7e7984",
+        "hev-runtime-altstack-fault-test.c": "12d333a6eef43b1fa8f50f08c7a27e3a621ee051b8d92e2ca107db38028a4143",
+        "bin/hev-original": "a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03",
+        "bin/hev-patched": "1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9",
+        "bin/altstack-fault.test": "c3cc99c25995f5691255fbf6aeeb86c472f68cba864e7b704596b2cf2c3d6b64"
+      },
+      "rows": 32,
+      "original_exit254": 0,
+      "patched_success": 16,
+      "stacks": [
+        0,
+        8192,
+        11568
+      ]
+    },
+    {
+      "runner": "26.04",
+      "platform": "hev_runtime_altstack_lab_native_linux_test.go:121: hev_altstack_lab_platform at_minsigstksz_bytes=3632 original_compatibility_failure_expected=false production_pin_unchanged=true",
+      "artifacts": {
+        "hev-socks5-tunnel-2.17.1.tar.xz": "a7b86050091c5a268d81de70b95d3bb0871ba4136160662b6496596761c2f9a7",
+        "x86_64-unknown-linux-musl.tar.xz": "5f20e367608d6e547c04534d37d00ecedbaa0c2e82730df12957b3332fa36a2d",
+        "hev-runtime-altstack.patch": "30dcee28f54a82305dd2da9b0b640a0dc54550d865bc2cf86cdafb404b7e7984",
+        "hev-runtime-altstack-fault-test.c": "12d333a6eef43b1fa8f50f08c7a27e3a621ee051b8d92e2ca107db38028a4143",
+        "bin/hev-original": "a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03",
+        "bin/hev-patched": "1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9",
+        "bin/altstack-fault.test": "c3cc99c25995f5691255fbf6aeeb86c472f68cba864e7b704596b2cf2c3d6b64"
+      },
+      "rows": 32,
+      "original_exit254": 0,
+      "patched_success": 16,
+      "stacks": [
+        0,
+        8192,
+        11824
+      ]
+    }
+  ],
+  "full_generic_ci_pass": {
+    "commit": "9e73d133bc43493ca9d8eeb6a573dfc16d40ee39",
+    "run_id": 43901009649
+  }
+}

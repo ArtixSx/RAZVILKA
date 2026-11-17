@@ -1,0 +1,40 @@
+{
+  "limitations": [
+    "Does not solve separate check-settlement110s fixture timeout in same run",
+    "No router proof or performance claim",
+    "No local Go builds due disk constraint"
+  ],
+  "decision": "approved source review; CI and actual HTTP rerun required",
+  "tests": "Targeted context tests inspect 110s/8min caps, values, independent child cancel, inherited parent cancel and expired/unbounded refusal; not locally executed",
+  "invariants": [
+    "Outer Apply8min unchanged",
+    "Component ReserveLiveChild2min refusal unchanged",
+    "All original preflight source/control/profile/custody checks and Start barrier use derived context",
+    "Original child retained before Prepare/Start; failures remain cleanup-owned",
+    "Runtime uses exec.Command not CommandContext; canceling completed startup does not kill live child",
+    "Config validation CommandContext sole Wait joins before runtime Start",
+    "Earlier110s parent preserved exactly and parent cancellation propagates"
+  ],
+  "reviewer": "independent verification agent",
+  "change": "Derive min(original finite deadline,2min) only around original native startup; never mint finite admission for nil/unbounded/canceled caller",
+  "files": [
+    {
+      "path": "internal/dataplane/mihomo_live_child.go",
+      "sha256": "301E7E8D7380D7CB8243728B58085234B6C3B0BF2A384E9625A607DDE5208E8A"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_start_context_test.go",
+      "sha256": "DBD3CEEF01F3FCD25EE5D9B485E2E7483CBF57BA8A3C3FFDB6EF785F052FFDDF"
+    }
+  ],
+  "base_sha": "dac23b293486bfd07292f0105fb4ce00e78f5211",
+  "date": "2026-11-09",
+  "observed_failure": {
+    "test_seconds": 8.47,
+    "job": 129177092505,
+    "run": 42622252631,
+    "rollback": "verified resource removed",
+    "cause": "Real HTTP server Apply deadline8min exceeded existing ReserveLiveChild max2min; fixture client110s deadline is not propagated over HTTP",
+    "phase": "validate"
+  }
+}

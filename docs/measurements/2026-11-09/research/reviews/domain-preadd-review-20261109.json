@@ -1,0 +1,32 @@
+{
+  "review": "APPROVED_CODE_PENDING_CI",
+  "date": "2026-11-09",
+  "reviewer": "verification",
+  "files": {
+    "internal/dataplane/domain_tcp_capture_execution_effects.go": "83a74277ede0579ae37ec6732cfc9023ef8d4cfe861be09085d42f5c6dcbc220",
+    "internal/dataplane/domain_tcp_tool_observation.go": "3f45ce09354cb720de545cdd51bbdc1daa5af234e358b9c00baf5cdac319e375",
+    "internal/dataplane/policy_effect_receipt.go": "19e99348e66d329edbf8e6bc75048254929949c1e0ce2aa78ae523217c38c5fd",
+    "internal/dataplane/synthetic_baseline_execution_resource.go": "8c3bbe1f16877ad2314705d553ffcf05367ad26a1846398df71f42d16848b985",
+    "internal/dataplane/domain_tcp_preadd_observation.go": "725fedfe5a174587428f3b494a56e859ad1eed744145294b5d72a13f4a89aaf2",
+    "internal/dataplane/domain_tcp_preadd_observation_test.go": "ee2daea3a740fa6c533ed468c2f28657acc2624475a0e71858317540147ff0c0",
+    "internal/dataplane/domain_tcp_preadd_measurement_linux_test.go": "12460d5ef5954b77eb5e4d5361dcb5038d71cbbb469fadaa0786a4ad4bd019fb",
+    "internal/dataplane/domain_tcp_original_process_native_linux_test.go": "ceb4d34f47fb9a554482be5bdf333c21886679e4bdacdf2cda246000ee5a64e0"
+  },
+  "checks": [
+    "COMMON pre-add exact four calls retain original order/error classes after durable intent and fault",
+    "scope excludes saves, fault callbacks and actual Add; exact original marker revoked before effect",
+    "all full source/process Current bookends retained",
+    "original captureResource owner association strengthened during review",
+    "pre-entry cancellation cause preserved during review",
+    "foreign/escaped/derived context rejected; independent fallback retained",
+    "whole bytes opening/closing with late mutation rejection; actual child closing Current on cancel",
+    "native factory read/completed/command metrics required to prove real new path entered"
+  ],
+  "executed": [
+    "git diff --check"
+  ],
+  "not_executed": [
+    "Go build/tests, local cache rebuild prohibited",
+    "strict DNS12s/4s and preparation recovery native (required CI)"
+  ]
+}

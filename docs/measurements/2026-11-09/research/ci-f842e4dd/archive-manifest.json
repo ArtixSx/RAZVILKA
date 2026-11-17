@@ -1,0 +1,72 @@
+[
+  {
+    "path": "analysis-output.txt",
+    "sha256": "ce9df5e3f1be8232e765c10761e0ccdc63cc1c299b6f397899fc6da3c1654141",
+    "bytes": 1233
+  },
+  {
+    "path": "analyze_pair.py",
+    "sha256": "79e6cc9295b38c777f4703cd15cce5f908a9e10f6086c9f78a7e7b2ec89e5ad5",
+    "bytes": 6941
+  },
+  {
+    "path": "comparison.txt",
+    "sha256": "f5d4553b33ed59288f86c66315a02a70b7bfd96e704a3d923187c368cc1e5a5f",
+    "bytes": 317
+  },
+  {
+    "path": "paired-analysis.json",
+    "sha256": "e909aafc15cb5f07c89d916a7b2b43ee318e12a5a060e8b363f77b7d9f3280f5",
+    "bytes": 51041
+  },
+  {
+    "path": "baseline/check-current-reuse.csv",
+    "sha256": "14dd18dd42fc52fc21793e445fed48bdb0bf1595c485da6628c7c5210505ab4e",
+    "bytes": 79622
+  },
+  {
+    "path": "baseline/environment.txt",
+    "sha256": "3e4939e385b667c5fffdb23914f45af7585ea6617502d5c1780395ec2009ee09",
+    "bytes": 1463
+  },
+  {
+    "path": "baseline/native-performance.log",
+    "sha256": "00d084bd7806953560219649c0fb70ee531ba3c6bf4e366ecf96a2347a16dd37",
+    "bytes": 1550
+  },
+  {
+    "path": "baseline/queue-http-current.csv",
+    "sha256": "c5061c41a40a71da2787acdf4f725bdd4dafa87e11455821efa23f6d581fd6b3",
+    "bytes": 240425
+  },
+  {
+    "path": "baseline/resource-helper.log",
+    "sha256": "d5f28b84f1beed112dd055d93b9e22db3924d7f82b10206a6bf4c7337003f161",
+    "bytes": 350
+  },
+  {
+    "path": "candidate/check-current-reuse.csv",
+    "sha256": "962299c4e7270b066d77f61bccfd6af6f9f64a820217673172c22e601ccf0306",
+    "bytes": 85414
+  },
+  {
+    "path": "candidate/environment.txt",
+    "sha256": "ab10e3564658fd38282cc78bc59b670e0dd6fcdd1a8953cf446bad80c544c3c4",
+    "bytes": 1463
+  },
+  {
+    "path": "candidate/native-performance.log",
+    "sha256": "293c3d718a1054e52868319e874e606a84b2a19bd11e608f9f67613b8496bd9e",
+    "bytes": 1550
+  },
+  {
+    "path": "candidate/queue-http-current.csv",
+    "sha256": "f546db8414fefb5184c64a7c8b540f85cc3114c6bcbfce1357dcd0783cb9ef1b",
+    "bytes": 251096
+  },
+  {
+    "path": "candidate/resource-helper.log",
+    "sha256": "100f41f27715d5cf4e4d27aeb59644704332be0c1318e7bf54f2da3683216a6c",
+    "bytes": 350
+  }
+]

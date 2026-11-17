@@ -275,48 +275,71 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 	return p, nil
 }
 
-func nfqws2ActiveRead(ctx context.Context, o *nfqws2ActiveOwner, live bool) (nfqws2ActiveProcessLease, error) {
+func nfqws2ActiveRead(ctx context.Context, o *nfqws2ActiveOwner, live bool) (lease nfqws2ActiveProcessLease, result error) {
+	measurement := beginNFQWSBoundaryMeasurement(ctx, "owner-read", "unspecified")
+	returned := false
+	defer func() { measurement.finish(ctx, result, returned) }()
+	lease, result = nfqws2ActiveReadMeasured(ctx, o, live, &measurement)
+	returned = true
+	return lease, result
+}
+
+func nfqws2ActiveReadMeasured(ctx context.Context, o *nfqws2ActiveOwner, live bool, measurement *nfqwsBoundaryMeasurement) (nfqws2ActiveProcessLease, error) {
+	measurement.begin("admission")
 	var zero nfqws2ActiveProcessLease
 	if nfqws2ActiveOperation(ctx) != nil {
 		return zero, ErrNFQWSManagedProcessUnknown
 	}
+	measurement.cause("protected-path")
 	path := filepath.Join(o.command.StateRoot, nfqws2LeaseFile)
 	if nfqws2ManagedProtected(path, true) != nil {
 		return zero, ErrNFQWSManagedProcessUnknown
 	}
+	measurement.begin("receipt-opening")
 	before, err := restorejournal.ReadFileImage(ctx, path)
+	measurement.cause("decode-known")
 	l, decodeErr := nfqws2DecodeActiveLease(before, o.command.StateRoot, o.command.Owner)
 	if err != nil || decodeErr != nil || !o.known(l) {
 		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err, decodeErr)
 	}
 	verify := func() error {
+		measurement.cause("not-live-context")
 		if !live {
 			return ctx.Err()
 		}
+		measurement.cause("state-files-control")
 		if l.Receipt.State != "running" || l.Acknowledged || nfqws2ManagedFilesCurrent(l.Command.fileShape()) != nil || nfqws2ManagedControlCurrent(ctx, l.Command.fileShape()) != nil {
 			return ErrNFQWSManagedProcessUnknown
 		}
+		measurement.cause("provider-current")
 		return o.admission.Provider.WithCurrent(ctx, func(held context.Context, identity netidentity.Identity) error {
+			measurement.cause("network-identity")
 			if identity != l.Command.NetworkIdentity {
 				return ErrNFQWSManagedProcessUnknown
 			}
+			measurement.cause("process-identities")
 			helper, e1 := components.ReadNFQWSSupervisionProcessIdentity(l.Receipt.PID)
 			child, e2 := components.ReadNFQWSRuntimeProcessIdentity(l.Child.PID)
 			if e1 != nil || e2 != nil || helper != o.base.Helper || child != l.Child {
 				return ErrNFQWSManagedProcessUnknown
 			}
+			measurement.cause("provider-closing")
 			return held.Err()
 		})
 	}
+	measurement.begin("verify-opening")
 	if err = verify(); err != nil {
 		return zero, err
 	}
+	measurement.begin("queue")
 	if live {
 		if err = nfqws2ActiveAdmissionQueueCheck(ctx, o.admission, &l.Child); err != nil {
 			return zero, err
 		}
 	}
+	measurement.begin("receipt-closing")
 	after, err := restorejournal.ReadFileImage(ctx, path)
+	measurement.cause("image-compare-or-verify")
 	if err != nil || !reflect.DeepEqual(before, after) || verify() != nil || ctx.Err() != nil {
 		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err, ctx.Err())
 	}

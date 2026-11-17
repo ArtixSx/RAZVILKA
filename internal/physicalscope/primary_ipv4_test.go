@@ -7,7 +7,6 @@ import (
 	"net/netip"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
@@ -172,6 +171,8 @@ func TestPhysicalPrimaryIPv4OriginalBookendsAndStickyRefusal(t *testing.T) {
 			}
 			defer r.Close()
 			active, reads := false, 0
+			var cancelRead context.CancelFunc
+			canceledInRead := false
 			read := func(c context.Context) ([]message, error) {
 				reads++
 				row := primaryIPv4Cache(primaryIPv4Frame(9, "192.0.2.1/24", 0), 100, 200, 1, 1)
@@ -192,6 +193,10 @@ func TestPhysicalPrimaryIPv4OriginalBookendsAndStickyRefusal(t *testing.T) {
 					case "fence":
 						m.fence.changed = true
 					case "cancel":
+						// Cancel only after the original current observation entered
+						// its reader; an already-canceled caller does not poison it.
+						canceledInRead = true
+						cancelRead()
 						<-c.Done()
 					}
 				}
@@ -220,12 +225,15 @@ func TestPhysicalPrimaryIPv4OriginalBookendsAndStickyRefusal(t *testing.T) {
 			}
 			check := ctx
 			if kind == "cancel" {
-				var cancel context.CancelFunc
-				check, cancel = context.WithTimeout(ctx, time.Millisecond)
-				defer cancel()
+				check, cancelRead = context.WithCancel(ctx)
+				defer cancelRead()
 			}
+			beforeCheck := reads
 			if err := p.Current(check); err == nil {
 				t.Fatal("changed/canceled primary evidence accepted")
+			}
+			if kind == "cancel" && (!canceledInRead || reads <= beforeCheck) {
+				t.Fatal("cancellation did not occur inside the original reader")
 			}
 			active, m.fence.changed, m.identity, o.source.current = false, false, originalIdentity, originalCurrent
 			m.selection.Revision, m.onSelection = 7, nil
@@ -234,6 +242,32 @@ func TestPhysicalPrimaryIPv4OriginalBookendsAndStickyRefusal(t *testing.T) {
 				t.Fatal("restored tuple revived original witness", err, reads)
 			}
 		})
+	}
+}
+
+func TestPhysicalPrimaryIPv4PreCanceledCallerDoesNotPoisonOriginal(t *testing.T) {
+	o, _, ctx := newModel(t)
+	r, err := o.Observe(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	reads := 0
+	read := func(context.Context) ([]message, error) {
+		reads++
+		return []message{primaryIPv4Frame(9, "192.0.2.1/24", 0)}, nil
+	}
+	p, err := o.reviewPrimaryIPv4(ctx, r, "Home", netip.MustParseAddr("192.0.2.1"), read)
+	if err != nil || reads != 2 {
+		t.Fatal("original complete observation unavailable", err, reads)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := p.Current(canceled); !errors.Is(err, context.Canceled) || reads != 2 {
+		t.Fatal("pre-canceled caller entered original reader", err, reads)
+	}
+	if err := p.Current(ctx); err != nil || reads != 4 {
+		t.Fatal("pre-canceled caller poisoned unopened original evidence", err, reads)
 	}
 }
 

@@ -307,7 +307,10 @@ func (x *DomainPolicyTCPXray) dial(ctx context.Context, flow DomainPolicyTCPFlow
 	if err != nil {
 		return nil, err
 	}
-	if err := x.check(dialCtx); err != nil {
+	finishPostSOCKS := domainTCPMeasureAcceptedStage(dialCtx, "post-socks-check")
+	postSOCKSErr := x.check(dialCtx)
+	finishPostSOCKS(postSOCKSErr)
+	if err := postSOCKSErr; err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
@@ -331,7 +334,11 @@ func domainPolicyTCPNumericSOCKS(ctx context.Context, endpoint string, target ne
 	if !domainPolicyTCPPublicIPv4(target.Addr()) || (target.Port() != 80 && target.Port() != 443) {
 		return nil, ErrDomainPolicyTCPConsumer
 	}
+	finishSOCKS := domainTCPMeasureAcceptedStage(ctx, "socks-handshake")
+	defer func() { finishSOCKS(result) }()
+	finishActualDial := domainTCPMeasureAcceptedStage(ctx, "socks-dial")
 	base, err := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp4", endpoint)
+	finishActualDial(err)
 	if err != nil {
 		return nil, err
 	}

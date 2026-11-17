@@ -38,6 +38,10 @@ func metadataMkdirCancellationProducer(t *testing.T, timeout bool) (*SelfUpdateF
 	u.space = func(string, int64) error {
 		if timeout {
 			<-ctx.Done()
+			// Done closes before cancellation reaches Prepare's child context.
+			// Join the original timer cancellation before releasing the producer
+			// at this seam; otherwise its post-Mkdir Err may still be nil.
+			cancel()
 		} else {
 			cancel()
 		}

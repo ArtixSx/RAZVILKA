@@ -1,0 +1,27 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ArtixSx/razvilka/internal/dataplane
+cpu: AMD EPYC 9V45 96-Core Processor                
+BenchmarkXrayCompleteHashChunks/original32-4         	      19	  18689675 ns/op	1957.09 MB/s	      1117 read-at-calls/op	    1088 B/op	       9 allocs/op
+BenchmarkXrayCompleteHashChunks/original32-4         	      19	  18697660 ns/op	1956.26 MB/s	      1117 read-at-calls/op	    1088 B/op	       9 allocs/op
+BenchmarkXrayCompleteHashChunks/original32-4         	      18	  19146259 ns/op	1910.42 MB/s	      1117 read-at-calls/op	    1088 B/op	       9 allocs/op
+BenchmarkXrayCompleteHashChunks/32768-4              	      18	  20800686 ns/op	1758.47 MB/s	      1117 read-at-calls/op	   33856 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/32768-4              	      18	  19330439 ns/op	1892.22 MB/s	      1117 read-at-calls/op	   33856 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/32768-4              	      18	  19122091 ns/op	1912.84 MB/s	      1117 read-at-calls/op	   33856 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/65536-4              	      19	  18499050 ns/op	1977.26 MB/s	       559.0 read-at-calls/op	   66624 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/65536-4              	      19	  18485459 ns/op	1978.71 MB/s	       559.0 read-at-calls/op	   66624 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/65536-4              	      19	  17878902 ns/op	2045.84 MB/s	       559.0 read-at-calls/op	   66624 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/131072-4             	      19	  17980613 ns/op	2034.27 MB/s	       280.0 read-at-calls/op	  132160 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/131072-4             	      18	  17915641 ns/op	2041.65 MB/s	       280.0 read-at-calls/op	  132160 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/131072-4             	      19	  17971460 ns/op	2035.31 MB/s	       280.0 read-at-calls/op	  132160 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/262144-4             	      19	  18322201 ns/op	1996.34 MB/s	       140.0 read-at-calls/op	  263232 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/262144-4             	      19	  18473448 ns/op	1980.00 MB/s	       140.0 read-at-calls/op	  263232 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/262144-4             	      19	  18396337 ns/op	1988.30 MB/s	       140.0 read-at-calls/op	  263232 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/private_capture_sha_clear-4         	      15	  20457402 ns/op	1787.98 MB/s	  36577406 retained-bytes/image	36586615 B/op	      11 allocs/op
+BenchmarkXrayCompleteHashChunks/private_capture_sha_clear-4         	      16	  21253956 ns/op	1720.97 MB/s	  36577406 retained-bytes/image	36586608 B/op	      11 allocs/op
+BenchmarkXrayCompleteHashChunks/private_capture_sha_clear-4         	      16	  21039864 ns/op	1738.48 MB/s	  36577406 retained-bytes/image	36586615 B/op	      11 allocs/op
+BenchmarkXrayCompleteHashChunks/private_repeat_compare-4            	     100	   3242971 ns/op	11278.98 MB/s	      1117 read-at-calls/op	  36577406 retained-bytes/image	     928 B/op	       6 allocs/op
+BenchmarkXrayCompleteHashChunks/private_repeat_compare-4            	     100	   3224625 ns/op	11343.15 MB/s	      1117 read-at-calls/op	  36577406 retained-bytes/image	     928 B/op	       6 allocs/op
+BenchmarkXrayCompleteHashChunks/private_repeat_compare-4            	     100	   3107947 ns/op	11768.99 MB/s	      1117 read-at-calls/op	  36577406 retained-bytes/image	     928 B/op	       6 allocs/op
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	7.828s

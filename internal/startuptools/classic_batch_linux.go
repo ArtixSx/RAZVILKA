@@ -114,6 +114,13 @@ func (l *Lease) classicBatchBytesCurrent(ctx context.Context) error {
 		return err
 	}
 	defer cancel()
+	// Every actual child below keeps its complete fresh metadata Start/Wait
+	// pair. Under the same original readonly observation those pairs bracket
+	// this nonempty callback-free batch; its outer source still hashes all
+	// bytes. Invalid markers refuse instead of falling back to ordinary reads.
+	if _, present := readObservationMarker(leaf); present {
+		return errors.Join(l.readObservationCurrent(leaf), leaf.Err())
+	}
 	return errors.Join(l.readObservationBytesCurrent(leaf), leaf.Err())
 }
 

@@ -1,0 +1,21 @@
+{
+  "sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "run_id": 42687051039,
+  "job_id": 129396561329,
+  "job_conclusion": "success",
+  "test": "TestNativeDefaultOld193InstallRefusal",
+  "test_conclusion": "PASS",
+  "elapsed_s": 1.21,
+  "witnesses": [
+    "Actual pinned817 original binary/init in historical default paths",
+    "Genuine original init stopped panel and process absence checked before baseline",
+    "Both actual current bundle dry-run/apply return exact pre0.20 refusal",
+    "All stopped source names/types/modes/bytes preserved and modern root absent"
+  ],
+  "raw_sha256": "616eb5c677fcafeb4debd3122d0c75453f443dc61f327ab4ab66b720c557f6ab",
+  "limits": [
+    "Actual stopped default source refusal; not migration or live upgrade acceptance",
+    "Separate configured empty paired restore alsoPASS; no conflation",
+    "An optional ordinary-image measurement skipped earlier in broad prerequisite selection; default test itself executed andPASS"
+  ]
+}

@@ -1,0 +1,44 @@
+File: app.test
+Build ID: f4ec2686feaf92d873faaf653d30ca3a5fa28c21
+Type: cpu
+Time: 2026-11-09 05:22:21 UTC
+Duration: 37.85s, Total samples = 37.04s (97.86%)
+Showing nodes accounting for 30.77s, 83.07% of 37.04s total
+Dropped 807 nodes (cum <= 0.19s)
+Showing top 35 nodes out of 423
+      flat  flat%   sum%        cum   cum%
+    18.48s 49.89% 49.89%     18.48s 49.89%  internal/runtime/syscall/linux.Syscall6
+     9.19s 24.81% 74.70%      9.19s 24.81%  crypto/internal/fips140/sha256.blockSHANI
+     0.47s  1.27% 75.97%      0.62s  1.67%  runtime.tryDeferToSpanScan
+     0.29s  0.78% 76.75%      0.37s     1%  strings.Fields
+     0.26s   0.7% 77.46%      1.02s  2.75%  runtime.scanObject
+     0.19s  0.51% 77.97%      0.19s  0.51%  runtime.nextFreeFast (inline)
+     0.16s  0.43% 78.40%      0.23s  0.62%  runtime.scanblock
+     0.14s  0.38% 78.78%      1.37s  3.70%  runtime.mallocgc
+     0.14s  0.38% 79.16%      0.21s  0.57%  runtime.typePointers.next
+     0.13s  0.35% 79.51%      0.33s  0.89%  runtime.scanObjectsSmall
+     0.13s  0.35% 79.86%     18.44s 49.78%  syscall.RawSyscall6
+     0.09s  0.24% 80.10%      0.49s  1.32%  runtime.mallocgcSmallScanNoHeader
+     0.09s  0.24% 80.35%     10.50s 28.35%  syscall.Syscall6
+     0.07s  0.19% 80.53%      0.20s  0.54%  encoding/json.(*Decoder).readValue
+     0.07s  0.19% 80.72%      2.64s  7.13%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.07s  0.19% 80.91%      8.45s 22.81%  syscall.Syscall
+     0.06s  0.16% 81.07%      5.48s 14.79%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.06s  0.16% 81.24%      6.58s 17.76%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.05s  0.13% 81.37%      4.23s 11.42%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.05s  0.13% 81.51%      0.26s   0.7%  reflect.deepValueEqual
+     0.05s  0.13% 81.64%      0.40s  1.08%  runtime.growslice
+     0.05s  0.13% 81.78%      0.42s  1.13%  runtime.newobject
+     0.05s  0.13% 81.91%      5.27s 14.23%  syscall.fstatat
+     0.04s  0.11% 82.02%      0.22s  0.59%  golang.org/x/sys/unix.Fstatfs
+     0.04s  0.11% 82.13%      0.97s  2.62%  internal/poll.ignoringEINTR (inline)
+     0.04s  0.11% 82.24%      0.68s  1.84%  os.(*File).readdir
+     0.04s  0.11% 82.34%      1.63s  4.40%  runtime.gcDrain
+     0.04s  0.11% 82.45%      0.21s  0.57%  runtime.mProf_FlushLocked
+     0.04s  0.11% 82.56%      2.29s  6.18%  runtime.systemstack
+     0.04s  0.11% 82.67%      0.21s  0.57%  strings.genSplit
+     0.03s 0.081% 82.75%      9.23s 24.92%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.03s 0.081% 82.83%      0.24s  0.65%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.03s 0.081% 82.91%      2.82s  7.61%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).rawFile
+     0.03s 0.081% 82.99%      0.32s  0.86%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+     0.03s 0.081% 83.07%      1.01s  2.73%  internal/poll.(*FD).Fstat

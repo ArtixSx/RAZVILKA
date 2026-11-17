@@ -1,0 +1,27 @@
+{
+  "commit": "8434e9ae2183ef926a123b1fe4217bc0114d214a",
+  "run": 42655695682,
+  "readiness": false,
+  "jobs": [
+    {
+      "mode": "empty",
+      "job": 129293463496,
+      "conclusion": "failure",
+      "log_sha256": "e7fd028fd45dba12f61820f5bd944fb816e6e580298975570fc8da1c9ad174ad",
+      "fast_diagnostic_output_tests": "PASS",
+      "old193_draft_writer": "not configured",
+      "failure": "quiesce-runtime-inactivity-deadline-scoped-dns-dns-observation-proc-closing-proc.installer-role-close",
+      "public_restore": "NOT REACHED"
+    },
+    {
+      "mode": "draft",
+      "job": 129293463373,
+      "conclusion": "failure",
+      "log_sha256": "69e1bc064d2f982448023169fa9b82a22a0a705460855637588c57f7b7b60064",
+      "fast_diagnostic_output_tests": "PASS",
+      "old193_draft_writer": "PASS",
+      "failure": "file-review: intentional bootstrap StrategyPair refusal",
+      "public_restore": "NOT REACHED"
+    }
+  ]
+}

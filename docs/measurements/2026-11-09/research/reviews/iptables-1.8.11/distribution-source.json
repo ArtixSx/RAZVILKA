@@ -1,0 +1,12 @@
+[
+  {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/iptables_1.8.11-2ubuntu3.dsc",
+    "sha256": "164593b8a72353b3bb650b58e9d44d5a9d9c6ba7a13285016bacf34960ca12fe",
+    "bytes": 3026
+  },
+  {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/iptables_1.8.11-2ubuntu3.debian.tar.xz",
+    "sha256": "7ab62c54ae411e4d6985445b4bfaf7452e5805d60436cbdc980d6c772748cc09",
+    "bytes": 33068
+  }
+]

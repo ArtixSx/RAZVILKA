@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 6973cbaed23e91ca72b48aa6d104370559f487f2
+Type: cpu
+Time: 2026-11-09 19:40:01 UTC
+Duration: 26.09s, Total samples = 23.61s (90.49%)
+Showing nodes accounting for 20s, 84.71% of 23.61s total
+Dropped 668 nodes (cum <= 0.12s)
+Showing top 35 nodes out of 457
+      flat  flat%   sum%        cum   cum%
+    12.45s 52.73% 52.73%     12.45s 52.73%  internal/runtime/syscall/linux.Syscall6
+     5.55s 23.51% 76.24%      5.55s 23.51%  crypto/internal/fips140/sha256.blockSHANI
+     0.17s  0.72% 76.96%      0.17s  0.72%  memeqbody
+     0.16s  0.68% 77.64%      0.96s  4.07%  runtime.mallocgc
+     0.15s  0.64% 78.27%      0.27s  1.14%  encoding/json.(*Decoder).readValue
+     0.15s  0.64% 78.91%      0.21s  0.89%  runtime.reentersyscall
+     0.14s  0.59% 79.50%      0.22s  0.93%  strings.Fields
+     0.13s  0.55% 80.05%      0.13s  0.55%  runtime.memclrNoHeapPointers
+     0.12s  0.51% 80.56%      0.12s  0.51%  runtime.memmove
+     0.12s  0.51% 81.07%      0.12s  0.51%  runtime.nextFreeFast (inline)
+     0.10s  0.42% 81.49%      0.43s  1.82%  runtime.mallocgcSmallScanNoHeader
+     0.08s  0.34% 81.83%      0.15s  0.64%  encoding/json.appendCompact
+     0.08s  0.34% 82.17%     12.35s 52.31%  syscall.RawSyscall6
+     0.08s  0.34% 82.51%      7.62s 32.27%  syscall.Syscall6
+     0.06s  0.25% 82.76%         3s 12.71%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.05s  0.21% 82.97%      5.10s 21.60%  syscall.Syscall
+     0.03s  0.13% 83.10%      3.92s 16.60%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.03s  0.13% 83.23%      0.23s  0.97%  reflect.deepValueEqual
+     0.03s  0.13% 83.35%      0.13s  0.55%  runtime.makeslicecopy
+     0.02s 0.085% 83.44%      0.33s  1.40%  encoding/json.(*decodeState).object
+     0.02s 0.085% 83.52%      0.20s  0.85%  encoding/json.structEncoder.encode
+     0.02s 0.085% 83.61%      0.14s  0.59%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).procFile
+     0.02s 0.085% 83.69%      0.83s  3.52%  github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).checkHeldOwner
+     0.02s 0.085% 83.78%      0.47s  1.99%  github.com/ArtixSx/razvilka/internal/ownedfs.(*Root).check
+     0.02s 0.085% 83.86%      4.32s 18.30%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s 0.085% 83.95%      0.20s  0.85%  internal/poll.(*FD).decref
+     0.02s 0.085% 84.03%      0.43s  1.82%  os.(*File).readdir
+     0.02s 0.085% 84.12%      0.65s  2.75%  os.rootStat.func1
+     0.02s 0.085% 84.20%      0.17s  0.72%  runtime.(*mcache).nextFree
+     0.02s 0.085% 84.29%      0.14s  0.59%  runtime.(*mcache).refill
+     0.02s 0.085% 84.37%      0.24s  1.02%  runtime.growslice
+     0.02s 0.085% 84.46%      0.19s   0.8%  runtime.mallocgcSmallNoscan
+     0.02s 0.085% 84.54%      0.30s  1.27%  runtime.newobject
+     0.02s 0.085% 84.63%      0.17s  0.72%  syscall.ByteSliceFromString
+     0.02s 0.085% 84.71%      1.24s  5.25%  syscall.Fstat

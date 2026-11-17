@@ -1,0 +1,76 @@
+{
+  "reviewer": "independent-verification",
+  "sha": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "workflow_run": 42614826249,
+  "conclusion": "success",
+  "scope": "Original Mihomo lifecycle in isolated native Linux fixture; not physical router acceptance",
+  "lifecycle": {
+    "job": 129151974468,
+    "test_seconds": 278.01,
+    "rounds": [
+      {
+        "round": 0,
+        "apply_seconds": 95.179778572,
+        "stop_seconds": 6.032970681,
+        "cycle_seconds": 137.998864747,
+        "closing_retry": false,
+        "restored_physical_baseline": true
+      },
+      {
+        "round": 1,
+        "apply_seconds": 95.053149152,
+        "stop_seconds": 6.02475527,
+        "cycle_seconds": 137.584102945,
+        "closing_retry": true,
+        "restored_physical_baseline": true
+      }
+    ]
+  },
+  "postcas": {
+    "job": 129151974320,
+    "test_seconds": 90.6,
+    "http_status": 503,
+    "desired_exact_restored": true,
+    "rollback_verified": true,
+    "original_pending": false
+  },
+  "settlement": {
+    "job": 129151974815,
+    "test_seconds": 125.53,
+    "apply_seconds": 94.809956523,
+    "stop_seconds": 9.378264464,
+    "cycle_seconds": 123.181022178,
+    "cuts": 2,
+    "all_original_rows_terminal": 9,
+    "restored_physical_baseline": true
+  },
+  "budgets_seconds": {
+    "lifecycle_aggregate": 600,
+    "other_aggregate": 300,
+    "per_round": 300,
+    "operation": 110,
+    "production_apply_unchanged": 480
+  },
+  "limitations": [
+    "No causal speedup inferred from separate runs or singleton timings.",
+    "Generic CI independently running when evidence recorded.",
+    "Newer local Stop/DNS changes are not covered."
+  ],
+  "logs": [
+    {
+      "path": "mihomo-lifecycle.log",
+      "bytes": 143045,
+      "sha256": "f91fa528aab72008e06f66bd1f4122353ccaa38bdafd85c8b524f8e72e29837c"
+    },
+    {
+      "path": "mihomo-postcas.log",
+      "bytes": 37479,
+      "sha256": "332dca919e98214f31f6b5371793befca070c5af4e9d373ccc7e049885fdbffc"
+    },
+    {
+      "path": "mihomo-settlement.log",
+      "bytes": 37537,
+      "sha256": "761a68fd4a95051c74b38764fd2e92e5fd80417a93e65d2e75047fc8818643dc"
+    }
+  ]
+}

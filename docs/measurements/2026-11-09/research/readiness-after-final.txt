@@ -1,0 +1,121 @@
+=== RUN   TestSOCKSReadinessHandlesSplitGreetingAndCancellation
+--- PASS: TestSOCKSReadinessHandlesSplitGreetingAndCancellation (0.04s)
+=== RUN   TestExactNodeSnapshotRejectsLegacyDraftAuthorityBeforeAnyWrite
+--- PASS: TestExactNodeSnapshotRejectsLegacyDraftAuthorityBeforeAnyWrite (0.02s)
+=== RUN   TestExactNodeChecksEntireCDNAddressSet
+=== RUN   TestExactNodeChecksEntireCDNAddressSet/addresses=5/failLast=false
+=== RUN   TestExactNodeChecksEntireCDNAddressSet/addresses=5/failLast=true
+=== RUN   TestExactNodeChecksEntireCDNAddressSet/addresses=8/failLast=false
+=== RUN   TestExactNodeChecksEntireCDNAddressSet/addresses=8/failLast=true
+--- PASS: TestExactNodeChecksEntireCDNAddressSet (0.03s)
+    --- PASS: TestExactNodeChecksEntireCDNAddressSet/addresses=5/failLast=false (0.01s)
+    --- PASS: TestExactNodeChecksEntireCDNAddressSet/addresses=5/failLast=true (0.01s)
+    --- PASS: TestExactNodeChecksEntireCDNAddressSet/addresses=8/failLast=false (0.01s)
+    --- PASS: TestExactNodeChecksEntireCDNAddressSet/addresses=8/failLast=true (0.01s)
+=== RUN   TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority
+=== RUN   TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/unsupported
+=== RUN   TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/wrong-route
+=== RUN   TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/private-dns
+=== RUN   TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/second-ip
+--- PASS: TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority (0.03s)
+    --- PASS: TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/unsupported (0.01s)
+    --- PASS: TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/wrong-route (0.01s)
+    --- PASS: TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/private-dns (0.01s)
+    --- PASS: TestExactNodeDomainSuccessDoesNotGrantIPPathAuthority/second-ip (0.01s)
+=== RUN   TestExactNodeCanceledIPProbeCleansBeforeReleasingRuntime
+--- PASS: TestExactNodeCanceledIPProbeCleansBeforeReleasingRuntime (0.01s)
+=== RUN   TestExactNodeCleanupDeadlineRevokesSuccessAndFencesNextCheck
+=== RUN   TestExactNodeCleanupDeadlineRevokesSuccessAndFencesNextCheck/service
+=== RUN   TestExactNodeCleanupDeadlineRevokesSuccessAndFencesNextCheck/connectivity
+--- PASS: TestExactNodeCleanupDeadlineRevokesSuccessAndFencesNextCheck (0.02s)
+    --- PASS: TestExactNodeCleanupDeadlineRevokesSuccessAndFencesNextCheck/service (0.01s)
+    --- PASS: TestExactNodeCleanupDeadlineRevokesSuccessAndFencesNextCheck/connectivity (0.01s)
+=== RUN   TestExactNodeRecoveryCancellationCannotClearCleanupFence
+=== RUN   TestExactNodeRecoveryCancellationCannotClearCleanupFence/before
+=== RUN   TestExactNodeRecoveryCancellationCannotClearCleanupFence/during
+--- PASS: TestExactNodeRecoveryCancellationCannotClearCleanupFence (0.07s)
+    --- PASS: TestExactNodeRecoveryCancellationCannotClearCleanupFence/before (0.03s)
+    --- PASS: TestExactNodeRecoveryCancellationCannotClearCleanupFence/during (0.04s)
+=== RUN   TestExactNodeCleanupStatusComesFromOriginalCleanup
+=== RUN   TestExactNodeCleanupStatusComesFromOriginalCleanup/transport
+=== RUN   TestExactNodeCleanupStatusComesFromOriginalCleanup/prepare
+=== RUN   TestExactNodeCleanupStatusComesFromOriginalCleanup/egress
+=== RUN   TestExactNodeCleanupStatusComesFromOriginalCleanup/cleanup
+=== RUN   TestExactNodeCleanupStatusComesFromOriginalCleanup/cancel
+=== RUN   TestExactNodeCleanupStatusComesFromOriginalCleanup/resource
+--- PASS: TestExactNodeCleanupStatusComesFromOriginalCleanup (0.04s)
+    --- PASS: TestExactNodeCleanupStatusComesFromOriginalCleanup/transport (0.00s)
+    --- PASS: TestExactNodeCleanupStatusComesFromOriginalCleanup/prepare (0.01s)
+    --- PASS: TestExactNodeCleanupStatusComesFromOriginalCleanup/egress (0.01s)
+    --- PASS: TestExactNodeCleanupStatusComesFromOriginalCleanup/cleanup (0.01s)
+    --- PASS: TestExactNodeCleanupStatusComesFromOriginalCleanup/cancel (0.01s)
+    --- PASS: TestExactNodeCleanupStatusComesFromOriginalCleanup/resource (0.01s)
+=== RUN   TestExactNodeReadinessRejectsLateSOCKSGreeting
+    nodecheck_readiness_test.go:76: loopback late greeting: elapsed_ms=8000 accepted=false
+--- PASS: TestExactNodeReadinessRejectsLateSOCKSGreeting (8.00s)
+=== RUN   TestExactNodeRuntimeTimingsSeparateStartupFromIdentity
+--- PASS: TestExactNodeRuntimeTimingsSeparateStartupFromIdentity (0.01s)
+=== RUN   TestExactNodeCanceledStartCannotBeginReadiness
+--- PASS: TestExactNodeCanceledStartCannotBeginReadiness (0.00s)
+=== RUN   TestExactNodeRealityRuntimeDefaultMatchesEffectiveContract
+--- PASS: TestExactNodeRealityRuntimeDefaultMatchesEffectiveContract (0.02s)
+=== RUN   TestExactNodeCheckerSlotSessionsAreDisjoint
+--- PASS: TestExactNodeCheckerSlotSessionsAreDisjoint (0.03s)
+=== RUN   TestExactNodeCheckerRunsOneCheckPerFreeSlot
+--- PASS: TestExactNodeCheckerRunsOneCheckPerFreeSlot (0.01s)
+=== RUN   TestExactNodeScreenTransport
+--- PASS: TestExactNodeScreenTransport (0.00s)
+=== RUN   TestExactNodeRecoverCleansEverySlot
+--- PASS: TestExactNodeRecoverCleansEverySlot (0.06s)
+=== RUN   TestExactNodeCheckConfirmsExactServicePath
+--- PASS: TestExactNodeCheckConfirmsExactServicePath (0.01s)
+=== RUN   TestExactNodeCheckRejectsDirectLeak
+--- PASS: TestExactNodeCheckRejectsDirectLeak (0.01s)
+=== RUN   TestExactNodeCheckDoesNotPromoteOpenTCPPort
+--- PASS: TestExactNodeCheckDoesNotPromoteOpenTCPPort (0.01s)
+=== RUN   TestExactNodeCheckReturnsOnlyBoundedIdentityDiagnostic
+--- PASS: TestExactNodeCheckReturnsOnlyBoundedIdentityDiagnostic (0.01s)
+=== RUN   TestExactNodeCheckRejectsBlockedServiceAndCleanupFailure
+--- PASS: TestExactNodeCheckRejectsBlockedServiceAndCleanupFailure (0.01s)
+=== RUN   TestExactNodeCheckCleansRejectedRuntimeConfig
+--- PASS: TestExactNodeCheckCleansRejectedRuntimeConfig (0.01s)
+=== RUN   TestExactNodeCheckRejectsServiceRouteMismatch
+--- PASS: TestExactNodeCheckRejectsServiceRouteMismatch (0.01s)
+=== RUN   TestExactNodeCheckRequiresDirectNegativeControl
+--- PASS: TestExactNodeCheckRequiresDirectNegativeControl (0.01s)
+=== RUN   TestExactNodeOutboundInspectionIsFailClosed
+--- PASS: TestExactNodeOutboundInspectionIsFailClosed (0.00s)
+=== RUN   TestExactNodeCheckerSerializesTemporaryRuntime
+--- PASS: TestExactNodeCheckerSerializesTemporaryRuntime (0.01s)
+=== RUN   TestExactNodeCheckerExplainsMissingRuntime
+--- PASS: TestExactNodeCheckerExplainsMissingRuntime (0.00s)
+=== RUN   TestExactNodeCheckerRechecksCleanupFenceAfterAcquiringGate
+--- PASS: TestExactNodeCheckerRechecksCleanupFenceAfterAcquiringGate (0.01s)
+=== RUN   TestExactNodeCheckerRecoveryClearsCleanupFence
+--- PASS: TestExactNodeCheckerRecoveryClearsCleanupFence (0.03s)
+=== RUN   TestExactNodeCheckRejectsUnconfirmedInitialNetwork
+=== RUN   TestExactNodeCheckRejectsUnconfirmedInitialNetwork/#00
+=== RUN   TestExactNodeCheckRejectsUnconfirmedInitialNetwork/network-unknown
+=== RUN   TestExactNodeCheckRejectsUnconfirmedInitialNetwork/legacy-unscoped
+=== RUN   TestExactNodeCheckRejectsUnconfirmedInitialNetwork/wan-ffffffffffff
+--- PASS: TestExactNodeCheckRejectsUnconfirmedInitialNetwork (0.00s)
+    --- PASS: TestExactNodeCheckRejectsUnconfirmedInitialNetwork/#00 (0.00s)
+    --- PASS: TestExactNodeCheckRejectsUnconfirmedInitialNetwork/network-unknown (0.00s)
+    --- PASS: TestExactNodeCheckRejectsUnconfirmedInitialNetwork/legacy-unscoped (0.00s)
+    --- PASS: TestExactNodeCheckRejectsUnconfirmedInitialNetwork/wan-ffffffffffff (0.00s)
+=== RUN   TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup
+=== RUN   TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup/probe
+=== RUN   TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup/cleanup
+=== RUN   TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup/observation-error
+--- PASS: TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup (0.02s)
+    --- PASS: TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup/probe (0.01s)
+    --- PASS: TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup/cleanup (0.01s)
+    --- PASS: TestExactNodeCheckRejectsNetworkChangeDuringProbeOrCleanup/observation-error (0.01s)
+=== RUN   TestExactNodeCheckRechecksNetworkAfterRequestValidation
+--- PASS: TestExactNodeCheckRechecksNetworkAfterRequestValidation (0.00s)
+=== RUN   TestExactNodeCheckCancellationDoesNotPromoteProofOrSkipCleanup
+--- PASS: TestExactNodeCheckCancellationDoesNotPromoteProofOrSkipCleanup (0.01s)
+=== RUN   TestExactNodeTimingIncludesValidationAndCleanupWithoutRenewingEvidence
+--- PASS: TestExactNodeTimingIncludesValidationAndCleanupWithoutRenewingEvidence (0.01s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	8.697s

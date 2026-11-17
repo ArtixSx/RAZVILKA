@@ -1,0 +1,222 @@
+{
+  "run_id": 43961200477,
+  "head_sha": "ce2e09e239389e13c247954caf7ecf1fd3f101f6",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43961200477",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "databaseId": 133628759267,
+      "name": "original-private-set (race)",
+      "conclusion": "success",
+      "startedAt": "2026-11-16T21:33:05Z",
+      "completedAt": "2026-11-16T21:35:33Z"
+    },
+    {
+      "databaseId": 133628760175,
+      "name": "original-parent-native (race)",
+      "conclusion": "failure",
+      "startedAt": "2026-11-16T21:33:05Z",
+      "completedAt": "2026-11-16T21:41:58Z"
+    },
+    {
+      "databaseId": 133634019214,
+      "name": "original-parent-native-ack-cuts",
+      "conclusion": "skipped",
+      "startedAt": "2026-11-16T21:41:59Z",
+      "completedAt": "2026-11-16T21:41:58Z"
+    }
+  ],
+  "first_failure": {
+    "test": "TestMihomoSameBootCLINativeOriginalParent",
+    "build": "race",
+    "test_seconds": 120.01,
+    "actor_ms": 119993.724,
+    "prepare_stage": "absence-process-kernel",
+    "absence_stage": "proxy-default-references",
+    "deadline": true,
+    "canceled": false
+  },
+  "ack_cuts": "NOT_RUN: dependency parent failed",
+  "observed": {
+    "producer_activation": "PASS",
+    "default_vendor_HEV_start": "PASS",
+    "physical_peer_pidfd_terminal": "confirmed",
+    "updater_transaction_guard": "fenced",
+    "updater_global_guard": "open",
+    "postfailure_official_HEV_diagnostic": "PASS"
+  },
+  "cpu": {
+    "duration_seconds": 120.01,
+    "samples_seconds": 110.75,
+    "flat_seconds": {
+      "syscall": 34.4,
+      "SHA256_SHANI": 26.88,
+      "TSAN_MemoryAccessRange": 19.76
+    },
+    "inclusive_seconds": {
+      "observeMihomoLiveColdProcesses": 39.54,
+      "observeMihomoOfflineHome": 34.56,
+      "mihomoColdFileHash": 19.37,
+      "scopedDNSInactiveProc": 18.71,
+      "assertPolicyDefaultUnreferenced": 5.66
+    }
+  },
+  "nested_measurements": [
+    {
+      "phase": "absence",
+      "calls": 75,
+      "inclusive_wall_ms": 79261.532
+    },
+    {
+      "phase": "absence-tool-read",
+      "calls": 75,
+      "inclusive_wall_ms": 79260.256
+    },
+    {
+      "phase": "home-current",
+      "calls": 23,
+      "inclusive_wall_ms": 49105.155
+    },
+    {
+      "phase": "native-stage",
+      "calls": 7,
+      "inclusive_wall_ms": 30278.858
+    },
+    {
+      "phase": "native-witness-callback",
+      "calls": 7,
+      "inclusive_wall_ms": 7317.293
+    },
+    {
+      "phase": "phase-archive",
+      "calls": 1,
+      "inclusive_wall_ms": 39621.673
+    },
+    {
+      "phase": "phase-completed",
+      "calls": 1,
+      "inclusive_wall_ms": 7200.342
+    },
+    {
+      "phase": "phase-forwarding",
+      "calls": 1,
+      "inclusive_wall_ms": 25724.035
+    },
+    {
+      "phase": "phase-intent",
+      "calls": 1,
+      "inclusive_wall_ms": 1312.512
+    },
+    {
+      "phase": "phase-opening",
+      "calls": 1,
+      "inclusive_wall_ms": 336.813
+    },
+    {
+      "phase": "phase-policy",
+      "calls": 1,
+      "inclusive_wall_ms": 7275.655
+    },
+    {
+      "phase": "phase-sidecar",
+      "calls": 1,
+      "inclusive_wall_ms": 2002.215
+    },
+    {
+      "phase": "phase-terminal",
+      "calls": 1,
+      "inclusive_wall_ms": 35358.178
+    },
+    {
+      "phase": "prepare",
+      "calls": 1,
+      "inclusive_wall_ms": 596.1
+    },
+    {
+      "phase": "run",
+      "calls": 1,
+      "inclusive_wall_ms": 118831.447
+    },
+    {
+      "phase": "source-before-sidecar",
+      "calls": 33,
+      "inclusive_wall_ms": 1660.545
+    },
+    {
+      "phase": "source-command-kernel",
+      "calls": 769,
+      "inclusive_wall_ms": 1182.096
+    },
+    {
+      "phase": "source-command-version",
+      "calls": 2543,
+      "inclusive_wall_ms": 4166.194
+    },
+    {
+      "phase": "source-current",
+      "calls": 234,
+      "inclusive_wall_ms": 58238.077
+    },
+    {
+      "phase": "source-current-tool-read",
+      "calls": 85,
+      "inclusive_wall_ms": 26488.527
+    },
+    {
+      "phase": "source-lease-owner-tool",
+      "calls": 468,
+      "inclusive_wall_ms": 5569.031
+    },
+    {
+      "phase": "source-lease-private",
+      "calls": 815,
+      "inclusive_wall_ms": 817.359
+    },
+    {
+      "phase": "source-lease-read-tool",
+      "calls": 1540,
+      "inclusive_wall_ms": 14658.283
+    },
+    {
+      "phase": "source-self-sha",
+      "calls": 468,
+      "inclusive_wall_ms": 26804.72
+    }
+  ],
+  "limits": [
+    "The failing parent retirement consumed its original120s; ACK cases were not run.",
+    "CPU and stage values are nested/inclusive, not additive.",
+    "Actual Linux disposable namespaces with reviewed default HEV; no router acceptance.",
+    "be7e67f1 removes only a redundant outer absence before complete home opening/closing; new43964362768 is a separate run."
+  ],
+  "read_only_candidate": {
+    "file": "internal/dataplane/mihomo_live_same_boot_retirement.go",
+    "site": "private absent closure before homeCurrent",
+    "observation": "Explicit o.absent immediately precedes homeCurrent, whose fixed home observer performs the same o.absent before any filesystem reads and again after them. Only pure definition/path validation intervenes.",
+    "status": "Proposal only; root review required. No production edit.",
+    "invariants": "Retain beforeSidecar, complete home opening and closing absences, fresh home byte/membership checks and all effect boundaries; no retained result/cache."
+  },
+  "date": "2026-11-17",
+  "evidence_root": "C:\\RAZVILKA-research-20261116\\sameboot-43961200477",
+  "raw_sha256": {
+    "artifacts/hev-after-failure-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/closed-diagnostic.txt": "7c7f3d86a7f5eadda2c4ce04e62ffc0d7f417abadbc83f893bbfd97f5b535f5e",
+    "artifacts/hev-after-failure-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/outcome.txt": "d58af8fbfb77d691ceb60fa9f7bf885833f6231ffd72cb0360f4b9f0218eb115",
+    "artifacts/hev-after-failure-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/platform.txt": "6c49eade2d21946e470ec06cabe72848505587284e844d85aa5ab2dc0c4ccb7b",
+    "artifacts/sameboot-hev-lab-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/hev-lab/bin/hev-patched": "1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9",
+    "artifacts/sameboot-hev-lab-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/hev-lab/build-manifest.json": "1bd3acd2030114e3d67702cbb81ac4cc53ea2032171ac6ebb3ba6e6f02b4f924",
+    "artifacts/sameboot-hev-lab-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/hev-lab/fault-tests.txt": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050",
+    "artifacts/sameboot-hev-lab-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/hev-lab-build.txt": "f458e748fd2ade30f219794b5fdca18fd85d99c780fcb6018d91bd611dc82e33",
+    "artifacts/sameboot-hev-lab-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/hev-lab-pin-tests.txt": "6fe94c0dabe397215000c018fdbd3a82315213e9b6f3b1a1ff3d4cd94e9431d2",
+    "artifacts/sameboot-hev-lab-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/hev-lab-platform.json": "ffa1a04d3ed9f0fa3fac92a8311f84fdeea10f75b44ff7cb9d66c7bb987f8549",
+    "artifacts/sameboot-hev-lab-original-parent-native-race-parent-ce2e09e239389e13c247954caf7ecf1fd3f101f6/hev-selected-mode.txt": "41ade786792ed74aa5de2ac2ec2fa40c40cced5f04aa449e3e5af521e8596993",
+    "artifacts/sameboot-profile-parent-race-ce2e09e239389e13c247954caf7ecf1fd3f101f6/race-exit-cost.json": "b94c3e49a61a6dc77b0a95eb0718cedc1ec0d3a61f44069a34c1a56487ad68af",
+    "artifacts/sameboot-profile-parent-race-ce2e09e239389e13c247954caf7ecf1fd3f101f6/sameboot-consumer.cpu.pprof": "ccc49096b1d427c992f0c7c8c8fcf3cf4819e952f00604d13ede65db81a5f5c4",
+    "artifacts/sameboot-profile-parent-race-ce2e09e239389e13c247954caf7ecf1fd3f101f6/sameboot-consumer.test": "f019601c0a6af86d2d90b6da37889fcc5873e5cbddcd88bc68be82f17df0dae9",
+    "cpu-cumulative.txt": "f047deef3fd8cd395dd726bc196c0f9a72de81ae55a51e1937149a93bafb62f7",
+    "cpu-default-references.txt": "43ee7446e78e8df60b905eec12fff59396b9b6042e66e12a783696d26272bdc7",
+    "cpu-top.txt": "b105623fb8ba62cef786496b66a7afc0fb3db0bf3bf06fe64853a12d2ab957d3",
+    "failed.log": "1470ed5c76807656d3690403a9be169d635a213179790b176966d749e0636d9c",
+    "run.json": "c3fded137347cf64380fc27e04c0beea106fffa2acdf465820604897611b7aac",
+    "summary.json": "afd8577178d29ac3c1b6754451b7fb2ba3671566cb2bd348e717eda9a5d9663f"
+  }
+}

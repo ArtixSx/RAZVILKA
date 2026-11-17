@@ -178,7 +178,7 @@ func (p *externalBootstrapPreparation) preflight(ctx context.Context) error {
 	if err != nil || version != "0.20.0\n" {
 		return externalBootstrapFailure("candidate-version", err)
 	}
-	if _, _, err := config.Inspect(p.record.Deployment.Paths["config"]); err != nil {
+	if err := inspectExternalBootstrapSourceConfig(p.record.Deployment.Paths["config"]); err != nil {
 		return externalBootstrapFailure("source-config", err)
 	}
 	if err := inspectExternalBootstrapCatalogs(bundle); err != nil {
@@ -204,6 +204,14 @@ func (p *externalBootstrapPreparation) preflight(ctx context.Context) error {
 		return externalBootstrapFailure("preparation-owner", err)
 	}
 	return nil
+}
+
+func inspectExternalBootstrapSourceConfig(path string) error {
+	cfg, _, err := config.Inspect(path)
+	if err != nil {
+		return err
+	}
+	return config.CheckManagedNFQReleaseUpdate(cfg)
 }
 
 func inspectExternalBootstrapCatalogs(bundle string) error {
@@ -321,16 +329,28 @@ func externalBootstrapFailure(stage string, err error) error {
 // chain for trusted callers, but no raw command output/path can enter this code.
 func ExternalBootstrapFailureCategory(err error) string {
 	var failure *externalBootstrapFailureError
-	if errors.As(err, &failure) {
-		if strings.HasPrefix(failure.stage, "quiesce-") && knownRuntimeQuiesceFailure(strings.TrimPrefix(failure.stage, "quiesce-")) {
-			return failure.stage
-		}
-		switch failure.stage {
-		case "preparation-owner", "candidate-version", "source-config", "release-catalogs", "release-script-syntax", "filesystem", "review-capabilities", "staged-migration", "file-review", "review-owner":
-			return failure.stage
-		}
+	if errors.As(err, &failure) && ExternalBootstrapFailureCategoryKnown(failure.stage) {
+		return failure.stage
 	}
 	return "external-bootstrap-refused"
+}
+
+// ExternalBootstrapFailureCategoryKnown recognizes the SAME closed producer
+// vocabulary, including composed original DNS/ordinary-role observations.
+// Recognition is diagnostic only; it neither proves inactivity nor grants an
+// operation. The static category list is not an exhaustive composition list.
+func ExternalBootstrapFailureCategoryKnown(category string) bool {
+	if knownExternalBootstrapFileFailure(category) {
+		return true
+	}
+	if strings.HasPrefix(category, "quiesce-") && knownRuntimeQuiesceFailure(strings.TrimPrefix(category, "quiesce-")) {
+		return true
+	}
+	switch category {
+	case "preparation-owner", "candidate-version", "source-config", "release-catalogs", "release-script-syntax", "filesystem", "review-capabilities", "staged-migration", "file-review", "review-owner", "external-bootstrap-refused":
+		return true
+	}
+	return false
 }
 
 func ExternalBootstrapFailureCategories() []string {

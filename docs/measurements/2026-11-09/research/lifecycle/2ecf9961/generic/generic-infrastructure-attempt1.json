@@ -1,0 +1,20 @@
+{
+  "head_sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "classification": "GitHub infrastructure failure before jobs; no tests executed",
+  "push": {
+    "annotation": "Internal server error",
+    "attempt": 1,
+    "run": 42673010038,
+    "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42673010038",
+    "correlation_id": "6f6a7d8c-65c9-4ee2-bef7-400cbbfb6e1d"
+  },
+  "pr": {
+    "annotation": "Internal server error",
+    "attempt": 1,
+    "run": 42673019667,
+    "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42673019667",
+    "correlation_id": "8a598a1a-c853-4bbc-a134-ca7a513ea3b0"
+  },
+  "action": "One unchanged-SHA rerun requested for each generic run after independently verifying public run annotations; no YAML change.",
+  "readiness": "No PASS inferred; rerun outcomes pending."
+}

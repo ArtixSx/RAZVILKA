@@ -1,0 +1,26 @@
+{
+  "source_directory": "C:\\RAZVILKA-research-20261109\\lifecycle-50bd038c",
+  "scope": "Frozen bounded evidence; statuses apply only to explicit source SHA and individual scenario. No router acceptance.",
+  "files": {
+    "generic-ci-independent-review.json": {
+      "bytes": 1868,
+      "sha256": "993b7a9f8645d1dc31fba9a56674f7ef67a12267e695239f6d534923e9dc0a60"
+    },
+    "generic-pr.json": {
+      "bytes": 2879,
+      "sha256": "58b0c4e6a9faf5e138dace77d36c2f8bef7ebeb410af80d7b205d3f411c9785e"
+    },
+    "generic-pr.log": {
+      "bytes": 309536,
+      "sha256": "0a7fb17a5bab02ea0af259e5a918b4a37482ad39b9e8db06440999d002a73448"
+    },
+    "generic-push.json": {
+      "bytes": 2879,
+      "sha256": "a187e4a4ef5b063f48e55af5a2e07f460643f947580faba08fd61be13af8445b"
+    },
+    "generic-push.log": {
+      "bytes": 156168,
+      "sha256": "09bc9b90be2867fcd6897a11f9df382e5a9c5ce8b58e929e4ba3642d3ea660e2"
+    }
+  }
+}

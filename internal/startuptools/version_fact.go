@@ -32,6 +32,9 @@ type scopedVersionFact struct {
 // docs/measurements/2026-11-01/native-version-fact/README.md.
 // Unknown builds retain real version subprocesses on every Check.
 func staticVersionProfile(p profile) bool {
+	if p.extensionExpectations != nil {
+		return false
+	}
 	base := ubuntuProfile()
 	if p.stock {
 		base = stockProfile()
@@ -47,6 +50,13 @@ func staticVersionProfile(p profile) bool {
 
 func cloneVersionProfile(p profile) profile {
 	p.libraries = slices.Clone(p.libraries)
+	if p.extensionExpectations != nil {
+		entries := make(map[string]extensionExpectation, len(p.extensionExpectations))
+		for name, entry := range p.extensionExpectations {
+			entries[name] = entry
+		}
+		p.extensionExpectations = entries
+	}
 	if p.pins != nil {
 		pins := make(map[string][]string, len(p.pins))
 		for path, hashes := range p.pins {

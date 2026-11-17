@@ -1,0 +1,404 @@
+[
+  {
+    "file": "domain-1a50-canceled.log",
+    "stage": "before-failure",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.36067043s"
+      },
+      "process-current": {
+        "calls": 265,
+        "elapsed": "5.028836122s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.567344053s"
+      },
+      "whole-executable-hash": {
+        "calls": 124,
+        "elapsed": "3.280142782s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-canceled.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.36067043s"
+      },
+      "process-current": {
+        "calls": 265,
+        "elapsed": "5.028836122s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.567344053s"
+      },
+      "whole-executable-hash": {
+        "calls": 129,
+        "elapsed": "3.393295797s"
+      }
+    },
+    "children": "map[original-effect:11 original-read-classic-save:216]"
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "13.684629043s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "elapsed": "8.644456616s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "elapsed": "10.451588138s"
+      },
+      "process-current": {
+        "calls": 482,
+        "elapsed": "11.54414233s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "4.776823312s"
+      },
+      "whole-executable-hash": {
+        "calls": 219,
+        "elapsed": "5.799994189s"
+      }
+    },
+    "children": "map[original-effect:18 original-read:56 original-read-classic-batch:1720]"
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "first-answer",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.202567885s"
+      },
+      "kernel-observe": {
+        "calls": 4,
+        "elapsed": "2.46879874s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "elapsed": "2.585529768s"
+      },
+      "process-current": {
+        "calls": 379,
+        "elapsed": "6.542747027s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.449132857s"
+      },
+      "whole-executable-hash": {
+        "calls": 134,
+        "elapsed": "3.536262412s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "before-stop",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.202567885s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "elapsed": "5.119175374s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "elapsed": "6.199889775s"
+      },
+      "process-current": {
+        "calls": 460,
+        "elapsed": "7.927160202s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.449132857s"
+      },
+      "whole-executable-hash": {
+        "calls": 140,
+        "elapsed": "3.696437827s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.202567885s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "elapsed": "5.119175374s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "elapsed": "6.199889775s"
+      },
+      "process-current": {
+        "calls": 460,
+        "elapsed": "7.927160202s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.449132857s"
+      },
+      "whole-executable-hash": {
+        "calls": 145,
+        "elapsed": "3.82867718s"
+      }
+    },
+    "children": "map[original-effect:18 original-read:56 original-read-classic-save:688]"
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "first-answer",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.28634743s"
+      },
+      "kernel-observe": {
+        "calls": 4,
+        "elapsed": "2.468331647s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "elapsed": "2.591377102s"
+      },
+      "process-current": {
+        "calls": 379,
+        "elapsed": "6.582620403s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.499611306s"
+      },
+      "whole-executable-hash": {
+        "calls": 134,
+        "elapsed": "3.550305207s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "before-stop",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.28634743s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "elapsed": "5.132695991s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "elapsed": "6.209279145s"
+      },
+      "process-current": {
+        "calls": 460,
+        "elapsed": "7.985675408s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.499611306s"
+      },
+      "whole-executable-hash": {
+        "calls": 140,
+        "elapsed": "3.712020699s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.28634743s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "elapsed": "5.132695991s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "elapsed": "6.209279145s"
+      },
+      "process-current": {
+        "calls": 460,
+        "elapsed": "7.985675408s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.499611306s"
+      },
+      "whole-executable-hash": {
+        "calls": 145,
+        "elapsed": "3.843243027s"
+      }
+    },
+    "children": "map[original-effect:18 original-read:56 original-read-classic-save:688]"
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "first-answer",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.135628387s"
+      },
+      "kernel-observe": {
+        "calls": 4,
+        "elapsed": "2.504633067s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "elapsed": "2.629838424s"
+      },
+      "process-current": {
+        "calls": 379,
+        "elapsed": "6.564115792s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.48282105s"
+      },
+      "whole-executable-hash": {
+        "calls": 134,
+        "elapsed": "3.538359465s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "before-stop",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.135628387s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "elapsed": "5.172576966s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "elapsed": "6.262031677s"
+      },
+      "process-current": {
+        "calls": 460,
+        "elapsed": "7.948747178s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.48282105s"
+      },
+      "whole-executable-hash": {
+        "calls": 140,
+        "elapsed": "3.699368608s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.135628387s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "elapsed": "5.172576966s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "elapsed": "6.262031677s"
+      },
+      "process-current": {
+        "calls": 460,
+        "elapsed": "7.948747178s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.48282105s"
+      },
+      "whole-executable-hash": {
+        "calls": 145,
+        "elapsed": "3.830984363s"
+      }
+    },
+    "children": "map[original-effect:18 original-read:56 original-read-classic-save:688]"
+  },
+  {
+    "file": "domain-1a50-selected.log",
+    "stage": "before-failure",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.179962325s"
+      },
+      "process-current": {
+        "calls": 273,
+        "elapsed": "5.042120347s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.473658802s"
+      },
+      "whole-executable-hash": {
+        "calls": 125,
+        "elapsed": "3.291659367s"
+      }
+    },
+    "children": null
+  },
+  {
+    "file": "domain-1a50-selected.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "elapsed": "7.179962325s"
+      },
+      "process-current": {
+        "calls": 274,
+        "elapsed": "5.042122792s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "elapsed": "2.473658802s"
+      },
+      "whole-executable-hash": {
+        "calls": 129,
+        "elapsed": "3.398485456s"
+      }
+    },
+    "children": "map[original-effect:11 original-read-classic-save:223]"
+  }
+]

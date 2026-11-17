@@ -1,0 +1,12 @@
+{
+  "files": {
+    "metadata-parallel-costmodel-review-20261109.json": {
+      "bytes": 1545,
+      "sha256": "32cf8aeddec4db84b768cf2d0ee9efb0082dcd904d717c6bf8702390327fb5a8"
+    },
+    "metadata-parallel-wiring-review-20261109.json": {
+      "bytes": 962,
+      "sha256": "d60275a9b013b268753ac561e4c09a659f92cfd91e98ec21ea000bd30c850473"
+    }
+  }
+}

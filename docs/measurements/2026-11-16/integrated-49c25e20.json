@@ -1,0 +1,344 @@
+{
+  "source": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+  "verified_utc": "2026-11-17T08:41:53.486123+00:00",
+  "all_five_runs_terminal": true,
+  "runs": [
+    {
+      "run_id": 44044228410,
+      "source": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+      "conclusion": "failure",
+      "jobs": [
+        {
+          "job_id": 133905845141,
+          "name": "Modern public update and known rollback (isolated lab)",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845419,
+          "name": "Exact iptables 1.8.11 / race",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845420,
+          "name": "Configured old193 public paired restore / draft",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845506,
+          "name": "Domain native strict / selected",
+          "conclusion": "failure",
+          "failed_steps": [
+            "Original scope and cleanup with unchanged production deadlines"
+          ]
+        },
+        {
+          "job_id": 133905845511,
+          "name": "strategy-pair",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845542,
+          "name": "Exact iptables 1.8.11 / production",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845545,
+          "name": "Startup loader closure (race)",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845564,
+          "name": "Startup loader closure (normal)",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845665,
+          "name": "Managed scope all (race)",
+          "conclusion": "failure",
+          "failed_steps": [
+            "Actual managed source, TLS flow, exact NFQUEUE counters and cleanup",
+            "Actual App LAN apply, exclusions and same-owner stop",
+            "Explicit manual LAN Apply, exclusions and same-owner stop",
+            "Original never-issued intent recovery and fresh manual Apply"
+          ]
+        },
+        {
+          "job_id": 133905845709,
+          "name": "Managed scope all (production)",
+          "conclusion": "failure",
+          "failed_steps": [
+            "Actual App LAN apply, exclusions and same-owner stop",
+            "Explicit manual LAN Apply, exclusions and same-owner stop",
+            "Original never-issued intent recovery and fresh manual Apply",
+            "Original quarantine close failure retains permanent fence"
+          ]
+        },
+        {
+          "job_id": 133905845724,
+          "name": "Configured old193 public paired restore / empty",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845739,
+          "name": "Domain native strict / direct-deny",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845755,
+          "name": "DNS preparation recovery pair (diagnostic 30s)",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845850,
+          "name": "Domain native strict / canceled-ready",
+          "conclusion": "failure",
+          "failed_steps": [
+            "Original scope and cleanup with unchanged production deadlines"
+          ]
+        },
+        {
+          "job_id": 133905846641,
+          "name": "Configured old193 public paired restore / history",
+          "conclusion": "success",
+          "failed_steps": []
+        }
+      ]
+    },
+    {
+      "run_id": 44044228436,
+      "source": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "job_id": 133905843897,
+          "name": "paired-native",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905844171,
+          "name": "mihomo-handler-native",
+          "conclusion": "success",
+          "failed_steps": []
+        }
+      ]
+    },
+    {
+      "run_id": 44044228489,
+      "source": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "job_id": 133905844435,
+          "name": "test",
+          "conclusion": "success",
+          "failed_steps": []
+        }
+      ]
+    },
+    {
+      "run_id": 44044228550,
+      "source": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "job_id": 133905844694,
+          "name": "live-native (check-settlement)",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905844931,
+          "name": "live-native (manual-http)",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845130,
+          "name": "live-native (lifecycle)",
+          "conclusion": "success",
+          "failed_steps": []
+        },
+        {
+          "job_id": 133905845606,
+          "name": "live-native (postcas-failure)",
+          "conclusion": "success",
+          "failed_steps": []
+        }
+      ]
+    },
+    {
+      "run_id": 44044236307,
+      "source": "49c25e2063dfda053a7f345e3489ce610fcec19f",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "job_id": 133905870051,
+          "name": "test",
+          "conclusion": "success",
+          "failed_steps": []
+        }
+      ]
+    }
+  ],
+  "findings": [
+    "Startup loader closure normal/race: four required top-level CPUID PASS each, no actual SKIP/FAIL; synthetic ARM64 ELF parsed on AMD64, not router execution.",
+    "Mihomo current lifecycle PASS230.73s; manual HTTP PASS261.44s; settlement PASS114.22s; post-CAS failure/undo PASS79.94s. Historical4cc comparison uses different HEV and fixed order, not isolated speed evidence.",
+    "Probe workflow SUCCESS; original service/common cleanup PASS11.65s; HTTP PASS4.78s. ResourceSampleChild helper SKIP exists in paired diagnostic and is not full-suite noSKIP evidence.",
+    "Strict selected FAIL21.25s at original12s initial publication; no selected/mismatch4s acceptance reached.",
+    "Strict canceled-ready FAIL32.63s: GEN1 publication/detach reached; GEN2 cancellation child/listener witness unavailable.",
+    "Direct-deny PASS17.12s: positive same-FD passive observer control, FORWARD DROP/OUTPUT ACCEPT, zero outbound target SYN and original cleanup.",
+    "Diagnostic30 recovery PASS94.49s and88.00s with explicit30s publication/10s client windows; not original12/4 acceptance.",
+    "Modern public rollback PASS157.04s; configured old193 draft/empty/history PASS175.01/188.67/166.93s.",
+    "Strategy-pair success: seven separate stopped-completion cut executions and restored-panel boot PASS.",
+    "Managed jobs analyzed by network agent; this report records job status only.",
+    "Generic push CI44044228489 and PR CI44044236307 both terminal SUCCESS on exact49c25e20."
+  ],
+  "limits": [
+    "Read-only monitoring; no rerun, cancellation, deadline modification or repository edit.",
+    "Job logs saved as UTF-8 text from gh API output; manifest hashes cover these saved local files."
+  ],
+  "raw_manifest": [
+    {
+      "file": "job-133905843897.log",
+      "bytes": 162746,
+      "sha256": "52ad623cf0cbb7d92bb51fb4deb8c6cc61dab4094746994c6c2a4116b5bffc19"
+    },
+    {
+      "file": "job-133905844171.log",
+      "bytes": 32736,
+      "sha256": "034f3346e4f4a17207857705880674e7ee90b22f78966b1d3517d7f92185c3e8"
+    },
+    {
+      "file": "job-133905844435.log",
+      "bytes": 468261,
+      "sha256": "6125483875fdac64ef8336dbe9c5b45b2cfd4feb0a28673e65c327e412d125a6"
+    },
+    {
+      "file": "job-133905844694.log",
+      "bytes": 68717,
+      "sha256": "d0c885ca3d78a695e78bc4a4b2cd5e3528e8370cb336bc4f803bd925399e40b3"
+    },
+    {
+      "file": "job-133905844931.log",
+      "bytes": 97062,
+      "sha256": "a04280a6e36f03a405da1cab0495080d1b3c00ae0d081ea06c79573e32ecfefd"
+    },
+    {
+      "file": "job-133905845130.log",
+      "bytes": 195455,
+      "sha256": "bc2a9c38c72afcec8ae7951213cab8c1e497a1ddfc6e7807dd939c38813753cf"
+    },
+    {
+      "file": "job-133905845141.log",
+      "bytes": 58807,
+      "sha256": "6d2a6c8ae5e08b021f6ae3c5800c08ab9513b1af22ca71b607ac5d8e8f4cc00f"
+    },
+    {
+      "file": "job-133905845419.log",
+      "bytes": 78827,
+      "sha256": "40fdc4cfcdb4523c129f418d76b1f1d23d0b414967558efb6da411c172bd447d"
+    },
+    {
+      "file": "job-133905845420.log",
+      "bytes": 76525,
+      "sha256": "0d4e659d9f412ca62e7c30b3b0bce85681352ca884121e8a7e5459e4830b5dda"
+    },
+    {
+      "file": "job-133905845506.log",
+      "bytes": 213352,
+      "sha256": "f447f6a67af9cd90b591ee5396e4ac1ab15a88d7a22e80181974e0d50298c824"
+    },
+    {
+      "file": "job-133905845511.log",
+      "bytes": 61388,
+      "sha256": "4047d9b07fb2d0920e58ea6a40692e79e92fed6332ef82d68c79308b7ac818be"
+    },
+    {
+      "file": "job-133905845542.log",
+      "bytes": 78636,
+      "sha256": "1b08b70df700c39a3e13d7d5d9c380dafc3cfabd4544cdf7f8372c5e0fb6fef0"
+    },
+    {
+      "file": "job-133905845545.log",
+      "bytes": 28507,
+      "sha256": "c075d6444f82df9052fdbb0c64b874f76f2d588edba9dceae7586d25c356b6fc"
+    },
+    {
+      "file": "job-133905845564.log",
+      "bytes": 28516,
+      "sha256": "ad2f5adf16973214baaa7e3bd51597db922a536ce33262ce8b8fc2f357b6515d"
+    },
+    {
+      "file": "job-133905845606.log",
+      "bytes": 68647,
+      "sha256": "bb4c35b31339b160514a865f5e676c724ca70c00ec72c9f330066faa9308a80c"
+    },
+    {
+      "file": "job-133905845724.log",
+      "bytes": 77344,
+      "sha256": "8a92490f39b3fee12ca5efb3e8b41ee2764eda1d5cee8472e647aa916cec24a9"
+    },
+    {
+      "file": "job-133905845739.log",
+      "bytes": 128788,
+      "sha256": "8fbdc48c95b317e4e740ca28262b8596c8d0ef8189380868f7de4f10291928b9"
+    },
+    {
+      "file": "job-133905845755.log",
+      "bytes": 132255,
+      "sha256": "a8f8867dcd358fe3ebe693e3a3e30e0117fbfbcc80fd81c706b8431544c0054e"
+    },
+    {
+      "file": "job-133905845850.log",
+      "bytes": 138433,
+      "sha256": "7c0aad7336162f0c9d7a658a5427ee85a44ef3e0478bfcf7c153469947f0215a"
+    },
+    {
+      "file": "job-133905846641.log",
+      "bytes": 77388,
+      "sha256": "a221b7f251f2f9091bcad9c6a4a50f02a3e587b41d44e2090c3e82527410cdd7"
+    },
+    {
+      "file": "job-133905870051.log",
+      "bytes": 468807,
+      "sha256": "1a4cce594e48eff1c1c11bcdc3cf9944ddeaeb208c22e072efa3f0e56b7c06e6"
+    },
+    {
+      "file": "run-44044228410.json",
+      "bytes": 42135,
+      "sha256": "cefb0b06fadb8d13e420ef5a56cd01e79979f93ec7e6ebd51f35be8454f3599c"
+    },
+    {
+      "file": "run-44044228436.json",
+      "bytes": 4401,
+      "sha256": "50251fae5bb469c7e10888e55ba35b0287f8c1c4b366277b59f0a3d4caa58c89"
+    },
+    {
+      "file": "run-44044228489.json",
+      "bytes": 3171,
+      "sha256": "208a29b6e487391443d483975291cf6577216fba90055b81e73f48049e370168"
+    },
+    {
+      "file": "run-44044228550.json",
+      "bytes": 15739,
+      "sha256": "d1e90e6b872df63279cf9c17cbf11331c9104bc5f5a4a47aff69cf2b42952beb"
+    },
+    {
+      "file": "run-44044236307.json",
+      "bytes": 3171,
+      "sha256": "15f99991063141f5c99bc018e10e8a3851921db33cc03fba07c836a8ffc1e2a6"
+    }
+  ],
+  "independent_root_verified_raw_files": 26
+}

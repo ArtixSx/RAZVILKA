@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "revision": "ec62ac2a631ecffac2b86d35809e916db53b6f9a",
+  "run_id": 43949636941,
+  "run_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43949636941",
+  "conclusion": "PASS",
+  "scope": "Default AMD64 production selector, local exact-URL HTTP transport, actual Linux processes and component recovery. Not route or router acceptance.",
+  "build_tags": [
+    "razvilka_native_fixture"
+  ],
+  "lab_selector_used": false,
+  "predecessor_sha256": "a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03",
+  "desired_sha256": "1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9",
+  "component_version_before_and_after": "2.17.1",
+  "planned_asset_url": "https://github.com/ArtixSx/RAZVILKA/releases/download/v0.20.0/razvilka-hev-2.17.1-runtime-altstack1-linux-amd64",
+  "public_get_verified": false,
+  "router_verified": false,
+  "route_readiness_verified": false,
+  "arm64_changed": false,
+  "release_published": false,
+  "existing_tag_moved": false,
+  "limitations": [
+    "The URL is prepared for the authorized future repository recreation. The currently existing v0.20.0 tag was not modified.",
+    "Native transport supplies exact source-built bytes locally; anonymous public URL, redirects and availability remain publication gates.",
+    "Normal and race ran on separate hosted jobs. Durations are per-test outcomes, not a before/after speedup comparison.",
+    "Existing original digest, ownership, copied-process, cancellation, crash rollback and pending refusal guards remain mandatory."
+  ],
+  "required_top_level_passes_per_mode": 10,
+  "skip_or_fail_markers": 0,
+  "rows": [
+    {
+      "mode": "normal",
+      "test_seconds": {
+        "TestHEVReleasePinnedNativeInstall": 0.04,
+        "TestHEVDefaultReleasePins": 0.0,
+        "TestHEVReleaseChangedOwnedBinaryRequiresInactivity": 0.01,
+        "TestHEVReleasePinnedDownloadRejectsBeforeExecution": 0.0,
+        "TestHEVSameVersionUpdateRequiresDifferentIntegrityOwnedBytes": 0.0,
+        "TestHEVReplacementCursorAndCompensation": 0.1,
+        "TestHEVReplacementAdmissionAndCancellation": 0.03,
+        "TestHEVReplacementReviewOriginalVectorAndIdentity": 0.08,
+        "TestHEVReplacementCrashRecoveryAndPendingRefusal": 0.06,
+        "TestHEVOriginalNativeHTTPSameVersionReplacement": 1.19
+      },
+      "log_sha256": "d2446071e2bed9acb78c9acf97d81aff413e670482f75e3c5f0e326af21c675a"
+    },
+    {
+      "mode": "race",
+      "test_seconds": {
+        "TestHEVReleasePinnedNativeInstall": 0.22,
+        "TestHEVDefaultReleasePins": 0.0,
+        "TestHEVReleaseChangedOwnedBinaryRequiresInactivity": 0.01,
+        "TestHEVReleasePinnedDownloadRejectsBeforeExecution": 0.0,
+        "TestHEVSameVersionUpdateRequiresDifferentIntegrityOwnedBytes": 0.0,
+        "TestHEVReplacementCursorAndCompensation": 0.15,
+        "TestHEVReplacementAdmissionAndCancellation": 0.04,
+        "TestHEVReplacementReviewOriginalVectorAndIdentity": 0.1,
+        "TestHEVReplacementCrashRecoveryAndPendingRefusal": 0.14,
+        "TestHEVOriginalNativeHTTPSameVersionReplacement": 3.23
+      },
+      "log_sha256": "c6e1a2ac5bc856f3678df0211b86a4aa2912a4c082eadccb89b5c8e2656fee8b"
+    }
+  ],
+  "raw_evidence_directory": "C:\\RAZVILKA-research-20261116\\hev-default-ec62ac2a",
+  "raw_files": [
+    {
+      "path": "artifacts/hev-replacement-normal-ec62ac2a631ecffac2b86d35809e916db53b6f9a/hev-lab/build-manifest.json",
+      "bytes": 28110,
+      "sha256": "1bd3acd2030114e3d67702cbb81ac4cc53ea2032171ac6ebb3ba6e6f02b4f924"
+    },
+    {
+      "path": "artifacts/hev-replacement-normal-ec62ac2a631ecffac2b86d35809e916db53b6f9a/hev-lab/fault-tests.txt",
+      "bytes": 41,
+      "sha256": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050"
+    },
+    {
+      "path": "artifacts/hev-replacement-normal-ec62ac2a631ecffac2b86d35809e916db53b6f9a/platform.txt",
+      "bytes": 3344,
+      "sha256": "3adced75217206310c0376ed5837837d3b1e1c75740aa1736941c58cd1bd44fc"
+    },
+    {
+      "path": "artifacts/hev-replacement-normal-ec62ac2a631ecffac2b86d35809e916db53b6f9a/replacement.txt",
+      "bytes": 5882,
+      "sha256": "d2446071e2bed9acb78c9acf97d81aff413e670482f75e3c5f0e326af21c675a"
+    },
+    {
+      "path": "artifacts/hev-replacement-race-ec62ac2a631ecffac2b86d35809e916db53b6f9a/hev-lab/build-manifest.json",
+      "bytes": 28110,
+      "sha256": "1bd3acd2030114e3d67702cbb81ac4cc53ea2032171ac6ebb3ba6e6f02b4f924"
+    },
+    {
+      "path": "artifacts/hev-replacement-race-ec62ac2a631ecffac2b86d35809e916db53b6f9a/hev-lab/fault-tests.txt",
+      "bytes": 41,
+      "sha256": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050"
+    },
+    {
+      "path": "artifacts/hev-replacement-race-ec62ac2a631ecffac2b86d35809e916db53b6f9a/platform.txt",
+      "bytes": 3571,
+      "sha256": "0a15c5b25049814392f06bd3639231fb92770cddadfdc6297d07dcb4a7992336"
+    },
+    {
+      "path": "artifacts/hev-replacement-race-ec62ac2a631ecffac2b86d35809e916db53b6f9a/replacement.txt",
+      "bytes": 5882,
+      "sha256": "c6e1a2ac5bc856f3678df0211b86a4aa2912a4c082eadccb89b5c8e2656fee8b"
+    },
+    {
+      "path": "run.json",
+      "bytes": 4129,
+      "sha256": "ef6838938054f9fcfcb1f47e3f40bb65758970bbed8840a4d14ea3feb2508660"
+    }
+  ]
+}

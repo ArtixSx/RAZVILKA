@@ -145,7 +145,11 @@ type Manager struct {
 }
 
 func New() *Manager {
-	return &Manager{Opkg: findOpkg(), RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: installpath.State + "/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}, retryDelay: 2 * time.Second}
+	return newWithOpkg(installpath.EntwareOpkg())
+}
+
+func newWithOpkg(opkg string) *Manager {
+	return &Manager{Opkg: opkg, RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: installpath.State + "/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}, retryDelay: 2 * time.Second}
 }
 
 func Specs() []Spec {
@@ -298,6 +302,9 @@ func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
 	}
 	if err := m.usquePackageNetworkPreflight(id); err != nil {
 		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
+	if spec, ok := lookup(id); ok && spec.Provider == "opkg" && m.Opkg == "" {
+		return Result{Component: id, Action: "install"}, NoMutation(errors.New("opkg is not available"))
 	}
 	release, err := m.fencePackageMutation()
 	if err != nil {
@@ -608,6 +615,9 @@ func (m *Manager) run(parent context.Context, args ...string) ([]byte, error) {
 	if err := m.nfqwsPackageArgumentsGuard(args); err != nil {
 		return nil, err
 	}
+	if m.Opkg == "" {
+		return nil, errors.New("opkg is not available")
+	}
 	timeout := m.Timeout
 	if timeout <= 0 {
 		timeout = 90 * time.Second
@@ -627,21 +637,6 @@ func (m *Manager) run(parent context.Context, args ...string) ([]byte, error) {
 		return out, fmt.Errorf("timed out after %s", timeout)
 	}
 	return out, err
-}
-
-func findOpkg() string {
-	for _, path := range []string{"/opt/bin/opkg", "/opt/sbin/opkg", "opkg"} {
-		if strings.Contains(path, "/") {
-			if _, err := exec.LookPath(path); err == nil {
-				return path
-			}
-			continue
-		}
-		if found, err := exec.LookPath(path); err == nil {
-			return found
-		}
-	}
-	return ""
 }
 
 func lookup(id string) (Spec, bool) {

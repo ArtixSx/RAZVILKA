@@ -1,6 +1,6 @@
 /* Simple mode: the owner's main use is to add or remove services; the
  * autopilot does the rest. The home page shows one status line, the managed
- * services and a catalog search. Everything else stays in advanced mode.
+ * services and a catalog search. Task navigation is available in both views.
  * Pure helpers are exported for tests; actions reuse interfaceManage. */
 (function (root) {
   'use strict';
@@ -188,17 +188,14 @@
     const toggle = document.getElementById('rzSimpleToggle');
     if (!toggle) return;
     toggle.setAttribute('aria-checked', String(!on));
-    toggle.querySelector('b').textContent = on ? 'Простой режим' : 'Расширенный режим';
-    toggle.querySelector('small').textContent = on ? 'Включить все разделы и ручные настройки' : 'Перейти к сервисам и устройствам';
+    toggle.querySelector('b').textContent = on ? 'Краткий вид' : 'Подробный вид';
+    toggle.querySelector('small').textContent = on ? 'Больше сведений на главной и в настройках' : 'Краткий обзор и основные настройки';
   }
   function apply() {
     const on = enabled();
     document.body.classList.toggle('rz-simple', on);
     ensure();
     label();
-    if (on && typeof state === 'object' && state && !['overview', 'devices', 'settings', 'onboard'].includes(state.currentView)) {
-      document.querySelector('[data-main-nav="overview"]')?.click();
-    }
     render(true);
     renderSettings(true);
     if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls();
@@ -436,7 +433,7 @@
     if (hidden) {
       const more = document.createElement('p');
       more.className = 'r5-caption rz-sh-engines-more';
-      more.textContent = `Ещё ${plural(hidden, 'способ можно установить', 'способа можно установить', 'способов можно установить')} в расширенном режиме, если понадобится.`;
+      more.textContent = `Ещё ${plural(hidden, 'способ можно установить', 'способа можно установить', 'способов можно установить')} в разделе «Обходы», если понадобится.`;
       (box.querySelector('.ui7-engine-summary') || box).after(more);
     }
     return box.innerHTML;
@@ -546,7 +543,7 @@
       + `<div class="rz-set-card"><h3>Устройства</h3><div class="rz-set-row"><span><b>Область действия сервисов</b><small>${html(devices)}</small></span><button type="button" class="secondary" data-view="devices">Открыть</button></div></div>`
       + `<div class="rz-set-card"><h3>Резервная копия и помощь</h3><div class="rz-set-row"><span><b>Настройки</b><small>Сервисы и маршруты, без ключей и паролей.</small></span><button type="button" class="secondary" data-rz-set-export>Скачать</button></div><div class="rz-set-row"><span><b>Отчёт для поддержки</b><small>Без ключей, паролей, адресов устройств и истории сайтов.</small></span><button type="button" class="secondary" data-rz-doc-report>Скачать</button></div></div>`
       + (ui.settingsError ? `<p class="rz-sh-error" role="alert">${html(ui.settingsError)}</p>` : '')
-      + `<p class="rz-sh-foot">Остальные параметры (DNS, списки сайтов, стратегии, перенос аккаунтов) — в <button type="button" class="link-button" data-rz-set-advanced>расширенном режиме</button>.</p>`;
+      + `<p class="rz-sh-foot">DNS, стратегии и проверки доступны в меню. <button type="button" class="link-button" data-rz-set-advanced>Показать все настройки</button>, включая списки сайтов и перенос аккаунтов.</p>`;
   }
 
   // renderDevicesNote says in one line whom the bypass serves, above the list.

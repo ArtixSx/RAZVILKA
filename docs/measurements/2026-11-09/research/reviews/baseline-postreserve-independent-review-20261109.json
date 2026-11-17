@@ -1,0 +1,22 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T14:16:07.9673783Z",
+  "base_head": "1ed3b8cb22e0aee5b581ec0d06ef0e0df483695f",
+  "old_git_blob": "e94d4c0e0502e14e22b96768b1429423674c4bcd",
+  "new_sha256": "BE8E0DBCE9753F7646E98A9089C61A3F6521A5C778B22E7C25080AB368ED846F",
+  "file": "internal/dataplane/synthetic_baseline_execution_resource.go",
+  "status": "two-call source diff approved; actual native measurement pending",
+  "scope": "After successful baseline reservation, or exact existing owner lookup after concurrent reservation, invoke existing currentInOriginalFileObservation instead of current",
+  "preserved": [
+    "Durable reservation and lookup remain outside executable-byte observation",
+    "Same original installed baseline registry, mapping, binding, control and both complete capture/process Current calls remain in currentWithFiles",
+    "Existing helper authenticates capture/process/binding/scope association, closes full SHA bookends and revokes view before return",
+    "Generic/custom producers retain original full-read path; no new authority or callback surface"
+  ],
+  "limitations": [
+    "Expected reduction of redundant SHA reads is unmeasured until actual original factory run",
+    "No local Go build/test",
+    "No routing, DNS evidence, exception or ownership relaxation; no router readiness claim"
+  ],
+  "reviewed_commit": "7c3b7f3f7d881a4ed462586dd8a2dd418c4ca53d"
+}

@@ -1,0 +1,33 @@
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness/25ms
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness/80ms
+--- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness (0.14s)
+    --- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness/25ms (0.03s)
+    --- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness/80ms (0.10s)
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness/25ms
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness/80ms
+--- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness (0.13s)
+    --- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness/25ms (0.03s)
+    --- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness/80ms (0.10s)
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness/25ms
+=== RUN   TestExactNodeStartupWaitsForDelayedSOCKSReadiness/80ms
+--- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness (0.13s)
+    --- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness/25ms (0.03s)
+    --- PASS: TestExactNodeStartupWaitsForDelayedSOCKSReadiness/80ms (0.10s)
+goos: windows
+goarch: amd64
+pkg: github.com/ArtixSx/razvilka/internal/dataplane
+cpu: AMD Ryzen 7 7800X3D 8-Core Processor           
+BenchmarkExactNodeDelayedSOCKSReadiness
+BenchmarkExactNodeDelayedSOCKSReadiness/25ms
+BenchmarkExactNodeDelayedSOCKSReadiness/25ms-16         	      10	  31401050 ns/op	         3.000 greetings/op
+BenchmarkExactNodeDelayedSOCKSReadiness/25ms-16         	      10	  31685520 ns/op	         3.000 greetings/op
+BenchmarkExactNodeDelayedSOCKSReadiness/25ms-16         	      10	  31562280 ns/op	         3.000 greetings/op
+BenchmarkExactNodeDelayedSOCKSReadiness/80ms
+BenchmarkExactNodeDelayedSOCKSReadiness/80ms-16         	      10	 102911730 ns/op	         5.000 greetings/op
+BenchmarkExactNodeDelayedSOCKSReadiness/80ms-16         	      10	 102747380 ns/op	         5.000 greetings/op
+BenchmarkExactNodeDelayedSOCKSReadiness/80ms-16         	      10	 102910240 ns/op	         5.000 greetings/op
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	5.003s

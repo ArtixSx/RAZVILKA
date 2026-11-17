@@ -1,0 +1,19 @@
+{
+  "decision": "APPROVED focused wiring source",
+  "files": {
+    ".github/workflows/ci.yml": "dd4446d9211512b90693505fcf4a9e49773cde9762fd0908e7ed6151a74357e1",
+    ".github/workflows/research-lifecycle.yml": "60c3a40f8820218c8ba0e3c480127f4ea4a9b59085b7cbb1823cf25cc788a595",
+    "scripts/test-managed-probe-native.sh": "26e3471ec13add687b92bc688b4a15f52076ea35fb1e5911e19307642835c265"
+  },
+  "changes": [
+    "Generic focused NFQ private RPDB and original runtime tests added without removing prior selectors",
+    "Native original two-command RPDB case routed through existing startuptools binary/private namespace; count3 paired benchmark with full outer source boundaries",
+    "Native GEN2 profile tests normal/race; all five exact PASS and no-SKIP required"
+  ],
+  "resolved_finding": "Restored missing outer for-mode done; final source checked",
+  "validation": "Source inspection; parent ran bash -n all30literal workflow blocks plus native shell; no local Go",
+  "limits": [
+    "No runtime deadline or production admission change",
+    "Benchmarks separate from real LAN operation time; no gain inferred before actual evidence"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "commit": "453559da",
+  "workflow_run": 43864979694,
+  "job": 133291106344,
+  "conclusion": "success",
+  "raw_sha256": "e1000469a72b619706ba0055f3177cf31199242cbd89ef54e52822eceab77676",
+  "raw_bytes": 48893,
+  "scope": "isolated Linux namespace; same-source lab versions 0.20.0 and 0.20.1; synthetic release transport; not official release provenance or Entware/router acceptance"
+}

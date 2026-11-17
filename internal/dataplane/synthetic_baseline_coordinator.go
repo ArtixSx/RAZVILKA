@@ -106,7 +106,14 @@ func (c *syntheticBaselineCoordinator) Current(ctx context.Context) error {
 	if err != nil || control != c.control {
 		return errors.Join(ErrSyntheticBaselineTransition, err)
 	}
-	if err := c.capture.Current(ctx); err != nil {
+	return c.observeOriginalCapturePair(ctx)
+}
+
+// This exact readonly tail remains in its original order. Both complete
+// capture/process comparisons still run; only original immutable bytes may
+// share the enclosing opening/closing SHA. Registration is outside Current.
+func (c *syntheticBaselineCoordinator) currentCapturePairWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if err := c.capture.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	m := c.binding.scope.manager
@@ -126,7 +133,7 @@ func (c *syntheticBaselineCoordinator) Current(ctx context.Context) error {
 	if err := c.control.Current(ctx); err != nil {
 		return err
 	}
-	if err := c.capture.Current(ctx); err != nil {
+	if err := c.capture.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	if err := c.binding.Current(ctx); err != nil {

@@ -1,0 +1,89 @@
+{
+  "observed_utc": "2026-11-09T20:22:15.0897038Z",
+  "run": 42692078602,
+  "sha": "83a1a933e6d7b1ba1ba62acf17f342e00011a6f9",
+  "status": "in_progress",
+  "conclusion": null,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078602",
+  "source_commit": "690c0c30ec476825d6737be1ac3dd83408ff222f",
+  "review": "modern-public-pair-independent-review-20261109.json",
+  "native_result": "PENDING - no success claimed",
+  "constraint": "User requested wrapping up due quota; CI left running; no further experiments or changes",
+  "jobs": [
+    {
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Install disposable namespace fixture dependencies",
+          "status": "completed"
+        },
+        {
+          "conclusion": null,
+          "name": "Actual main public update and rollback with same-source lab versions",
+          "status": "in_progress"
+        }
+      ],
+      "conclusion": null,
+      "id": 129414123735,
+      "status": "in_progress",
+      "name": "Modern public update and known rollback (isolated lab)"
+    },
+    {
+      "steps": [],
+      "conclusion": "skipped",
+      "id": 129414125527,
+      "status": "completed",
+      "name": "DNS preparation recovery pair (diagnostic 30s)"
+    },
+    {
+      "steps": [],
+      "conclusion": "skipped",
+      "id": 129414126008,
+      "status": "completed",
+      "name": "Exact iptables 1.8.11 / ${{ matrix.build-mode }}"
+    },
+    {
+      "steps": [],
+      "conclusion": "skipped",
+      "id": 129414126138,
+      "status": "completed",
+      "name": "managed-probe-native (${{ matrix.build-mode }})"
+    },
+    {
+      "steps": [],
+      "conclusion": "skipped",
+      "id": 129414126272,
+      "status": "completed",
+      "name": "Configured old193 public paired restore / ${{ matrix.history }}"
+    },
+    {
+      "steps": [],
+      "conclusion": "skipped",
+      "id": 129414178496,
+      "status": "completed",
+      "name": "strategy-pair"
+    },
+    {
+      "steps": [],
+      "conclusion": "skipped",
+      "id": 129414202788,
+      "status": "completed",
+      "name": "Domain native strict / ${{ matrix.scenario }}"
+    }
+  ]
+}

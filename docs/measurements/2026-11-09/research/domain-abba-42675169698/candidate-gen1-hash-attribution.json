@@ -1,0 +1,10 @@
+{
+  "total_cpu_s": 18.25,
+  "xray_hash_parent_stacks_cpu_s": {
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPExecutable).current -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForImageRead -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForObservation -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).originalContextAlreadyHeldWithFiles": 0.62,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPExecutable).current -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForImageRead -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservationAfterOpeningImage -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservationAfterOpening": 0.44,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPExecutable).current -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForImageRead -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForObservation -> github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrent": 0.02
+  },
+  "profile_sha256": "38e59e0ded0225613f88137c6887c09f8d986a6dc8f7c1f363bb05c0647cc4df",
+  "limit": "Original GEN1 Run-through-join CPU scope only; StopCPUProfile runs before successor GEN2 phase. This profile cannot attribute GEN2 hash costs."
+}

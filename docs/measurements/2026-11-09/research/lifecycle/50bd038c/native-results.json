@@ -1,0 +1,243 @@
+{
+  "sha": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "run_id": 42684649742,
+  "metadata_parallel": "TEST_ONLY_REJECT_PROMOTION",
+  "managed": {
+    "production": {
+      "job_id": 129388092209,
+      "conclusion": "failure",
+      "raw_sha256": "4b59694f0d0114e7d88f21318cdb667a9ea49a64b3e7a3ea194ff4bdaaa4e694",
+      "metadata_samples": {
+        "original_serial": {
+          "runs": [
+            [
+              646482,
+              669160,
+              37769,
+              542
+            ],
+            [
+              644167,
+              664673,
+              37784,
+              542
+            ],
+            [
+              635318,
+              657022,
+              37768,
+              542
+            ]
+          ],
+          "fields": [
+            "ns_per_op",
+            "process_cpu_ns_per_op",
+            "bytes_per_op",
+            "allocs_per_op"
+          ],
+          "medians": [
+            644167,
+            664673,
+            37769,
+            542
+          ]
+        },
+        "two_workers_full_provider": {
+          "runs": [
+            [
+              1836901,
+              3437119,
+              425552,
+              2523
+            ],
+            [
+              1921755,
+              3541211,
+              425365,
+              2523
+            ],
+            [
+              1830836,
+              3435686,
+              425503,
+              2523
+            ]
+          ],
+          "fields": [
+            "ns_per_op",
+            "process_cpu_ns_per_op",
+            "bytes_per_op",
+            "allocs_per_op"
+          ],
+          "medians": [
+            1836901,
+            3437119,
+            425503,
+            2523
+          ]
+        }
+      },
+      "metadata_cases_pass": true,
+      "failed_cases": [
+        [
+          "TestManagedStrategyProbeNativeLANAppHTTP",
+          "44.79"
+        ],
+        [
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "20.91"
+        ],
+        [
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "53.24"
+        ],
+        [
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "53.04"
+        ]
+      ],
+      "cuts_recovered": [
+        "intent",
+        "settlement-sync"
+      ],
+      "cleanup_only_pass": true,
+      "forward_outcome": "FAIL; unchanged deadlines and source checks"
+    },
+    "race": {
+      "job_id": 129388092168,
+      "conclusion": "failure",
+      "raw_sha256": "4998c5a3fe89ac26ed2f6fb53640ba62e00a43da56704b4af05e2ef01b717434",
+      "metadata_samples": {
+        "original_serial": {
+          "runs": [
+            [
+              1205346,
+              1260468,
+              46536,
+              609
+            ],
+            [
+              1160070,
+              1210545,
+              46672,
+              608
+            ],
+            [
+              1179413,
+              1233165,
+              46337,
+              608
+            ]
+          ],
+          "fields": [
+            "ns_per_op",
+            "process_cpu_ns_per_op",
+            "bytes_per_op",
+            "allocs_per_op"
+          ],
+          "medians": [
+            1179413,
+            1233165,
+            46536,
+            608
+          ]
+        },
+        "two_workers_full_provider": {
+          "runs": [
+            [
+              4897469,
+              8893487,
+              708894,
+              2798
+            ],
+            [
+              4706027,
+              8547726,
+              710037,
+              2800
+            ],
+            [
+              4927254,
+              8875667,
+              710362,
+              2799
+            ]
+          ],
+          "fields": [
+            "ns_per_op",
+            "process_cpu_ns_per_op",
+            "bytes_per_op",
+            "allocs_per_op"
+          ],
+          "medians": [
+            4897469,
+            8875667,
+            710037,
+            2799
+          ]
+        }
+      },
+      "metadata_cases_pass": true,
+      "failed_cases": [
+        [
+          "TestManagedStrategyProbeNativeConsumer",
+          "18.97"
+        ],
+        [
+          "TestManagedStrategyProbeNativeLANAppHTTP",
+          "21.57"
+        ],
+        [
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "31.05"
+        ],
+        [
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "62.85"
+        ],
+        [
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "31.60"
+        ]
+      ],
+      "cuts_recovered": [],
+      "cleanup_only_pass": false,
+      "forward_outcome": "FAIL; unchanged deadlines and source checks"
+    }
+  },
+  "public": {
+    "empty": {
+      "job_id": 129388092032,
+      "conclusion": "success",
+      "raw_sha256": "9239d852cc57b2787207bb6c14ae9c121fb8fb9a367604013ca19a32a403d5d0",
+      "total_seconds": 126.58,
+      "bootstrap_seconds": 39.27,
+      "restore_seconds": 87.29,
+      "complete_marker": true,
+      "full_history_preserved": false,
+      "limits": "configured old193 offline, taggedUbuntu; no oldlive/defaultmigration/router claim"
+    },
+    "draft": {
+      "job_id": 129388091953,
+      "conclusion": "success",
+      "raw_sha256": "05e1b2d094c33797b05021b6168d098ec364c6ed94e21d481e301a778c9571a2",
+      "total_seconds": 149.67,
+      "bootstrap_seconds": 57.92,
+      "restore_seconds": 91.72,
+      "complete_marker": true,
+      "full_history_preserved": false,
+      "limits": "configured old193 offline, taggedUbuntu; no oldlive/defaultmigration/router claim"
+    },
+    "history": {
+      "job_id": 129388092124,
+      "conclusion": "success",
+      "raw_sha256": "0df1184ca0c5752d9b872d1e08b5beaf8be54bffad960560621f67d563da60fb",
+      "total_seconds": 164.2,
+      "bootstrap_seconds": 57.98,
+      "restore_seconds": 105.4,
+      "complete_marker": true,
+      "full_history_preserved": true,
+      "limits": "configured old193 offline, taggedUbuntu; no oldlive/defaultmigration/router claim"
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-11-16T22:49:37.014121+00:00",
+  "kind": "physical-router-readonly-inventory-not-acceptance",
+  "repository_head_during_review": "db0c08bc602072dfb9517be184186a475b97540c",
+  "router_mutations": false,
+  "reviewed_collector": {
+    "unit_tests": 21,
+    "result": "INCOMPLETE: /bin/busybox absent; exit127; all dependent probes not run",
+    "unchanged": true
+  },
+  "manual_probe_limits": {
+    "labels": "separate manual diagnostics, not original collector or production admission",
+    "private_raw": true,
+    "remote_uploads": false,
+    "stdout_limit_bytes": 262144,
+    "per_probe_timeout_seconds_max": 25,
+    "all_remote_channels_closed": true
+  },
+  "concrete_gaps": [
+    {
+      "kind": "bootstrap",
+      "file": "scripts/bootstrap.sh:120",
+      "fact": "BusyBox ip passes -4 -o addr show, so dependency selection fails to request absent ip-full; stockPolicyProfile requires exact full tool path and version.",
+      "next": "Require installed exact base/libexec/ip-full and functional version before/after opkg; retain all current address checks. No package installation performed."
+    },
+    {
+      "kind": "production_profile",
+      "file": "internal/startuptools/profile.go:49",
+      "fact": "Actual xtables main and six backend DSOs all differ from accepted old hashes; current14files match independently pinned new package closure.",
+      "next": "Review complete new closure/source/extension and loader/environment behavior; add explicit reviewed profile with tests, never substitute only main SHA."
+    },
+    {
+      "kind": "collector",
+      "fact": "Firmware /bin/busybox missing; Entware BusyBox stat lacks -c, supports -t. Thirty extension entries vs collector expected four.",
+      "next": "Prepare a separately reviewed actual-platform collector; no silent fallback or acceptance claim."
+    },
+    {
+      "kind": "hardware_acceptance",
+      "fact": "No current candidate installed or run; no full custody/NS/StartWait/LAN/VLESS/DNS/recovery acceptance.",
+      "next": "After software gates and backup, exact ordinary ARM64 candidate through normal startup, separate LAN controls and recovery."
+    }
+  ],
+  "actual": {
+    "model": "Netcraze Ultra NC-1812",
+    "firmware": "5.01.C.6.0-1",
+    "architecture": "aarch64",
+    "kernel": "4.9-ndm-5",
+    "accepted_vendor_tuple_matches": true,
+    "entware": "2026.11-1",
+    "visible_cpu_entries": 3,
+    "ram_total_kib": 1015072,
+    "ram_available_sample_kib": 656536,
+    "swap_total_kib": 0,
+    "opt_total_kib": 7656028,
+    "opt_available_kib": 7219056,
+    "tmp_available_kib": 507280,
+    "queue_ids_open_and_close": [
+      64511,
+      64512
+    ],
+    "queue_custody_proof_complete": false,
+    "registered_classic_tables_each_family": [
+      "filter",
+      "mangle",
+      "nat"
+    ],
+    "classic_read_exit_codes": {
+      "classic4_filter": [
+        "0"
+      ],
+      "classic4_mangle": [
+        "0"
+      ],
+      "classic4_nat": [
+        "0"
+      ],
+      "classic4_raw": [],
+      "classic4_security": [],
+      "classic6_filter": [
+        "0"
+      ],
+      "classic6_mangle": [
+        "0"
+      ],
+      "classic6_nat": [
+        "0"
+      ],
+      "classic6_raw": [],
+      "classic6_security": []
+    }
+  },
+  "evidence": {
+    "private_summary": "C:\\RAZVILKA-research-20261116\\router-readiness-20261117-summary.json",
+    "sha256": "b7053e3f39169e17689966efe5de6c6f13ea4457a59626cfddc6621ae8e01b1f",
+    "independently_verified_files": 270,
+    "raw_rules_committed": false
+  },
+  "acceptance": false
+}

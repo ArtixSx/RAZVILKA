@@ -117,6 +117,10 @@ func (r *domainTCPFailureCleanup) restoreOriginalStandby(ctx context.Context, hi
 			}
 		}
 	}
+	listener := r.cursor.listener.Load()
+	if err := r.restorationListenerCurrent(ctx, listener); err != nil {
+		return err
+	}
 	if err := r.restoredStandbyCurrent(ctx); err != nil {
 		return err
 	}
@@ -132,6 +136,14 @@ func (r *domainTCPFailureCleanup) restoreOriginalStandby(ctx context.Context, hi
 	if !s.retained || s.retainedXrayOwner != retained || s.manager.retainedXrayOwner() != retained || ctx.Err() != nil {
 		s.mu.Unlock()
 		return ErrPolicyAdditionUnknown
+	}
+	// The joined successor no longer owns a live-listener exception. Revoke
+	// only that original witness, after both writers and actual absence agree,
+	// before releasing failed custody. Prior owners must now read GLOBAL
+	// absence afresh; an expired forward witness must not obstruct recovery.
+	if err := r.revokeRestorationListener(ctx, listener); err != nil {
+		s.mu.Unlock()
+		return err
 	}
 	s.failure = nil
 	s.pending = false

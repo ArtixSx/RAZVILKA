@@ -1,0 +1,140 @@
+{
+  "schema": 1,
+  "revision": "1cdbbfaebbbbb648e0415e703039fbb226ac50ff",
+  "run": 43949510059,
+  "production_changed": false,
+  "decision": "REJECT production promotion for DNS latency: absolute benefit is too small",
+  "modes": {
+    "normal": {
+      "job": 133587934973,
+      "result": "SUCCESS",
+      "exact_tests_passed": 3,
+      "pairs": 8,
+      "samples_per_variant_per_pair": 512,
+      "median_before_ns": 2224.341796875,
+      "median_after_ns": 2018.931640625,
+      "median_difference_ns": 205.41015625,
+      "percent_change": -9.234648943727208,
+      "eight_leaf_cost_difference_estimate_ns": 1643.28125
+    },
+    "race": {
+      "job": 133587935315,
+      "result": "SUCCESS",
+      "exact_tests_passed": 3,
+      "pairs": 8,
+      "samples_per_variant_per_pair": 512,
+      "median_before_ns": 4253.6455078125,
+      "median_after_ns": 3812.529296875,
+      "median_difference_ns": 441.1162109375,
+      "percent_change": -10.37030965855804,
+      "eight_leaf_cost_difference_estimate_ns": 3528.9296875
+    }
+  },
+  "raw_files": [
+    {
+      "path": "netidentity-metadata-normal-1cdbbfaebbbbb648e0415e703039fbb226ac50ff/metadata.log",
+      "bytes": 7248,
+      "sha256": "f324ef25d7bd41995328488a3d42a2e00e577735cdcd7a13bea73ac63b51ee2a"
+    },
+    {
+      "path": "netidentity-metadata-normal-1cdbbfaebbbbb648e0415e703039fbb226ac50ff/platform.txt",
+      "bytes": 3588,
+      "sha256": "e38fd6a5e7d66ed7b7f87af327dbe4325b94818102701815518a131770f44f76"
+    },
+    {
+      "path": "netidentity-metadata-normal-1cdbbfaebbbbb648e0415e703039fbb226ac50ff/samples.json",
+      "bytes": 6275,
+      "sha256": "a68917d4e8141bb6dd2ce89b704330b0486551ee91a07f2b16166f32468f449a"
+    },
+    {
+      "path": "netidentity-metadata-race-1cdbbfaebbbbb648e0415e703039fbb226ac50ff/metadata.log",
+      "bytes": 7248,
+      "sha256": "f863398b014f296c8df7bd8734052a88aee8a71c21036a39cae69823ba985eba"
+    },
+    {
+      "path": "netidentity-metadata-race-1cdbbfaebbbbb648e0415e703039fbb226ac50ff/platform.txt",
+      "bytes": 3588,
+      "sha256": "e38fd6a5e7d66ed7b7f87af327dbe4325b94818102701815518a131770f44f76"
+    },
+    {
+      "path": "netidentity-metadata-race-1cdbbfaebbbbb648e0415e703039fbb226ac50ff/samples.json",
+      "bytes": 6275,
+      "sha256": "2fe2de87199d3250be3d4aac2e1de42152eda61c2278143c75e4330e4ba2fab5"
+    }
+  ],
+  "limits": [
+    "Compare modes only internally: normal/race ran on different hosts.",
+    "Full anchored current-thread comm leaf Open/read/Close plus complete output comparison measured; not complete captureProc, route, service or router time.",
+    "Eight readFile calls per full capture: multiplying leaf difference by eight is only a local cost estimate, not measured whole-observation improvement.",
+    "Historical measurement precedes follow-up test-only present-MNT_ID-zero/missing-TYPE refusal correction. Updated negative test runtime requires a new exact revision check; no old PASS is attributed to it."
+  ],
+  "verified_followup": {
+    "schema": 1,
+    "revision": "df4aa9385ad4c90bdc82de1cddea43b331d403c7",
+    "run": 43951327655,
+    "production_changed": false,
+    "followup": "Present zero MNT_ID refuses before missing TYPE fallback; mixed-mask and actual wrong mount-ID negatives now executed.",
+    "modes": {
+      "normal": {
+        "job": 133594273359,
+        "result": "SUCCESS",
+        "exact_tests_passed": 3,
+        "pairs": 8,
+        "samples_per_variant_per_pair": 512,
+        "median_before_ns": 2341.71875,
+        "median_after_ns": 2074.3056640625,
+        "median_difference_ns": 267.4130859375,
+        "percent_change": -11.419521918996466
+      },
+      "race": {
+        "job": 133594273927,
+        "result": "SUCCESS",
+        "exact_tests_passed": 3,
+        "pairs": 8,
+        "samples_per_variant_per_pair": 512,
+        "median_before_ns": 9616.1416015625,
+        "median_after_ns": 8588.9990234375,
+        "median_difference_ns": 1027.142578125,
+        "percent_change": -10.681441899296729
+      }
+    },
+    "raw_files": [
+      {
+        "path": "netidentity-metadata-normal-df4aa9385ad4c90bdc82de1cddea43b331d403c7/metadata.log",
+        "bytes": 7246,
+        "sha256": "bd2606beffd2ed2ba7a2a7f2b9473c69135926ae90fc6396a2d79ec67eb2aa90"
+      },
+      {
+        "path": "netidentity-metadata-normal-df4aa9385ad4c90bdc82de1cddea43b331d403c7/platform.txt",
+        "bytes": 3588,
+        "sha256": "41ecd65d7bc62401a6845e43a85f8151f1d84a82adaa7322122c0c2ec480462d"
+      },
+      {
+        "path": "netidentity-metadata-normal-df4aa9385ad4c90bdc82de1cddea43b331d403c7/samples.json",
+        "bytes": 6273,
+        "sha256": "b5666276b96a8ffb3253d330549902d9cb2375e0889181e487e99cfcc707b025"
+      },
+      {
+        "path": "netidentity-metadata-race-df4aa9385ad4c90bdc82de1cddea43b331d403c7/metadata.log",
+        "bytes": 7248,
+        "sha256": "c23e1f198e4bf312a91e517d5d20fceec934a3cb200c0e7e520038c5764137c9"
+      },
+      {
+        "path": "netidentity-metadata-race-df4aa9385ad4c90bdc82de1cddea43b331d403c7/platform.txt",
+        "bytes": 3502,
+        "sha256": "bff82d3f20d085c79de0a5f52e549a7e8668b49a417c86ca6a2a26a1ae529d56"
+      },
+      {
+        "path": "netidentity-metadata-race-df4aa9385ad4c90bdc82de1cddea43b331d403c7/samples.json",
+        "bytes": 6275,
+        "sha256": "a86d048c0dd9b144d3cda3868e2ba46ecd77e2596546f2d386c9559d47e95312"
+      }
+    ],
+    "decision": "REJECT production promotion: leaf-only microseconds do not resolve seconds of DNS pre-dial budget.",
+    "limits": [
+      "Within-mode pairs only; normal and race use different hosts.",
+      "Provider and full observation bookends outside leaf timers; no route performance or hardware acceptance claim.",
+      "Earlier 1cdbbfae measurements remain historical and unchanged."
+    ]
+  }
+}

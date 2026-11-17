@@ -1,0 +1,719 @@
+{
+  "run": 43957916376,
+  "sha": "7419b4e562e557d844ff6d067d423e9e56bd0c77",
+  "overall": "PASS",
+  "fixed_samples": 16,
+  "actual_calls": 32,
+  "accepted_samples": 16,
+  "summary": {
+    "race": {
+      "wireguard": {
+        "reduction_percent": 33.38846810226561,
+        "cli": {
+          "median_ms": 5908.976126,
+          "samples_ms": [
+            5885.032517,
+            5932.919735,
+            6071.738678,
+            5582.297928
+          ]
+        },
+        "kernel": {
+          "median_ms": 3936.0595169999997,
+          "samples_ms": [
+            4012.264852,
+            3908.610441,
+            3963.508593,
+            3878.14987
+          ]
+        }
+      },
+      "amneziawg": {
+        "reduction_percent": 33.24664929656363,
+        "cli": {
+          "median_ms": 5918.486484,
+          "samples_ms": [
+            5858.668599,
+            5978.304369,
+            6044.363827,
+            5605.067249
+          ]
+        },
+        "kernel": {
+          "median_ms": 3950.788039,
+          "samples_ms": [
+            3995.317183,
+            3947.971925,
+            3953.604153,
+            3699.009994
+          ]
+        }
+      }
+    },
+    "production": {
+      "wireguard": {
+        "reduction_percent": 32.725516444947,
+        "cli": {
+          "median_ms": 3850.8128484999997,
+          "samples_ms": [
+            3817.757864,
+            3883.065765,
+            3849.07831,
+            3852.547387
+          ]
+        },
+        "kernel": {
+          "median_ms": 2590.6144565000004,
+          "samples_ms": [
+            2601.027805,
+            2572.82021,
+            2580.201108,
+            2612.812095
+          ]
+        }
+      },
+      "amneziawg": {
+        "reduction_percent": 32.24739489372872,
+        "cli": {
+          "median_ms": 3832.000199,
+          "samples_ms": [
+            3836.893359,
+            3946.871805,
+            3827.107039,
+            3758.33711
+          ]
+        },
+        "kernel": {
+          "median_ms": 2596.2799625,
+          "samples_ms": [
+            2593.955309,
+            2611.682037,
+            2556.405929,
+            2598.604616
+          ]
+        }
+      }
+    }
+  },
+  "samples": [
+    {
+      "mode": "production",
+      "sample": 0,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 98959.001477,
+      "log_sha256": "dae631cab6dc248287154227bc908daf0b0e7502ed55dc409383381f15f1c5ed",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 3817757864,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3836893359,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "10.73"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "sample": 1,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 75264.884606,
+      "log_sha256": "549a0b4f84eb1dd1b83033b210a2cc570e8d52a635ffbd117192a7473bd91fd2",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 2601027805,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 2593955309,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "8.25"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "sample": 2,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 11400.513545,
+      "log_sha256": "ccceab89abd2e5d44667c4294046f8f71af7665f2e043a5d7e0391dacdc06cc7",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 2572820210,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 2611682037,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "8.07"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "sample": 3,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 14161.614844,
+      "log_sha256": "3168ee250d9598a970d78825d25ba202dd586e0ae662250b8a950373a992f12c",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 3883065765,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3946871805,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "10.92"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "sample": 4,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 14083.90657,
+      "log_sha256": "3f01d6df5a3dd17cd566a918e78fec56935628cc388c6fc6dd0d2d1db0cb5118",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 3849078310,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3827107039,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "10.83"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "sample": 5,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 11159.998946,
+      "log_sha256": "a30be9c464c781dc68e520b734096d218e99bb46659adc764da8d29faa345cfd",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 2580201108,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 2556405929,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "8.09"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "sample": 6,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 11199.881436,
+      "log_sha256": "44f837a9d88122dd70954e12cf1530b4e3c6414796f781281658c69c87fd4a5c",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 2612812095,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 2598604616,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "8.13"
+        ]
+      ]
+    },
+    {
+      "mode": "production",
+      "sample": 7,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 13561.428612,
+      "log_sha256": "96cc0961cc5ee39214bb6ba1ddea26ab57d2cd2caabd8f0c2b6e52ba27e4cde6",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 3852547387,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3758337110,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "10.38"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 0,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 138033.138669,
+      "log_sha256": "2774b7e3ac6fa4e0892c0cfdd8f8a5aa823892d0aaa37aa365d56a0c89bd8596",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 5885032517,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 5858668599,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "17.94"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 1,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 114528.9036,
+      "log_sha256": "85858f7c9c8583d4cf78838de516b78d2084429ce587006e2101fe6da002ada0",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 4012264852,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3995317183,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "15.48"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 2,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 19619.167646,
+      "log_sha256": "29b1cdeae368776a46d9d0f1ce28cb9b41da7fae66685ce0b1de6a272bafcd83",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 3908610441,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3947971925,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "14.57"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 3,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 23555.489104,
+      "log_sha256": "0367e7faccec8afb8c001eacd1a638334c2a8fc1afc8aa6e1b23fd9473adde56",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 5932919735,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 5978304369,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "18.54"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 4,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 24319.548797,
+      "log_sha256": "e88eb64ae4cee10b93c55360e588df134923a7cd79b7fb63e6eaeb5848bc6ee5",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 6071738678,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 6044363827,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "19.12"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 5,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 19698.986033,
+      "log_sha256": "8abefdaf4d361eb7fa1b61ed8d67e6e5a4053e1bb46a9081cdd674198daff7fb",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 3963508593,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3953604153,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "14.65"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 6,
+      "variant": "kernel",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 19516.802383,
+      "log_sha256": "58731df0e227452be070f7b2dd2a64aa42c47c7d731c920666db98711733bb93",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 3878149870,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 3699009994,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "14.43"
+        ]
+      ]
+    },
+    {
+      "mode": "race",
+      "sample": 7,
+      "variant": "cli",
+      "exit_code": 0,
+      "accepted": true,
+      "driver_wall_including_build_ms": 22300.841964,
+      "log_sha256": "07e45e7811405e1328e8993b3233eb604a82c7f9d740f2d8cbcf4f5648f9b452",
+      "calls": [
+        {
+          "engine": "wireguard",
+          "elapsed_ns": 5582297928,
+          "outcome": "passed",
+          "closed": true
+        },
+        {
+          "engine": "amneziawg",
+          "elapsed_ns": 5605067249,
+          "outcome": "passed",
+          "closed": true
+        }
+      ],
+      "test_outcomes": [
+        [
+          "PASS",
+          "17.49"
+        ]
+      ]
+    }
+  ],
+  "source_provenance": {
+    "revision": "7419b4e562e557d844ff6d067d423e9e56bd0c77",
+    "historical_revision": "aab413ebf6f16567434fd0f2569331708c9b0b71",
+    "historical_blob": "9310a512731b18d9badb34d87b4f19e6144cd2ca",
+    "archive_sha256": "d987f3e0683d6e44d867bd205a55079d36a03f790b345621b05ebf9eee047747",
+    "only_changed_file": "internal/dataplane/wg_empty_table_read.go",
+    "baseline_sha256": "186bb7f79e00548ed512e1662ab561d3f6a1caf3bf66716bf97278bdb2f4c9f6",
+    "candidate_sha256": "308b5dfc289c89cf5ba1c8c4a9989b7fc3cdb70941048535644d952429521d71",
+    "sequence_per_mode": [
+      "cli",
+      "kernel",
+      "kernel",
+      "cli",
+      "cli",
+      "kernel",
+      "kernel",
+      "cli"
+    ],
+    "modes": [
+      "production",
+      "race"
+    ],
+    "original_body_budget_seconds": 8,
+    "full_apply": false,
+    "scope": "complete original WG inactivity calls, two engines, same fresh namespace per sample"
+  },
+  "scope": "WG inactivity only; complete original calls including original8s body and closing; no full Apply or router claim",
+  "evidence_directory": "C:/RAZVILKA-research-20261116/wg-pair-7419b4e5",
+  "files": [
+    {
+      "sha256": "e3e9e104c0c52f48abab03d92b5a481b3cc109f6aa595b8a1ec3ddb0097ff3e9",
+      "bytes": 125559,
+      "path": "all.log"
+    },
+    {
+      "sha256": "48701eb0aac63d5e907eb50e5cae13c489d8e14745fd1d3844b704b8264abd8c",
+      "bytes": 2222,
+      "path": "status.json"
+    },
+    {
+      "sha256": "5df844ebca33c345ccc166873209d2da76550cbdfeabc7cf2c4388a45b0c6cba",
+      "bytes": 7059,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\driver.log"
+    },
+    {
+      "sha256": "2e25973dd08e61c0e37b80977018f29e00ec11494ea3b6327ba74b85e77ce916",
+      "bytes": 3494,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\platform.txt"
+    },
+    {
+      "sha256": "2af9aa2babd937bf016eb9b447a4e6569a90d62851ad8382b45f0a7b1fada1bf",
+      "bytes": 1319537,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\cli.files.json"
+    },
+    {
+      "sha256": "009a7278f92ef2d305fdfe6481f35f992416486180922fbc25f7aecc0692c569",
+      "bytes": 1319537,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\kernel.files.json"
+    },
+    {
+      "sha256": "dae631cab6dc248287154227bc908daf0b0e7502ed55dc409383381f15f1c5ed",
+      "bytes": 9507,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-0-cli.log"
+    },
+    {
+      "sha256": "549a0b4f84eb1dd1b83033b210a2cc570e8d52a635ffbd117192a7473bd91fd2",
+      "bytes": 9197,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-1-kernel.log"
+    },
+    {
+      "sha256": "ccceab89abd2e5d44667c4294046f8f71af7665f2e043a5d7e0391dacdc06cc7",
+      "bytes": 9197,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-2-kernel.log"
+    },
+    {
+      "sha256": "3168ee250d9598a970d78825d25ba202dd586e0ae662250b8a950373a992f12c",
+      "bytes": 9201,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-3-cli.log"
+    },
+    {
+      "sha256": "3f01d6df5a3dd17cd566a918e78fec56935628cc388c6fc6dd0d2d1db0cb5118",
+      "bytes": 9201,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-4-cli.log"
+    },
+    {
+      "sha256": "a30be9c464c781dc68e520b734096d218e99bb46659adc764da8d29faa345cfd",
+      "bytes": 9191,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-5-kernel.log"
+    },
+    {
+      "sha256": "44f837a9d88122dd70954e12cf1530b4e3c6414796f781281658c69c87fd4a5c",
+      "bytes": 9200,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-6-kernel.log"
+    },
+    {
+      "sha256": "96cc0961cc5ee39214bb6ba1ddea26ab57d2cd2caabd8f0c2b6e52ba27e4cde6",
+      "bytes": 9199,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\production-7-cli.log"
+    },
+    {
+      "sha256": "2774b7e3ac6fa4e0892c0cfdd8f8a5aa823892d0aaa37aa365d56a0c89bd8596",
+      "bytes": 9227,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-0-cli.log"
+    },
+    {
+      "sha256": "85858f7c9c8583d4cf78838de516b78d2084429ce587006e2101fe6da002ada0",
+      "bytes": 9227,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-1-kernel.log"
+    },
+    {
+      "sha256": "29b1cdeae368776a46d9d0f1ce28cb9b41da7fae66685ce0b1de6a272bafcd83",
+      "bytes": 9226,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-2-kernel.log"
+    },
+    {
+      "sha256": "0367e7faccec8afb8c001eacd1a638334c2a8fc1afc8aa6e1b23fd9473adde56",
+      "bytes": 9227,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-3-cli.log"
+    },
+    {
+      "sha256": "e88eb64ae4cee10b93c55360e588df134923a7cd79b7fb63e6eaeb5848bc6ee5",
+      "bytes": 9227,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-4-cli.log"
+    },
+    {
+      "sha256": "8abefdaf4d361eb7fa1b61ed8d67e6e5a4053e1bb46a9081cdd674198daff7fb",
+      "bytes": 9227,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-5-kernel.log"
+    },
+    {
+      "sha256": "58731df0e227452be070f7b2dd2a64aa42c47c7d731c920666db98711733bb93",
+      "bytes": 9213,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-6-kernel.log"
+    },
+    {
+      "sha256": "07e45e7811405e1328e8993b3233eb604a82c7f9d740f2d8cbcf4f5648f9b452",
+      "bytes": 9210,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\race-7-cli.log"
+    },
+    {
+      "sha256": "b94d8ddb6f7d877545b57690528a644aa877bcf38f29e9e9aa7000afd647aa09",
+      "bytes": 185,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\result.json"
+    },
+    {
+      "sha256": "7f5b26d834bc0ba5a44e851856493e0b32fd914eb0e9d333fd1ec6e2b46040e5",
+      "bytes": 9894,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\samples.json"
+    },
+    {
+      "sha256": "4a81682bf9e86772a305e322e5b4c925e010e5d0d07d2ec96083166a12e6164e",
+      "bytes": 864,
+      "path": "artifacts\\wg-empty-table-comparison-7419b4e562e557d844ff6d067d423e9e56bd0c77\\comparison\\source-provenance.json"
+    }
+  ]
+}

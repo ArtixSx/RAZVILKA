@@ -49,13 +49,13 @@ func (r *mihomoLiveResource) startSidecarNative(ctx context.Context) error {
 		return errMihomoLiveMaterial
 	}
 	if err := r.currentBeforeStart(ctx); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-source", err)
 	}
 	if err := r.nativeCurrent(ctx); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-native", err)
 	}
 	if err := r.compiledCurrent(true); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-compiled", err)
 	}
 	r.mu.Lock()
 	if r.sidecarAttempted || r.sidecar != nil || r.closed || r.closeErr != nil {
@@ -72,25 +72,34 @@ func (r *mihomoLiveResource) startSidecarNative(ctx context.Context) error {
 	}
 	r.mu.Unlock()
 	if err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-construct", err)
 	}
 	if err := native.validate(ctx); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-validate", err)
 	}
 	if err := r.recordPhase(ctx, "sidecar-pending", nil); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-pending", err)
 	}
 	if err := native.start(ctx); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-start", err)
 	}
 	if err := r.captureTUN(ctx); err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-tun", err)
 	}
 	observation, err := native.observation(ctx)
 	if err != nil {
-		return err
+		return mihomoLiveSidecarDiagnostic("sidecar-observe", err)
 	}
-	return r.recordPhase(ctx, "sidecar-bound", &observation)
+	return mihomoLiveSidecarDiagnostic("sidecar-bound", r.recordPhase(ctx, "sidecar-bound", &observation))
+}
+
+// Report fixed failure stages only; production diagnostics are a no-op.
+// Preserve the original error object and evaluation order.
+func mihomoLiveSidecarDiagnostic(stage string, err error) error {
+	if err != nil {
+		return mihomoLiveActivationDiagnostic(stage, err)
+	}
+	return nil
 }
 
 func (r *mihomoLiveResource) cleanupSidecarNative(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {

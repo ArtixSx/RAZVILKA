@@ -1,0 +1,73 @@
+{
+  "sha": "6b120f8c92fb4d6e93f786d84d28c7245efc2725",
+  "ref": "work/research-history-verify-20261109",
+  "run_id": 42677249225,
+  "attempt": 1,
+  "conclusion": "failure",
+  "expected_jobs": 11,
+  "actual_jobs": 11,
+  "missing_jobs": [],
+  "jobs": [
+    {
+      "databaseId": 129361849756,
+      "name": "Domain native strict / canceled-ready",
+      "conclusion": "failure"
+    },
+    {
+      "databaseId": 129361849964,
+      "name": "Configured old193 public paired restore / history",
+      "conclusion": "failure"
+    },
+    {
+      "databaseId": 129361849985,
+      "name": "Domain native strict / selected",
+      "conclusion": "failure"
+    },
+    {
+      "databaseId": 129361850059,
+      "name": "DNS preparation recovery pair (diagnostic 30s)",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 129361850102,
+      "name": "managed-probe-native (production)",
+      "conclusion": "failure"
+    },
+    {
+      "databaseId": 129361850119,
+      "name": "Configured old193 public paired restore / draft",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 129361850139,
+      "name": "strategy-pair",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 129361850160,
+      "name": "managed-probe-native (race)",
+      "conclusion": "failure"
+    },
+    {
+      "databaseId": 129361850191,
+      "name": "Configured old193 public paired restore / empty",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 129361850258,
+      "name": "Exact iptables 1.8.11 / production",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 129361850737,
+      "name": "Exact iptables 1.8.11 / race",
+      "conclusion": "success"
+    }
+  ],
+  "limitations": [
+    "Auxiliary ref is separate from main2ecf; no readiness extrapolation",
+    "History failed before actual probe; exact legacy-alias fixture fix is newer and not tested by this run",
+    "Startup image comparison passed parity but race pair regressed; no production promotion",
+    "Strict DNS and managed native deadlines still fail; diagnostic30s recovery PASS is separate"
+  ]
+}

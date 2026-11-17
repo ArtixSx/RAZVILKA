@@ -1,0 +1,225 @@
+{
+  "schema": 1,
+  "kind": "accepted_flow_boundary_diagnostic",
+  "revision": "4c0484e16f3b9bbf247fece89b321c9ca59b8cf3",
+  "run_id": 43935593347,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43935593347",
+  "strict_jobs": {
+    "selected": {
+      "job_id": 133539230410,
+      "result": "FAIL",
+      "client_budget_seconds": 4
+    },
+    "canceled_ready": {
+      "job_id": 133539229695,
+      "result": "FAIL",
+      "readiness_budget_seconds": 12
+    }
+  },
+  "accepted_stage_unit_checks": {
+    "normal": "PASS",
+    "race": "PASS",
+    "selected_skips": 0
+  },
+  "selected": {
+    "initial_publication": {
+      "calls": 1,
+      "bytes": 0,
+      "elapsed_go": "6.271774086s"
+    },
+    "explicit_test_lookup_before_client_window": {
+      "calls": 1,
+      "bytes": 0,
+      "elapsed_go": "966.584961ms"
+    },
+    "accepted_lookup_delta_inside_client_attempt_ns": 767106467,
+    "abort_snapshot_returned": false,
+    "abort_snapshot_order": "Inline defer runs on t.Fatalf/Goexit before outer cleanup and before mismatch/opaque requests.",
+    "stages_at_abort": {
+      "accepted-stage/admit/completed": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "389.545682ms"
+      },
+      "accepted-stage/admit/returned-nil": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      },
+      "accepted-stage/admit/started": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      },
+      "accepted-stage/baseline/completed": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "389.968547ms"
+      },
+      "accepted-stage/baseline/returned-nil": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      },
+      "accepted-stage/baseline/started": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      },
+      "accepted-stage/initial-current/completed": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "292.889487ms"
+      },
+      "accepted-stage/initial-current/returned-nil": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      },
+      "accepted-stage/initial-current/started": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      },
+      "accepted-stage/socks-dial/completed": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "309.353\u00b5s"
+      },
+      "accepted-stage/socks-dial/returned-nil": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      },
+      "accepted-stage/socks-dial/started": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed_go": "0s"
+      }
+    },
+    "guard_at_abort": {
+      "calls": 3,
+      "bytes": 0,
+      "elapsed_go": "1.279990346s"
+    },
+    "guard_after_join": {
+      "calls": 4,
+      "bytes": 0,
+      "elapsed_go": "1.708598307s"
+    },
+    "interpretation": "Initial prepared.Current completed in 292.889487ms and is not established as the dominant cost. By the deferred abort snapshot TCP DialContext had returned nil; this does not prove the exact client deadline was met or SOCKS CONNECT/TLS/replay/service readiness. A fourth guard completed only by the later join snapshot."
+  },
+  "canceled_ready": {
+    "failure": "Actual original child/readiness cancellation witness was not reached in the unchanged strict readiness window.",
+    "gen2_capture_prepare": {
+      "calls": 1,
+      "bytes": 0,
+      "elapsed_go": "6.285182927s"
+    },
+    "gen2_standby_prepare": {
+      "calls": 1,
+      "bytes": 0,
+      "elapsed_go": "2.247486353s"
+    },
+    "gen2_initial_kernel_attempt": {
+      "calls": 1,
+      "bytes": 0,
+      "elapsed_go": "5.251\u00b5s"
+    },
+    "interpretation": "Separate successor/readiness failure, not the selected client4s failure. Initial-kernel completion counter records an attempted call, not successful readiness."
+  },
+  "decision": "Do not promote the proposed initial-current immutable-byte bracket from this sample. Next diagnostics separate full SOCKS handshake, post-SOCKS x.check, post-dial guard/decision and relay entry without changing the execution or deadlines.",
+  "limits": [
+    "All completed-duration counters may overlap; do not sum lookup, guard, mapping or nested process/tool counters as wall time.",
+    "The explicit test Lookup occurs before the selected request and is excluded from the client-window lookup delta.",
+    "Counters have no absolute per-flow completion timestamp; TCP success is known by the abort snapshot, not proven before the peer deadline.",
+    "Native CPU profiling and diagnostic collection add overhead; one sample is not a before/after speed benchmark.",
+    "Returned-nil stages and relay entry are not end-to-end service or route proof. Both strict acceptance jobs still failed.",
+    "No physical router/LAN profile was exercised. The separate diagnostic30 job is not used as strict acceptance evidence here."
+  ],
+  "raw_artifact_root": "C:\\RAZVILKA-research-20261116\\domain-accepted-stages-4c\\artifacts",
+  "raw_sha256_manifest": [
+    {
+      "path": "research-domain-selected-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/native.log",
+      "bytes": 21619,
+      "sha256": "1554407b446456f1db9f22fe61806cf7d3e847f2ba795e7c514357e0db06efd6"
+    },
+    {
+      "path": "research-domain-selected-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/status.txt",
+      "bytes": 182,
+      "sha256": "dd07be5c1633b6e3d3ea075634618325a9131ea50eb9d9a1ca85b7ddb4536fa5"
+    },
+    {
+      "path": "research-domain-selected-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/accepted-stages-normal.log",
+      "bytes": 348,
+      "sha256": "414bd98ad25fb732738a6d7516e3f29738afa377896533299a1c5adab95baaf0"
+    },
+    {
+      "path": "research-domain-selected-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/accepted-stages-race.log",
+      "bytes": 348,
+      "sha256": "7f52fd448c2c290bc7da850ef38c3e3651e2cbd1cd22c4ee270bbc94f325afb0"
+    },
+    {
+      "path": "research-domain-selected-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/original-run.cpu.pprof",
+      "bytes": 86712,
+      "sha256": "4733482d8f4dc4fc1e8c660e08fb278b5d9dc01acf80a02da87d8ab81ca26561"
+    },
+    {
+      "path": "research-domain-selected-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/cpu-top.txt",
+      "bytes": 3306,
+      "sha256": "d9379d01f6dbd34fe2236f6f3becb0f6e10ea55823d06b08efa95226bc962e0a"
+    },
+    {
+      "path": "research-domain-selected-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/cpu-cumulative.txt",
+      "bytes": 5087,
+      "sha256": "618923de5d3fa645fd4d18add6a2090498021d6fb933adbf4c6c7e09706ce3a9"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/native.log",
+      "bytes": 20054,
+      "sha256": "42d161808aaf8c46c6cad38074d0b2660c41c38e30e19fdd440c2dd6d165332d"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/status.txt",
+      "bytes": 192,
+      "sha256": "34c74a8d0a96e2a07cd15bf9259ae1823ac98f7b456fc61bfff3e41dbbe3a90e"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/accepted-stages-normal.log",
+      "bytes": 348,
+      "sha256": "414bd98ad25fb732738a6d7516e3f29738afa377896533299a1c5adab95baaf0"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/accepted-stages-race.log",
+      "bytes": 348,
+      "sha256": "7f52fd448c2c290bc7da850ef38c3e3651e2cbd1cd22c4ee270bbc94f325afb0"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/original-run.cpu.pprof",
+      "bytes": 73581,
+      "sha256": "7078cf9159efc682805c9ba5aedb9060c13359f158a7c8b48035dfc34c47e608"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/cpu-top.txt",
+      "bytes": 3423,
+      "sha256": "f38d509eafb64a5f012f6f527b0264847302aa1e8fbceabb502e3081b3aa6586"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/cpu-cumulative.txt",
+      "bytes": 4766,
+      "sha256": "6a3631e42086476bb17b1c14abeb03e78b867990f5fe456e53ce2a0ff518041f"
+    },
+    {
+      "path": "research-domain-canceled-ready-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3/successor-run.cpu.pprof",
+      "bytes": 64617,
+      "sha256": "dfda9fb05f713ee622186d6f80320130b6c8dd8af995afa8b59803a569d47e29"
+    }
+  ],
+  "diagnostic_30s": {
+    "job_id": 133539229308,
+    "result": "SUCCESS",
+    "meaning": "Expected preserved baseline failure plus three current failure-recovery runs PASS under separate30s diagnostic budget; does not replace either strict failed gate.",
+    "artifact": "research-preparation-4c0484e16f3b9bbf247fece89b321c9ca59b8cf3",
+    "local_root": "C:/RAZVILKA-research-20261116/domain-accepted-stages-4c/diagnostic30"
+  }
+}

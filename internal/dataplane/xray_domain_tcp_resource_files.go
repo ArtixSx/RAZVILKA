@@ -150,6 +150,20 @@ func (r *XrayDomainTCPExecutionResource) filesCurrent(ctx context.Context) error
 }
 
 func (r *XrayDomainTCPExecutionResource) filesCurrentForObservation(ctx context.Context, view *xrayDomainTCPFileObservation) error {
+	return r.filesCurrentForImageRead(ctx, view, nil)
+}
+
+func (r *XrayDomainTCPExecutionResource) filesCurrentForImageRead(ctx context.Context, view *xrayDomainTCPFileObservation, image *xrayDomainTCPImageRead) error {
+	return r.filesCurrentForExecutableComparison(ctx, view, image, nil)
+}
+
+func (r *XrayDomainTCPExecutionResource) filesCurrentForExecutableComparison(ctx context.Context, view *xrayDomainTCPFileObservation, image *xrayDomainTCPImageRead, prior *domainTCPPriorByteRead) error {
+	if prior != nil && (view != nil || image != nil || prior.old != r) {
+		return ErrXrayDomainTCPOriginal
+	}
+	if image != nil && (view != nil || !image.belongsTo(r)) {
+		return ErrXrayDomainTCPOriginal
+	}
 	if r == nil || r.self != r || r.descriptorsClosed.Load() || xraySelectedTCPFinite(ctx) != nil || r.root == nil || r.config == nil || r.configInfo == nil || r.executable == nil {
 		return ErrXrayDomainTCPOriginal
 	}
@@ -177,6 +191,12 @@ func (r *XrayDomainTCPExecutionResource) filesCurrentForObservation(ctx context.
 	}
 	if view != nil {
 		return errors.Join(check(), view.current(ctx, r), ctx.Err())
+	}
+	if image != nil {
+		return errors.Join(check(), image.current(ctx), ctx.Err())
+	}
+	if prior != nil {
+		return errors.Join(check(), prior.current(ctx), ctx.Err())
 	}
 	return errors.Join(check(), r.executable.current(ctx), ctx.Err())
 }

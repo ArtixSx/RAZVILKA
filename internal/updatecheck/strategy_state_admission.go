@@ -77,6 +77,9 @@ func (a *SelfUpdateFileAdapter) strategyAdmission(ctx context.Context, id string
 	if err != nil {
 		return err
 	}
+	if hasBootstrapOfflineStrategy(review) {
+		return a.checkBootstrapOfflineStrategy(ctx, review, image, schema)
+	}
 	if review.StrategyPair == nil {
 		if image.Exists {
 			return ErrStrategyStateAdmission

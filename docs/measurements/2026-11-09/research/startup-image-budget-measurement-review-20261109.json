@@ -1,0 +1,13 @@
+{
+  "status": "source-approved-measurement-only",
+  "file": "C:/Projects/RAZVILKA/research-build-20261109/internal/startuptools/version_names_measurement_native_linux_test.go",
+  "sha256": "062fbc431ede58dcc1dbca8292a23c337e49deff8e11b9e6649301bc8f1054e8",
+  "checks": [
+    "Only immutable acquired held-image sizes read after successful original observation closing",
+    "Positive sizes, doubled-sum overflow and exact acquired review.bytes checked",
+    "Benchmark metrics emitted outside timed callback",
+    "Static inventory payload explicitly not executed read count, throughput, bytes/op or process RSS",
+    "No production predicates, filesystem reads, callbacks or authority changed"
+  ],
+  "validation": "Source/gofmt only; actual native run pending"
+}

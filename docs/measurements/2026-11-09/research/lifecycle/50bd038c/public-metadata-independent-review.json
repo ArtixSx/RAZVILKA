@@ -1,0 +1,23 @@
+{
+  "sha": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "run_id": 42684649742,
+  "review": "Independent raw source outcome and five artifact hash check",
+  "public": {
+    "empty": "PASS126.58s",
+    "draft": "PASS149.67s",
+    "history": "PASS164.20s; actual three probes plus frozen selection preserved, second successful history run"
+  },
+  "metadata": {
+    "normal_serial_ms": 0.644167,
+    "normal_parallel_ms": 1.836901,
+    "actual_tests": "All three tests PASS three repetitions both normal/race",
+    "decision": "REJECT PRODUCTION PROMOTION; worse wall CPU allocation in both modes",
+    "race_serial_ms": 1.179413,
+    "race_parallel_ms": 4.897469
+  },
+  "limits": [
+    "Configured0.19.3 offline restore; synthetic private TLS service, no public service or old live readiness",
+    "Managed fullforward remainsFAIL; metadata test success is not routing acceptance",
+    "No production parallel metadata changes"
+  ]
+}

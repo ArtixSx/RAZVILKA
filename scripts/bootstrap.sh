@@ -88,10 +88,20 @@ fi
 
 step '1/5' 'Проверяю Entware и системные инструменты…'
 [ "$(id -u)" = 0 ] || { echo "Run this command as the Entware administrator (root)." >&2; exit 10; }
-command -v opkg >/dev/null 2>&1 || {
-  echo "ОШИБКА: opkg не найден в /opt. Установка Entware не завершена или /opt не подключён." >&2
+OPKG=""
+for OPKG_CANDIDATE in "$BASE/bin/opkg" "$BASE/sbin/opkg"; do
+  if [ -f "$OPKG_CANDIDATE" ] && [ -x "$OPKG_CANDIDATE" ]; then
+    OPKG="$OPKG_CANDIDATE"
+    break
+  fi
+done
+[ -n "$OPKG" ] || {
+  echo "ОШИБКА: opkg не найден в $BASE. Установка Entware не завершена или каталог не подключён." >&2
   exit 11
 }
+# The firmware may provide its own opkg in PATH. It must never receive Entware
+# package operations, including after changing to the private workspace.
+readonly OPKG
 PACKAGES=""
 NEED_HTTPS_WGET=0
 need_package() {
@@ -117,7 +127,17 @@ for TOOL in awk dd od pidof grep; do
   command -v "$TOOL" >/dev/null 2>&1 || need_package busybox
 done
 [ -x "$BASE/sbin/start-stop-daemon" ] || need_package busybox
-if ! command -v ip >/dev/null 2>&1 || ! ip -4 -o addr show >/dev/null 2>&1; then
+supports_stock_ip_full() {
+  # BusyBox ip can pass the address probe while lacking the reviewed policy
+  # tool. Let opkg own its alternative; do not rewrite a user's link here.
+  [ -x "$BASE/libexec/ip-full" ] && command -v readlink >/dev/null 2>&1 || return 1
+  IP_FULL_MAIN="$(readlink -f "$BASE/libexec/ip-full" 2>/dev/null)" || return 1
+  IP_FULL_ALIAS="$(readlink -f "$BASE/sbin/ip" 2>/dev/null)" || return 1
+  [ -n "$IP_FULL_MAIN" ] && [ "$IP_FULL_ALIAS" = "$IP_FULL_MAIN" ] || return 1
+  IP_FULL_VERSION="$("$BASE/libexec/ip-full" -Version 2>&1)" || return 1
+  [ "$IP_FULL_VERSION" = 'ip utility, iproute2-ss4.4.0-11-entware' ]
+}
+if ! supports_stock_ip_full || ! command -v ip >/dev/null 2>&1 || ! ip -4 -o addr show >/dev/null 2>&1; then
   need_package ip-full
 fi
 if [ ! -r "$BASE/etc/ssl/certs/ca-certificates.crt" ] && [ ! -r "$BASE/etc/ssl/cert.pem" ]; then
@@ -125,21 +145,46 @@ if [ ! -r "$BASE/etc/ssl/certs/ca-certificates.crt" ] && [ ! -r "$BASE/etc/ssl/c
 fi
 if [ -n "$PACKAGES" ]; then
   step '1/5' "Устанавливаю недостающие инструменты: $PACKAGES"
-  if ! opkg update; then
+  (
+  # Entware opkg falls back to the caller's cwd when TMPDIR is absent. The
+  # firmware cwd may be read-only, and mktemp/coreutils may themselves be among
+  # the missing packages. Claim one private directory using only BusyBox mkdir;
+  # never adopt a colliding path. Keep this environment local to dependency
+  # installation so the caller's later download TMPDIR is preserved.
+  OPKG_TMP="$BASE/.razvilka-opkg.$$"
+  readonly OPKG_TMP
+  mkdir "$OPKG_TMP" || { echo "Cannot create private Entware package workspace" >&2; exit 12; }
+  cleanup_opkg() {
+    OPKG_STATUS=$?
+    if ! rm -rf "$OPKG_TMP"; then
+      echo "Cannot clean private Entware package workspace: $OPKG_TMP" >&2
+      [ "$OPKG_STATUS" -ne 0 ] || OPKG_STATUS=12
+    fi
+    exit "$OPKG_STATUS"
+  }
+  trap cleanup_opkg EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  TMPDIR="$OPKG_TMP"
+  export TMPDIR
+  cd -- "$OPKG_TMP"
+  if ! "$OPKG" update; then
     if [ "$NEED_HTTPS_WGET" -eq 1 ]; then
       # Entware's HTTP index may have refreshed while existing HTTPS feeds
       # failed. Bootstrap only its fixed TLS downloader, then require a clean
       # refresh; do not silently continue with failed package metadata.
       warn 'Подготавливаю wget-ssl для HTTPS-каталогов Entware…'
-      opkg install wget-ssl
-      opkg update
+      "$OPKG" install wget-ssl
+      "$OPKG" update
     else
       echo "Не удалось обновить каталог Entware. Проверьте доступность репозиториев." >&2
       exit 12
     fi
   fi
   # Package names are exclusively the fixed allowlist above. No global upgrade.
-  opkg install $PACKAGES
+  "$OPKG" install $PACKAGES
+  )
   hash -r 2>/dev/null || true
 fi
 for TOOL in curl sha256sum tar gzip mktemp readlink timeout awk dd od pidof grep ip; do
@@ -150,7 +195,7 @@ case "$(wget --version 2>/dev/null || true)" in
   *+https*) ;;
   *) echo "Для HTTPS-каталогов opkg нужен wget-ssl. Проверьте PATH и установку пакета." >&2; exit 12 ;;
 esac
-if [ ! -x "$BASE/sbin/start-stop-daemon" ] || ! ip -4 -o addr show >/dev/null 2>&1; then
+if [ ! -x "$BASE/sbin/start-stop-daemon" ] || ! supports_stock_ip_full || ! ip -4 -o addr show >/dev/null 2>&1; then
   echo "Entware service/IP tools are incomplete; check busybox and ip-full packages." >&2
   exit 12
 fi

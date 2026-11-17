@@ -1,0 +1,78 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T13:31:33.0573944Z",
+  "base_head": "757cf79858b1c3ab3942086bcadaa6d83c8bf84a",
+  "status": "source approved; remote normal/race and actual native acceptance pending",
+  "scope": "Optional request-local service phase diagnostics, CLI fresh-result publication, separate native profile instrumentation, targeted CI and quarantine close-retry gate",
+  "findings_resolved": [
+    "A canceled second TLS/SOCKS attempt could retain the first completed singleton interval; second Start now immediately marks multiple, with regression coverage",
+    "Timing transport now delegates CloseIdleConnections"
+  ],
+  "preserved": [
+    "Exact pinned target/source checks, finite request and dial cancellation, underlying transport cleanup, existing service predicates",
+    "Per-redirect trace composition; mutex-protected bounded 32-row collector; immutable Close snapshots and ignored late callbacks",
+    "No endpoint, URL, certificate, raw error, or response content in telemetry schema",
+    "CLI only publishes rows for fresh original node/service/profile result; generic paired timings unchanged",
+    "Separate native cleanup-only test requires permanent fence, joined second Stop and released original lease; does not substitute for normal full fresh Apply"
+  ],
+  "limitations": [
+    "No local Go build/test was run by reviewer",
+    "Network durations overlap and cannot be summed; SOCKS duration includes local connection and negotiation, not separately observed remote TCP or proxy DNS",
+    "Native profile output is diagnostic and unpaired; no router readiness or speed claim",
+    "Quarantine production native gate and normal/race tests still must pass on the integrated SHA"
+  ],
+  "files": [
+    {
+      "path": "internal/probecheck/network_timing.go",
+      "sha256": "F94DAC19AA555E193C9FD8AFDD0916067A110E28FD831879D1F4D53983535873"
+    },
+    {
+      "path": "internal/probecheck/network_timing_test.go",
+      "sha256": "BA76757E3D89940CC1CF779A7D2ACCD0D2F8674813D34AAC2F153B990ACDDAAA"
+    },
+    {
+      "path": "internal/dataplane/service_ip_probe.go",
+      "sha256": "154AAD6DF51B9064F46878901CE68D98DEF35BD32B4E8F678E1A2136DD70AF6C"
+    },
+    {
+      "path": "internal/dataplane/proxy.go",
+      "sha256": "E2E2D5979A77A3DBB07DE81FF5B10440F18D89348506181DC04D20705840D8CB"
+    },
+    {
+      "path": "internal/dataplane/node_ip_probe.go",
+      "sha256": "BC63A2243BA1185C5E789163BCEE200593FB1B810049F63A00D0186179EE39A7"
+    },
+    {
+      "path": "internal/dataplane/proxy_service_timing_test.go",
+      "sha256": "2C740C1B967AF425D220F3C0D333039A507196D3440D0B7A455D38F8AE157D60"
+    },
+    {
+      "path": "cmd/nodeeval/main.go",
+      "sha256": "28544F116DA285651B4808514B862B37A75772183BA520F4DB8E0558E427216A"
+    },
+    {
+      "path": "cmd/nodeeval/network_timing_test.go",
+      "sha256": "E99DC113B0F48348536E77789F08DAE708C75C026D809A6757BFD04E1AB55B1E"
+    },
+    {
+      "path": "internal/app/node_native_perf_linux_test.go",
+      "sha256": "BFAB6D949CC0C707DDB9D008130D56C29FBE078D8FD15806DC905D0967D0B877"
+    },
+    {
+      "path": "cmd/nodeeval/README.md",
+      "sha256": "5FC524E478EA0FD46660C3A77EE7BAA9F36D096DEAF415D1C393D0B83B11561E"
+    },
+    {
+      "path": "docs/RESEARCH_LAB_20261109.md",
+      "sha256": "E4F21A8E0A6127BB2B015B5CA816A39976E0172335FBE87C546FD17FD33D40F0"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "88D0241ABCDFCC8845E194891FD0F4A4FE74CB662B8333EA2BDB7AD764822EDA"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "99501011784FD93AE7E2084E5CF982BA5CDC7076465A8E9EA50AFBA926A5C79D"
+    }
+  ]
+}

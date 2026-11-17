@@ -46,9 +46,14 @@ func (a *App) autonomyCapabilityRefusal(cfg config.Config, serviceID, route stri
 	if strings.HasPrefix(route, "xray:node-") && cfg.NetworkPolicy.Clients.Mode == "selected_devices" {
 		return nil
 	}
+	if route == "nfqws2" {
+		if refusal := a.managedNFQNewApplyRefusal(serviceID); refusal != nil {
+			return refusal
+		}
+	}
 	return &capabilityRefusal{Code: capabilityExecutorRequired, Title: "Автопилот не включает этот путь", ServiceID: serviceID,
 		Message:    "В режиме «Домашняя сеть» автопилот пока включает сервис с IP-диапазонами только через узел Xray и только для выбранных устройств.",
-		Resolution: "Выберите для сервиса узел Xray или примените его вручную через NFQWS2 или WireGuard."}
+		Resolution: "Выберите для сервиса узел Xray или примените его вручную через WireGuard."}
 }
 
 // Before any probe of an unapplied service, refuse only when every route the

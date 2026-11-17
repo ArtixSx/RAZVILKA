@@ -1,0 +1,86 @@
+{
+  "run": 42623923506,
+  "conclusion": "failure",
+  "limitations": [
+    "Whole workflow FAIL until manual Stop and second cycle pass",
+    "Generic CI independent and still running at report creation",
+    "Prior dac23 settlement timeout remains recorded; this unpaired pass is not causal performance evidence",
+    "No physical router LAN proof",
+    "Outer Apply480s child-start120s native operation110s and cycle300s preserved"
+  ],
+  "logs": [
+    {
+      "sha256": "D485B8A624D2E802A97DA110E6912D48ADFC8D993A2A29237B9D52EDF4C1150A",
+      "file": "mihomo-lifecycle.log"
+    },
+    {
+      "sha256": "E4A591456FA1AFBD977317516B2140C1F53317990393D369E30951D1BFE371CE",
+      "file": "mihomo-postcas.log"
+    },
+    {
+      "sha256": "F6C4E0419BE854A1277BC9BA7A5983C800A8CEF00753A91B53A4910F453A21EC",
+      "file": "mihomo-settlement.log"
+    },
+    {
+      "sha256": "00984F6FCA7997F772683171BF5FF156E3B9211813632A2FA7EF15D59BDB3A72",
+      "file": "mihomo-manual-http.log"
+    }
+  ],
+  "sha": "b9bb3c13e02d91e441b6538f855e533a13e1ef15",
+  "jobs": [
+    {
+      "both_baselines_restored": true,
+      "id": 129182709425,
+      "scenario": "lifecycle",
+      "test_seconds": 224.83,
+      "official_child_normal_race_bookends": "PASS",
+      "rounds": [
+        {
+          "apply_seconds": 77.075399248,
+          "stop_seconds": 4.940700117,
+          "cycle_seconds": 111.501108096,
+          "closing_retry": false
+        },
+        {
+          "apply_seconds": 76.289014509,
+          "stop_seconds": 4.857215036,
+          "cycle_seconds": 110.701889098,
+          "closing_retry": true
+        }
+      ],
+      "conclusion": "success"
+    },
+    {
+      "http_status": 503,
+      "rollback_verified": true,
+      "scenario": "postcas-failure",
+      "desired_exact_restored": true,
+      "test_seconds": 90.08,
+      "conclusion": "success",
+      "id": 129182709794,
+      "original_pending": false
+    },
+    {
+      "scenario": "check-settlement",
+      "cycle_seconds": 123.142148506,
+      "stop_seconds": 9.40135051,
+      "baseline_restored": true,
+      "apply_seconds": 94.727373809,
+      "test_seconds": 126.03,
+      "conclusion": "success",
+      "id": 129182709536
+    },
+    {
+      "test_seconds": 100.48,
+      "id": 129182709017,
+      "apply_seconds": 72.132018054,
+      "preview": "PASS",
+      "actual_LAN": "PASS before Stop",
+      "conclusion": "failure",
+      "scenario": "manual-http",
+      "reviewed_fix": "Actual security.Gate and same test Bearer across all real HTTP requests, anonymous Stop401 retained; pending rerun",
+      "apply": "COMMITTED replay refused",
+      "failure": "HTTP Stop401; fixture omitted real administrator authentication"
+    }
+  ]
+}

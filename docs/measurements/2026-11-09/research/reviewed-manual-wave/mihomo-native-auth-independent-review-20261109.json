@@ -1,0 +1,39 @@
+{
+  "base_sha": "b9bb3c13e02d91e441b6538f855e533a13e1ef15",
+  "change": "Manual native fixture installs actual security.Gate with disposable test credential and sends same Bearer identity for selection preview apply replay and Stop",
+  "date": "2026-11-09",
+  "limitations": [
+    "No local Go build due disk constraint",
+    "Current b9bb whole manual workflow still FAIL until rerun",
+    "Not physical router proof"
+  ],
+  "files": [
+    {
+      "path": "internal/app/mihomo_live_native_linux_test.go",
+      "sha256": "092DC50E708B8D9067AACD40113D778870C4F39CB3BE3CEB0042E554DD3D800A"
+    },
+    {
+      "path": "internal/app/mihomo_manual_http_native_linux_test.go",
+      "sha256": "82CCD6607F78EFD165567A9DFE63C84C9B34CA90527ACAC96C3CF71F69594331"
+    }
+  ],
+  "decision": "approved fixture-only correction; actual native rerun required",
+  "reviewer": "independent verification agent",
+  "observed_failure": {
+    "preview": "PASS",
+    "apply": "COMMITTED replay refused",
+    "actual_LAN": "passed before Stop",
+    "job": 129182709017,
+    "run": 42623923506,
+    "test_seconds": 100.48,
+    "failure": "HTTP Stop401; real runtime control requires authenticated administrator"
+  },
+  "verification": [
+    "Independent exact diff review",
+    "Anonymous Stop must401 and preserve Store before authenticated Stop",
+    "Production security/ownership/deadlines untouched",
+    "Same Authorization preserves review token owner binding",
+    "Existing required TLS and actual LAN/Stop/fresh-cycle checks retained",
+    "git diff --check PASS"
+  ]
+}

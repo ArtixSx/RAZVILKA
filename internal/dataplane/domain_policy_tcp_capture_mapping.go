@@ -31,6 +31,8 @@ type DomainPolicyTCPCapture struct {
 	preparing    sync.WaitGroup
 	closeDone    chan struct{}
 	closeErr     error
+	directMu     sync.Mutex
+	directError  error
 	retirement   *DomainPolicyTCPCaptureRetirement
 }
 
@@ -85,6 +87,9 @@ func (c *DomainPolicyTCPCapture) currentWithFiles(ctx context.Context, files *xr
 	}
 	if err := raw.Control(func(uintptr) {}); err != nil {
 		return err
+	}
+	if original, ok := c.owner.(*DomainTCPOriginalScope); ok {
+		return c.currentOriginalResource(ctx, original, files)
 	}
 	if err := c.owner.CheckCapture(ctx, c); err != nil {
 		return err
@@ -242,6 +247,7 @@ func (c *DomainPolicyTCPCapture) Close() error {
 	for _, mapping := range mappings {
 		c.closeErr = errors.Join(c.closeErr, mapping.Close())
 	}
+	c.closeErr = errors.Join(c.closeErr, c.directFailure())
 	return c.closeErr
 }
 

@@ -1,0 +1,28 @@
+{
+  "commit": "dee26552fba5318ae44a10545432f64ac1ade3c9",
+  "run_id": 42627881685,
+  "failure_kind": "compile",
+  "blocker": "internal/dataplane/proxy.go:2526,2539 missing probecheck import",
+  "fresh_held_node_normal": "not_run_build_failure",
+  "fresh_held_node_race": "not_run_build_failure",
+  "held_stat_benchmark": "not_run",
+  "quarantine_native": "not_run",
+  "full_managed_lan": "not_run",
+  "router_tested": false,
+  "jobs": {
+    "production": {
+      "job_id": 129196265602,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-production.log",
+      "sha256": "7104be4cd648bf0908c1619afc0e816d8585b91a6975263ac4b49c0b0dc2cbc1"
+    },
+    "race": {
+      "job_id": 129196265637,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-race.log",
+      "sha256": "669bc515bbba392036999626aba86ce44ce08def141c689078f7089b642a61dc"
+    }
+  }
+}

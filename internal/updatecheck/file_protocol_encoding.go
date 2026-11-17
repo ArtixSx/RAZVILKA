@@ -14,6 +14,10 @@ import (
 
 // Reader version is a format capability, not production installer readiness.
 const SelfUpdateReadVersion = selfupdatejournal.ReadVersion
+
+// Only the explicit current-owner paired restore command uses this reader.
+// It is not a capability of ordinary startup, installers, or retained fleets.
+const SelfUpdateOfflineRestoreReadVersion = selfupdatejournal.OfflineRetryReadVersion
 const selfUpdateProtocolSchema = 2
 
 var ErrFileProtocol = errors.New("self update file/helper protocol requires matching trusted evidence")

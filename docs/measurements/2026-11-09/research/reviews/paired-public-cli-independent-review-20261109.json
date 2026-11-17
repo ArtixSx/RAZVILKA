@@ -1,0 +1,77 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; actual CI pending",
+  "base_sha": "6df3d753761cf0ff6de3fb34799e596bee2ca3c2",
+  "files": [
+    {
+      "path": "cmd/razvilka/external_bootstrap_command_native_linux_test.go",
+      "sha256": "403F271D466F934C8101757BCC37B9965F217D62777744A5011DA57E1DC8BD60"
+    },
+    {
+      "path": "cmd/razvilka/paired_restore_command_native_linux_test.go",
+      "sha256": "4D4F50F9C4A6CE5A1F7763406A9313E8A52E56B41591B9BBE8736D146C2F6718"
+    },
+    {
+      "path": "cmd/razvilka/paired_public_lifecycle_native_linux_test.go",
+      "sha256": "D47442FFD44CB6CF70601088A6885D2D3581DC0350DD3E128400BE6EAF42FF8A"
+    },
+    {
+      "path": "cmd/razvilka/paired_runtime_source_fixture_linux_test.go",
+      "sha256": "447F78EA34C41D8E283D12B5FE8479B86CBD2A812492FE66A1F1F159A1F8622A"
+    },
+    {
+      "path": "cmd/razvilka/paired_runtime_source_fixture_other_test.go",
+      "sha256": "943A51DDF12C19D178050CD9DBF1E46C03D00CC0C008AF475443BEB9CB0A2F07"
+    },
+    {
+      "path": "internal/updatecheck/file_commands_linux.go",
+      "sha256": "D15414B2FF824B8A3B7785328D3769E51A8A9163D403A5B56581B8CED8341A59"
+    },
+    {
+      "path": "internal/updatecheck/runtime_source_fixture_linux.go",
+      "sha256": "827A7A83C52E8E4B143455B1246B8EB1901D3B3F60D3C721B2549728C307AD28"
+    },
+    {
+      "path": "internal/updatecheck/runtime_source_fixture_linux_test.go",
+      "sha256": "3A11428A21527CB7EB6C9400DDCB7A819594304D192DDD9DCCADA2AD443AC3AF"
+    },
+    {
+      "path": "internal/updatecheck/runtime_source_fixture_other.go",
+      "sha256": "02B21557E1C916156FDDE7B445D5A05D175249A04D12E973DB9C2B09DCE0918F"
+    },
+    {
+      "path": "scripts/fixtures/paired-public-session.sh",
+      "sha256": "1F4542CB30B6691EAD3220C952A74089E0330BC722E30328C9C7FED716DDB72B"
+    },
+    {
+      "path": "scripts/test-paired-public-native.sh",
+      "sha256": "75658084948001F00B977188016FECE477C9A25D5A39481FDBBD304C0B5439FA"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "9090A44ECCCB9D19B59D0D7DCD59AF5CF0922546C7C831A45A331DFB4278863B"
+    }
+  ],
+  "findings": [
+    "Production helper is a complementary-build-tag no-op; original command authority, receipt and sole Wait unchanged.",
+    "Tagged forwarding only fixed original control.bin bootstrap3 worker argv and quiesce child; exact private coordinates and real different outer NET namespace FD3; duplicate close once, no arbitrary inherited env.",
+    "Original old193 commit817783493f0c2784ccc70aa73868cd64e9437634 binary and init script compiled/copied unchanged; existing old layout variables explicitly configured.",
+    "Real mount/net/PID namespace descriptors validated by NS_GET_NSTYPE and inode before explicit mounts; private propagation then disposable /opt tmpfs.",
+    "Actual public bootstrap produces receipts, actual Gate publishes Stop, actual public restore verifies binary/config/guards/protected evidence.",
+    "Reviewer caught Version newline mismatch; fixed exact accepted tool-output canonicalization, preserving raw IPVersion newline.",
+    "Reviewer requested top-level native child closed environment; now fixed seven allowed variables.",
+    "Workflow separate40min job; existing production deadlines unchanged; bounded public output artifact and shell pipefail.",
+    "Pre-mount namespace checks use explicit if/raise and cannot be disabled by Python optimized mode.",
+    "Unchanged real queue initializer requires net/mount distinct from /proc/1; now runs in first original-FD-validated mount+net namespace before entering separate PID/tini namespace. Existing pinned archive/member SHA, bounded original pidfd TERM/sole Wait and positively empty queue kept; all three namespace checks repeat before tmpfs /opt."
+  ],
+  "limitations": [
+    "No local Go build or test executed; static review/gofmt/diff checks only.",
+    "Native normal integration still pending; no native race or router acceptance claimed.",
+    "Configured baseline offline pair is not default old-layout migration and does not prove nonempty StrategyLab history/manual-choice preservation.",
+    "Tag changes Ubuntu platform classification only; production/router profile support remains independently gated."
+  ],
+  "source_commit": "bbc3cefe2d4000c7ae98393429429f5606d5cced",
+  "workflow": "separately reviewed root-owned hunk; SHA256 recorded in files",
+  "followup": "Reviewed pre-PID original queue initializer correction; actual CI pending.",
+  "followup_commit": "aa24c9a06389455fb26a0f11653e755bfa5d69a4"
+}

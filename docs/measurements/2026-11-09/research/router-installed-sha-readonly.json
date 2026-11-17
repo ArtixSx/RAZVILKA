@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-09",
+  "device_profile": "NC-1812/aarch64 existing rc106",
+  "operation": "read-only existing sha256sum of installed binary",
+  "bytes": 30277794,
+  "sha256": "030c9b185c1c313be609c9fb15d27c5c11ae9a96c724ac06285de0d669dd58ba",
+  "wall_seconds": [
+    0.58,
+    0.59,
+    0.59
+  ],
+  "first_is_not_proven_cold": true,
+  "metadata_before_equals_after": true,
+  "candidate_executed": false,
+  "router_configuration_changed": false,
+  "raw_sha256": "ce07605519115c23a8f1a75130ac8b126d137c0a84ebf81f01df8473dab4c9a5",
+  "limits": [
+    "existing external sha256sum implementation; not Go hash benchmark",
+    "three sequential observations, no cold cache control",
+    "not route readiness or update acceptance"
+  ]
+}

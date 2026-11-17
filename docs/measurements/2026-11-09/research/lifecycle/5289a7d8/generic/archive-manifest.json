@@ -1,0 +1,24 @@
+{
+  "files": {
+    "generic-ci-independent-review.json": {
+      "bytes": 2012,
+      "sha256": "1ec88c38e6e473f3ac34097c7a626be5ef2194e96d2c4eebcf7273a6f15c7e65"
+    },
+    "generic-pr.log": {
+      "bytes": 309137,
+      "sha256": "9a3d209236f107e7559eaddf4603d5d6cceda6142382042c166929999d893161"
+    },
+    "generic-pr.json": {
+      "bytes": 2785,
+      "sha256": "e5c913530498f3a81b389167c82828f2781e16a931d303b1831f9a45ba581071"
+    },
+    "generic-push.log": {
+      "bytes": 426177,
+      "sha256": "69b8ca5f3d7dc5ed7d5072088bf329975b42ebb93c11b7fe45fab68e055f27ab"
+    },
+    "generic-push.json": {
+      "bytes": 2879,
+      "sha256": "ad1acd6518a8a76fe17670b2a00d6e504511357afbfe3f57775fe59265468dec"
+    }
+  }
+}

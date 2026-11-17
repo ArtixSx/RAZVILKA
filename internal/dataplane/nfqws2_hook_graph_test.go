@@ -544,6 +544,8 @@ func TestNFQWS2HookClassifierMatrix(t *testing.T) {
 			}
 			return strings.Replace(strings.Join(kept, "\n"), "COMMIT\n", "-A nfqws_post -o eth3 -j ACCEPT\nCOMMIT\n", 1)
 		}), ipv6: nfqws2RouterIPv6Fixture, reason: nfqws2HookBodyDiffers},
+		{name: "same-count-pre-rule-replaced", ipv4: mangle(func(s string) string { return nfqws2HookSameCountLoss(t, s, "nfqws_pre") }), ipv6: nfqws2RouterIPv6Fixture, reason: nfqws2HookPartial},
+		{name: "same-count-post-rule-replaced", ipv4: mangle(func(s string) string { return nfqws2HookSameCountLoss(t, s, "nfqws_post") }), ipv6: nfqws2RouterIPv6Fixture, reason: nfqws2HookPartial},
 		{name: "other-queue-number", ipv4: mangle(func(s string) string { return strings.ReplaceAll(s, "--queue-num 300", "--queue-num 301") }), ipv6: nfqws2RouterIPv6Fixture, reason: nfqws2HookBodyDiffers},
 		{name: "token-order-differs", ipv4: mangle(func(s string) string {
 			return strings.Replace(s, "-A nfqws_post -o eth3 -p tcp -m mark", "-A nfqws_post -p tcp -o eth3 -m mark", 1)

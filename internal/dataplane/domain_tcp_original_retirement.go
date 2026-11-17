@@ -54,6 +54,15 @@ func (o *DomainTCPOriginalScope) finishCapture(ctx context.Context, process *Xra
 		if err := resource.retire(ctx, baseline, kernel); err != nil {
 			return err
 		}
+		if kernel == nil {
+			cursor, err := process.failureCleanup(ctx)
+			if err != nil || cursor == nil {
+				return errors.Join(ErrDomainPolicyTCPConsumer, err)
+			}
+			if err := cursor.freezeUnpublishedPreparation(ctx, o, resource, baseline); err != nil {
+				return err
+			}
+		}
 	}
 	if baseline != nil {
 		o.mu.Lock()

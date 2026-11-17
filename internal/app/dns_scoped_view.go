@@ -28,11 +28,24 @@ type scopedDNSCandidate struct {
 }
 type dnsPanelSnapshot struct {
 	dnscontrol.Snapshot
-	Scoped scopedDNSView `json:"scoped"`
+	Scoped             scopedDNSView             `json:"scoped"`
+	ExperimentalBypass experimentalDNSBypassView `json:"experimental_bypass"`
+}
+
+// Release information only. Ordinary resolver profiles and scoped DNS have
+// independent admission; this field cannot grant a domain transport runtime.
+type experimentalDNSBypassView struct {
+	Available bool   `json:"available"`
+	Code      string `json:"code"`
+	Reason    string `json:"reason"`
 }
 
 func (a *App) dnsPanelSnapshot(r *http.Request) dnsPanelSnapshot {
 	v := dnsPanelSnapshot{Snapshot: a.DNS.Snapshot(), Scoped: scopedDNSView{State: "unavailable", Profiles: []string{}, Candidates: []scopedDNSCandidate{}}}
+	v.ExperimentalBypass = experimentalDNSBypassView{
+		Code:   "EXPERIMENTAL_DNS_BYPASS_DEFERRED",
+		Reason: "Экспериментальный обход по доменам через синтетический DNS не входит в этот выпуск. Обычное разрешение DNS и отдельный DNS для сервиса не отключены. Выбранные маршруты и устройства не заменяются автоматически.",
+	}
 	if a.Store == nil || a.Dataplane == nil || !a.Dataplane.Capable("dns-scoped") {
 		return v
 	}

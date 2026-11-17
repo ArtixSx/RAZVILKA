@@ -1,0 +1,14 @@
+{
+  "head_sha":"b5a5f58ee0bdddf62dd7f53bef020a42dc1ed5c9",
+  "mihomo_run":42575195592,
+  "mihomo_conclusion":"success",
+  "mihomo_lifecycle":{"job":129021224146,"test_seconds":253.49,"rounds":[{"round":0,"apply_seconds":86.815874718,"stop_seconds":5.549761972,"closing_retry":false},{"round":1,"apply_seconds":86.423223870,"stop_seconds":5.545537652,"closing_retry":true}],"fresh_check_selected_lan_https_physical_cleanup":"PASS","normal_race_original_child_bookends":"PASS","check_wall_seconds":null},
+  "mihomo_settlement":{"job":129021224495,"test_seconds":126.31,"apply_seconds":95.378472778,"stop_seconds":9.505247713,"cuts":2,"original_child_sidecar_tun_preserved":true,"retired_header_reader":9,"all_rows_terminal":true},
+  "mihomo_postcas":{"job":129021224596,"test_seconds":58.71,"http_status":503,"desired_exact_restored":true,"rollback_verified":true,"original_pending":false},
+  "historical_unresolved":"bfc96dd2 first lifecycle attempt refused original material after15.18s, same-SHA rerun passed. This final success does not identify or resolve the previous nondeterministic refusal.",
+  "managed_run":42575195644,
+  "managed_production":{"job":129021225120,"conclusion":"failure","core_app_http_closing":"PASS","lan_app_http_seconds":58.21,"manual_seconds":22.66,"first_failure_both":"native-apply / lan-preflight-inventory-consumer-close / DEADLINE_EXCEEDED","native_apply_ms":[19133,19116],"activation_seconds":[16.075560429,16.064372031],"budget_seconds":15,"cleanup_failure":"retire.policy-remove; unknown receipt retained"},
+  "managed_race":{"job":129021225084,"conclusion":"failure","consumer_seconds":18.83,"consumer_failure":"successful response lacks owned NFQUEUE packet proof; closing read deadline and unknown settlement","lan_app_http_seconds":21.13,"lan_failure":"strategy-probe-execute / runtime-operation / DEADLINE_EXCEEDED","manual_seconds":31.33,"manual_failure":"native-apply / lan-preflight-inventory-consumer-close / SOURCE_MISSING; total_ms23765; retire.policy-remove unknown"},
+  "limitations":"Mihomo timings are unpaired scenario durations, not a speedup claim; no dedicated pure Check timing. Managed failures remain software performance/recovery tasks. Isolated native fixtures do not prove physical router readiness. No runtime/fence/budget changes or local builds performed during this final check.",
+  "evidence":["mihomo-lifecycle.log","mihomo-settlement.log","mihomo-postcas.log","managed-production.log","managed-race.log"]
+}

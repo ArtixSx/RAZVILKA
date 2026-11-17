@@ -1,0 +1,44 @@
+File: app.test
+Build ID: ff87e0abfa57e2824b13107d6bb530a7987f2a09
+Type: cpu
+Time: 2026-11-09 16:33:06 UTC
+Duration: 24.90s, Total samples = 24.02s (96.47%)
+Showing nodes accounting for 18.62s, 77.52% of 24.02s total
+Dropped 769 nodes (cum <= 0.12s)
+Showing top 35 nodes out of 446
+      flat  flat%   sum%        cum   cum%
+     8.28s 34.47% 34.47%      8.28s 34.47%  internal/runtime/syscall/linux.Syscall6
+     7.60s 31.64% 66.11%      7.60s 31.64%  crypto/internal/fips140/sha256.blockSHANI
+     0.35s  1.46% 67.57%      0.61s  2.54%  runtime.tryDeferToSpanScan
+     0.26s  1.08% 68.65%      0.26s  1.08%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.19s  0.79% 69.44%      0.19s  0.79%  runtime.memmove
+     0.17s  0.71% 70.15%      0.76s  3.16%  runtime.scanObject
+     0.16s  0.67% 70.82%      0.16s  0.67%  runtime.rtsigprocmask
+     0.15s  0.62% 71.44%      0.15s  0.62%  runtime.nextFreeFast (inline)
+     0.14s  0.58% 72.02%      0.14s  0.58%  runtime.futex
+     0.13s  0.54% 72.56%      0.27s  1.12%  runtime.exitsyscall
+     0.13s  0.54% 73.11%      0.18s  0.75%  runtime.findObject
+     0.12s   0.5% 73.61%      0.22s  0.92%  strings.Fields
+     0.10s  0.42% 74.02%      0.14s  0.58%  runtime.(*bucket).mp
+     0.08s  0.33% 74.35%      0.15s  0.62%  runtime.scanblock
+     0.07s  0.29% 74.65%      0.54s  2.25%  runtime.scanSpan
+     0.06s  0.25% 74.90%      0.19s  0.79%  encoding/json.(*Decoder).readValue
+     0.06s  0.25% 75.15%      1.31s  5.45%  runtime.mallocgc
+     0.05s  0.21% 75.35%      0.26s  1.08%  reflect.deepValueEqual
+     0.05s  0.21% 75.56%      0.13s  0.54%  runtime.(*unwinder).resolveInternal
+     0.05s  0.21% 75.77%      0.15s  0.62%  runtime.heapArenaOf (inline)
+     0.05s  0.21% 75.98%      0.59s  2.46%  runtime.mallocgcSmallScanNoHeader
+     0.04s  0.17% 76.14%      0.29s  1.21%  runtime.(*mcache).refill
+     0.04s  0.17% 76.31%      1.54s  6.41%  runtime.gcDrain
+     0.03s  0.12% 76.44%      0.28s  1.17%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.03s  0.12% 76.56%      0.20s  0.83%  runtime.mProf_FlushLocked
+     0.03s  0.12% 76.69%      0.36s  1.50%  runtime.mallocgcSmallNoscan
+     0.03s  0.12% 76.81%      0.40s  1.67%  runtime.newobject
+     0.03s  0.12% 76.94%      0.18s  0.75%  runtime.reentersyscall
+     0.02s 0.083% 77.02%      0.13s  0.54%  encoding/json.structEncoder.encode
+     0.02s 0.083% 77.10%      0.15s  0.62%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.02s 0.083% 77.19%      1.34s  5.58%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.02s 0.083% 77.27%      3.97s 16.53%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+     0.02s 0.083% 77.35%      2.10s  8.74%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s 0.083% 77.44%      0.24s     1%  io.ReadAll
+     0.02s 0.083% 77.52%      0.56s  2.33%  os.(*File).Stat

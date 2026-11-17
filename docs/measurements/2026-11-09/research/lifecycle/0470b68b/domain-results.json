@@ -1,0 +1,555 @@
+{
+  "sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "run_id": 42687051039,
+  "architecture": "linux/amd64",
+  "scenarios": {
+    "selected": {
+      "job_id": 129396561240,
+      "cpu": "AMD EPYC 9V45 96-Core Processor",
+      "test_result": "FAIL",
+      "test_wall_seconds": 25.86,
+      "failed_stage": "GEN1 selected actual HTTPS4s",
+      "gen2_reached": false,
+      "raw_sha256": "1bc91e9612a2aece257cc122d32fe55f0b7bbc18e55f57b63494ef40377069fc",
+      "completed_domain_metrics": {
+        "accepted-flow-guard": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "1.100551172s"
+        },
+        "accepted-flow-lookup": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "2.802564182s"
+        },
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "2.741570265s"
+        },
+        "capture-guard-original-closing": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "4.891µs"
+        },
+        "capture-guard-original-opening": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "2.62990579s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "4.935625973s"
+        },
+        "coordinator-original-read": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "213.470531ms"
+        },
+        "coordinator-original-read-complete": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "1.373µs"
+        },
+        "dns-publication-closing": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "918.726934ms"
+        },
+        "dns-publication-opening": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "609.135146ms"
+        },
+        "dns-send": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "609.675191ms"
+        },
+        "dns-send-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "490ns"
+        },
+        "executable-image-capture": {
+          "calls": 56,
+          "bytes": 2048334736,
+          "elapsed": "1.18356961s"
+        },
+        "executable-image-compare": {
+          "calls": 55,
+          "bytes": 2011757330,
+          "elapsed": "199.785519ms"
+        },
+        "executable-image-storage": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "276.902µs"
+        },
+        "hash-stack/after-opening-scope/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "144.82866ms"
+        },
+        "hash-stack/after-opening-scope/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "19.610674ms"
+        },
+        "hash-stack/after-opening-scope/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "19.694229ms"
+        },
+        "hash-stack/after-opening-scope/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "21.029165ms"
+        },
+        "hash-stack/after-opening-scope/mapping-compare": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "19.762682ms"
+        },
+        "hash-stack/after-opening-scope/other": {
+          "calls": 8,
+          "bytes": 292619248,
+          "elapsed": "162.442867ms"
+        },
+        "hash-stack/after-opening-scope/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "20.495261ms"
+        },
+        "hash-stack/direct/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "140.150949ms"
+        },
+        "hash-stack/direct/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "19.693818ms"
+        },
+        "hash-stack/direct/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "19.629443ms"
+        },
+        "hash-stack/direct/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "19.80868ms"
+        },
+        "hash-stack/direct/other": {
+          "calls": 14,
+          "bytes": 512083684,
+          "elapsed": "284.592475ms"
+        },
+        "hash-stack/direct/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "20.504825ms"
+        },
+        "hash-stack/file-opening-wrapper/mapping-compare": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "22.851735ms"
+        },
+        "kernel-observe": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "6.086090544s"
+        },
+        "kernel-observe-success": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "3.837µs"
+        },
+        "mapping-compare": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "7.61351526s"
+        },
+        "mapping-compare-success": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "6.441µs"
+        },
+        "mapping-original-tool-closing": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "4.327µs"
+        },
+        "mapping-original-tool-read": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "7.101431156s"
+        },
+        "native-hash-attribution": {
+          "calls": 46,
+          "bytes": 0,
+          "elapsed": "1.428316ms"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "861ns"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.106568694s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "4.196µs"
+        },
+        "process-current": {
+          "calls": 624,
+          "bytes": 0,
+          "elapsed": "6.888649078s"
+        },
+        "publication-gate": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "2.137551714s"
+        },
+        "publication-gate-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "80ns"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "614.572973ms"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "1.609923305s"
+        },
+        "whole-executable-hash": {
+          "calls": 46,
+          "bytes": 1682560676,
+          "elapsed": "935.095463ms"
+        }
+      },
+      "completed_gate_timing": {
+        "attribution": {
+          "calls": 1782,
+          "seconds": 0.05073054900000001,
+          "raw_elapsed": "50.730549ms"
+        },
+        "held/accepted-guard": {
+          "calls": 96,
+          "seconds": 0.39548758900000003,
+          "raw_elapsed": "395.487589ms"
+        },
+        "held/accepted-lookup": {
+          "calls": 232,
+          "seconds": 1.062890371,
+          "raw_elapsed": "1.062890371s"
+        },
+        "held/accepted-other": {
+          "calls": 126,
+          "seconds": 0.603956628,
+          "raw_elapsed": "603.956628ms"
+        },
+        "held/capture-prepare": {
+          "calls": 321,
+          "seconds": 1.65200462,
+          "raw_elapsed": "1.65200462s"
+        },
+        "held/dns-publication": {
+          "calls": 174,
+          "seconds": 0.8225563419999999,
+          "raw_elapsed": "822.556342ms"
+        },
+        "held/other": {
+          "calls": 746,
+          "seconds": 6.611188893,
+          "raw_elapsed": "6.611188893s"
+        },
+        "held/standby-prepare": {
+          "calls": 87,
+          "seconds": 0.564142366,
+          "raw_elapsed": "564.142366ms"
+        },
+        "wait/accepted-guard/acquired": {
+          "calls": 96,
+          "seconds": 0.000115566,
+          "raw_elapsed": "115.566Вµs"
+        },
+        "wait/accepted-lookup/acquired": {
+          "calls": 232,
+          "seconds": 0.13152358,
+          "raw_elapsed": "131.52358ms"
+        },
+        "wait/accepted-other/acquired": {
+          "calls": 126,
+          "seconds": 0.000171951,
+          "raw_elapsed": "171.951Вµs"
+        },
+        "wait/capture-prepare/acquired": {
+          "calls": 321,
+          "seconds": 0.000384399,
+          "raw_elapsed": "384.399Вµs"
+        },
+        "wait/dns-publication/acquired": {
+          "calls": 174,
+          "seconds": 0.119529843,
+          "raw_elapsed": "119.529843ms"
+        },
+        "wait/other/acquired": {
+          "calls": 746,
+          "seconds": 0.0008502939999999999,
+          "raw_elapsed": "850.294Вµs"
+        },
+        "wait/standby-prepare/acquired": {
+          "calls": 87,
+          "seconds": 0.00013555099999999998,
+          "raw_elapsed": "135.551Вµs"
+        }
+      },
+      "total_completed_gate_wait_seconds": 0.252711184,
+      "total_completed_gate_held_seconds": 11.712226808999999,
+      "full_executable_reads": 157
+    },
+    "canceled": {
+      "job_id": 129396561154,
+      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "test_result": "FAIL",
+      "test_wall_seconds": 21.8,
+      "failed_stage": "GEN1 DNS readiness12s",
+      "gen2_reached": false,
+      "raw_sha256": "928c8fd289691fe612d8ed0614f255eeb33c1686544086c26c10fd55fe721d66",
+      "completed_domain_metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "3.696817813s"
+        },
+        "capture-guard-original-closing": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "5.903µs"
+        },
+        "capture-guard-original-opening": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "3.556177365s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.570198237s"
+        },
+        "coordinator-original-read": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "274.795373ms"
+        },
+        "coordinator-original-read-complete": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "842ns"
+        },
+        "dns-publication-opening": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "4.445µs"
+        },
+        "executable-image-capture": {
+          "calls": 46,
+          "bytes": 1682560676,
+          "elapsed": "1.267437634s"
+        },
+        "executable-image-compare": {
+          "calls": 45,
+          "bytes": 1645983270,
+          "elapsed": "241.461137ms"
+        },
+        "executable-image-storage": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "253.381µs"
+        },
+        "hash-stack/after-opening-scope/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "184.604475ms"
+        },
+        "hash-stack/after-opening-scope/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.248888ms"
+        },
+        "hash-stack/after-opening-scope/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.245811ms"
+        },
+        "hash-stack/after-opening-scope/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.290415ms"
+        },
+        "hash-stack/after-opening-scope/other": {
+          "calls": 3,
+          "bytes": 109732218,
+          "elapsed": "78.352879ms"
+        },
+        "hash-stack/after-opening-scope/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.122432ms"
+        },
+        "hash-stack/direct/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "184.125299ms"
+        },
+        "hash-stack/direct/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.172646ms"
+        },
+        "hash-stack/direct/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "27.061693ms"
+        },
+        "hash-stack/direct/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.485167ms"
+        },
+        "hash-stack/direct/other": {
+          "calls": 9,
+          "bytes": 329196654,
+          "elapsed": "247.758433ms"
+        },
+        "hash-stack/direct/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.100421ms"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "1.122481861s"
+        },
+        "kernel-observe-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "260ns"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "695.633658ms"
+        },
+        "mapping-original-tool-read": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "651.288937ms"
+        },
+        "native-hash-attribution": {
+          "calls": 34,
+          "bytes": 0,
+          "elapsed": "1.265641ms"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "2.153µs"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "4.105345295s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.168µs"
+        },
+        "process-current": {
+          "calls": 323,
+          "bytes": 0,
+          "elapsed": "5.041437915s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "17.564µs"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "801.060316ms"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.0853147s"
+        },
+        "whole-executable-hash": {
+          "calls": 34,
+          "bytes": 1243631804,
+          "elapsed": "905.568559ms"
+        }
+      },
+      "completed_gate_timing": {
+        "attribution": {
+          "calls": 1144,
+          "seconds": 0.034675304,
+          "raw_elapsed": "34.675304ms"
+        },
+        "held/capture-prepare": {
+          "calls": 321,
+          "seconds": 2.086074493,
+          "raw_elapsed": "2.086074493s"
+        },
+        "held/other": {
+          "calls": 736,
+          "seconds": 8.244749211,
+          "raw_elapsed": "8.244749211s"
+        },
+        "held/standby-prepare": {
+          "calls": 87,
+          "seconds": 0.696504491,
+          "raw_elapsed": "696.504491ms"
+        },
+        "wait/capture-prepare/acquired": {
+          "calls": 321,
+          "seconds": 0.000394404,
+          "raw_elapsed": "394.404Вµs"
+        },
+        "wait/other/acquired": {
+          "calls": 736,
+          "seconds": 0.000851957,
+          "raw_elapsed": "851.957Вµs"
+        },
+        "wait/standby-prepare/acquired": {
+          "calls": 87,
+          "seconds": 0.00011068399999999999,
+          "raw_elapsed": "110.684Вµs"
+        }
+      },
+      "total_completed_gate_wait_seconds": 0.0013570449999999999,
+      "total_completed_gate_held_seconds": 11.027328195,
+      "full_executable_reads": 125
+    }
+  },
+  "limitations": [
+    "Fixed12s DNS readiness and4s actual selected service budgets unchanged.",
+    "Cumulative CPU/stage/gate intervals overlap and do not add to scenario wall time.",
+    "Different runner CPU models; no before/after causal speed claim.",
+    "Gate attribution overhead measured separately, included in actual scenario wall time."
+  ]
+}

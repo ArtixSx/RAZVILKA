@@ -1,0 +1,43 @@
+{
+  "decision": "approved",
+  "reviewed_at_utc": "2026-11-09T19:47:36.4732523Z",
+  "files_sha256": {
+    "internal/app/domain_tcp_original_native_linux_test.go": "ddac82c4bef725f4859d1e9bf328816c618b3bc13b0c5b06875763f49c010175",
+    "internal/dataplane/domain_tcp_accepted_observation.go": "990312f6ea7f4eafcdad0d20a3690a6ebd0904a121697c0bcc280e37c4705809",
+    "internal/startuptools/domain_gate_measurement_native.go": "2c62d3fb02a31a28e15af6f2d26a67259b48101ccd8873634e81ffb898dc5fc8",
+    "internal/startuptools/tools.go": "596b85183d7e8c79efa271f1701b147ad0473d260bb76bc65f4b9171cda6fb96",
+    "internal/startuptools/domain_gate_measurement_native_test.go": "a8cc7cbced91ee73f449be55e4604491e1406da4646dc5481629b46a657b32e2",
+    "internal/dataplane/domain_tcp_original_coordinator.go": "85a69ba000fe669fcef38b4da80a35527c58443de246ac4540873523610bba4a",
+    "internal/startuptools/domain_native_measurement.go": "a114cadda21c10ba62c085929930f1717bdae27f4f5016ea9605fb1265dd395b",
+    "internal/startuptools/domain_native_measurement_other.go": "305c12f3d15f0e66a13e471d9a9d91e7296db065b7b1332421d56b761e5bc74a"
+  },
+  "contract": [
+    "Original lock select, registration, post-acquire checks and unlock order unchanged",
+    "Native wait/held timestamps and closed caller labels only; ordinary hooks no-op",
+    "No metric mutex across original callbacks/select/gate send; max8 retained lease pointers",
+    "Epoch suppresses stale completions; Stop clears held pointers; copied snapshot",
+    "DNS source opening/send/closing and return errors unchanged"
+  ],
+  "limitations": [
+    "Native attribution overhead included; inclusive timings are not wall or readiness proof",
+    "Completed intervals only; stale unmatched unlock is diagnostic-only",
+    "No local Go execution; actual normal/race validation pending"
+  ],
+  "reviewed_commit": "2200487c2dbabfbeb1d0a81c4c91abe301da6eeb",
+  "committed_blob_sha256": {
+    "internal/app/domain_tcp_original_native_linux_test.go": "ddac82c4bef725f4859d1e9bf328816c618b3bc13b0c5b06875763f49c010175",
+    "internal/dataplane/domain_tcp_accepted_observation.go": "990312f6ea7f4eafcdad0d20a3690a6ebd0904a121697c0bcc280e37c4705809",
+    "internal/startuptools/domain_gate_measurement_native.go": "2c62d3fb02a31a28e15af6f2d26a67259b48101ccd8873634e81ffb898dc5fc8",
+    "internal/startuptools/tools.go": "596b85183d7e8c79efa271f1701b147ad0473d260bb76bc65f4b9171cda6fb96",
+    "internal/startuptools/domain_gate_measurement_native_test.go": "a8cc7cbced91ee73f449be55e4604491e1406da4646dc5481629b46a657b32e2",
+    "internal/dataplane/domain_tcp_original_coordinator.go": "85a69ba000fe669fcef38b4da80a35527c58443de246ac4540873523610bba4a",
+    "internal/startuptools/domain_native_measurement.go": "a114cadda21c10ba62c085929930f1717bdae27f4f5016ea9605fb1265dd395b",
+    "internal/startuptools/domain_native_measurement_other.go": "305c12f3d15f0e66a13e471d9a9d91e7296db065b7b1332421d56b761e5bc74a"
+  },
+  "cleanup_followup": {
+    "commit": "42c2640bfdf3bc0405c8920a2a47826528abaaa9",
+    "file": "internal/startuptools/domain_gate_measurement_native_test.go",
+    "git_blob_sha256": "e3e5cc336cd39d69905116997e3b9721e2475203d3c358b3f4c7d627c1ca3d88",
+    "decision": "approved test-only deferred original unlock/cancel on early assertion failure; no production changes"
+  }
+}

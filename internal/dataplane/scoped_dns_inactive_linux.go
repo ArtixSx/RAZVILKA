@@ -9,7 +9,7 @@ import (
 )
 
 func scopedDNSInactivePlatformProof() (scopedDNSInactiveProof, error) {
-	return scopedDNSInactiveProof{procRoot: "/proc", selfPID: os.Getpid(), readlink: os.Readlink, threadNetRoot: func() string {
+	return scopedDNSInactiveProof{procPass: openLinuxInactiveProc, procRoot: "/proc", selfPID: os.Getpid(), readlink: os.Readlink, threadNetRoot: func() string {
 		// Resolve the TID only inside Provider.WithCurrent, after LockOSThread.
 		// The explicit task path is also observed on the reviewed stock kernel;
 		// absence of an optional thread-self/ns/net link proves nothing here.

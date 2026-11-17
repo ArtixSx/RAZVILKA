@@ -1,0 +1,69 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T14:10:52.6531236Z",
+  "status": "source approved; local JS test PASS; remote Go normal/race pending",
+  "scope": "Original-invocation network phase diagnostics in process-local node API/jobs and fixed-label UI",
+  "preserved": [
+    "Collector only inside original secret callback, closed on return/unwind; arbitrary checker field cleared on every returned result path",
+    "Attach only after unchanged resource/network/history/RecordCheck/generation checks plus current exact node/service/profile/route and invocation timestamps",
+    "Explicit NodeStore CheckRecord omits diagnostics; rememberNodeMeasurement remains before timing attachment; no disk schema/evidence/ranking change",
+    "Closed maximum32-row numeric/status allowlist and fresh slice copies at job DTO and both snapshot boundaries",
+    "UI fixed escaped-safe labels only; missing/incomplete/multiple distinct, no sum or remote-TCP/LAN/service proof claim"
+  ],
+  "tests_reviewed": [
+    "Actual local TLS503 exchange preserves negative verdict and measured phases",
+    "Old/foreign route or service/canceled/forged-only results suppress telemetry",
+    "No URL/content/arbitrary checker text in DTO; NodeStore history lacks timing field",
+    "Bounded cloned snapshots and invalid enums/durations/sequence refusal",
+    "node scripts/test-node-job-timing-ui.mjs PASS independently"
+  ],
+  "finding_resolved": "Added deferred collector Close; docs explicitly state ordinary App candidate samples now include telemetry overhead, separate profile inner collector remains distinct",
+  "limitations": [
+    "No local Go build/test",
+    "Remote integration and race validation required on final SHA",
+    "Candidate paired measurements after this change include штатная telemetry overhead; previous SHA timings are not transferable",
+    "Service evidence and router/LAN readiness unchanged"
+  ],
+  "files": [
+    {
+      "path": "internal/app/nodes.go",
+      "sha256": "F9345387D2C8DCB481E8F10D93730C685211A4095DC8EF53EE1F367193A05901"
+    },
+    {
+      "path": "internal/app/node_checks.go",
+      "sha256": "0ED08A392407E94D917D58FF55D6A2CC468A94816776EEF1676D32343EE1B211"
+    },
+    {
+      "path": "internal/app/durable_node_checks.go",
+      "sha256": "E1C849FFB7F1A9B1ADD4BBE955D932C208D68061D0EAEDC81472ADD929945F01"
+    },
+    {
+      "path": "internal/app/node_network_timings.go",
+      "sha256": "87B513B926998CD4F2121DF32A827895008DFA7D0B11D632DDEF1370DD9C7413"
+    },
+    {
+      "path": "internal/app/node_network_timings_test.go",
+      "sha256": "0D1AC2C16981E057BB17663D6A02E92B677ACCED1707DFC6FA3361F517E82286"
+    },
+    {
+      "path": "internal/dataplane/nodecheck.go",
+      "sha256": "9422070E106749A6711AE8813C1A38A80283FE7EBFE65B6CEAF57BF4275F07CB"
+    },
+    {
+      "path": "cmd/razvilka/web/node-browser.js",
+      "sha256": "5D0AD37CBAF2D41DE10856BF0B6E95E3A34AB047FBF7CF736ACDA99E4FFE242A"
+    },
+    {
+      "path": "scripts/test-node-job-timing-ui.mjs",
+      "sha256": "7FB9FBB3942AAA8877D49617F63E66BF6CCE2D05243159109378DEA49B6CD4DC"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "A7D6DD37377479E34F794E4BA58DCC48348822ACB7964313C29B1E88316F95E6"
+    },
+    {
+      "path": "docs/RESEARCH_LAB_20261109.md",
+      "sha256": "092AFA6533E00D733917BE434CBA9F6E275281B53296F209FD53E01624138676"
+    }
+  ]
+}

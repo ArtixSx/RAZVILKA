@@ -64,7 +64,9 @@ func captureProc(ctx context.Context) observation {
 		return r
 	}
 	r.KernelRelease, r.Machine = releaseBefore, machineBefore
-	a := &audit{fdinfo: -1, ctx: ctx}
+	// Reserve common descriptor storage; append still grows without a new cap.
+	var retained [16]heldFD
+	a := &audit{fds: retained[:0], fdinfo: -1, ctx: ctx}
 	defer a.close()
 	rootFD, err := syscall.Open("/proc", dirFlags, 0)
 	if err != nil {
@@ -154,7 +156,7 @@ func captureProc(ctx context.Context) observation {
 		return r
 	}
 	r.Checks.FreshPositionZero = true
-	r.Names, r.DTUnknownObserved, r.DirectoryComplete, ok = readNamespaceDirectory(ctx, func(buf []byte) (int, error) { return syscall.ReadDirent(nsFD, buf) })
+	r.Names, r.DTUnknownObserved, r.DirectoryComplete, ok = readNamespaceDirectoryFD(ctx, nsFD)
 	if !ok {
 		return r
 	}
@@ -164,7 +166,7 @@ func captureProc(ctx context.Context) observation {
 	if err != nil || position != 0 {
 		return r
 	}
-	pidNames, _, complete, valid := readNamespaceDirectory(ctx, func(buf []byte) (int, error) { return syscall.ReadDirent(pidNSFD, buf) })
+	pidNames, _, complete, valid := readNamespaceDirectoryFD(ctx, pidNSFD)
 	if !complete || !valid {
 		return r
 	}
@@ -207,7 +209,11 @@ func captureProc(ctx context.Context) observation {
 	if !ok {
 		return r
 	}
-	r.Checks.SameMountLayout = bytes.Equal(mountBefore, mountAfter) && mountLayoutOK(mountAfter, rootMount, paths)
+	// The opening bytes already passed mountLayoutOK with these unchanged
+	// rootMount/paths. Both reads own separate buffers: exact closing equality
+	// preserves that proof without parsing identical bytes twice. Keep the fresh
+	// closing read and all descriptor/identity postchecks; this is not a cache.
+	r.Checks.SameMountLayout = bytes.Equal(mountBefore, mountAfter)
 	releaseAfter, machineAfter, ok := kernelTuple()
 	if !ok {
 		return r
@@ -335,7 +341,8 @@ func boundedRead(ctx context.Context, fd, limit int) ([]byte, bool) {
 	return nil, false
 }
 
-func (a *audit) mountID(fd int) (uint64, bool) {
+// Compatibility reader retained unchanged for unsupported or denied statx.
+func (a *audit) mountIDFromFDInfo(fd int) (uint64, bool) {
 	data, ok := a.rawFile(a.fdinfo, strconv.Itoa(fd), 4096)
 	if !ok {
 		return 0, false
@@ -477,21 +484,55 @@ func (a *audit) taskStart(tidFD, tid int, rootMount uint64) (uint64, bool) {
 	if !ok {
 		return 0, false
 	}
-	text := string(data)
-	left, right := strings.IndexByte(text, '('), strings.LastIndex(text, ") ")
+	return taskStartFromStat(data, tid)
+}
+
+// Parse only the required field from this freshly read stat image. The kernel
+// emits ASCII separators; retain strings.Fields for unusual input so its exact
+// Unicode whitespace and numeric acceptance remain unchanged. No read, result
+// or authority is reused across either process/thread identity bookend.
+func taskStartFromStat(data []byte, tid int) (uint64, bool) {
+	left, right := bytes.IndexByte(data, '('), bytes.LastIndex(data, []byte(") "))
 	if left < 1 || right <= left {
 		return 0, false
 	}
-	actual, err := strconv.Atoi(strings.TrimSpace(text[:left]))
+	actual, err := strconv.Atoi(strings.TrimSpace(string(data[:left])))
 	if err != nil || actual != tid {
 		return 0, false
 	}
-	fields := strings.Fields(text[right+2:])
+	tail := data[right+2:]
+	field := 0
+	for offset := 0; offset < len(tail); {
+		if tail[offset] >= 0x80 {
+			break // Fall back to the original Unicode-aware field semantics.
+		}
+		if taskStatSpace(tail[offset]) {
+			offset++
+			continue
+		}
+		start := offset
+		for offset < len(tail) && tail[offset] < 0x80 && !taskStatSpace(tail[offset]) {
+			offset++
+		}
+		if offset < len(tail) && tail[offset] >= 0x80 {
+			break
+		}
+		if field == 19 { // stat field 22; field 3 is index 0.
+			value, parseErr := strconv.ParseUint(string(tail[start:offset]), 10, 64)
+			return value, parseErr == nil
+		}
+		field++
+	}
+	fields := strings.Fields(string(tail))
 	if len(fields) < 20 {
 		return 0, false
 	}
 	start, err := strconv.ParseUint(fields[19], 10, 64) // field 22; field 3 is index 0.
 	return start, err == nil
+}
+
+func taskStatSpace(b byte) bool {
+	return b == ' ' || b >= '\t' && b <= '\r'
 }
 
 func (a *audit) bootID(randomFD int, rootMount uint64) ([]byte, bool) {

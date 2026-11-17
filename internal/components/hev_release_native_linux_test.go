@@ -12,14 +12,14 @@ import (
 	"testing"
 )
 
-// Uses the exact pinned official executable through the production downloader,
+// Uses the exact reviewed pinned executable through the production downloader,
 // digest verifier, --version observation and durable install transaction. The
 // HTTP transport only supplies the already downloaded pinned fixture locally;
 // this test needs no GitHub credentials and starts no HEV TUN or service.
 func TestHEVReleasePinnedNativeInstall(t *testing.T) {
 	path := os.Getenv("RAZVILKA_HEV_NATIVE")
 	if path == "" {
-		t.Skip("set absolute path to pinned official HEV 2.17.1 amd64 fixture")
+		t.Skip("set absolute path to selected reviewed HEV 2.17.1 amd64 fixture")
 	}
 	if !filepath.IsAbs(path) {
 		t.Fatal("HEV fixture must be absolute")

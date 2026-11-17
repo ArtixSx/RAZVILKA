@@ -1,0 +1,375 @@
+{
+  "schema": 1,
+  "sha": "7a338026094baf11b6e3635a20286d883509e211",
+  "run_id": 43945773992,
+  "scope": "fresh inactive-process mount ID leaf and unchanged actual terminal/mount fences",
+  "modes": {
+    "normal": {
+      "result": "PASS",
+      "leaf": {
+        "original-fdinfo": {
+          "samples": [
+            {
+              "ns_per_op": 10535.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10499.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10528.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10416.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10568.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10475.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10605.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10524.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10487.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10439.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            }
+          ],
+          "median_ns": 10511.5
+        },
+        "fresh-statx": {
+          "samples": [
+            {
+              "ns_per_op": 1869.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 1853.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 1845.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 1870.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 1860.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 1855.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 1873.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 2021.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 1860.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 2006.0,
+              "bytes_per_op": 1,
+              "allocs_per_op": 1
+            }
+          ],
+          "median_ns": 1864.5
+        },
+        "fallback-handler-only": {
+          "samples": [
+            {
+              "ns_per_op": 11339.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 11103.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10585.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10625.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10621.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10632.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10601.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10578.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10775.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 10637.0,
+              "bytes_per_op": 4274,
+              "allocs_per_op": 5
+            }
+          ],
+          "median_ns": 10628.5
+        }
+      },
+      "leaf_change_percent": -82.26228416496218,
+      "native_five_bind_fences": true,
+      "descriptor_reuse": true,
+      "raw_sha256": {
+        "environment.txt": "63dbd18cb48b77b54912acd4c3483620ce1db62a483db2bdd0f40ca5ff5dfd3f",
+        "models.log": "5fe8a43a6388977d8cb115bbb212d5c377f9d672f574bc49f212e208a1269910",
+        "mount-id-pair.log": "83130dcd0eb4c8527f978081fde67528d20fa7ed16094f29dcceb3a2fcd9d38c",
+        "native.log": "516914a0fcfa6d2aaf54e4444094c6d2bf357bef76b5bb23cf6f7d6b7ae3d038",
+        "source.sha256": "271dc5b56ce4506864361646e901b58df4a272fb57ebf0946ac44d4d406ae5b7"
+      }
+    },
+    "race": {
+      "result": "PASS",
+      "leaf": {
+        "original-fdinfo": {
+          "samples": [
+            {
+              "ns_per_op": 6282.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6158.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6177.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6159.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6136.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6162.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6143.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6129.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6140.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6165.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            }
+          ],
+          "median_ns": 6158.5
+        },
+        "fresh-statx": {
+          "samples": [
+            {
+              "ns_per_op": 956.1,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 953.8,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 954.4,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 952.8,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 947.6,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 951.9,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 953.1,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 952.5,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 953.6,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            },
+            {
+              "ns_per_op": 947.0,
+              "bytes_per_op": 16,
+              "allocs_per_op": 1
+            }
+          ],
+          "median_ns": 952.95
+        },
+        "fallback-handler-only": {
+          "samples": [
+            {
+              "ns_per_op": 6271.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6212.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6271.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6225.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6195.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6245.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6231.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6238.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6262.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            },
+            {
+              "ns_per_op": 6265.0,
+              "bytes_per_op": 4288,
+              "allocs_per_op": 5
+            }
+          ],
+          "median_ns": 6241.5
+        }
+      },
+      "leaf_change_percent": -84.52626451246245,
+      "native_five_bind_fences": true,
+      "descriptor_reuse": true,
+      "raw_sha256": {
+        "environment.txt": "f4c28afaee89dfa8392374d147690796f2b6b8859cbbd710b0601e7b0d8805a2",
+        "models.log": "27652ebb2bdb2e0f4b99114071807242448f9d3753649c74fc45538377d61513",
+        "mount-id-pair.log": "69981f9a249f98214cde6832f07b5abc34f9c4425d7bf1ef99b57c886d421bdf",
+        "native.log": "ae5b69f00400859084dd3cc744513801c310575cc2b3e185314790aea61b1ad7",
+        "source.sha256": "271dc5b56ce4506864361646e901b58df4a272fb57ebf0946ac44d4d406ae5b7"
+      }
+    }
+  },
+  "router_acceptance": false,
+  "limits": [
+    "Same host per mode, fixed subbenchmark order, ten measurements each.",
+    "Fallback-handler-only excludes the failed statx syscall overhead; not actual Linux4.9 performance.",
+    "This is a leaf microbenchmark and actual refusal regression; full Mihomo sameboot/ACK run43946381158 still pending.",
+    "Modern successful statx proves held FD mount directly; separate fdinfo/<fd> text readability is no longer tested on that path. Existing held fdinfo custody and caller named/root/namespace/thread/final checks remain."
+  ]
+}

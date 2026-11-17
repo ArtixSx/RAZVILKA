@@ -1,0 +1,54 @@
+File: razvilka
+Build ID: ef476820ad34e2c070af6e4bda02f6278868d01b
+Type: cpu
+Time: 2026-11-09 13:51:44 UTC
+Duration: 40.46s, Total samples = 26.57s (65.67%)
+Showing nodes accounting for 23.68s, 89.12% of 26.57s total
+Dropped 813 nodes (cum <= 0.13s)
+Showing top 45 nodes out of 162
+      flat  flat%   sum%        cum   cum%
+    16.15s 60.78% 60.78%     16.15s 60.78%  crypto/internal/fips140/sha256.blockSHANI
+     6.35s 23.90% 84.68%      6.35s 23.90%  internal/runtime/syscall/linux.Syscall6
+     0.22s  0.83% 85.51%      0.36s  1.35%  runtime.tryDeferToSpanScan
+     0.10s  0.38% 85.89%      0.32s  1.20%  encoding/json.(*Decoder).readValue
+     0.10s  0.38% 86.26%      0.44s  1.66%  runtime.scanObject
+     0.10s  0.38% 86.64%      0.28s  1.05%  runtime.scanObjectsSmall
+     0.09s  0.34% 86.98%      0.15s  0.56%  encoding/json.unquoteBytes
+     0.08s   0.3% 87.28%      0.55s  2.07%  runtime.mallocgc
+     0.05s  0.19% 87.47%      0.21s  0.79%  runtime.mallocgcSmallScanNoHeader
+     0.04s  0.15% 87.62%      0.27s  1.02%  syscall.Fstat
+     0.04s  0.15% 87.77%      0.91s  3.42%  syscall.openat
+     0.03s  0.11% 87.88%      0.31s  1.17%  encoding/json.(*decodeState).literalStore
+     0.03s  0.11% 87.99%      0.19s  0.72%  runtime.newobject
+     0.02s 0.075% 88.07%      0.40s  1.51%  encoding/json.(*Decoder).Token
+     0.02s 0.075% 88.14%      0.30s  1.13%  encoding/json.(*decodeState).object
+     0.02s 0.075% 88.22%      3.80s 14.30%  internal/poll.(*FD).Read
+     0.02s 0.075% 88.30%      0.37s  1.39%  internal/poll.(*SysFile).destroy (inline)
+     0.02s 0.075% 88.37%      0.29s  1.09%  os.(*File).readdir
+     0.02s 0.075% 88.45%      3.08s 11.59%  os.ReadFile
+     0.02s 0.075% 88.52%      0.64s  2.41%  os.newFile
+     0.02s 0.075% 88.60%      0.96s  3.61%  runtime.gcDrain
+     0.02s 0.075% 88.67%      0.42s  1.58%  syscall.SetNonblock
+     0.01s 0.038% 88.71%      0.80s  3.01%  encoding/json.(*Decoder).Decode
+     0.01s 0.038% 88.75%      0.16s   0.6%  encoding/json.(*encodeState).reflectValue
+     0.01s 0.038% 88.78%      3.79s 14.26%  os.(*File).Read
+     0.01s 0.038% 88.82%      0.34s  1.28%  os.(*File).Stat
+     0.01s 0.038% 88.86%      0.92s  3.46%  os.open
+     0.01s 0.038% 88.90%      1.56s  5.87%  os.openFileNolog
+     0.01s 0.038% 88.93%      0.90s  3.39%  os.openFileNolog.func1 (inline)
+     0.01s 0.038% 88.97%      0.34s  1.28%  os.statOrZero
+     0.01s 0.038% 89.01%      0.17s  0.64%  runtime.growslice
+     0.01s 0.038% 89.05%      1.25s  4.70%  runtime.systemstack
+     0.01s 0.038% 89.09%      6.23s 23.45%  syscall.RawSyscall6
+     0.01s 0.038% 89.12%      3.78s 14.23%  syscall.Read (inline)
+         0     0% 89.12%     16.15s 60.78%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0% 89.12%     16.15s 60.78%  crypto/internal/fips140/sha256.block
+         0     0% 89.12%      0.27s  1.02%  crypto/tls.(*Conn).HandshakeContext
+         0     0% 89.12%      0.20s  0.75%  crypto/tls.(*Conn).clientHandshake
+         0     0% 89.12%      0.27s  1.02%  crypto/tls.(*Conn).handshakeContext
+         0     0% 89.12%      0.14s  0.53%  crypto/tls.(*clientHandshakeStateTLS13).handshake
+         0     0% 89.12%      0.29s  1.09%  encoding/json.(*decodeState).array
+         0     0% 89.12%      0.48s  1.81%  encoding/json.(*decodeState).unmarshal
+         0     0% 89.12%      0.48s  1.81%  encoding/json.(*decodeState).value
+         0     0% 89.12%      0.16s   0.6%  encoding/json.(*encodeState).marshal
+         0     0% 89.12%      0.14s  0.53%  encoding/json.(*scanner).error (inline)

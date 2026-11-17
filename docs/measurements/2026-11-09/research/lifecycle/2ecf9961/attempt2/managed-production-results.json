@@ -1,0 +1,98 @@
+{
+  "commit": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "attempt": 2,
+  "job_id": 129353747803,
+  "status": "completed",
+  "conclusion": "failure",
+  "core_native": "pass",
+  "full_app_lan": "fail",
+  "full_manual_lan": "fail",
+  "never_entered_intent_cleanup": "pass, subsequent fresh Apply failed",
+  "never_entered_sync_cleanup": "pass with continuous original Gate; subsequent fresh Apply failed",
+  "permanently_fenced_cleanup_only_close_retry": "pass; no forward authority restored",
+  "manual_forward": {
+    "phase": "lan-preflight-rpdb-read",
+    "cause": "DEADLINE_EXCEEDED",
+    "native_wall_ms": 18719,
+    "activation_seconds": 15.987038038,
+    "active_lan_inclusive_seconds": 10.748378228,
+    "active_lan_calls": 10,
+    "policy_apply_inclusive_seconds": 9.039891843,
+    "prepared_active_inclusive_seconds": 3.843288219,
+    "tool_check_calls": 1425,
+    "tool_check_inclusive_seconds": 7.018517916,
+    "metadata_traversal_attempts": 6818,
+    "version_starts": [
+      98,
+      98,
+      1405
+    ],
+    "classic_save_started_children": 1808,
+    "in_process_allocated_bytes": 1376961840,
+    "in_process_allocated_objects": 9717125,
+    "member_reads": 7356,
+    "member_bytes": 601500120
+  },
+  "manual_cpu": {
+    "duration_seconds": 19.11,
+    "cpu_sample_seconds": 16.71,
+    "syscall_flat_seconds": 10.55,
+    "sha256_flat_seconds": 1.8,
+    "paths_current_cumulative_seconds": 4.81,
+    "fresh_path_node_cumulative_seconds": 3.71
+  },
+  "classic_save_actual_child_benchmark": {
+    "before": {
+      "samples": [
+        [
+          13685368,
+          167258,
+          148
+        ],
+        [
+          13861510,
+          167088,
+          147
+        ],
+        [
+          14142546,
+          166197,
+          145
+        ]
+      ],
+      "median_ns": 13861510,
+      "median_bytes": 167088,
+      "median_allocs": 147
+    },
+    "after": {
+      "samples": [
+        [
+          14008535,
+          44365,
+          139
+        ],
+        [
+          13867799,
+          55346,
+          140
+        ],
+        [
+          13921446,
+          44424,
+          140
+        ]
+      ],
+      "median_ns": 13921446,
+      "median_bytes": 44424,
+      "median_allocs": 140
+    }
+  },
+  "interpretation": [
+    "Allocation reduction demonstrated on same actual two-child benchmark; wall approximately neutral",
+    "CPU cumulative/inclusive measurements overlap and must not be summed",
+    "Full route/healthy service and fresh generation remain unproved; deadlines/ownership unchanged",
+    "Production raw is separate from attempt1 evidence"
+  ],
+  "log_sha256": "e365530bdf8cad9e6d3eeaddefa946e68a1e71e65a33b93d610ac881231215f0"
+}

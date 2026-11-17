@@ -164,9 +164,22 @@ type policyEffectSession struct {
 	hash                string
 	borrow              *policyEffectReceiptBorrow
 	nodeTransitPresence *nodeTransitPolicyRuntimeBinding
+	domainPreAdd        *domainTCPPreAddRead
+	nfqRecovery         *nfqwsPolicyRecovery
 }
 
-func (s *policyEffectSession) save(ctx context.Context) (result error) {
+func (s *policyEffectSession) save(ctx context.Context) error {
+	measurement := domainTCPMeasurePreparationSave(s)
+	return measurement.end(s.saveOriginal(ctx))
+}
+
+// The unchanged writer body retains its own final close-error join. The outer
+// native diagnostic completes only after this body returns; panic/Goexit leave
+// an incomplete row and propagate through every original cleanup defer.
+func (s *policyEffectSession) saveOriginal(ctx context.Context) (result error) {
+	if s.nfqRecovery != nil {
+		return s.nfqRecovery.save(ctx, s)
+	}
 	if s.borrow == nil {
 		return s.policyAdditionSession.save(ctx)
 	}
@@ -313,6 +326,9 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 	// Persist the whole-generation fence BEFORE inspecting this effect. A late
 	// preexisting attachment can already reference earlier acknowledged guards;
 	// it must not leave a "planned" child that cleanup would otherwise skip.
+	if s.nfqRecovery != nil {
+		s.nfqRecovery.intent(index)
+	}
 	s.doc.Steps[index].State = "intent"
 	if err := s.save(ctx); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
@@ -320,6 +336,45 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 	if err := s.fault("intent", index); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
+	if err := s.observeBeforeAdd(ctx, runtime, index); err != nil {
+		return err
+	}
+	if s.domainPreAdd != nil {
+		if ctx.Value(domainTCPPreAddKey{}) != nil {
+			return ErrPolicyAdditionUnknown
+		}
+		// Fixture-only witness: the original command uses no borrowed read.
+		domainTCPMeasure("pre-add-original-command-boundary")(0)
+	}
+	effect := s.plan.Effects[index]
+	if _, err := s.runCommand(ctx, runtime, index, false, effect.Add); err != nil {
+		return errors.Join(ErrPolicyAdditionUnknown, err)
+	}
+	if err := s.fault("add", index); err != nil {
+		return errors.Join(ErrPolicyAdditionUnknown, err)
+	}
+	s.doc.Steps[index].State = "added"
+	if err := s.save(ctx); err != nil {
+		s.doc.Steps[index].State = "intent"
+		return errors.Join(ErrPolicyAdditionUnknown, err)
+	}
+	return s.fault("added", index)
+}
+
+// All four observations remain ordered after the durable intent and fault seam.
+// Private original producers may share immutable held bytes across only
+// this synchronous read sequence. Its closing proof completes before Add.
+func (s *policyEffectSession) observeBeforeAdd(ctx context.Context, runtime PolicyEffectRuntime, index int) error {
+	if s.domainPreAdd != nil {
+		return s.domainPreAdd.observe(ctx, s, runtime, index)
+	}
+	if s.nfqRecovery != nil && s.nfqRecovery.preAdd != nil {
+		return s.nfqRecovery.preAdd.observe(ctx, s, runtime, index)
+	}
+	return s.observeBeforeAddUnshared(ctx, runtime, index)
+}
+
+func (s *policyEffectSession) observeBeforeAddUnshared(ctx context.Context, runtime PolicyEffectRuntime, index int) error {
 	present, err := s.exactPresence(ctx, runtime, index)
 	if err != nil || present != 0 {
 		return errors.Join(ErrPolicyAdditionUnknown, ErrPolicyAdditionReceipt, err)
@@ -337,19 +392,7 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 	if err := s.guardAfterPresence(ctx, runtime, index); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
-	effect := s.plan.Effects[index]
-	if _, err := s.runCommand(ctx, runtime, index, false, effect.Add); err != nil {
-		return errors.Join(ErrPolicyAdditionUnknown, err)
-	}
-	if err := s.fault("add", index); err != nil {
-		return errors.Join(ErrPolicyAdditionUnknown, err)
-	}
-	s.doc.Steps[index].State = "added"
-	if err := s.save(ctx); err != nil {
-		s.doc.Steps[index].State = "intent"
-		return errors.Join(ErrPolicyAdditionUnknown, err)
-	}
-	return s.fault("added", index)
+	return nil
 }
 
 // An earlier parent cannot be removed while any direct child remains active or
@@ -438,6 +481,14 @@ func ApplyPolicyEffectsWithReceipt(ctx context.Context, runtime PolicyEffectRunt
 }
 
 func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions) error {
+	return applyPolicyEffectsWithDomainRead(ctx, runtime, plan, root, options, nil)
+}
+
+func applyPolicyEffectsWithDomainRead(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions, domainRead *domainTCPPreAddRead) error {
+	return applyPolicyEffectsWithOriginalRecovery(ctx, runtime, plan, root, options, domainRead, nil)
+}
+
+func applyPolicyEffectsWithOriginalRecovery(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions, domainRead *domainTCPPreAddRead, recovery *nfqwsPolicyRecovery) error {
 	runtime, presenceOwner, err := preparePolicyEffectRuntime(runtime, plan, root)
 	if err != nil {
 		return err
@@ -446,8 +497,13 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 	if err != nil {
 		return err
 	}
-	defer s.close()
+	defer func() {
+		if recovery == nil || !recovery.retained {
+			s.close()
+		}
+	}()
 	s.nodeTransitPresence = presenceOwner
+	s.domainPreAdd = domainRead
 	if err := s.validateRuntime(runtime); err != nil {
 		return err
 	}
@@ -463,9 +519,28 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 	if err != nil {
 		return err
 	}
-	defer borrow.close()
+	defer func() {
+		if recovery == nil || !recovery.retained {
+			borrow.close()
+		}
+	}()
 	s.borrow = borrow
+	if recovery != nil {
+		s.nfqRecovery, recovery.session = recovery, s
+		recovery.armPreLedger(s, runtime)
+		defer recovery.finishApply()
+	}
 	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
+	if recovery != nil && recovery.preparedPolicy != nil {
+		if err := recovery.preparedPolicy.prepare(ctx, recovery); err != nil {
+			return err
+		}
+	}
+	if recovery != nil && recovery.preLedgerArmed() {
+		if err := s.fault("nfq-original-pre-ledger", -1); err != nil {
+			return err
+		}
+	}
 	if err := s.guard(ctx, runtime, 0); err != nil {
 		return err
 	}
@@ -477,19 +552,12 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	boot, err := s.options.boot()
-	if err != nil || boot == "" {
-		return ErrPolicyAdditionReceipt
+	if recovery != nil {
+		recovery.disarmPreLedger()
 	}
-	var nonce [16]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return ErrPolicyAdditionReceipt
+	if err := s.initializeDocument(root); err != nil {
+		return err
 	}
-	steps := make([]policyAdditionStep, len(s.plan.Effects))
-	for i, effect := range s.plan.Effects {
-		steps[i] = policyAdditionStep{Tool: effect.Tool, Add: effect.Add, Delete: effect.Delete, Needs: effect.Needs, State: "planned"}
-	}
-	s.doc = policyAdditionDocument{Schema: 2, ID: hex.EncodeToString(nonce[:]), Boot: boot, Generation: s.plan.Generation, EffectsHash: s.hash, RootHash: policyAdditionRootHash(root), Phase: "active", Steps: steps}
 	borrow.requireDocument()
 	if err := s.save(ctx); err != nil {
 		return err
@@ -503,6 +571,31 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 		return ErrPolicyAdditionUnknown
 	}
 	return ctx.Err()
+}
+
+func (s *policyEffectSession) initializeDocument(root string) error {
+	document, err := s.newDocument(root)
+	if err != nil {
+		return err
+	}
+	s.doc = document
+	return nil
+}
+
+func (s *policyEffectSession) newDocument(root string) (policyAdditionDocument, error) {
+	boot, err := s.options.boot()
+	if err != nil || boot == "" {
+		return policyAdditionDocument{}, ErrPolicyAdditionReceipt
+	}
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return policyAdditionDocument{}, ErrPolicyAdditionReceipt
+	}
+	steps := make([]policyAdditionStep, len(s.plan.Effects))
+	for i, effect := range s.plan.Effects {
+		steps[i] = policyAdditionStep{Tool: effect.Tool, Add: effect.Add, Delete: effect.Delete, Needs: effect.Needs, State: "planned"}
+	}
+	return policyAdditionDocument{Schema: 2, ID: hex.EncodeToString(nonce[:]), Boot: boot, Generation: s.plan.Generation, EffectsHash: s.hash, RootHash: policyAdditionRootHash(root), Phase: "active", Steps: steps}, nil
 }
 
 func RemovePolicyEffectsWithReceipt(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string) error {
@@ -629,6 +722,15 @@ func removePolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan 
 	}
 	if err := checkDomainStandbyOriginalLoadedReceipt(ctx, borrow); err != nil {
 		return err
+	}
+	return s.removeKnownEffects(ctx, runtime)
+}
+
+// The original retained NFQ writer may enter this SAME strict cleanup only
+// after its never-issued intent has been settled. Unknown outcomes never pass.
+func (s *policyEffectSession) removeKnownEffects(ctx context.Context, runtime PolicyEffectRuntime) error {
+	if s.doc.Phase != "active" || s.status().Unknown {
+		return ErrPolicyAdditionUnknown
 	}
 	if err := s.inspectCleanupPlan(ctx, runtime); err != nil {
 		return err

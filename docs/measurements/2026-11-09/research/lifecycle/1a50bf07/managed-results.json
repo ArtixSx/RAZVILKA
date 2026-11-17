@@ -1,0 +1,521 @@
+{
+  "commit": "1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b",
+  "run_id": 42628478111,
+  "router_tested": false,
+  "full_managed_workflow": "FAIL",
+  "completed_flow_acceleration_proven": false,
+  "quarantine_production": {
+    "same_owner_sync_settlement": "PASS",
+    "continuous_original_exclusive_lease": "PASS",
+    "fresh_plan_after_sync": "PASS (prior503 fixed)",
+    "fresh_apply_after_sync": "FAIL deadline18834ms",
+    "post_source_close_second_stop": "PASS",
+    "permanent_fence_after_second_stop": "PASS",
+    "cleanup_only_case_seconds": 45.79
+  },
+  "jobs": {
+    "production": {
+      "job_id": 129198303221,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-production.log",
+      "sha256": "04eb0e7703a8e152aae9420c512b43946491077a1954f11ffc415a11cabe9dfe",
+      "tests": [
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier",
+          "result": "PASS",
+          "seconds": 0.08
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift",
+          "result": "PASS",
+          "seconds": 0.38
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking",
+          "result": "PASS",
+          "seconds": 0.11
+        },
+        {
+          "test": "TestManagedRuntimePayloadScratchExclusiveAndCleared",
+          "result": "PASS",
+          "seconds": 0.04
+        },
+        {
+          "test": "TestManagedRuntimePayloadScratchBounds",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineActualThreeWriterFDsSurviveScopeClose",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure",
+          "result": "PASS",
+          "seconds": 0.02
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair",
+          "result": "PASS",
+          "seconds": 0.04
+        },
+        {
+          "test": "TestNFQWSQuarantineExactParticipantsAndIssuerRefusal",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineRevokedAdmissionStillFinishesOriginalCleanup",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeInventoryParity",
+          "result": "FAIL",
+          "seconds": 0.35
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 1.77
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "result": "FAIL",
+          "seconds": 54.17
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 1.85
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 22.1
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 1.65
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 62.76
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.14
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 64.89
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 1.66
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "PASS",
+          "seconds": 45.79
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "PASS",
+          "seconds": 45.79
+        }
+      ],
+      "forward_timings": [
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-consumer-close",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 18761
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 18809
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 40019
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-consumer-close",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 18838
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 19460
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 18834
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 19461
+        }
+      ],
+      "observed_recovery_markers": [
+        "actual_never_issued_recovered mode=intent intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false",
+        "actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=false",
+        "actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true"
+      ],
+      "benchmark_command_has_race_flag": false,
+      "held_stat_benchmark": [
+        {
+          "variant": "before_fileinfo",
+          "ns_per_op": 810.3,
+          "bytes_per_op": 208,
+          "allocs_per_op": 1
+        },
+        {
+          "variant": "before_fileinfo",
+          "ns_per_op": 808.0,
+          "bytes_per_op": 208,
+          "allocs_per_op": 1
+        },
+        {
+          "variant": "before_fileinfo",
+          "ns_per_op": 808.6,
+          "bytes_per_op": 208,
+          "allocs_per_op": 1
+        },
+        {
+          "variant": "after_fstat",
+          "ns_per_op": 730.2,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        {
+          "variant": "after_fstat",
+          "ns_per_op": 743.2,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        {
+          "variant": "after_fstat",
+          "ns_per_op": 727.7,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        }
+      ]
+    },
+    "race": {
+      "job_id": 129198303543,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-race.log",
+      "sha256": "54284cc132591fa916ee13241b87ba061561d1ad2815746646a6bbbba04bde1d",
+      "tests": [
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences",
+          "result": "PASS",
+          "seconds": 0.02
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier",
+          "result": "PASS",
+          "seconds": 0.11
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift",
+          "result": "PASS",
+          "seconds": 0.41
+        },
+        {
+          "test": "TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking",
+          "result": "PASS",
+          "seconds": 0.15
+        },
+        {
+          "test": "TestManagedRuntimePayloadScratchExclusiveAndCleared",
+          "result": "PASS",
+          "seconds": 0.07
+        },
+        {
+          "test": "TestManagedRuntimePayloadScratchBounds",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineActualThreeWriterFDsSurviveScopeClose",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure",
+          "result": "PASS",
+          "seconds": 0.04
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair",
+          "result": "PASS",
+          "seconds": 0.07
+        },
+        {
+          "test": "TestNFQWSQuarantineExactParticipantsAndIssuerRefusal",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineRevokedAdmissionStillFinishesOriginalCleanup",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeInventoryParity",
+          "result": "FAIL",
+          "seconds": 0.46
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.06
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "result": "FAIL",
+          "seconds": 21.89
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.12
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 32.89
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 1.67
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 32.34
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.01
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 32.73
+        }
+      ],
+      "forward_timings": [
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-read-open-classic",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 24697
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "SOURCE_MISSING",
+          "total_ms": 24547
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 24608
+        }
+      ],
+      "observed_recovery_markers": [],
+      "benchmark_command_has_race_flag": false,
+      "held_stat_benchmark": [
+        {
+          "variant": "before_fileinfo",
+          "ns_per_op": 808.2,
+          "bytes_per_op": 208,
+          "allocs_per_op": 1
+        },
+        {
+          "variant": "before_fileinfo",
+          "ns_per_op": 805.4,
+          "bytes_per_op": 208,
+          "allocs_per_op": 1
+        },
+        {
+          "variant": "before_fileinfo",
+          "ns_per_op": 807.5,
+          "bytes_per_op": 208,
+          "allocs_per_op": 1
+        },
+        {
+          "variant": "after_fstat",
+          "ns_per_op": 733.4,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        {
+          "variant": "after_fstat",
+          "ns_per_op": 751.7,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        {
+          "variant": "after_fstat",
+          "ns_per_op": 729.7,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        }
+      ]
+    }
+  },
+  "held_stat_measurement": {
+    "focused_normal": "PASS",
+    "focused_race": "PASS",
+    "samples_per_variant": 6,
+    "median_before_ns": 808.1,
+    "median_after_ns": 731.8,
+    "median_ns_reduction_percent": 9.44,
+    "before_bytes": 208,
+    "after_bytes": 0,
+    "before_allocs": 1,
+    "after_allocs": 0,
+    "scope": "same actual open /bin/sh descriptor, each iteration performs fresh Fstat; microbenchmark only"
+  },
+  "production_manual": {
+    "activation_seconds": 16.012506629,
+    "native_apply_ms": 18809,
+    "outcome": "FAIL",
+    "cpu_seconds": 17.06,
+    "profile_wall_seconds": 19.21,
+    "allocated_bytes": 1833701112,
+    "allocated_objects": 13627904,
+    "payload_member_reads": 7356,
+    "payload_bytes": 601500120,
+    "metadata_attempts": 6626,
+    "version_starts": [
+      98,
+      98,
+      1365
+    ],
+    "tool_checks": 1385,
+    "tool_checks_wall_seconds": 7.058525232,
+    "inventory_cpu_inclusive_seconds": 8.85,
+    "lan_preflight_cpu_inclusive_seconds": 8.77
+  },
+  "remaining": [
+    "Full production/race Apply still misses unchanged activation deadline; kernel/source/consumer checks preserved.",
+    "Native classic-save parity fixture attempts DROP in nat and fails setup; DNS owner fixing fixture.",
+    "Core native consumer cases after that fixture were not executed in this run.",
+    "No physical router/LAN readiness established."
+  ]
+}

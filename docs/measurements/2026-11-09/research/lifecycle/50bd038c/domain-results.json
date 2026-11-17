@@ -1,0 +1,441 @@
+{
+  "sha": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "run_id": 42684649742,
+  "architecture": "linux/amd64",
+  "limitations": [
+    "Full strict scenarios failed before GEN1 DNS; successor carrier not exercised.",
+    "Cumulative durations overlap and are not wall speed.",
+    "Unit/static tuple tests are not original factory authority."
+  ],
+  "scenarios": {
+    "selected": {
+      "job_id": 129388092267,
+      "cpu": "AMD EPYC 7763 64-Core Processor                ",
+      "result": "FAIL",
+      "failed_stage": "GEN1 DNS publication before 12s deadline",
+      "test_wall_seconds": 22.26,
+      "raw_sha256": "4a175db45a1f8c85781dc670fd5b6a8aefbde03e1f6d417730a9dd3d4d53da1b",
+      "full_read_count": 125,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "3.67039107s"
+        },
+        "capture-guard-original-closing": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "5.609µs"
+        },
+        "capture-guard-original-opening": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "3.52755384s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.560949818s"
+        },
+        "coordinator-original-read": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "283.33386ms"
+        },
+        "coordinator-original-read-complete": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "620ns"
+        },
+        "executable-image-capture": {
+          "calls": 46,
+          "bytes": 1682560676,
+          "elapsed": "1.259502177s"
+        },
+        "executable-image-compare": {
+          "calls": 45,
+          "bytes": 1645983270,
+          "elapsed": "249.318895ms"
+        },
+        "executable-image-storage": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "17.994381ms"
+        },
+        "hash-stack/after-opening-scope/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "184.385204ms"
+        },
+        "hash-stack/after-opening-scope/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.145819ms"
+        },
+        "hash-stack/after-opening-scope/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.230176ms"
+        },
+        "hash-stack/after-opening-scope/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.808892ms"
+        },
+        "hash-stack/after-opening-scope/other": {
+          "calls": 3,
+          "bytes": 109732218,
+          "elapsed": "78.779335ms"
+        },
+        "hash-stack/after-opening-scope/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.468785ms"
+        },
+        "hash-stack/direct/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "184.327557ms"
+        },
+        "hash-stack/direct/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.177037ms"
+        },
+        "hash-stack/direct/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.159314ms"
+        },
+        "hash-stack/direct/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.119429ms"
+        },
+        "hash-stack/direct/other": {
+          "calls": 9,
+          "bytes": 329196654,
+          "elapsed": "249.399372ms"
+        },
+        "hash-stack/direct/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "26.395016ms"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "1.086888883s"
+        },
+        "kernel-observe-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "321ns"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "659.45492ms"
+        },
+        "mapping-original-tool-read": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "615.396274ms"
+        },
+        "native-hash-attribution": {
+          "calls": 34,
+          "bytes": 0,
+          "elapsed": "1.737174ms"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "1.136µs"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "4.089052603s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.044µs"
+        },
+        "process-current": {
+          "calls": 322,
+          "bytes": 0,
+          "elapsed": "5.0433461s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "8.024µs"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "802.98346ms"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.086201409s"
+        },
+        "whole-executable-hash": {
+          "calls": 34,
+          "bytes": 1243631804,
+          "elapsed": "907.395936ms"
+        }
+      },
+      "successor_metrics": {},
+      "gen2_profile_exists": false,
+      "successor_tests": {
+        "normal": {
+          "pass": [
+            "TestDomainSuccessorReadRejectsForeignAndCopiedCarriers",
+            "TestDomainSuccessorReadRejectsChangedOwnerAndExpiredLoan",
+            "TestDomainSuccessorReadCanceledAndInvalidMarkers",
+            "TestDomainSuccessorReadNoWitnessCannotHideInvalidLoan",
+            "TestDomainSuccessorReadRetainsOuterActualByteClosing"
+          ],
+          "fail": [],
+          "skip": false
+        },
+        "race": {
+          "pass": [
+            "TestDomainSuccessorReadRejectsForeignAndCopiedCarriers",
+            "TestDomainSuccessorReadRejectsChangedOwnerAndExpiredLoan",
+            "TestDomainSuccessorReadCanceledAndInvalidMarkers",
+            "TestDomainSuccessorReadNoWitnessCannotHideInvalidLoan",
+            "TestDomainSuccessorReadRetainsOuterActualByteClosing"
+          ],
+          "fail": [],
+          "skip": false
+        }
+      }
+    },
+    "canceled": {
+      "job_id": 129388092121,
+      "cpu": "AMD EPYC 9V74 80-Core Processor                ",
+      "result": "FAIL",
+      "failed_stage": "GEN1 DNS publication before 12s deadline",
+      "test_wall_seconds": 20.9,
+      "raw_sha256": "818c6b52e358db45c71114d01a8e1cb5a44a31fbe6324ca802a78f09e0bf8f6b",
+      "full_read_count": 129,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "3.268936213s"
+        },
+        "capture-guard-original-closing": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "5.718µs"
+        },
+        "capture-guard-original-opening": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "3.136897127s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "5.837047732s"
+        },
+        "coordinator-original-read": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "266.909456ms"
+        },
+        "coordinator-original-read-complete": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "2.293µs"
+        },
+        "dns-send": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "323.552794ms"
+        },
+        "executable-image-capture": {
+          "calls": 48,
+          "bytes": 1755715488,
+          "elapsed": "1.173463048s"
+        },
+        "executable-image-compare": {
+          "calls": 47,
+          "bytes": 1719138082,
+          "elapsed": "289.82481ms"
+        },
+        "executable-image-storage": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "352.622µs"
+        },
+        "hash-stack/after-opening-scope/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "163.822818ms"
+        },
+        "hash-stack/after-opening-scope/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.190418ms"
+        },
+        "hash-stack/after-opening-scope/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.438035ms"
+        },
+        "hash-stack/after-opening-scope/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.284346ms"
+        },
+        "hash-stack/after-opening-scope/other": {
+          "calls": 3,
+          "bytes": 109732218,
+          "elapsed": "70.380491ms"
+        },
+        "hash-stack/after-opening-scope/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.547637ms"
+        },
+        "hash-stack/direct/capture-effect-admission/capture-prepare": {
+          "calls": 7,
+          "bytes": 256041842,
+          "elapsed": "163.338269ms"
+        },
+        "hash-stack/direct/capture-issue/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.325067ms"
+        },
+        "hash-stack/direct/capture-mapping/standby-capture": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.321111ms"
+        },
+        "hash-stack/direct/capture-prepare/capture-mapping": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.222164ms"
+        },
+        "hash-stack/direct/other": {
+          "calls": 9,
+          "bytes": 329196654,
+          "elapsed": "213.265402ms"
+        },
+        "hash-stack/direct/standby-issue": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "23.475129ms"
+        },
+        "kernel-observe": {
+          "calls": 4,
+          "bytes": 0,
+          "elapsed": "1.711773806s"
+        },
+        "kernel-observe-success": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "670ns"
+        },
+        "mapping-compare": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "1.730269711s"
+        },
+        "mapping-compare-success": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "821ns"
+        },
+        "mapping-original-tool-closing": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "801ns"
+        },
+        "mapping-original-tool-read": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "1.575877719s"
+        },
+        "native-hash-attribution": {
+          "calls": 34,
+          "bytes": 0,
+          "elapsed": "1.440243ms"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "690ns"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.653562178s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "5.526µs"
+        },
+        "process-current": {
+          "calls": 365,
+          "bytes": 0,
+          "elapsed": "4.927579879s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "1.026712842s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "729.70832ms"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "1.973242296s"
+        },
+        "whole-executable-hash": {
+          "calls": 34,
+          "bytes": 1243631804,
+          "elapsed": "797.610887ms"
+        }
+      },
+      "successor_metrics": {},
+      "gen2_profile_exists": false,
+      "successor_tests": {
+        "normal": {
+          "pass": [
+            "TestDomainSuccessorReadRejectsForeignAndCopiedCarriers",
+            "TestDomainSuccessorReadRejectsChangedOwnerAndExpiredLoan",
+            "TestDomainSuccessorReadCanceledAndInvalidMarkers",
+            "TestDomainSuccessorReadNoWitnessCannotHideInvalidLoan",
+            "TestDomainSuccessorReadRetainsOuterActualByteClosing"
+          ],
+          "fail": [],
+          "skip": false
+        },
+        "race": {
+          "pass": [
+            "TestDomainSuccessorReadRejectsForeignAndCopiedCarriers",
+            "TestDomainSuccessorReadRejectsChangedOwnerAndExpiredLoan",
+            "TestDomainSuccessorReadCanceledAndInvalidMarkers",
+            "TestDomainSuccessorReadNoWitnessCannotHideInvalidLoan",
+            "TestDomainSuccessorReadRetainsOuterActualByteClosing"
+          ],
+          "fail": [],
+          "skip": false
+        }
+      }
+    }
+  }
+}

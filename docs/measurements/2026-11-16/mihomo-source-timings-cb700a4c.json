@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "run_id": 43940309148,
+  "sha": "cb700a4caaa3f027919cc3653e7aae549e682afa",
+  "result": "FAIL",
+  "actor_wall_ms": 119995.778,
+  "failed_stage": "absence-source-closing",
+  "deadline": true,
+  "canceled": false,
+  "metrics": {
+    "absence": {
+      "calls": 61,
+      "inclusive_wall_ms": 75100.539
+    },
+    "absence-tool-read": {
+      "calls": 61,
+      "inclusive_wall_ms": 75099.715
+    },
+    "failure-process-inventory-proc.stat-read": {
+      "calls": 1,
+      "inclusive_wall_ms": 0.0
+    },
+    "failure-process-provider": {
+      "calls": 1,
+      "inclusive_wall_ms": 0.0
+    },
+    "failure-processes": {
+      "calls": 1,
+      "inclusive_wall_ms": 0.0
+    },
+    "home-current": {
+      "calls": 19,
+      "inclusive_wall_ms": 45593.739
+    },
+    "native-stage": {
+      "calls": 6,
+      "inclusive_wall_ms": 25189.548
+    },
+    "native-witness-callback": {
+      "calls": 6,
+      "inclusive_wall_ms": 6211.255
+    },
+    "phase-archive": {
+      "calls": 1,
+      "inclusive_wall_ms": 46150.778
+    },
+    "phase-forwarding": {
+      "calls": 1,
+      "inclusive_wall_ms": 30886.841
+    },
+    "phase-intent": {
+      "calls": 1,
+      "inclusive_wall_ms": 1267.983
+    },
+    "phase-opening": {
+      "calls": 1,
+      "inclusive_wall_ms": 278.698
+    },
+    "phase-policy": {
+      "calls": 1,
+      "inclusive_wall_ms": 8310.553
+    },
+    "phase-sidecar": {
+      "calls": 1,
+      "inclusive_wall_ms": 2221.63
+    },
+    "phase-terminal": {
+      "calls": 1,
+      "inclusive_wall_ms": 29899.771
+    },
+    "prepare": {
+      "calls": 1,
+      "inclusive_wall_ms": 510.716
+    },
+    "run": {
+      "calls": 1,
+      "inclusive_wall_ms": 119016.272
+    },
+    "source-before-sidecar": {
+      "calls": 28,
+      "inclusive_wall_ms": 1192.142
+    },
+    "source-command-kernel": {
+      "calls": 636,
+      "inclusive_wall_ms": 733.21
+    },
+    "source-command-version": {
+      "calls": 2178,
+      "inclusive_wall_ms": 2831.083
+    },
+    "source-current": {
+      "calls": 207,
+      "inclusive_wall_ms": 68879.166
+    },
+    "source-current-tool-read": {
+      "calls": 85,
+      "inclusive_wall_ms": 33080.282
+    },
+    "source-lease-owner-tool": {
+      "calls": 413,
+      "inclusive_wall_ms": 4106.887
+    },
+    "source-lease-private": {
+      "calls": 733,
+      "inclusive_wall_ms": 618.812
+    },
+    "source-lease-read-tool": {
+      "calls": 1272,
+      "inclusive_wall_ms": 10050.839
+    },
+    "source-self-sha": {
+      "calls": 413,
+      "inclusive_wall_ms": 20562.063
+    }
+  },
+  "raw_path": "C:\\RAZVILKA-research-20261116\\sameboot-cb700a4c\\failed.log",
+  "raw_sha256": "2e58b6f8012baa13ab64bc4b8156ba31669eb32d01a9af10a43385555d925896",
+  "private_race": "PASS",
+  "ack_matrix": "SKIPPED",
+  "limits": [
+    "Intervals overlap and must not be added.",
+    "No normal parent run in this focused race diagnostic.",
+    "No router acceptance."
+  ]
+}

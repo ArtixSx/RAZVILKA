@@ -60,7 +60,7 @@ func (m *Manager) CheckInstalledHEV(ctx context.Context) (path string, err error
 	actual := hex.EncodeToString(digest[:])
 	var binding externalReceipt
 	if actual != info.PinnedSHA256 || json.Unmarshal(receipt.Data, &binding) != nil || binding.Version != info.Version || binding.SHA256 != actual {
-		return "", errors.New("HEV current bytes/receipt do not match official reviewed pin")
+		return "", errors.New("HEV current bytes/receipt do not match reviewed pin")
 	}
 	path = s.paths["a_binary"]
 	if err := verifyHEVRelease(ctx, path); err != nil {

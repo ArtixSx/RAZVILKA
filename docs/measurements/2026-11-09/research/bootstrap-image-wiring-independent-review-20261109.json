@@ -1,0 +1,20 @@
+{
+  "status": "source-approved",
+  "head": "506153545ad88e73b64caffd23d4f7f73be6226d",
+  "scope": "Focused bootstrap offline StrategyLab, bootstrap image and ordinary image tests appended to existing generic/native commands",
+  "checks": [
+    "Existing test selectors retained",
+    "No extra compilation, production deadline or authority changes",
+    "Actual CI remains pending on next commit"
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "e63df8cd2b4d9afc4c93014448f2d6baad334f6c34e3deaa376fbbd5dcf2307a"
+    },
+    {
+      "path": "scripts/test-paired-public-native.sh",
+      "sha256": "a6960a4e1d26b0c000b373b01552dfec634cb5d9e9c471605c46cf9037b71a95"
+    }
+  ]
+}

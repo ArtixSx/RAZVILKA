@@ -1,0 +1,63 @@
+{
+  "run_id": 43972434154,
+  "revision": "db0c08bc602072dfb9517be184186a475b97540c",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "live-native (check-settlement)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133667772216
+    },
+    {
+      "name": "live-native (lifecycle)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133667772483
+    },
+    {
+      "name": "live-native (manual-http)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133667772635
+    },
+    {
+      "name": "live-native (postcas-failure)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133667772956
+    }
+  ],
+  "manual_evidence": [
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:43:25.4794764Z     mihomo_live_native_linux_test.go:386: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:45:04.4058344Z     mihomo_live_native_linux_test.go:412: actual_manual_http_apply committed=true replay_refused=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:45:04.4070609Z     mihomo_live_native_linux_test.go:423: actual_mihomo_live round=0 apply=1m39.115284983s mandatory_probes=2",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:45:50.0201755Z     mihomo_live_native_linux_test.go:525: actual_mihomo_live round=0 stop=7.091285377s closing_retry=false",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:45:50.0747114Z     mihomo_live_native_linux_test.go:532: actual_mihomo_live round=0 cycle=2m24.785390187s fixture_elapsed=2m26.837322043s restored_physical_baseline=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:45:50.2624660Z     mihomo_live_native_linux_test.go:386: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:47:29.0105034Z     mihomo_live_native_linux_test.go:412: actual_manual_http_apply committed=true replay_refused=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:47:29.0106072Z     mihomo_live_native_linux_test.go:423: actual_mihomo_live round=1 apply=1m38.93521997s mandatory_probes=2",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:48:14.0627555Z     mihomo_live_native_linux_test.go:525: actual_mihomo_live round=1 stop=6.925898267s closing_retry=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:48:14.1161267Z     mihomo_live_native_linux_test.go:532: actual_mihomo_live round=1 cycle=2m24.041625215s fixture_elapsed=4m50.878996851s restored_physical_baseline=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:48:14.5939995Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (291.36s)",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T22:48:15.0139775Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (291.36s)",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:49:00.9325439Z     mihomo_live_native_linux_test.go:382: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:50:50.4661573Z     mihomo_live_native_linux_test.go:408: actual_manual_http_apply committed=true replay_refused=true",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:50:50.4664206Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m49.718795058s mandatory_probes=2",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:51:37.5047318Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=7.080078681s closing_retry=false",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:51:37.5580777Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=2m36.812020321s fixture_elapsed=2m38.503812655s restored_physical_baseline=true",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:51:37.7378471Z     mihomo_live_native_linux_test.go:382: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:53:26.0980550Z     mihomo_live_native_linux_test.go:408: actual_manual_http_apply committed=true replay_refused=true",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:53:26.0983687Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m48.539269105s mandatory_probes=2",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:54:13.2925467Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=7.051722235s closing_retry=true",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:54:13.3459908Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=2m35.78793552s fixture_elapsed=5m14.291790659s restored_physical_baseline=true",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:54:13.8239898Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (314.77s)",
+    "live-native (manual-http)\tCompare original warm scenario without changing its deadline\t2026-11-16T22:54:14.3170962Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (314.77s)"
+  ],
+  "raw_log_sha256": "2ffc79df81e69fa9473b66dd2c369c8e1fb5244e8e0a82f58df416b79d8d053a",
+  "limits": [
+    "Actual Linux isolated native LAN; not the physical router.",
+    "Historical warm comparison changes more than one implementation mechanism; not causal speedup proof.",
+    "Exact newer code has separate CI/native checks."
+  ]
+}

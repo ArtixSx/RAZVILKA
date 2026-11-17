@@ -1,0 +1,347 @@
+CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+=== RUN   TestDomainTCPOriginalNativeAcceptedFlows
+    domain_tcp_original_native_linux_test.go:595: actual before DNS failure cleanup completed-counter snapshot (in-flight checks excluded; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.003483745s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:6.804µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.860463163s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.179962325s} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.705152ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.467347ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.043584ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.243944ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.600533ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:78.598209ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:210.294412ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.782202ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.30339ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.252026ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.217324ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.212374ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.295343ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.030686ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:183.652071ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.794655ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.198638ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.160185ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.218085ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:290.491098ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:130.801106ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.878363ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:210.159459ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.595824ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.191112ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.361968ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.277102ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.565486ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.334086ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.576429ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.594261ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.316343ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.44657ms} native-hash-attribution:{Calls:125 Bytes:0 Elapsed:5.30074ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.112µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.496439135s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.108µs} process-current:{Calls:273 Bytes:0 Elapsed:5.042120347s} publication-gate:{Calls:12 Bytes:0 Elapsed:8.388µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:941.392279ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.473658802s} whole-executable-hash:{Calls:125 Bytes:4572175750 Elapsed:3.291659367s}]
+    domain_tcp_original_native_linux_test.go:596: original publication blocked; bounded goroutine stacks:
+        goroutine 21 [running]:
+        github.com/ArtixSx/razvilka/internal/app.domainOriginalPublicationDiagnostics(0x3a981edec908, {0x1e1f873, 0x1d})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:1119 +0x6a
+        github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11({0x1f75f08, 0x3a981ee02ba0})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:596 +0x1965
+        github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody(0x14?, 0x3a981f185788)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_action_failure.go:9 +0xda
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x3a981ee064b0, 0x0, 0x3a981f1d1c20, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:791 +0x18f
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x3a981ee064b0, 0x0, 0x3a981f1d1c20, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:773 +0x10b5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked(...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:701
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked(...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:697
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).WithDomainTCPProofResources(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x3a981ee064b0, 0x0, 0x3a981f1d1c20, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_proof_scope.go:90 +0x34c
+        github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative(0x3a981edec908, 0x0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:458 +0x45b2
+        github.com/ArtixSx/razvilka/internal/app.TestDomainTCPOriginalNativeAcceptedFlows(0x3a981edec908?)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:36 +0x15
+        testing.tRunner(0x3a981edec908, 0x1f4c9b8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+        created by testing.(*T).Run in goroutine 1
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0x4c5
+        
+        goroutine 1 [chan receive]:
+        testing.(*T).Run(0x3a981edec6c8, {0x1e4260e?, 0x0?}, 0x1f4c9b8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2109 +0x4e5
+        testing.runTests.func1(0x3a981edec6c8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2585 +0x3e
+        testing.tRunner(0x3a981edec6c8, 0x3a981f17fb70)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+        testing.runTests({0x1e1874c, 0x1b}, {0x1e427c6, 0x28}, 0x3a981edac3d8, {0x2d3d300, 0x4a6, 0x4a6}, {0xc2b491fc862a6c27, 0x29e92dd54c, ...})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2583 +0x505
+        testing.(*M).Run(0x3a981eeaa0a0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2443 +0x6ac
+        github.com/ArtixSx/razvilka/internal/app.TestMain(0x3a981eeaa0a0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:69 +0x379
+        main.main()
+        	_testmain.go:2426 +0xa5
+        
+        goroutine 128 [runnable, locked to thread]:
+        os.underlyingErrorIs({0x0?, 0x0?}, {0x1f6c700, 0x2d22f90})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/error.go:117 +0x24a
+        os.IsNotExist(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/error.go:91
+        os.(*File).readdir(0x3a981ed88390, 0x101, 0x1)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/dir_unix.go:142 +0x50d
+        os.(*File).ReadDir(0x3a981f049ce0?, 0x21?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/dir.go:101 +0x1d
+        github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent(0x3a981ee50000, {0x1f75f08, 0x3a981f15a870})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/version_batch_linux.go:174 +0x3c5
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).readClassicSaveFamily(0x3a981ee88200, {0x1f75f40, 0x3a981f2abae0}, 0x3a981f15a840, 0x3a981ed38ca0, 0x0, 0xffaa3)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/classic_save_linux.go:179 +0xd39
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).ReadBoundedClassicInventory.func1({0x1f75f40, 0x3a981f2abae0}, {0x1, {0x1df4488, 0xe}, {0x3a981f049320, 0x24}, 0xf00001ad, {0x0, 0x0}})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/classic_save_linux.go:131 +0x3c7
+        github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent(0x3a981ee02b70, {0x1f75f40?, 0x3a981f2aba90?}, 0x3a981f465070)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/netidentity/provider.go:159 +0x3c2
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).ReadBoundedClassicInventory(0x3a981ee88200, {0x1f75f78, 0x3a981ef0e0e0}, {0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/classic_save_linux.go:113 +0xabc
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic.func1()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:384 +0x76b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic(0x3a981f480858?, {0x1f75f78, 0x3a981ef0e0e0}, {{0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:463 +0x342
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).capture(_, {_, _}, {{0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:273 +0x848
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation.func2({0x1f75f40, 0x3a981f4a9680})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_observation.go:78 +0x427
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0x3a981ee88200, {0x1f75f40, 0x3a981f4a9680}, {0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/read_observation_linux.go:37 +0x2b1
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation(_, {_, _}, {{0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_observation.go:56 +0x5f0
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read.func1({0x1f75f40, 0x3a981f4a9630}, {0x1, {0x1df4488, 0xe}, {0x3a981f1bb1a0, 0x24}, 0xf00001ad, {0x0, 0x0}})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:168 +0x2eb
+        github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent(0x3a981ee02b70, {0x1f75f78?, 0x3a981ed47dc0?}, 0x3a981f240aa0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/netidentity/provider.go:159 +0x3c2
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read(_, {_, _}, {{0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:159 +0x78b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read(_, {_, _}, {{0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:133 +0x196
+        github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read(_, {_, _}, {0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_api.go:69 +0x16a
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).readWithFiles(0x3a981f4c9208, {0x1f75f08, 0x3a981eff1140}, 0x3a981f226510)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_capture_execution_effects.go:118 +0x15e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).checkPreparedWithFiles(0x3a981f4c9208, {0x1f75f08, 0x3a981eff1140}, 0x3a981f226510)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_capture_execution_effects.go:248 +0x452
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).currentSyntheticCaptureWithFiles(0x3a981efada20, {0x1f75f08, 0x3a981eff1140}, 0x3a981f1584e0, 0x3a981edaea80, 0x3a981f226510)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_original_coordinator.go:250 +0xda
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCaptureMapping).currentWithFiles(0x3a981f0eb6c0, {0x1f75f08, 0x3a981eff1140}, 0x3a981f226510)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture_mapping.go:299 +0x66d
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).prepareCapture.func1.1(0x3a981f226510)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/synthetic_baseline_execution_resource.go:298 +0x65
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withCurrentFileObservation.func1(0x3a981f226510)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_file_observation.go:121 +0x7b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservationAfterOpening(0x3a981f0dfb88, {0x1f75f08, 0x3a981eff1140}, 0x0?, 0x3a981f196d90)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_file_observation.go:52 +0x25e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservation(0x3a981f0dfb88, {0x1f75f08, 0x3a981eff1140}, 0x3a981f196d90)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_file_observation.go:35 +0x5e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withCurrentFileObservation(0x1d32720?, {0x1f75f08?, 0x3a981eff1140?}, 0x424645?)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_file_observation.go:117 +0x47
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).observeOriginalFiles(0x1d32701?, {0x1f75f08?, 0x3a981eff1140?}, 0x3a981f0f22a0?)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_tool_observation.go:78 +0x6f
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).prepareCapture.func1({0x1f75f08?, 0x3a981eff1140?})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/synthetic_baseline_execution_resource.go:294 +0x53
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0x3a981ee88200, {0x1f75f78, 0x3a981ee36310}, {0x1, {0x1df4488, 0xe}, {0x3a981ecf3740, 0x24}, 0xf00001ad, {0x0, ...}}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/read_observation_linux.go:61 +0x7c8
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).observeTools(0x3a981ef6f1e0, {0x1f75f78, 0x3a981ee36310}, 0x3a981edac108)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_tool_observation.go:61 +0x13a
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).prepareCapture(0x3a981ef6f1e0, {0x1f75f78, 0x3a981ee36310})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/synthetic_baseline_execution_resource.go:293 +0xb7
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).WithCapture(_, {_, _}, {{{0x3a981ed54bc0, 0x40}, {0x1df997c, 0x10}, {0x1de9011, 0x7}, {0x3a981ecf43c0, ...}, ...}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_original_coordinator.go:173 +0x473
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture.func1(0xc?)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture.go:122 +0x9a
+        github.com/ArtixSx/razvilka/internal/dataplane.domainPolicyTCPSynchronousScope({0x1f75f78, 0x3a981ee36310}, 0x3a981f197838, 0x3a981ee969f0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture.go:173 +0x193
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture(_, {_, _}, {{{0x3a981ed54bc0, 0x40}, {0x1df997c, 0x10}, {0x1de9011, 0x7}, {0x3a981ecf43c0, ...}, ...}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture.go:121 +0x2b3
+        github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource.func1({0x1f75f78, 0x3a981ee36310})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_resource_consumer.go:37 +0x51f
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withNativeInPhase(0x3a981f0dfb88, {0x1f75f78, 0x3a981ee36310}, 0x3a981f197f10)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:296 +0x242
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative.func1({0x1f75f78?, 0x3a981ee36310?})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:232 +0x2e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionPhase).withDomainNativeActivity(0x3a981ed46c40, {0x1f75f40, 0x3a981edb0640}, 0x3a981ed07ea8)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:265 +0x395
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative(0x3a981f0dfb88, {0x1f75f40, 0x3a981edb0640}, 0x3a981ed07f10)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:232 +0x22a
+        github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource(0x3a981eeda008, {0x1f75f40, 0x3a981edb0640}, 0x3a981f0dfb88, {0x1f7b950, 0x3a981efada20})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_resource_consumer.go:22 +0x195
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).Run(0x3a981efada20, {0x1f75f40, 0x3a981edb0640}, 0x3a981f0dfb88)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_original_coordinator.go:135 +0x177
+        github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11.3()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:531 +0x2c
+        created by github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11 in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:531 +0x146f
+        
+        goroutine 120 [IO wait]:
+        internal/poll.runtime_pollWait(0x7f14b82c5600, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3a981f084d00?, 0x3a981f486ec5?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).ReadFromInet4(0x3a981f084d00, {0x3a981ed06ec5, 0x1001, 0x1001}, 0x3a981ed06d90)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+        net.(*netFD).readFromInet4(0x3a981f084d00, {0x3a981f486ec5?, 0x3a981f323808?, 0x0?}, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+        net.(*UDPConn).readFromAddrPort(0x3a981f486e20?, {0x3a981f486ec5?, 0x88?, 0x491dd2?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:78 +0x152
+        net.(*UDPConn).ReadFromUDPAddrPort(0x3a981ecb87b8, {0x3a981f486ec5?, 0x3a981edac0c0?, 0xa77f?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:172 +0x30
+        github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func1()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:98 +0xf2
+        created by github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS in goroutine 119
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:95 +0x4e9
+        
+        goroutine 127 [syscall]:
+        runtime/pprof.readProfile()
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/cpuprof.go:251 +0x4a
+        runtime/pprof.profileWriter({0x1f6c6c0?, 0x3a981ed889a8?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:930 +0x45
+        created by runtime/pprof.StartCPUProfile in goroutine 21
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:911 +0x1a5
+        
+        goroutine 119 [select]:
+        github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS({0x1f75f40, 0x3a981edb0e60}, 0x3a981ecb87b8, 0x3a981eeb9500, {0x3a981eeea920?, 0x0?, 0x0?, 0x3a981eeea930?})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:228 +0x685
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Serve(0x3a981efacdc0, {0x1f75f40, 0x3a981edb0e60}, 0x3a981ecb87b8, 0x3a981eeb9500)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_synthetic_publish.go:194 +0x185
+        github.com/ArtixSx/razvilka/internal/dataplane.(*scopedDNSSession).serve(0x3a981eebffd0?, {0x1f75f40?, 0x3a981edb0e60?})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/scoped_dns_inactive_lifecycle.go:69 +0xfd
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*ScopedDNSAdapter).startSyntheticDNSContinuingLocked in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/scoped_dns_synthetic_mode.go:145 +0xf9f
+        
+        goroutine 72 [IO wait]:
+        internal/poll.runtime_pollWait(0x7f14b82c5400, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3a981f084380?, 0x3a981ee82000?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).ReadFromInet4(0x3a981f084380, {0x3a981ee82000, 0x1000, 0x1000}, 0x3a981f117cc0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+        net.(*netFD).readFromInet4(0x3a981f084380, {0x3a981ee82000?, 0x3a981ef5e400?, 0x0?}, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+        net.(*UDPConn).readFrom(0x30?, {0x3a981ee82000?, 0x0?, 0x0?}, 0x3a981f2805a0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:52 +0x19b
+        net.(*UDPConn).readFromUDP(0x3a981ecb8398, {0x3a981ee82000?, 0x0?, 0x1f73ef0?}, 0x3a981ecca170?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:146 +0x30
+        net.(*UDPConn).ReadFrom(0x3a981ecb8398, {0x3a981ee82000, 0x1000, 0x1000})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:155 +0x4a
+        github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func4()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:260 +0x7c
+        created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:257 +0x1ff
+        
+        goroutine 73 [IO wait]:
+        internal/poll.runtime_pollWait(0x7f14b82c5800, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3a981f084480?, 0x427945?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).Accept(0x3a981f084480)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+        net.(*netFD).accept(0x3a981f084480)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+        net.(*TCPListener).accept(0x3a981ed448c0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+        net.(*TCPListener).Accept(0x3a981ed448c0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:387 +0x30
+        crypto/tls.(*listener).Accept(0x3a981edac1b0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/crypto/tls/tls.go:78 +0x24
+        net/http.(*Server).Serve(0x3a981ee3a000, {0x1f73fe0, 0x3a981edac1b0})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3434 +0x30c
+        net/http.(*Server).ServeTLS(0x3a981ee3a000, {0x1f74fe0, 0x3a981ed448c0}, {0x3a981ed840e0, 0x62}, {0x3a981ed84150, 0x63})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3503 +0x406
+        github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func7()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:295 +0x109
+        created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:294 +0x35e
+        
+        goroutine 74 [syscall]:
+        syscall.Syscall6(0xf7, 0x3, 0xc, 0x3a981eecd648, 0x4, 0x3a981edf8120, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+        internal/syscall/unix.Waitid(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+        os.(*Process).pidfdWait.func1(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+        os.ignoringEINTR(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+        os.(*Process).pidfdWait(0x3a981ed44900)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+        os.(*Process).wait(0x8200000000?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+        os.(*Process).Wait(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+        os/exec.(*Cmd).Wait(0x3a981eeddba0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+        github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers.func4()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x25
+        created by github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x1f73
+        
+        goroutine 139 [syscall]:
+        syscall.Syscall6(0xf7, 0x3, 0xa6, 0x3a981eec5e40, 0x4, 0x3a981ed00fc0, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+        internal/syscall/unix.Waitid(0x1f75f78?, 0x3a981ed475e0?, 0x0?, 0x0?, 0x3a981eec5f28?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+        os.(*Process).pidfdWait.func1(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+        os.ignoringEINTR(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+        os.(*Process).pidfdWait(0x3a981edae600)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+        os.(*Process).wait(0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+        os.(*Process).Wait(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+        os/exec.(*Cmd).Wait(0x3a981eedc680)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+        github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProcess).wait(0x3a981f1061c0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_selected_tcp_runtime_process.go:183 +0x25
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProcess).beginReservedWait in goroutine 128
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_selected_tcp_runtime_process.go:163 +0x118
+        
+        goroutine 121 [IO wait]:
+        internal/poll.runtime_pollWait(0x7f14b82c4e00, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3a981f084d80?, 0x424645?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).Accept(0x3a981f084d80)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+        net.(*netFD).accept(0x3a981f084d80)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+        net.(*TCPListener).accept(0x3a981eeb9500)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+        net.(*TCPListener).AcceptTCP(0x3a981eeb9500)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:374 +0x30
+        github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func2()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:171 +0xa5
+        created by github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS in goroutine 119
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:169 +0x60a
+        
+        goroutine 1901 [select]:
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).PrepareSyntheticMapping.func3()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture_mapping.go:180 +0xd4
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).PrepareSyntheticMapping in goroutine 128
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture_mapping.go:178 +0xe4f
+    domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=xray-domain-tcp state=prepared phase=listener-ready
+    domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=synthetic-baseline state=prepared phase=baseline-prepared
+    domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=domain-tcp-capture state=prepared phase=capture-prepared
+    domain_tcp_original_native_linux_test.go:1143: actual generated runtime transactions/dp-check-bf2825c47650363f98a8f049bfb62ba6/execution-resources/xd-3f4fb02f6893270621c4502ebf28161e/xray-domain.log: Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 13:50:56.052284 [Info] infra/conf/serial: Reading config: &{Name:stdin: Format:json}
+        2026/11/09 13:50:56.055882 [Warning] core: Xray 26.3.27 started
+    domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.003483745s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:6.804µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.860463163s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.179962325s} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.705152ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.467347ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.043584ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.243944ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.600533ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:78.598209ms} hash-stack/after-opening-scope/other:{Calls:9 Bytes:329196654 Elapsed:237.064839ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.782202ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.30339ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.252026ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.217324ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.212374ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.295343ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.030686ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:183.652071ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.794655ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.198638ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.160185ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.218085ms} hash-stack/direct/other:{Calls:13 Bytes:475506278 Elapsed:344.088518ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:130.801106ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.878363ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:210.159459ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.595824ms} hash-stack/file-opening-wrapper/other:{Calls:2 Bytes:73154812 Elapsed:52.649354ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.361968ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.277102ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.565486ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.334086ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.576429ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.594261ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.316343ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.44657ms} native-hash-attribution:{Calls:129 Bytes:0 Elapsed:5.43711ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.112µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.496439135s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.108µs} process-current:{Calls:274 Bytes:0 Elapsed:5.042122792s} publication-gate:{Calls:12 Bytes:0 Elapsed:8.388µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:941.392279ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.473658802s} whole-executable-hash:{Calls:129 Bytes:4718485374 Elapsed:3.398485456s}] actual_tool_starts=map[original-effect:11 original-read-classic-save:223]; overlapping cumulative durations, not wall speed
+    domain_tcp_original_native_linux_test.go:668: full original domain native workflow: actual DNS publication did not become available
+        dataplane transaction journal is unavailable
+        policy addition or cleanup result unknown; reconciliation required blockers=[{Code:DOMAIN_POLICY_RUNTIME_UNAVAILABLE Adapter:dns-scoped Message:Для доменного маршрута ещё не подключён проверенный runtime. Resolution:Повторите план после подключения владельцев DNS и транспорта.} {Code:DOMAIN_FLOW_AUTHORITY_REQUIRED Adapter:xray Message:Сервис «service» задан доменами, а VPN или прокси выбирает трафик по IP-адресам: на тех же адресах работают чужие сайты, и они тоже ушли бы в обход. Resolution:Выберите для этого сервиса NFQWS2 или замените его вариантом только с IP-сетями (например, «Telegram · через VPN или прокси» из каталога) и примените.}]
+    domain_tcp_original_native_linux_test.go:206: isolated fixture peer.log: === RUN   TestDomainTCPOriginalNativePeer
+        Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 13:50:54.192712 [Info] infra/conf/serial: Reading config: &{Name:/tmp/razvilka-domain-original.h4otcw/TestDomainTCPOriginalNativeAcceptedFlows3143552868/001/server.json Format:json}
+        2026/11/09 13:50:54.194361 [Debug] app/log: Logger started
+        2026/11/09 13:50:54.195997 [Info] app/dns: DNS: created localhost client
+        2026/11/09 13:50:54.196020 [Debug] app/proxyman/inbound: creating stream worker on 1.1.1.2:10443
+        2026/11/09 13:50:54.196254 [Info] transport/internet/tcp: listening TCP on 1.1.1.2:10443
+        2026/11/09 13:50:54.196549 [Warning] core: Xray 26.3.27 started
+        2026/11/09 13:50:54.206076 [Info] [461970151] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 13:50:54.546217 [Info] [2881065986] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 13:50:54.574429 [Info] [4253449973] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 13:50:54.574449 [Info] [4253449973] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 13:50:54.574456 [Info] [4253449973] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 13:50:54.574462 [Info] [4253449973] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 13:50:54.574469 [Debug] [4253449973] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 13:50:54.574567 [Info] [4253449973] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:33413, remote endpoint 1.1.1.2:443
+        2026/11/09 13:50:54.574585 [Debug] [4253449973] proxy: CopyRawConn (maybe) readv
+        2026/11/09 13:50:54.576679 [Info] [4253449973] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:50720: use of closed network connection
+        2026/11/09 13:50:54.578818 [Info] [1216734607] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 13:50:54.578853 [Info] [1216734607] proxy/vless/inbound: received request for tcp:service.example.com:443
+        2026/11/09 13:50:54.578860 [Info] [1216734607] app/dispatcher: default route for tcp:service.example.com:443
+        2026/11/09 13:50:54.578887 [Info] app/dns: returning 1 IP(s) for domain service.example.com -> [1.1.1.2]
+        2026/11/09 13:50:54.578893 [Info] [1216734607] proxy/freedom: dialing to tcp:1.1.1.2:443
+        2026/11/09 13:50:54.578898 [Info] [1216734607] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 13:50:54.578902 [Debug] [1216734607] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 13:50:54.578908 [Info] [1216734607] proxy/freedom: connection opened to tcp:service.example.com:443, local endpoint 1.1.1.2:54953, remote endpoint 1.1.1.2:443
+        2026/11/09 13:50:54.578985 [Debug] [1216734607] proxy: CopyRawConn (maybe) readv
+        2026/11/09 13:50:54.581280 [Info] [1216734607] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:50734: use of closed network connection
+        2026/11/09 13:50:54.583220 [Info] [3703708145] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 13:50:54.583243 [Info] [3703708145] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 13:50:54.583251 [Info] [3703708145] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 13:50:54.583257 [Info] [3703708145] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 13:50:54.583262 [Debug] [3703708145] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 13:50:54.583318 [Info] [3703708145] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:58359, remote endpoint 1.1.1.2:443
+        2026/11/09 13:50:54.583327 [Debug] [3703708145] proxy: CopyRawConn (maybe) readv
+        2026/11/09 13:50:54.585142 [Info] [3703708145] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:50746: use of closed network connection
+--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (14.03s)
+FAIL

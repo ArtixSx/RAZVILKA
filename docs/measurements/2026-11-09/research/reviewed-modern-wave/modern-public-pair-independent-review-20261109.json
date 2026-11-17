@@ -1,0 +1,91 @@
+{
+  "review": "modern configured public update rollback native fixture",
+  "outcome": "approved for CI validation; no execution or acceptance claim",
+  "files": [
+    {
+      "path": "internal/updatecheck/file_adapter.go",
+      "sha256": "AA99F5B2F9D1674C9E6B16C4D2B6AEC1E3465ECA50AE2E7E4951C76F3497BB28",
+      "git_blob_sha256": "aa99f5b2f9d1674c9e6b16c4d2b6aec1e3465eca50ae2e7e4951c76f3497bb28"
+    },
+    {
+      "path": "internal/updatecheck/file_commands_linux.go",
+      "sha256": "EF4806811AE97B1848455A27AEB51655C657901F8F629D4EFBE83AC5153B0541",
+      "git_blob_sha256": "ef4806811ae97b1848455a27aeb51655c657901f8f629d4efbe83ac5153b0541"
+    },
+    {
+      "path": "internal/updatecheck/platform_linux.go",
+      "sha256": "E10599186546D47BCFC1F7BF9BC78CC3EF6E0F6A82B71B574462E39878454948",
+      "git_blob_sha256": "e10599186546d47bcfc1f7bf9bc78cc3ef6e0f6a82b71b574462e39878454948"
+    },
+    {
+      "path": "internal/updatecheck/runtime_source_fixture_linux.go",
+      "sha256": "BE9E96C525179D489D39E557E9F40A348F8C8EFFB934398AD593E46F70BE9808",
+      "git_blob_sha256": "be9e96c525179d489d39e557e9f40a348f8c8effb934398ad593e46f70be9808"
+    },
+    {
+      "path": "internal/updatecheck/modern_pair_fixture_linux.go",
+      "sha256": "D860C3809E1F2C0F5533B5947654BE431D8E58D11C948F6F81B72CE2394C5603",
+      "git_blob_sha256": "d860c3809e1f2c0f5533b5947654be431d8e58d11c948f6f81b72ce2394c5603"
+    },
+    {
+      "path": "internal/updatecheck/modern_pair_fixture_other.go",
+      "sha256": "AA35799519F837E8DA4745FF950291BA1F2DB9C4006A32C0A1A4FCDF113520EB",
+      "git_blob_sha256": "aa35799519f837e8da4745ff950291ba1f2db9c4006a32c0a1a4fcdf113520eb"
+    },
+    {
+      "path": "internal/updatecheck/modern_pair_fixture_linux_test.go",
+      "sha256": "C0EF64740FE434E5CD92B515B4BC9140F418BDE2D9C2A396844184EC4669DE3C",
+      "git_blob_sha256": "c0ef64740fe434e5cd92b515b4bc9140f418bde2d9c2a396844184ec4669de3c"
+    },
+    {
+      "path": "internal/updatecheck/modern_pair_fixture_default_test.go",
+      "sha256": "03042ACF65A801CB840D700B281E2EB4FDAAB6F22739C260EE602891A57B0412",
+      "git_blob_sha256": "03042acf65a801cb840d700b281e2eb4fdaab6f22739c260ee602891a57b0412"
+    },
+    {
+      "path": "cmd/razvilka/modern_pair_native_linux_test.go",
+      "sha256": "ECBABF8DDC63324406A7F23C40C862F22BA82447B579AC628DEEED06B0B9AF84",
+      "git_blob_sha256": "ecbabf8ddc63324406a7f23c40c862f22ba82447b579ac628deeed06b0b9af84"
+    },
+    {
+      "path": "scripts/fixtures/modern-pair-daemon.py",
+      "sha256": "4F3A9255D38C3E3A9ABDEEFAC34132D7B9C9907D4C2F1BF537208EDDE1CFBE27",
+      "git_blob_sha256": "4f3a9255d38c3e3a9abdeefac34132d7b9c9907d4c2f1bf537208edde1cfbe27"
+    },
+    {
+      "path": "scripts/fixtures/modern-pair-session.sh",
+      "sha256": "98786A7AAE7F8F373AF991075153F19D6899641F3B0C841D6ACB77E1D4A00F1E",
+      "git_blob_sha256": "98786a7aae7f8f373af991075153f19d6899641f3b0c841d6acb77e1d4a00f1e"
+    },
+    {
+      "path": "scripts/test-modern-paired-native.sh",
+      "sha256": "80FCDF407EF1B77101664CBE9C330421088659AD948755466137ADB1C5C15C81",
+      "git_blob_sha256": "80fcdf407ef1b77101664cbe9c330421088659ad948755466137adb1c5c15c81"
+    }
+  ],
+  "contracts": [
+    "Normal builds no-op; original admission, authority, Start, Wait and Live+Stop checks retained",
+    "Native closed seven worker commands; immutable reviewed source/candidate/init plus actual namespace binding",
+    "Reviewed script interpreter FD3 preserved, namespace appended FD4, child-only launcher remaps namespace to3 and closes4+ before actual dpkg no-close",
+    "Genuine public HTTP preparation/apply, exact synthetic release TLS host/path and real locally built artifacts; no fabricated producer receipts",
+    "Post-real-Live negative-only once cut with exclusive bounded diagnostic; actual terminal rollback receipt and candidate PID absence independently required",
+    "Actual restored source draft reader plus genuine init restart/Stop and kernel baseline",
+    "Only private mount/net/PID fixture; original namespace checks precede mutations; no external interface"
+  ],
+  "review_fixes": [
+    "Actual installing/handoff initial predicate",
+    "Bounded no-follow diagnostic artifact read",
+    "Bounded peer shutdown/Close/Serve join",
+    "Retained candidate PID and explicit absence",
+    "Explicit hook test PASS and no SKIP"
+  ],
+  "limitations": [
+    "No local Go build/test under parent constraint",
+    "Native positive workflow mandatory before acceptance",
+    "Same-source 0.20.0 and0.20.1 linker versions; no historical schema migration claim",
+    "Configured Ubuntu dpkg launcher, not Entware equivalence",
+    "Synthetic release transport, not official release provenance or attestation",
+    "No router readiness claim"
+  ],
+  "commit": "690c0c30ec476825d6737be1ac3dd83408ff222f"
+}

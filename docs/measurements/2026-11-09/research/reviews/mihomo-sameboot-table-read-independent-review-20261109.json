@@ -1,0 +1,36 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved exact read ABI correction; native pending",
+  "files": [
+    {
+      "path": "internal/startuptools/read_observation_linux.go",
+      "sha256": "FE616170C273C62C13F28062662B65C0AC9BADC9FF4D77B620459697AA373EAA"
+    },
+    {
+      "path": "internal/startuptools/mihomo_same_boot_read.go",
+      "sha256": "6E3D718AFBD0904539766FE9A8A7488472B9B87885998C0A5FF71B615C79C9D1"
+    },
+    {
+      "path": "internal/startuptools/mihomo_same_boot_read_test.go",
+      "sha256": "DF35AA9BF70B49AEDE60BFAF1C3CF3DDD92C41C769055E2B0AFBC25983E9C8CC"
+    },
+    {
+      "path": "internal/startuptools/policy_read_observation_native_fixture_linux_test.go",
+      "sha256": "73E7E1B17D2C8639D3F0B244A493C90CBEA26E89B9ECBCE9F7F4B97A1F721DC8"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_same_boot_command.go",
+      "sha256": "115C084CA22F803C7EB58AA3E4515BF32EF6778EB877E30C3CDCF7DEB1141288"
+    }
+  ],
+  "findings": [
+    "Original read observation validator lacked four existing sameboot route table207 forms;60e failed first scoped absence. Added only exact implicitIPv4/IPv6 with and without -N literals at original IP image index2.",
+    "No broader Mihomo ABI, selector rewriting, new effects or pathname execution; existing cold runner full SHA, output bounds, process Start/soleWait and source checks unchanged. Stock unscoped compatibility retained.",
+    "Native original lease test compares unscoped/scoped bytes and actual child exit status for all4 forms, preserving legitimate absent-table failures; effect and expired scope refused.",
+    "Unit predicate refuses other table/alias/format/effect/extra flags. Fixed source/opening/process-kernel/closing diagnostic wrappers preserve original cause."
+  ],
+  "limitations": [
+    "No localGo execution; exact next native sameboot baseline and ACK cuts required.",
+    "Read admission is not positive absence evidence; original parsers and closing checks still required."
+  ]
+}

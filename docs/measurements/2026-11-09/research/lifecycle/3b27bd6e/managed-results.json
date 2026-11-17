@@ -1,0 +1,164 @@
+{
+  "commit": "3b27bd6ecd1696431887d28d2444a8944f25cce4",
+  "run": 42651543247,
+  "readiness": false,
+  "jobs": [
+    {
+      "mode": "production",
+      "job": 129278909570,
+      "conclusion": "failure",
+      "log_sha256": "baa1380c1e750e7ffd6c7a73b3d3d712ee398fb0caef65e03ff034116a7452ea",
+      "copy_and_output_focused": "PASS",
+      "core": "PASS",
+      "full_lan_manual": "FAIL",
+      "intent_and_sync_recovery": "Recovered markers PASS; fresh Apply FAIL",
+      "cleanup_only_close_retry": "PASS original lease released, permanent fence retained",
+      "benchmarks": {
+        "BenchmarkOutputReader/before-2": {
+          "samples": 3,
+          "median_ns_op": 7455.0,
+          "median_B_op": 32840.0
+        },
+        "BenchmarkOutputReader/after-2": {
+          "samples": 3,
+          "median_ns_op": 573.0,
+          "median_B_op": 88.0
+        },
+        "BenchmarkOutputReaderChild/before-2": {
+          "samples": 3,
+          "median_ns_op": 7784865.0,
+          "median_B_op": 83450.0
+        },
+        "BenchmarkOutputReaderChild/after-2": {
+          "samples": 3,
+          "median_ns_op": 7738989.0,
+          "median_B_op": 18413.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes80/before-2": {
+          "samples": 3,
+          "median_ns_op": 9216.0,
+          "median_B_op": 32952.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes80/after-2": {
+          "samples": 3,
+          "median_ns_op": 2858.0,
+          "median_B_op": 184.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes32769/before-2": {
+          "samples": 3,
+          "median_ns_op": 32511.0,
+          "median_B_op": 32952.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes32769/after-2": {
+          "samples": 3,
+          "median_ns_op": 25187.0,
+          "median_B_op": 186.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes1048576/before-2": {
+          "samples": 3,
+          "median_ns_op": 740528.0,
+          "median_B_op": 32952.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes1048576/after-2": {
+          "samples": 3,
+          "median_ns_op": 728321.0,
+          "median_B_op": 250.0
+        }
+      },
+      "timing": [
+        "2026-11-09T16:15:05.5806963Z 2026/11/09 16:15:05 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=18809",
+        "2026-11-09T16:15:05.5818508Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 16.021505061s} active-inventory-capture:{20 20 486.401464ms} active-lan:{10 10 10.623780808s} active-read-pair:{10 10 698.51984ms} capture-current:{0 0 0s} cleanup-current:{3 3 80.690672ms} counter:{0 0 0s} current:{15 15 881.568297ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{482 482 3.500450444s} policy-apply:{1 1 8.826122777s} policy-readback:{8 8 17.447960087s} policy-remove:{1 1 292.662319ms} prepared-active:{1 1 3.94817694s}]",
+        "2026-11-09T16:15:34.4901234Z 2026/11/09 16:15:34 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=LAN_CONSUMER_REFUSED total_ms=18820",
+        "2026-11-09T16:15:34.4911110Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 16.00641534s} active-inventory-capture:{20 20 504.394074ms} active-lan:{10 10 10.61015061s} active-read-pair:{10 10 718.716024ms} capture-current:{0 0 0s} cleanup-current:{3 3 78.426965ms} counter:{0 0 0s} current:{15 15 880.307322ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{483 483 3.489635588s} policy-apply:{1 1 8.744586198s} policy-readback:{8 8 17.450116415s} policy-remove:{1 1 287.938465ms} prepared-active:{1 1 4.090854416s}]",
+        "2026-11-09T16:16:23.9664152Z 2026/11/09 16:16:23 Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=40158",
+        "2026-11-09T16:16:43.1865472Z 2026/11/09 16:16:43 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=18787",
+        "2026-11-09T16:16:43.1872068Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 16.004654277s} active-inventory-capture:{20 20 482.914328ms} active-lan:{10 10 10.733970171s} active-read-pair:{10 10 693.414335ms} capture-current:{0 0 0s} cleanup-current:{3 3 80.624852ms} counter:{0 0 0s} current:{15 15 860.299391ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{490 490 3.476539196s} policy-apply:{1 1 8.959156964s} policy-readback:{8 8 17.738239741s} policy-remove:{1 1 290.065428ms} prepared-active:{1 1 3.903777036s}]",
+        "2026-11-09T16:17:12.3871093Z 2026/11/09 16:17:12 Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=19548",
+        "2026-11-09T16:17:54.2108055Z 2026/11/09 16:17:54 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=LAN_CONSUMER_REFUSED total_ms=18768",
+        "2026-11-09T16:17:54.2123555Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 16.010255683s} active-inventory-capture:{20 20 487.866923ms} active-lan:{10 10 10.719409701s} active-read-pair:{10 10 700.075815ms} capture-current:{0 0 0s} cleanup-current:{3 3 78.430165ms} counter:{0 0 0s} current:{15 15 856.173082ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{492 492 3.470833169s} policy-apply:{1 1 8.937852703s} policy-readback:{8 8 17.739142673s} policy-remove:{1 1 291.677784ms} prepared-active:{1 1 3.946437908s}]",
+        "2026-11-09T16:18:23.6639080Z 2026/11/09 16:18:23 Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=19490"
+      ],
+      "markers": [
+        "2026-11-09T16:16:24.1349091Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_recovered mode=intent intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "2026-11-09T16:16:45.0047356Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_recovered mode=intent intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "2026-11-09T16:17:35.0205959Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false",
+        "2026-11-09T16:17:35.1837657Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "2026-11-09T16:17:56.1034395Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "2026-11-09T16:18:46.2922706Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false",
+        "2026-11-09T16:18:46.4594501Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=false",
+        "2026-11-09T16:18:46.4599935Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true",
+        "2026-11-09T16:18:47.8496724Z     strategy_managed_probe_native_linux_test.go:468: actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true"
+      ]
+    },
+    {
+      "mode": "race",
+      "job": 129278909875,
+      "conclusion": "failure",
+      "log_sha256": "bd45183976a101bb41981c373bf5023d2fd585b6283c13527ee1c4e44b17f58f",
+      "copy_and_output_focused": "PASS",
+      "core": "FAIL Consumer settlement",
+      "full_lan_manual": "FAIL",
+      "intent_and_sync_recovery": "Cuts not reached",
+      "cleanup_only_close_retry": "not scheduled",
+      "benchmarks": {
+        "BenchmarkOutputReader/before-2": {
+          "samples": 3,
+          "median_ns_op": 5726.0,
+          "median_B_op": 32848.0
+        },
+        "BenchmarkOutputReader/after-2": {
+          "samples": 3,
+          "median_ns_op": 2680.0,
+          "median_B_op": 8294.0
+        },
+        "BenchmarkOutputReaderChild/before-2": {
+          "samples": 3,
+          "median_ns_op": 1023124341.0,
+          "median_B_op": 82858.0
+        },
+        "BenchmarkOutputReaderChild/after-2": {
+          "samples": 3,
+          "median_ns_op": 1021942217.0,
+          "median_B_op": 38906.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes80/before-2": {
+          "samples": 3,
+          "median_ns_op": 9093.0,
+          "median_B_op": 32952.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes80/after-2": {
+          "samples": 3,
+          "median_ns_op": 5426.0,
+          "median_B_op": 8494.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes32769/before-2": {
+          "samples": 3,
+          "median_ns_op": 28333.0,
+          "median_B_op": 32952.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes32769/after-2": {
+          "samples": 3,
+          "median_ns_op": 27524.0,
+          "median_B_op": 8456.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes1048576/before-2": {
+          "samples": 3,
+          "median_ns_op": 666498.0,
+          "median_B_op": 32952.0
+        },
+        "BenchmarkNFQWSManagedCopy/bytes1048576/after-2": {
+          "samples": 3,
+          "median_ns_op": 663042.0,
+          "median_B_op": 8955.0
+        }
+      },
+      "timing": [
+        "2026-11-09T16:13:55.2457010Z 2026/11/09 16:13:55 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=SOURCE_MISSING total_ms=22290",
+        "2026-11-09T16:13:55.2468679Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 17.54445069s} active-inventory-capture:{8 8 273.216951ms} active-lan:{7 7 9.924163461s} active-read-pair:{4 4 385.600161ms} capture-current:{0 0 0s} cleanup-current:{3 3 96.555658ms} counter:{0 0 0s} current:{15 15 2.108547388s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{322 322 3.603295701s} policy-apply:{1 1 5.047440532s} policy-readback:{4 4 11.958890024s} policy-remove:{1 1 379.646984ms} prepared-active:{1 1 5.881853999s}]",
+        "2026-11-09T16:14:32.2941089Z 2026/11/09 16:14:32 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=22505",
+        "2026-11-09T16:15:09.4208369Z 2026/11/09 16:15:09 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=SOURCE_MISSING total_ms=22279"
+      ],
+      "markers": []
+    }
+  ]
+}

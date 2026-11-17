@@ -1,0 +1,376 @@
+{
+  "commit": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "run_id": 42614826250,
+  "evidence_kind": "GitHub Ubuntu isolated native namespace; not physical router",
+  "jobs": {
+    "production": {
+      "id": 129151974542,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-production.log",
+      "log_sha256": "efdb5e99a1934dbb655ee3621d2daa6c356ae2c0c3894526364c87896a0ae074",
+      "tests": [
+        {
+          "test": "TestManagedStrategyProbeNativeConsumer",
+          "result": "PASS",
+          "elapsed_seconds": 9.85,
+          "cpu_profile": {
+            "wall_seconds": 8.85,
+            "sample_seconds": 8.36,
+            "sample_wall_percent": 94.49
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeConsumerLateWaitCleanup",
+          "result": "PASS",
+          "elapsed_seconds": 12.65,
+          "cpu_profile": {
+            "wall_seconds": 8.37,
+            "sample_seconds": 6.12,
+            "sample_wall_percent": 73.08
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeAppHTTP",
+          "result": "PASS",
+          "elapsed_seconds": 32.53,
+          "cpu_profile": {
+            "wall_seconds": 31.69,
+            "sample_seconds": 30.69,
+            "sample_wall_percent": 96.84
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeClosingSource",
+          "result": "PASS",
+          "elapsed_seconds": 9.58,
+          "cpu_profile": {
+            "wall_seconds": 8.7,
+            "sample_seconds": 8.24,
+            "sample_wall_percent": 94.75
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeClosingRuntime",
+          "result": "PASS",
+          "elapsed_seconds": 9.71,
+          "cpu_profile": {
+            "wall_seconds": 8.71,
+            "sample_seconds": 8.25,
+            "sample_wall_percent": 94.69
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeClosingControl",
+          "result": "PASS",
+          "elapsed_seconds": 9.51,
+          "cpu_profile": {
+            "wall_seconds": 8.57,
+            "sample_seconds": 8.12,
+            "sample_wall_percent": 94.74
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeClosingEnvironment",
+          "result": "PASS",
+          "elapsed_seconds": 9.58,
+          "cpu_profile": {
+            "wall_seconds": 8.66,
+            "sample_seconds": 8.19,
+            "sample_wall_percent": 94.61
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "result": "FAIL",
+          "elapsed_seconds": 54.53,
+          "native_timing": {
+            "outer": "native-apply",
+            "inner": "lan-preflight-inventory-nfq-consumer-open",
+            "reason": "LAN_CONSUMER_REFUSED",
+            "total_ms": 18836
+          },
+          "inclusive_phases": {
+            "activate": {
+              "started": 1,
+              "completed": 1,
+              "wall": "16.026958117s"
+            },
+            "active-inventory-capture": {
+              "started": 20,
+              "completed": 20,
+              "wall": "489.88027ms"
+            },
+            "active-lan": {
+              "started": 10,
+              "completed": 10,
+              "wall": "10.590748741s"
+            },
+            "owners": {
+              "started": 480,
+              "completed": 480,
+              "wall": "3.517119053s"
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall": "8.871505815s"
+            },
+            "prepared-active": {
+              "started": 1,
+              "completed": 1,
+              "wall": "3.952681717s"
+            }
+          },
+          "cpu_profile": {
+            "wall_seconds": 51.46,
+            "sample_seconds": 48.35,
+            "sample_wall_percent": 93.95
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "elapsed_seconds": 22.19,
+          "mode": "normal",
+          "native_timing": {
+            "outer": "native-apply",
+            "inner": "lan-preflight-inventory-nfq-consumer-open",
+            "reason": "DEADLINE_EXCEEDED",
+            "total_ms": 18839
+          },
+          "inclusive_phases": {
+            "activate": {
+              "started": 1,
+              "completed": 1,
+              "wall": "16.027763303s"
+            },
+            "active-inventory-capture": {
+              "started": 20,
+              "completed": 20,
+              "wall": "504.858949ms"
+            },
+            "active-lan": {
+              "started": 10,
+              "completed": 10,
+              "wall": "10.522885969s"
+            },
+            "owners": {
+              "started": 480,
+              "completed": 480,
+              "wall": "3.547111029s"
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall": "8.803313155s"
+            },
+            "prepared-active": {
+              "started": 1,
+              "completed": 1,
+              "wall": "3.990734087s"
+            }
+          },
+          "cpu_profile": {
+            "wall_seconds": 19.25,
+            "sample_seconds": 17.17,
+            "sample_wall_percent": 89.19
+          },
+          "cpu_functions_inclusive_seconds": {
+            "versionMetadataCurrent": 6.61,
+            "pathsCurrent": 5.2,
+            "BackendInventory.Read": 8.96,
+            "linux.Syscall6": 10.24
+          },
+          "metadata_attempts": 6574,
+          "actual_version_child_starts": {
+            "iptables": 100,
+            "ip6tables": 100,
+            "IP": 1352
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "elapsed_seconds": 29.2,
+          "mode": "intent",
+          "recovered_marker": false,
+          "cut_reached": true,
+          "full_fresh_apply": "NOT_REACHED",
+          "blocking_reason": "WG_INACTIVITY_COMMAND",
+          "nfq_rollback": "PASS",
+          "nfq_verify_rollback": "PASS",
+          "nfq_resource_state": "removed",
+          "lan_rollback": "FAIL",
+          "native_timing": {
+            "outer": "native-apply",
+            "inner": "lan-preflight-boundary-retire",
+            "reason": "LAN_CONSUMER_REFUSED",
+            "total_ms": 24550
+          },
+          "cpu_profile": {
+            "wall_seconds": 26.45,
+            "sample_seconds": 23.54,
+            "sample_wall_percent": 89.0
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "elapsed_seconds": 31.12,
+          "mode": "settlement-sync",
+          "recovered_marker": false,
+          "cut_reached": true,
+          "full_fresh_apply": "NOT_REACHED",
+          "blocking_reason": "WG_INACTIVITY_COMMAND",
+          "fresh_stop_attempted": true,
+          "fresh_stop": "FAIL",
+          "native_timing": {
+            "outer": "native-apply",
+            "inner": "native-apply",
+            "reason": "LAN_CONSUMER_REFUSED",
+            "total_ms": 19381
+          },
+          "cpu_profile": {
+            "wall_seconds": 27.96,
+            "sample_seconds": 24.76,
+            "sample_wall_percent": 88.55
+          }
+        }
+      ]
+    },
+    "race": {
+      "id": 129151974459,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-race.log",
+      "log_sha256": "d980f43a00ddd05bfa71b1737479a694081fee0e1711eca121c0543b0151f41e",
+      "tests": [
+        {
+          "test": "TestManagedStrategyProbeNativeConsumer",
+          "result": "FAIL",
+          "elapsed_seconds": 18.77,
+          "cpu_profile": {
+            "wall_seconds": 15.01,
+            "sample_seconds": 13.95,
+            "sample_wall_percent": 92.92
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "result": "FAIL",
+          "elapsed_seconds": 21.41,
+          "cpu_profile": {
+            "wall_seconds": 15.41,
+            "sample_seconds": 14.57,
+            "sample_wall_percent": 94.52
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "elapsed_seconds": 30.97,
+          "mode": "normal",
+          "native_timing": {
+            "outer": "native-apply",
+            "inner": "lan-preflight-inventory-nfq-consumer-open",
+            "reason": "DEADLINE_EXCEEDED",
+            "total_ms": 23109
+          },
+          "inclusive_phases": {
+            "activate": {
+              "started": 1,
+              "completed": 1,
+              "wall": "17.706330074s"
+            },
+            "active-inventory-capture": {
+              "started": 8,
+              "completed": 8,
+              "wall": "269.74957ms"
+            },
+            "active-lan": {
+              "started": 7,
+              "completed": 7,
+              "wall": "9.849857694s"
+            },
+            "owners": {
+              "started": 318,
+              "completed": 318,
+              "wall": "3.724889193s"
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall": "4.793372625s"
+            },
+            "prepared-active": {
+              "started": 1,
+              "completed": 1,
+              "wall": "5.987276473s"
+            }
+          },
+          "cpu_profile": {
+            "wall_seconds": 24.52,
+            "sample_seconds": 22.79,
+            "sample_wall_percent": 92.94
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "elapsed_seconds": 30.26,
+          "mode": "intent",
+          "recovered_marker": false,
+          "cut_reached": false,
+          "full_fresh_apply": "NOT_REACHED",
+          "blocking_reason": "SOURCE_MISSING",
+          "native_timing": {
+            "outer": "native-apply",
+            "inner": "lan-preflight-inventory-nfq-consumer-open",
+            "reason": "SOURCE_MISSING",
+            "total_ms": 23148
+          },
+          "cpu_profile": {
+            "wall_seconds": 24.38,
+            "sample_seconds": 22.8,
+            "sample_wall_percent": 93.52
+          }
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "elapsed_seconds": 30.11,
+          "mode": "settlement-sync",
+          "recovered_marker": false,
+          "cut_reached": false,
+          "full_fresh_apply": "NOT_REACHED",
+          "blocking_reason": "DEADLINE_EXCEEDED",
+          "native_timing": {
+            "outer": "native-apply",
+            "inner": "lan-preflight-inventory-nfq-consumer-open",
+            "reason": "DEADLINE_EXCEEDED",
+            "total_ms": 23019
+          },
+          "cpu_profile": {
+            "wall_seconds": 24.25,
+            "sample_seconds": 22.72,
+            "sample_wall_percent": 93.69
+          }
+        }
+      ]
+    }
+  },
+  "overall": "FAIL",
+  "readiness": {
+    "managed_full_lan": false,
+    "full_recovery_and_fresh_apply": false,
+    "router_validated": false
+  },
+  "notes": [
+    "Phase and CPU function timings are inclusive and not additive.",
+    "Failed forward operations are not completed-scenario speed measurements.",
+    "Production intent cut has actual NFQ rollback and verify-rollback PASS; remaining LAN rollback fails WG_INACTIVITY_COMMAND.",
+    "New WG framing fix and diagnostic are in 88b25ca3; not tested by this363f evidence.",
+    "Race cut witness absent; the failure precedes requested cut."
+  ]
+}

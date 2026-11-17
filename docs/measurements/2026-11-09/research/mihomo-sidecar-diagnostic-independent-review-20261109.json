@@ -1,0 +1,26 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved diagnostic only",
+  "files": [
+    {
+      "path": "internal/dataplane/mihomo_live_sidecar.go",
+      "sha256": "A33D5BF9C68DFC155D7A5D260DBC6B2E214CEAAB63C8DC75A5551431E9AB3DCC"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_sidecar_linux.go",
+      "sha256": "9F5760C64BF994BA4433F51C847EFB7335E026DEF9DC307E3CE3CCD9C4D0D8FA"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_activation_diagnostic_native.go",
+      "sha256": "C8E052A159F89308AE1A96D0EA024D535AE100D63DC3A1ED34A76A5C98E4246E"
+    }
+  ],
+  "findings": [
+    "Fixed failure-only sidecar source/native/compiled/construct/validate/pending/start/tun/observe/bound labels return original error unchanged.",
+    "currentLocked preserves evaluation of BOTH metadata and control in sameorder, then original kernelCurrent; done label only after closed-channel synchronization, no additional child state reads.",
+    "Native-only printer closed allowlist outputs booleans, no raw errors/args/paths/credentials. Production existing no-op remains."
+  ],
+  "limits": [
+    "Diagnostics do not correct underlying sidecar failure or change retry/ownership/deadline."
+  ]
+}

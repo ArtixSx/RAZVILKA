@@ -1,0 +1,43 @@
+{
+  "sha": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "push": {
+    "run_id": 42684857995,
+    "job_id": 129388790027,
+    "cause": "Test1ms timer can expire before observation enters; production early canceled caller intentionally does not invalidate unopened witness",
+    "message": "restored tuple revived original witness <nil> 4",
+    "conclusion": "failure",
+    "case": "TestPhysicalPrimaryIPv4OriginalBookendsAndStickyRefusal/cancel",
+    "stage": "Full project checks: race",
+    "followup": "Test-only deterministic in-reader cancellation plus explicit pre-canceled nonpoison regression b5582e00, independently approved by parent; current results pending"
+  },
+  "pull_request": {
+    "job_id": 129388833932,
+    "status": "completed",
+    "run_id": 42684870925,
+    "conclusion": "success",
+    "gates": [
+      "nonroot original denied-write",
+      "focused ownership/recovery",
+      "Cloudflare positive fixtures10x normal/race",
+      "gofmt/vet/fullnormal/fullrace",
+      "shell/UI/4archbuild/checksums"
+    ],
+    "race_package_s": {
+      "app": 429.792,
+      "dataplane": 593.671,
+      "updatecheck": 620.789,
+      "physicalscope": 5.935
+    }
+  },
+  "raw_sha256": {
+    "generic-push.json": "a187e4a4ef5b063f48e55af5a2e07f460643f947580faba08fd61be13af8445b",
+    "generic-push.log": "09bc9b90be2867fcd6897a11f9df382e5a9c5ce8b58e929e4ba3642d3ea660e2",
+    "generic-pr.json": "58b0c4e6a9faf5e138dace77d36c2f8bef7ebeb410af80d7b205d3f411c9785e",
+    "generic-pr.log": "0a7fb17a5bab02ea0af259e5a918b4a37482ad39b9e8db06440999d002a73448"
+  },
+  "limitations": [
+    "PR full genericPASS and push race fixtureFAIL are independently preserved, not doublePASS",
+    "Reviewed deterministic test-only fix b5582e00 awaits remote validation",
+    "Native Mihomo4PASS separate from DNS/NFQ/samebootFAIL"
+  ]
+}

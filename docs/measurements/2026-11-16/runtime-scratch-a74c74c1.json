@@ -1,0 +1,99 @@
+{
+  "run": 43912334464,
+  "head": "a74c74c1f53bcb47e5a1ef9aa20b6c9df30bf37b",
+  "conclusion": "success",
+  "scope": "full original verifier on modeled payload, own clearing included; not executable/LAN/router evidence",
+  "cells": [
+    {
+      "build": "normal",
+      "regime": "after-two-GC",
+      "mode": "pool",
+      "n": 4,
+      "median_ms": 0.975626,
+      "mean_alloc_bytes": 639352
+    },
+    {
+      "build": "normal",
+      "regime": "after-two-GC",
+      "mode": "retained",
+      "n": 4,
+      "median_ms": 0.8127885,
+      "mean_alloc_bytes": 98968
+    },
+    {
+      "build": "normal",
+      "regime": "steady",
+      "mode": "pool",
+      "n": 4,
+      "median_ms": 0.7958755,
+      "mean_alloc_bytes": 72888
+    },
+    {
+      "build": "normal",
+      "regime": "steady",
+      "mode": "retained",
+      "n": 4,
+      "median_ms": 0.820117,
+      "mean_alloc_bytes": 72888
+    },
+    {
+      "build": "race",
+      "regime": "after-two-GC",
+      "mode": "pool",
+      "n": 4,
+      "median_ms": 4.332579,
+      "mean_alloc_bytes": 714780
+    },
+    {
+      "build": "race",
+      "regime": "after-two-GC",
+      "mode": "retained",
+      "n": 4,
+      "median_ms": 3.6929215,
+      "mean_alloc_bytes": 153804
+    },
+    {
+      "build": "race",
+      "regime": "steady",
+      "mode": "pool",
+      "n": 4,
+      "median_ms": 4.150668,
+      "mean_alloc_bytes": 396174
+    },
+    {
+      "build": "race",
+      "regime": "steady",
+      "mode": "retained",
+      "n": 4,
+      "median_ms": 3.78284,
+      "mean_alloc_bytes": 142098
+    }
+  ],
+  "files": [
+    {
+      "path": "samples.json",
+      "bytes": 8200,
+      "sha256": "d6ed0980c97ea125c6684b4ac39ac7dc38e51d443e19b7ea81772001e4ec6b09"
+    },
+    {
+      "path": "artifacts/runtime-scratch-normal-a74c74c1f53bcb47e5a1ef9aa20b6c9df30bf37b/comparison.txt",
+      "bytes": 7848,
+      "sha256": "f6534d2953e41cdacd959e24a0e1a2f74821e91ee7d3f340b49b65b4c7a007a6"
+    },
+    {
+      "path": "artifacts/runtime-scratch-normal-a74c74c1f53bcb47e5a1ef9aa20b6c9df30bf37b/environment.txt",
+      "bytes": 3549,
+      "sha256": "394f3dbaaf4f96b7c95b3d13d0d1550a2740aecba4e30bac9396b5fc16ff8e60"
+    },
+    {
+      "path": "artifacts/runtime-scratch-race-a74c74c1f53bcb47e5a1ef9aa20b6c9df30bf37b/comparison.txt",
+      "bytes": 7873,
+      "sha256": "2b5029260bc7e95358f28f79f6e562549086f109c7f00132feba7e5a3cf5e9a4"
+    },
+    {
+      "path": "artifacts/runtime-scratch-race-a74c74c1f53bcb47e5a1ef9aa20b6c9df30bf37b/environment.txt",
+      "bytes": 3344,
+      "sha256": "047b80ffe8ad2f3df51117ea1f234a3b8c16b975ced2a726aa9d7c282729e15f"
+    }
+  ]
+}

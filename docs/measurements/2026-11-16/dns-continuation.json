@@ -1,0 +1,43 @@
+{
+  "status": "FAIL strict12s on supported Ubuntu24 image; real effective-BPF guard passed twice. No external clean-runner blocker established.",
+  "exact_revision": "eacafc398104edac6bd985f57644c2645769aed4",
+  "run": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43862791267",
+  "timing_interpretation": "standby2.154447654s,capture6.722679137s,initial-kernel723.02601ms completed. First mapping comparison still in-flight at failure snapshot;384.972387ms reported only after cancellation/join is not successful admission. process-current311calls4.97589394s and tool timings overlap; no summed route latency. Gate waits total~1.78ms are not bottleneck.",
+  "known_rejected_candidates": [
+    {
+      "candidate": "mountinfo4/16/32KiB read chunk",
+      "reads_per_pair": [
+        4,
+        4,
+        4
+      ],
+      "bytes_per_pair": 5030,
+      "median_us": [
+        103.342,
+        104.521,
+        105.533
+      ],
+      "bytes_per_op": [
+        30000,
+        54576,
+        87344
+      ],
+      "source": "docs/RESEARCH_LAB_20261109.md:376",
+      "action": "Keep4096; no duplicate experiment."
+    },
+    {
+      "candidate": "Xray32to256KiB ReadAt",
+      "finding": "~1.64percent warm difference with increased allocation/cancellation granularity",
+      "source": "docs/CURRENT_STATUS_RU.md:590",
+      "action": "Keep32KiB."
+    }
+  ],
+  "next_actions": [
+    "Finish current integration/gates; no extra CI launched by this agent.",
+    "For next performance work, attribute complete fresh source-observation cost in existing profile. process-current includes original network/tool/file observations; do not equate it with child proc syscall cost alone.",
+    "Only propose byte-for-byte or local validation optimization with preserved original I/O, same scope/owner/context/cleanup and independent review; no proven additional candidate from this audit.",
+    "Use same explicit Ubuntu24 strict fixture for validation after a supported change, retaining profiler-off, pinned engine and12/4seconds. If success, validate canceled-ready separately; no route/LAN claim from unit tests."
+  ],
+  "reproduction_only_not_executed": "gh workflow run domain-profiler-comparison.yml --repo ArtixSx/RAZVILKA --ref <reviewed-exact-branch> -f plan=single-selected-off -f runner=ubuntu-24.04",
+  "reproduction_note": "Confirm workflow input name from checked-in definition before dispatch; no dispatch authorized by this note."
+}

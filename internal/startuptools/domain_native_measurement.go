@@ -17,6 +17,7 @@ func StartDomainNativeToolMeasurement() func() map[string]int64 {
 		domainNativeToolMetrics.Unlock()
 		panic("overlapping tool measurement")
 	}
+	startDomainNativeGateMeasurement()
 	domainNativeToolMetrics.active = true
 	domainNativeToolMetrics.values = make(map[string]int64)
 	domainNativeToolMetrics.Unlock()
@@ -26,6 +27,7 @@ func StartDomainNativeToolMeasurement() func() map[string]int64 {
 		once.Do(func() {
 			domainNativeToolMetrics.Lock()
 			defer domainNativeToolMetrics.Unlock()
+			stopDomainNativeGateMeasurement()
 			domainNativeToolMetrics.active = false
 			result = domainNativeToolMetrics.values
 		})

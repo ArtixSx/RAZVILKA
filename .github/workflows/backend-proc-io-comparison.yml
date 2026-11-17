@@ -1,0 +1,107 @@
+name: Complete proc leaf IO comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/backend-proc-io-20261116']
+permissions:
+  contents: read
+jobs:
+  leaf:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Diagnostic tooling
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y strace util-linux python3
+      - name: Build exact source and preserve provenance
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; strace --version; dpkg-query -W strace util-linux; } > artifacts/environment.txt
+          sha256sum internal/dataplane/network_backend_inventory_linux.go "$(command -v strace)" > artifacts/source-tools.sha256
+          flags=()
+          if test "$MODE" = race; then flags=(-race); fi
+          GOMAXPROCS=2 GOFLAGS=-p=2 go test "${flags[@]}" -tags razvilka_native_fixture -c ./internal/dataplane -o artifacts/proc-io.test
+          sha256sum artifacts/proc-io.test >> artifacts/source-tools.sha256
+      - name: Same thread and namespace full leaf pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          sudo env RAZVILKA_BACKEND_PROC_IO_MEASURE=1 unshare --net \
+            "$PWD/artifacts/proc-io.test" -test.v -test.timeout=120s \
+            -test.run '^TestBackendProcIO(SourceParity|BoundedRefusals|ActualPairs)$' \
+            2>&1 | tee artifacts/pairs.log || status=$?
+          if grep -F -- '--- SKIP:' artifacts/pairs.log; then status=1; fi
+          for name in TestBackendProcIOSourceParity TestBackendProcIOBoundedRefusals TestBackendProcIOActualPairs; do
+            if ! grep -F -- "--- PASS: $name " artifacts/pairs.log; then status=1; fi
+          done
+          python3 - <<'PY'
+          import json, pathlib
+          text = pathlib.Path('artifacts/pairs.log').read_text()
+          rows = [json.loads(line.split('backend_proc_io_pair ', 1)[1]) for line in text.splitlines() if 'backend_proc_io_pair ' in line]
+          assert len(rows) == 16
+          expected = [(i, m) for i in range(8) for m in (('original', 'raw') if i % 2 == 0 else ('raw', 'original'))]
+          assert [(r['pair'], r['mode']) for r in rows] == expected
+          assert all(r['calls'] == 64 and r['bytes'] > 0 and r['wall_ns'] > 0 and r['thread_cpu_ns'] > 0 and r['provider_bracket_ns'] >= r['wall_ns'] for r in rows)
+          for field in ('payload_sha256', 'source_sha256', 'original_body_sha256'):
+              assert len({r[field] for r in rows}) == 1 and len(rows[0][field]) == 64
+          pathlib.Path('artifacts/pairs.json').write_text(json.dumps(rows, indent=2) + '\n')
+          PY
+          exit "$status"
+      - name: Separate marked syscall population
+        if: ${{ !cancelled() && matrix.mode == 'normal' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in original raw; do
+            mkdir -p "artifacts/trace-$mode"
+            sudo env RAZVILKA_BACKEND_PROC_IO_TRACE="$mode" unshare --net \
+              strace -ff -qq -e trace=fcntl,openat,read,close,write,fstat,fstatfs,newfstatat,epoll_ctl -e raw=read \
+              -o "$PWD/artifacts/trace-$mode/syscall" \
+              "$PWD/artifacts/proc-io.test" -test.v -test.timeout=30s -test.run '^TestBackendProcIOTrace$' \
+              2>&1 | tee "artifacts/trace-$mode/test.log"
+            grep -F -- '--- PASS: TestBackendProcIOTrace ' "artifacts/trace-$mode/test.log"
+          done
+          sudo chown -R "$(id -u):$(id -g)" artifacts/trace-original artifacts/trace-raw
+          python3 - <<'PY'
+          import collections, json, pathlib, re
+          result = {}
+          for mode in ('original', 'raw'):
+              marked = []
+              for path in pathlib.Path('artifacts/trace-' + mode).glob('syscall.*'):
+                  lines = path.read_text().splitlines()
+                  starts = [i for i, line in enumerate(lines) if 'BACKEND_PROC_IO_BEGIN' in line]
+                  ends = [i for i, line in enumerate(lines) if 'BACKEND_PROC_IO_END' in line]
+                  if starts or ends:
+                      assert len(starts) == len(ends) == 1 and starts[0] < ends[0]
+                      interval = lines[starts[0]+1:ends[0]]
+                      counts = collections.Counter(re.match(r'([a-z0-9_]+)\(', line).group(1) for line in interval if re.match(r'([a-z0-9_]+)\(', line))
+                      marked.append({'thread_trace': path.name, 'calls': dict(counts), 'interval_lines': len(interval)})
+              assert len(marked) == 1
+              result[mode] = marked[0]
+          result['limitations'] = 'Separate traced leaf population, never acceptance or timing sample; Go/provider setup outside markers. Source-parity and implementation labels in pairs.log identify the exact baseline and candidate; no full Apply or router claim.'
+          pathlib.Path('artifacts/syscall-counts.json').write_text(json.dumps(result, indent=2) + '\n')
+          PY
+      - name: Preserve all outcomes without binary artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-proc-io-${{ matrix.mode }}-${{ github.sha }}
+          path: |
+            artifacts/**
+            !artifacts/proc-io.test
+          retention-days: 7

@@ -40,7 +40,14 @@ func (l *Lease) WithReadOnlyToolObservation(ctx context.Context, expected netide
 		return err
 	}
 	defer l.retained.Done()
-	if err := l.observationBytes(ctx, expected, review); err != nil {
+	image, err := borrowToolObservationImage(ctx, l.review, &toolObservationScratch)
+	if err != nil {
+		return err
+	}
+	if image != nil {
+		defer image.release() // Runs after revocation, joined readers and closing.
+	}
+	if err := l.observationBytesWithImage(ctx, expected, review, image); err != nil {
 		return err
 	}
 	base, cancel := context.WithCancel(ctx)
@@ -56,12 +63,16 @@ func (l *Lease) WithReadOnlyToolObservation(ctx context.Context, expected netide
 		o.mu.Unlock()
 		cancel()
 		o.users.Wait()
-		result = errors.Join(result, l.observationBytes(ctx, expected, review), ctx.Err())
+		result = errors.Join(result, l.observationBytesWithImage(ctx, expected, review, image), ctx.Err())
 	}()
 	return use(scoped)
 }
 
 func (l *Lease) observationBytes(ctx context.Context, expected netidentity.Identity, review string) error {
+	return l.observationBytesWithImage(ctx, expected, review, nil)
+}
+
+func (l *Lease) observationBytesWithImage(ctx context.Context, expected netidentity.Identity, review string, image *toolObservationImage) error {
 	leaf, cancel, err := boundedReadContext(ctx)
 	if err != nil {
 		return err
@@ -79,6 +90,9 @@ func (l *Lease) observationBytes(ctx context.Context, expected netidentity.Ident
 	err = l.provider.WithCurrent(leaf, func(held context.Context, id netidentity.Identity) error {
 		if id != expected || !l.profile.acceptsIdentity(id) {
 			return at("READ_IDENTITY", nil)
+		}
+		if image != nil {
+			return errors.Join(image.current(ctx, held, l.review), held.Err())
 		}
 		return errors.Join(l.review.unchanged(held), held.Err())
 	})
@@ -103,14 +117,30 @@ func (l *Lease) readObservationBytesCurrent(ctx context.Context) error {
 // Context cancellation/sole Wait retain the original Cmd. The scope mutex
 // linearizes ONLY actual Start with revocation, never Wait or user callbacks.
 func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
+	return l.runObservedReadMeasured(ctx, command, nil)
+}
+
+func (l *Lease) runObservedReadMeasured(ctx context.Context, command *exec.Cmd, timing *domainBaselineReadMeasurement) error {
 	o, present := readObservationMarker(ctx)
 	if !present {
-		return command.Run()
+		if !domainBaselineReadTimingEnabled || timing == nil {
+			return command.Run()
+		}
+		// The native-only timing follows os/exec.Cmd.Run's Start then Wait.
+		start := timing.now()
+		startErr := command.Start()
+		timing.startResult(start, startErr != nil)
+		if startErr != nil {
+			return startErr
+		}
+		waitErr := command.Wait()
+		timing.waitResult(command.ProcessState, waitErr != nil)
+		return waitErr
 	}
 	if o == nil {
 		return at("READ_OBSERVATION_SCOPE", nil)
 	}
-	if !l.observedReadCommand(command) {
+	if !l.observedReadCommand(command) && !l.observedClassicSaveCommand(ctx, command) {
 		return at("READ_OBSERVATION_EFFECT", nil)
 	}
 	o.mu.Lock()
@@ -118,7 +148,9 @@ func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
 		o.mu.Unlock()
 		return err
 	}
+	start := timing.now()
 	startErr := command.Start()
+	timing.startResult(start, startErr != nil)
 	var stop func() bool
 	var cancelled chan struct{}
 	var cancelErr error
@@ -136,6 +168,7 @@ func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
 		return startErr
 	}
 	waitErr := command.Wait()
+	timing.waitResult(command.ProcessState, waitErr != nil)
 	if !stop() {
 		<-cancelled
 	}
@@ -162,7 +195,7 @@ func (l *Lease) observedReadCommand(command *exec.Cmd) bool {
 			return readArguments(args) || !combined && slices.Equal(args, []string{"--version"})
 		}
 		if index == 2 {
-			return !combined && slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
+			return !combined && slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || mihomoSameBootObservedTableRead(args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
 		}
 		return !combined && slices.Equal(args, []string{"--version"})
 	}

@@ -1,0 +1,111 @@
+{
+  "jobs": [
+    {
+      "result": "SUCCESS",
+      "test_seconds": 251.58,
+      "both_baselines_restored": true,
+      "cycle_seconds": [
+        124.616880592,
+        124.757948892
+      ],
+      "stop_seconds": [
+        5.38597246,
+        5.504281043
+      ],
+      "job": 129278908558,
+      "case": "lifecycle",
+      "apply_seconds": [
+        86.128646153,
+        86.071137582
+      ],
+      "second_closing_retry": true
+    },
+    {
+      "job": 129278908713,
+      "cause": "Original 110s HTTP deadline after policy ACK; subsequent metadata/control failures canceled=true material=false. Test elapsed includes httptest.Server.Close waiting for original handler.",
+      "result": "FAILURE",
+      "case": "manual-http",
+      "no_apply_stop_acceptance": true,
+      "test_seconds": 123.42
+    },
+    {
+      "apply_seconds": 96.090165984,
+      "stop_seconds": 9.562518158,
+      "physical_baseline_restored": true,
+      "cycle_seconds": 124.870821872,
+      "job": 129278908778,
+      "test_seconds": 127.24,
+      "case": "check-settlement",
+      "result": "SUCCESS"
+    },
+    {
+      "http_status": 503,
+      "rollback_verified": true,
+      "original_pending": false,
+      "case": "postcas-failure",
+      "test_seconds": 79.64,
+      "desired_exact_restored": true,
+      "result": "SUCCESS",
+      "job": 129278908791
+    }
+  ],
+  "reviewer": "verification",
+  "run": 42651543081,
+  "evidence": [
+    {
+      "file": "mihomo-lifecycle.log",
+      "sha256": "8a82376c130175587a8bb5415a46258461e5afce5976de5b9f90e511dabb52af"
+    },
+    {
+      "file": "mihomo-manual-http.log",
+      "sha256": "af8bcb3ae54122662fcfd09b9b64adae35da0e7f30cc8db29b72ad57e11aacff"
+    },
+    {
+      "file": "mihomo-check-settlement.log",
+      "sha256": "6e8d1c29f202a5fa02231a75c53e45620199ac9ceae410a8cd514498cc90b589"
+    },
+    {
+      "file": "mihomo-postcas-failure.log",
+      "sha256": "b96994791605f23a25c334b26a5749be0d1d30e2878d1baadda53805e0b5a94a"
+    }
+  ],
+  "limitations": [
+    "Native Ubuntu isolated fixture only, not router/LAN hardware approval.",
+    "Manual HTTP workflow remains unaccepted at this SHA.",
+    "Separate generic full checks still running at report creation.",
+    "No production deadline changed; no intermittent startup failure reproduced by these successful startup stages."
+  ],
+  "same_host_comparison": {
+    "finding": "Both pass; candidate not faster. One host fixed-order small sample, warm/cache/order effects possible, not a causal speedup claim.",
+    "order": "candidate then baseline",
+    "baseline_test_seconds": 247.97,
+    "both_baselines_restored": true,
+    "baseline_stop_seconds": [
+      5.471952634,
+      5.352359074
+    ],
+    "baseline_sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+    "baseline_apply_seconds": [
+      85.206206157,
+      84.675136451
+    ],
+    "baseline_cycle_seconds": [
+      123.489024623,
+      122.583659874
+    ],
+    "second_closing_retry": true
+  },
+  "conclusion": "FAILURE",
+  "bookends": {
+    "kernel_owner_normal_race_seconds": [
+      4.68,
+      11.03
+    ],
+    "fingerprint_mutation_normal_race_seconds": [
+      3.2,
+      9.28
+    ],
+    "actual_original_child_normal_race": "PASS"
+  },
+  "sha": "3b27bd6ecd1696431887d28d2444a8944f25cce4"
+}

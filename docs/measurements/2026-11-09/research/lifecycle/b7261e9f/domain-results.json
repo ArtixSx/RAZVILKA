@@ -1,0 +1,133 @@
+{
+  "head_sha": "b7261e9f1d8cd7ea3c0af4b6f8e78c94d24688b4",
+  "run_id": 42568035565,
+  "publication_budget_seconds": 12,
+  "diagnostic_only": false,
+  "limits": [
+    "Single samples from different hosted runner jobs.",
+    "Run-through-join nested cumulative counters are not additive wall latency.",
+    "Both strict cases failed GEN1 DNS publication. GEN2 was not executed.",
+    "Primitive 40-byte held-file measurement proves4\u21922 fullhash calls and mutation/fresh-bracket behavior only, not service or router performance.",
+    "Post-deadline stacks are phase diagnostics, never readiness timestamps."
+  ],
+  "scenarios": [
+    {
+      "case": "selected",
+      "outcome": "failure",
+      "test": "TestDomainTCPOriginalNativeAcceptedFlows",
+      "wall": "14.09s",
+      "deadline_diagnostic_phase": "whole-byte closing of baseline.prepareCapture readonly bracket; before capture-ready journal",
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "4.280422993s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "7.518674209s"
+        },
+        "process-current": {
+          "calls": 298,
+          "bytes": 0,
+          "elapsed": "4.630874631s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "11.051\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.251839343s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.388414517s"
+        },
+        "whole-executable-hash": {
+          "calls": 192,
+          "bytes": 7019216386,
+          "elapsed": "4.838820106s"
+        }
+      },
+      "profile_duration": "12.18s",
+      "profile_samples": "12.56s (103.09%)",
+      "held_file_primitive": {
+        "before_calls": 4,
+        "before_bytes": 160,
+        "before_elapsed": "25.679\u00b5s",
+        "after_calls": 2,
+        "after_bytes": 80,
+        "after_elapsed": "3.772\u00b5s",
+        "measurement_PASS": true,
+        "mutation_refusal_PASS": true
+      },
+      "raw_native_log": "C:\\RAZVILKA-research-20261109\\lifecycle-b7261e9f\\domain-selected-artifact\\native.log",
+      "raw_native_sha256": "35de37805f8ba35edc03106b476ea9a95e3a1570a4cd051ebd8f8ee58e857722",
+      "artifact_sha256": "c963ab9fe9061e4d1c58933474d82f3299cae7a4d90fe82fc79b81cf8509063a"
+    },
+    {
+      "case": "canceled-ready",
+      "outcome": "failure",
+      "test": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+      "wall": "13.91s",
+      "deadline_diagnostic_phase": "whole-byte opening of newDomainTCPBaselineKernelOwner; before first kernel observation",
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "4.531149324s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "7.627992712s"
+        },
+        "process-current": {
+          "calls": 298,
+          "bytes": 0,
+          "elapsed": "4.710418359s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "8.912\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.185492182s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.387081757s"
+        },
+        "whole-executable-hash": {
+          "calls": 193,
+          "bytes": 7034199680,
+          "elapsed": "3.56366584s"
+        }
+      },
+      "profile_duration": "12.14s",
+      "profile_samples": "12.19s (100.45%)",
+      "held_file_primitive": {
+        "before_calls": 4,
+        "before_bytes": 160,
+        "before_elapsed": "16.226\u00b5s",
+        "after_calls": 2,
+        "after_bytes": 80,
+        "after_elapsed": "2.584\u00b5s",
+        "measurement_PASS": true,
+        "mutation_refusal_PASS": true
+      },
+      "raw_native_log": "C:\\RAZVILKA-research-20261109\\lifecycle-b7261e9f\\domain-canceled-ready-artifact\\native.log",
+      "raw_native_sha256": "81dbba98301e0624374e7810d113e904de74e7fe745e2a97d7d10ff96e8c5e50",
+      "artifact_sha256": "89b03b7dafae31d92b145f0a598e82d01c1adfc204ea420227fd16c71504b098"
+    }
+  ]
+}

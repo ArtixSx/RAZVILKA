@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 6973cbaed23e91ca72b48aa6d104370559f487f2
+Type: cpu
+Time: 2026-11-09 19:38:23 UTC
+Duration: 26.14s, Total samples = 23.67s (90.56%)
+Showing nodes accounting for 12.61s, 53.27% of 23.67s total
+Dropped 716 nodes (cum <= 0.12s)
+Showing top 35 nodes out of 463
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%     18.16s 76.72%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withNativeInPhase
+         0     0%     0%     18.10s 76.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative.func1
+         0     0%     0%     18.04s 76.21%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionPhase).withDomainNativeActivity
+         0     0%     0%     17.99s 76.00%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative
+         0     0%     0%     17.87s 75.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource
+         0     0%     0%     17.85s 75.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource.func1
+         0     0%     0%     17.72s 74.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).Run
+         0     0%     0%     17.62s 74.44%  github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11.3
+     0.01s 0.042% 0.042%     16.47s 69.58%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+         0     0% 0.042%     14.99s 63.33%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0% 0.042%     13.55s 57.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservation
+         0     0% 0.042%     12.46s 52.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservationAfterOpeningImage
+    12.46s 52.64% 52.68%     12.46s 52.64%  internal/runtime/syscall/linux.Syscall6
+     0.07s   0.3% 52.98%     12.40s 52.39%  syscall.RawSyscall6
+         0     0% 52.98%     10.99s 46.43%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).WithCapture
+         0     0% 52.98%     10.95s 46.26%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture
+         0     0% 52.98%     10.95s 46.26%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture.func1
+         0     0% 52.98%     10.92s 46.13%  github.com/ArtixSx/razvilka/internal/dataplane.domainPolicyTCPSynchronousScope
+         0     0% 52.98%     10.23s 43.22%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeTools
+         0     0% 52.98%      9.19s 38.83%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).prepareCapture
+         0     0% 52.98%      8.86s 37.43%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).readWithFiles
+     0.07s   0.3% 53.27%      7.62s 32.19%  syscall.Syscall6
+         0     0% 53.27%      7.50s 31.69%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).currentWithFiles
+         0     0% 53.27%      7.28s 30.76%  github.com/ArtixSx/razvilka/internal/dataplane.applyDomainTCPOriginalEffects
+         0     0% 53.27%      7.28s 30.76%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffectsWithDomainRead (inline)
+         0     0% 53.27%      7.28s 30.76%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffectsWithOriginalRecovery
+         0     0% 53.27%      7.08s 29.91%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).listenerCurrentWithFiles
+         0     0% 53.27%      7.01s 29.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).currentWithFiles
+         0     0% 53.27%      6.92s 29.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).PrepareSyntheticMapping
+         0     0% 53.27%      6.88s 29.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).finishCapture
+         0     0% 53.27%      6.88s 29.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource.func1.1
+         0     0% 53.27%      6.88s 29.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).retire
+         0     0% 53.27%      6.77s 28.60%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withCurrentFileObservation
+         0     0% 53.27%      6.77s 28.60%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0% 53.27%      6.76s 28.56%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current

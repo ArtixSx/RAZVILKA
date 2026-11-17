@@ -1,0 +1,187 @@
+{
+  "run_id": 44068109279,
+  "head_sha": "a2cecc0ab3fc3fc4c0dde78a5c843c8b734c1c49",
+  "run_status": "completed",
+  "run_conclusion": "failure",
+  "artifact_validation": "API ZIP byte size and SHA256 matched; bounded traversal-free extraction; raw per-file hashes in raw-manifest.json",
+  "cases": [
+    {
+      "scenario": "canceled-ready",
+      "artifact_id": 14322460469,
+      "zip_bytes": 193920,
+      "zip_sha256": "f5ba3eb21f0da3b83c170084e75575941225e2ff3a634b93774e795479e5b5de",
+      "unit_tests": {
+        "normal": {
+          "exact_pass": [
+            "SourceParity",
+            "Lifecycle",
+            "Bounds",
+            "WriterAndCommand"
+          ],
+          "skip": false,
+          "fail": false
+        },
+        "race": {
+          "exact_pass": [
+            "SourceParity",
+            "Lifecycle",
+            "Bounds",
+            "WriterAndCommand"
+          ],
+          "skip": false,
+          "fail": false
+        }
+      },
+      "actual": {
+        "outcome": "FAIL",
+        "name": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+        "elapsed_seconds": 21.65,
+        "first_failure": "FIRST DNS publication 12s; GEN2 not reached; not the f54 GEN2 missing-cancellation-witness boundary"
+      },
+      "raw_directory": "C:\\RAZVILKA-research-20261117\\domain-preparation-a2cecc0a\\raw\\14322460469",
+      "native_log_sha256": "08e15d377be7b9b6a3f9819a53425d97965ebae38dfd38c6b15e3ab550d3e279",
+      "before_cleanup": {
+        "rows": 32,
+        "all_completed": true,
+        "returned_errors": 0,
+        "dropped": 0,
+        "phase_finish_offset_ns": 9381292958,
+        "parent_remaining_at_phase_finish_ns": 89287963223,
+        "parent_canceled_at_phase_finish": false,
+        "earliest_completed_refusal": null,
+        "in_flight_stage": null,
+        "complete_capture_command_calls": 7,
+        "complete_start_admission_calls": 7,
+        "successful_save_initial": 1,
+        "successful_save_intent": 7,
+        "successful_save_added": 7
+      },
+      "after_join": {
+        "joined": true,
+        "rows": 46,
+        "dropped": 0,
+        "all_completed": true,
+        "returned_errors": 0,
+        "first32_unchanged": true,
+        "additional_rows": "14 unindexed command/start records; do not infer cleanup direction from recorder fields"
+      },
+      "publication": {
+        "initial_capture_to_publication_open_elapsed_ns": 11200952369,
+        "initial_kernel_elapsed_ns": 665639766,
+        "initial_mapping_compare_elapsed_ns": 764692948,
+        "warning": "Elapsed intervals have different starts; publication-open duration is not an absolute offset from Run. No inference of child-context deadline.",
+        "failure_snapshot_stack": "original Run waiting AcceptTCP; no active DNS exchange worker in captured goroutine dump",
+        "remaining_uncertainty": "No packet arrival timestamps: last packet before opening readiness is plausible, not established. First DNS deadline remains12s; retry cadence unchanged."
+      }
+    },
+    {
+      "scenario": "direct-deny",
+      "artifact_id": 14322085791,
+      "zip_bytes": 192867,
+      "zip_sha256": "025ca6ae16e6e9b7e88641daa0a06e23f340ad99a7ed749ce60ba13eaf823e67",
+      "unit_tests": {
+        "normal": {
+          "exact_pass": [
+            "SourceParity",
+            "Lifecycle",
+            "Bounds",
+            "WriterAndCommand"
+          ],
+          "skip": false,
+          "fail": false
+        },
+        "race": {
+          "exact_pass": [
+            "SourceParity",
+            "Lifecycle",
+            "Bounds",
+            "WriterAndCommand"
+          ],
+          "skip": false,
+          "fail": false
+        }
+      },
+      "actual": {
+        "outcome": "PASS",
+        "name": "TestDomainTCPOriginalNativeDirectForwardDeny",
+        "elapsed_seconds": 15.82,
+        "proof": "actual zero outbound target SYN + positive observer control + policy restore + joined observer"
+      },
+      "raw_directory": "C:\\RAZVILKA-research-20261117\\domain-preparation-a2cecc0a\\raw\\14322085791",
+      "native_log_sha256": "12b049aef746f2b4dbe0672c67fdafbc3dbc4274c0721262b31f7cd5d5331260"
+    },
+    {
+      "scenario": "selected",
+      "artifact_id": 14321582917,
+      "zip_bytes": 279843,
+      "zip_sha256": "194c59df9dac30e5eb387e15a7d386cea4513b69e138d002352e15a411a964f1",
+      "unit_tests": {
+        "normal": {
+          "exact_pass": [
+            "SourceParity",
+            "Lifecycle",
+            "Bounds",
+            "WriterAndCommand"
+          ],
+          "skip": false,
+          "fail": false
+        },
+        "race": {
+          "exact_pass": [
+            "SourceParity",
+            "Lifecycle",
+            "Bounds",
+            "WriterAndCommand"
+          ],
+          "skip": false,
+          "fail": false
+        }
+      },
+      "actual": {
+        "outcome": "FAIL",
+        "name": "TestDomainTCPOriginalNativeAcceptedFlows",
+        "elapsed_seconds": 22.63,
+        "first_failure": "unknown.example.com mismatch HTTP 4s timeout; original preparation completed successfully"
+      },
+      "raw_directory": "C:\\RAZVILKA-research-20261117\\domain-preparation-a2cecc0a\\raw\\14321582917",
+      "native_log_sha256": "747de4050712a30bc9758b530295d1b41fbe4aa1cb87d0c29b1dc3cf3a4b0f6b"
+    }
+  ],
+  "jobs": [
+    {
+      "id": 133986985662,
+      "name": "Domain native strict / direct-deny",
+      "conclusion": "success",
+      "runner_name": "GitHub Actions 1000003487"
+    },
+    {
+      "id": 133986985765,
+      "name": "Domain native strict / selected",
+      "conclusion": "failure",
+      "runner_name": "GitHub Actions 1000003490"
+    },
+    {
+      "id": 133986986099,
+      "name": "Domain native strict / canceled-ready",
+      "conclusion": "failure",
+      "runner_name": "GitHub Actions 1000003491"
+    }
+  ],
+  "interpretation": {
+    "diagnostic_runtime_gate": "All4 new tests normal+race PASS/noSKIP in all3 scenario jobs;24 total exact PASS markers",
+    "full_route": "NOT_PASS: selected mismatch and canceled first publication fail",
+    "primary_canceled": "No failed/inflight preparation stage beforecleanup; startup commands/ACKs completed, parent context not canceled at their completion. This run does not reproduce f54 GEN2 boundary.",
+    "safe_fix": "No confirmed command/ACK/Stop defect to fix from these results. Do not merge full guards, change timeout or retry cadence as a claimed fix. Further optimization must preserve original source/kernel/receipt samples.",
+    "limits": [
+      "Snapshot scope only fixed capture preparation; no child deadline or directional authority",
+      "Parent deadline is100s generation lifetime, distinct from12s publication limit",
+      "Cumulative CPU includes original Run throughjoin and cleanup",
+      "Scenario jobs are different runners; absolute timing differences are not causal performance evidence"
+    ]
+  },
+  "hashes": {
+    "raw-manifest.json": "c718dffb9db46bd89894e79fcbc5624b64b4ca571a3a4f877c5e78b1ec92edc4",
+    "preparation-traces.json": "940a3718efed4efdb32b8f37597af5bb8f38600cadf6800bc590657638a6f79d",
+    "jobs-terminal.json": "a25ffead2728c9bf4bdc22304dbf4337bc66cc3d72d579748500d5e5d040bccd"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "status": "source-approved-runtime-pending",
+  "base_sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "finding": "Return context was evaluated before deferred whole-image clear",
+  "fix": "Named result; deferred finish clears original image/work then checks original context and retained absolute deadline; joins closing error without losing original body error",
+  "regression": [
+    "Success remains nil and bytes/work zero",
+    "Deterministic context cancellation only after image.closed is observed refuses success",
+    "Absolute deadline expired without timer delivery refuses",
+    "Original failure preserved alongside cancellation"
+  ],
+  "limits": [
+    "No byte/read/owner/timeout removal or new effect authority",
+    "No Go execution locally; next focused/full tests required",
+    "Per-image<64MiB remains a logical allocation bound, not global/RSS admission"
+  ],
+  "files": [
+    {
+      "path": "internal/updatecheck/file_bootstrap_role_linux.go",
+      "sha256": "15a13d1a2d4c435299f1237c35b44f4857257d7dc3f9c7ac72bdc1ed3539757b"
+    },
+    {
+      "path": "internal/updatecheck/file_bootstrap_image_linux_test.go",
+      "sha256": "22f8c4654f8803f4ad78ce19f25ac34ed5441c04dd3f7bd9deb407519f9d7a1e"
+    }
+  ]
+}

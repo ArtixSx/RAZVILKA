@@ -310,6 +310,7 @@ func (p *NFQWSPreparedHandle) Observe(ctx context.Context) (observation NFQWSAct
 func (p *NFQWSPreparedHandle) VerifyOwnerObservation(ctx context.Context, supplied NFQWSActiveObservation) (err error) {
 	defer nfqws2ActivePublicError("prepared owner proof", &err)
 	if p == nil || p.owner == nil {
+		noteNFQInventoryRead(nfqInventoryOwnerMissing)
 		return ErrNFQWSManagedProcessUnknown
 	}
 	o := p.owner
@@ -317,17 +318,54 @@ func (p *NFQWSPreparedHandle) VerifyOwnerObservation(ctx context.Context, suppli
 	valid := o.prepared == p && !o.detached && !o.stopRequested && (o.state == "starting" || o.state == "prepared" || o.state == "committing")
 	activation := o.activation
 	o.mu.Unlock()
-	if !valid || activation == nil || activation.Err() != nil {
+	if !valid {
+		noteNFQInventoryRead(nfqInventoryOwnerOpeningInvalid)
+		return ErrNFQWSManagedProcessUnknown
+	}
+	if activation == nil {
+		noteNFQInventoryRead(nfqInventoryOwnerOpeningNoActivation)
+		return ErrNFQWSManagedProcessUnknown
+	}
+	if activationErr := activation.Err(); activationErr != nil {
+		switch activationErr {
+		case context.DeadlineExceeded:
+			noteNFQInventoryRead(nfqInventoryOwnerOpeningDeadline)
+		case context.Canceled:
+			noteNFQInventoryRead(nfqInventoryOwnerOpeningCanceled)
+		default:
+			noteNFQInventoryRead(nfqInventoryOwnerOpeningOther)
+		}
 		return ErrNFQWSManagedProcessUnknown
 	}
 	l, err := o.observe(ctx, true)
-	if err != nil || l.observation() != supplied || (l.Transfer != "none" && l.Transfer != "provisional") {
+	if err != nil {
+		noteNFQInventoryRead(nfqInventoryOwnerObserveError)
+		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
+	}
+	if l.observation() != supplied {
+		noteNFQInventoryRead(nfqInventoryOwnerObserveMismatch)
+		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
+	}
+	if l.Transfer != "none" && l.Transfer != "provisional" {
+		noteNFQInventoryRead(nfqInventoryOwnerObserveTransfer)
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
 	}
 	o.mu.Lock()
 	valid = o.prepared == p && !o.detached && !o.stopRequested && (o.state == "starting" || o.state == "prepared" || o.state == "committing")
 	o.mu.Unlock()
-	if !valid || activation.Err() != nil {
+	if !valid {
+		noteNFQInventoryRead(nfqInventoryOwnerClosingInvalid)
+		return ErrNFQWSManagedProcessUnknown
+	}
+	if activationErr := activation.Err(); activationErr != nil {
+		switch activationErr {
+		case context.DeadlineExceeded:
+			noteNFQInventoryRead(nfqInventoryOwnerClosingDeadline)
+		case context.Canceled:
+			noteNFQInventoryRead(nfqInventoryOwnerClosingCanceled)
+		default:
+			noteNFQInventoryRead(nfqInventoryOwnerClosingOther)
+		}
 		return ErrNFQWSManagedProcessUnknown
 	}
 	return nil

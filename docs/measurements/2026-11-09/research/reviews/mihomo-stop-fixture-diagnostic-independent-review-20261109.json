@@ -1,0 +1,41 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T13:57:49.1107266Z",
+  "status": "source approved; remote execution pending",
+  "scope": "Fix real manual HTTP fixture self-update routing and add native-only fixed activation stage diagnostics",
+  "verified_cause": "Empty SelfUpdateFiles.Directory is rejected by Current and makes Pending true; real Stop then returns202 from self-update revocation, not Mihomo cleanup",
+  "preserved": [
+    "Original initialized control owner, production PendingSelfUpdateRecovery guard and authenticated real endpoints retained",
+    "Manual-only actual absolute absent journal directory, nonpending setup and pre-Stop assertions",
+    "Diagnostics fixed labels/boolean classifications only, same original errors returned",
+    "All three errors.Join checks still execute in original order; effects, source checks, deadlines and cleanup unchanged",
+    "Production diagnostic helper is identity without output"
+  ],
+  "limitations": [
+    "Does not fix or explain intermittent activate errMihomoLiveMaterial; next native stage output required",
+    "HTTP Stop terminal proof and fresh second cycle remain pending",
+    "No local Go build/test"
+  ],
+  "files": [
+    {
+      "path": "internal/app/mihomo_live_native_linux_test.go",
+      "sha256": "5A7713ECFA0180519FF39BC56725E6DBA5D5366507ECA12E004C00F57CDE0E96"
+    },
+    {
+      "path": "internal/app/mihomo_manual_http_native_linux_test.go",
+      "sha256": "2184D1117D208E91AB455BD8604DD8FE3D479F9B8DC74281EB9633665E4F2B9E"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_phases.go",
+      "sha256": "C73D78FA9EE6039172FC70A3BA0B14AF000A143CEA97236CAC6B0B2000C377AA"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_activation_diagnostic.go",
+      "sha256": "6C53F53FF25721C9E95CB52ED802393466909FB625C4E47D3BFB796766322673"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_activation_diagnostic_native.go",
+      "sha256": "9A2204C69711B48DD6D95ECA65A6CE07FF0D2264E8264C3DF145542AAC4741E5"
+    }
+  ]
+}

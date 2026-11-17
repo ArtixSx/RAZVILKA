@@ -1,0 +1,43 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "workflow_run": 42673010546,
+  "decision": "PASS actual public offline paired bootstrap and restore for empty and one draft state",
+  "jobs": [
+    {
+      "mode": "empty",
+      "job_id": 129350125047,
+      "status": "success",
+      "total_s": 101.78,
+      "bootstrap_s": 31.35,
+      "restore_s": 70.41,
+      "raw": "paired-empty.log",
+      "sha256": "fb50dba9de9560247005274aa1e6d2fd27d80fd049cec4c61da4d66ad20dba3b"
+    },
+    {
+      "mode": "draft",
+      "job_id": 129350123920,
+      "status": "success",
+      "total_s": 115.88,
+      "bootstrap_s": 41.55,
+      "restore_s": 74.31,
+      "raw": "paired-draft.log",
+      "sha256": "63d5b8af84021aa5f144e2a592b079272fdd1a150f6a31eed68045292f6eb75b"
+    }
+  ],
+  "source_assertions": [
+    "actual original817783493f0c2784ccc70aa73868cd64e9437634 source executable and init provenance",
+    "actual public candidate bootstrap creates schema4 pair and installed-offline immutable review; exact old/new binaries verified",
+    "genuine exclusive Gate RequestSelfUpdateStop with current transaction and revision",
+    "public candidate self-update-paired-restore restores exact prior executable SHA, returns only offline-requires-review",
+    "init scripts remain refusing guarded scripts; config SafeMode/Stopped and incremented revision, routing/exclusions/consent unchanged",
+    "protected current journals, StrategyLab, Stop epoch and offline archive file hashes/modes unchanged; no live panel PID",
+    "draft created by actual old HTTP writer, exact whole state bytes preserved; current StrategyLab reader full Candidate equality and zero evidence/selections/eligibility"
+  ],
+  "limitations": [
+    "isolated tagged Ubuntu fixture, configured old193 paths; not physical router",
+    "offline restoration does not start restored old panel or establish old binary compatibility with modern StrategyLab reader",
+    "draft case contains no completed evidence/history and no manual selection; separate history scenario still required",
+    "modern private strategy pair is a separate scenario",
+    "unrelated opt-in OrdinaryImage native primitive is skipped in preflight; actual public test and both subtests passed"
+  ]
+}

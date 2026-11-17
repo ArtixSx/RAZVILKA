@@ -133,6 +133,9 @@ func (c *domainTCPGlobalSuccessor) original() error {
 }
 
 func (c *domainTCPGlobalSuccessor) comparePrior(ctx context.Context, after bool) error {
+	return c.comparePriorWithSuccessorRead(ctx, after, nil)
+}
+func (c *domainTCPGlobalSuccessor) comparePriorWithSuccessorRead(ctx context.Context, after bool, read *domainTCPSuccessorRead) error {
 	if err := c.original(); err != nil {
 		return err
 	}
@@ -141,7 +144,7 @@ func (c *domainTCPGlobalSuccessor) comparePrior(ctx context.Context, after bool)
 		return err
 	}
 	for i, entry := range entries {
-		if err := entry.current(ctx, c.pool.manager, c.scope.plan, c.previousKeeper != nil || after || i != len(entries)-1); err != nil {
+		if err := entry.currentWithSuccessorRead(ctx, c.pool.manager, c.scope.plan, c.previousKeeper != nil || after || i != len(entries)-1, read); err != nil {
 			return err
 		}
 	}

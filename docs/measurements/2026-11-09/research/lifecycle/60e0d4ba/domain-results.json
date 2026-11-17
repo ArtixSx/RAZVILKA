@@ -1,0 +1,226 @@
+{
+  "selected": {
+    "outcomes": [
+      "--- PASS: TestProcMountIDNativeMeasurement (0.02s)",
+      "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)",
+      "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)",
+      "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)",
+      "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)",
+      "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)",
+      "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateSourceParity (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateActualCleanup (0.00s)",
+      "--- PASS: TestMountLayoutStreamCandidateParity (0.01s)",
+      "--- PASS: TestMountUnescapePreservesExactByteSemantics (0.00s)",
+      "--- PASS: TestProcMountinfoMeasurementReadBounds (0.00s)",
+      "--- PASS: FuzzMountLayoutStreamCandidateParity (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateSourceParity (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateActualCleanup (0.00s)",
+      "--- PASS: TestMountLayoutStreamCandidateParity (0.05s)",
+      "--- PASS: TestMountUnescapePreservesExactByteSemantics (0.00s)",
+      "--- PASS: TestProcMountinfoMeasurementReadBounds (0.02s)",
+      "--- PASS: FuzzMountLayoutStreamCandidateParity (0.00s)",
+      "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (21.06s)",
+      "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (5.82s)",
+      "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)",
+      "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.32s)",
+      "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDBindBoundary (1.03s)",
+      "--- PASS: TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline (0.00s)",
+      "--- PASS: TestDomainNativeMeasurementSnapshotsRemainCumulative (0.00s)",
+      "--- PASS: TestDomainNativeHashBucketsPreserveAggregate (0.00s)",
+      "--- PASS: TestDomainPreAddOriginalByteReadMeasurement (0.03s)",
+      "--- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure (0.01s)",
+      "--- PASS: TestDomainPreAddLoanRejectsForeignAndEscapedReaders (0.00s)",
+      "--- PASS: TestDomainPreAddLoanClosingRejectsLateByteMutation (0.02s)",
+      "--- PASS: TestDomainPreAddLoanCancellationRevokesFurtherReads (0.00s)",
+      "--- PASS: TestDomainPreAddCanceledEntryPreservesCause (0.00s)",
+      "--- PASS: TestDomainStandbyReadFileBracketMeasurement (0.00s)",
+      "--- PASS: TestDomainStandbyReadFileBracketMutationCannotEscape (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDMeasurement (0.02s)"
+    ],
+    "benchmarks": [
+      "BenchmarkProcAuditCapacityCandidate/before_append-4         \t    1082\t    312404 ns/op\t   48560 B/op\t     224 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/before_append-4         \t    1093\t    316118 ns/op\t   48560 B/op\t     224 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/before_append-4         \t    1083\t    312540 ns/op\t   48565 B/op\t     224 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    \t    1117\t    311543 ns/op\t   44240 B/op\t     220 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    \t    1110\t    313552 ns/op\t   44240 B/op\t     220 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    \t    1128\t    310696 ns/op\t   44240 B/op\t     220 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/before_fields-4     \t   64458\t      5363 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    7296 B/op\t      26 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/before_fields-4     \t   65432\t      5352 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    7296 B/op\t      26 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/before_fields-4     \t   63110\t      5420 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    7296 B/op\t      26 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  \t   53541\t      6555 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    3072 B/op\t       2 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  \t   53847\t      6583 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    3072 B/op\t       2 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  \t   53077\t      6543 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    3072 B/op\t       2 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4             \t  200206\t      1641 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4             \t  196246\t      1632 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4             \t  196198\t      1633 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4                \t 1300664\t       276.3 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4                \t 1320284\t       285.6 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4                \t 1317002\t       272.7 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4                \t    3205\t    100580 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4                \t    3590\t     99629 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4                \t    3249\t     99816 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4               \t    3206\t    101067 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4               \t    3216\t    109518 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4               \t    3168\t    100659 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4               \t    3056\t    102716 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4               \t    3050\t    103373 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4               \t    3052\t    102785 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op"
+    ],
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "6.212387847s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.170377723s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.232\u00b5s"
+      },
+      "whole-executable-hash": {
+        "calls": 126,
+        "bytes": 4608753156,
+        "elapsed": "2.941400466s"
+      },
+      "process-current": {
+        "calls": 325,
+        "bytes": 0,
+        "elapsed": "4.624217341s"
+      },
+      "kernel-observe": {
+        "calls": 2,
+        "bytes": 0,
+        "elapsed": "1.165467493s"
+      },
+      "mapping-compare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "766.771644ms"
+      }
+    }
+  },
+  "canceled": {
+    "outcomes": [
+      "--- PASS: TestProcMountIDNativeMeasurement (0.02s)",
+      "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)",
+      "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)",
+      "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)",
+      "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)",
+      "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)",
+      "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateSourceParity (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateActualCleanup (0.00s)",
+      "--- PASS: TestMountLayoutStreamCandidateParity (0.01s)",
+      "--- PASS: TestMountUnescapePreservesExactByteSemantics (0.00s)",
+      "--- PASS: TestProcMountinfoMeasurementReadBounds (0.00s)",
+      "--- PASS: FuzzMountLayoutStreamCandidateParity (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateSourceParity (0.00s)",
+      "--- PASS: TestAuditCapacityCandidateActualCleanup (0.00s)",
+      "--- PASS: TestMountLayoutStreamCandidateParity (0.05s)",
+      "--- PASS: TestMountUnescapePreservesExactByteSemantics (0.00s)",
+      "--- PASS: TestProcMountinfoMeasurementReadBounds (0.02s)",
+      "--- PASS: FuzzMountLayoutStreamCandidateParity (0.00s)",
+      "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (20.97s)",
+      "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.72s)",
+      "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)",
+      "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.30s)",
+      "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDBindBoundary (1.03s)",
+      "--- PASS: TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline (0.00s)",
+      "--- PASS: TestDomainNativeMeasurementSnapshotsRemainCumulative (0.00s)",
+      "--- PASS: TestDomainNativeHashBucketsPreserveAggregate (0.00s)",
+      "--- PASS: TestDomainPreAddOriginalByteReadMeasurement (0.00s)",
+      "--- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure (0.01s)",
+      "--- PASS: TestDomainPreAddLoanRejectsForeignAndEscapedReaders (0.00s)",
+      "--- PASS: TestDomainPreAddLoanClosingRejectsLateByteMutation (0.00s)",
+      "--- PASS: TestDomainPreAddLoanCancellationRevokesFurtherReads (0.00s)",
+      "--- PASS: TestDomainPreAddCanceledEntryPreservesCause (0.00s)",
+      "--- PASS: TestDomainStandbyReadFileBracketMeasurement (0.00s)",
+      "--- PASS: TestDomainStandbyReadFileBracketMutationCannotEscape (0.00s)",
+      "--- PASS: TestXraySelectedTCPMountIDMeasurement (0.02s)"
+    ],
+    "benchmarks": [
+      "BenchmarkProcAuditCapacityCandidate/before_append-4         \t    1072\t    311501 ns/op\t   48560 B/op\t     224 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/before_append-4         \t    1116\t    311349 ns/op\t   48560 B/op\t     224 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/before_append-4         \t    1112\t    312390 ns/op\t   48565 B/op\t     224 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    \t    1095\t    311464 ns/op\t   44240 B/op\t     220 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    \t    1107\t    312305 ns/op\t   44240 B/op\t     220 allocs/op",
+      "BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    \t    1123\t    309118 ns/op\t   44240 B/op\t     220 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/before_fields-4     \t   66146\t      5448 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    7296 B/op\t      26 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/before_fields-4     \t   66036\t      5275 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    7296 B/op\t      26 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/before_fields-4     \t   65935\t      5281 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    7296 B/op\t      26 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  \t   53683\t      6519 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    3072 B/op\t       2 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  \t   52941\t      6672 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    3072 B/op\t       2 allocs/op",
+      "BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  \t   52464\t      6573 ns/op\t      2515 captured-bytes/op\t        24.00 captured-lines/op\t    3072 B/op\t       2 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4             \t  200924\t      1650 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4             \t  199561\t      1626 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4             \t  202807\t      1619 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4                \t 1313977\t       285.7 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4                \t 1263753\t       272.7 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4                \t 1314992\t       272.5 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4                \t    3276\t     99725 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4                \t    3559\t    100493 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4                \t    3234\t    101001 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4               \t    3249\t    100863 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4               \t    3223\t    101574 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4               \t    3427\t    103198 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4               \t    3415\t    102311 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4               \t    3002\t    102077 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4               \t    3018\t    101908 ns/op\t      5030 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op"
+    ],
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "6.161283342s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.184388483s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "3.214\u00b5s"
+      },
+      "whole-executable-hash": {
+        "calls": 126,
+        "bytes": 4608753156,
+        "elapsed": "2.93456045s"
+      },
+      "process-current": {
+        "calls": 325,
+        "bytes": 0,
+        "elapsed": "4.615837173s"
+      },
+      "kernel-observe": {
+        "calls": 2,
+        "bytes": 0,
+        "elapsed": "1.171529731s"
+      },
+      "mapping-compare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "806.572897ms"
+      }
+    }
+  }
+}

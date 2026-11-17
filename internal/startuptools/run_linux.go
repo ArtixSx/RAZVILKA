@@ -13,12 +13,19 @@ import (
 )
 
 func (l *Lease) execute(ctx context.Context, index, limit int, args ...string) ([]byte, error) {
+	return l.executeMeasured(ctx, index, limit, nil, args...)
+}
+
+func (l *Lease) executeMeasured(ctx context.Context, index, limit int, timing *domainBaselineReadMeasurement, args ...string) ([]byte, error) {
 	name, image := l.commandImage(index)
 	if name == "" || image == nil || limit <= 0 || limit > maxOutputBytes || ctx.Err() != nil || l.closed.Load() || l.lifetime.Err() != nil {
 		return nil, at("COMMAND_SCOPE", nil)
 	}
-	if err := l.review.unchanged(ctx); err != nil {
-		return nil, err
+	openingStart := timing.now()
+	openingErr := l.review.unchanged(ctx)
+	timing.phase(domainBaselineReadOpening, openingStart)
+	if openingErr != nil {
+		return nil, openingErr
 	}
 	c, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -37,11 +44,16 @@ func (l *Lease) execute(ctx context.Context, index, limit int, args ...string) (
 			domainNativeToolStarted("original-read")
 		}
 	}()
-	if err := l.runObservedRead(c, command); err != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
-		return nil, commandResultFailure("COMMAND_RESULT", err, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)
+	runErr := l.runObservedReadMeasured(c, command, timing)
+	timing.output(stdout.overflow, stderr.overflow, len(stderr.data) != 0)
+	if runErr != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
+		return nil, commandResultFailure("COMMAND_RESULT", runErr, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)
 	}
-	if err := l.review.unchanged(c); err != nil {
-		return nil, err
+	closingStart := timing.now()
+	closingErr := l.review.unchanged(c)
+	timing.phase(domainBaselineReadClosing, closingStart)
+	if closingErr != nil {
+		return nil, closingErr
 	}
 	return stdout.data, nil
 }

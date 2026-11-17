@@ -1,0 +1,141 @@
+{
+  "run": 44036930470,
+  "head": "a6dece77ae01e86a379df7ca051260d3b418ebd0",
+  "source_revision": "b6d15c1b34a6275af35fa905eaac3614bd2ad76e",
+  "outcome": "FAIL",
+  "raw_manifest_verified": 51,
+  "production": [
+    {
+      "arm": "production-1-baseline",
+      "variant": "baseline",
+      "test_seconds": 40.98,
+      "apply_ms": 37424,
+      "cpu_total_s": 32.33,
+      "sampled_alloc_total_mb": 1938.48,
+      "helper_flat_mb_if_top30": 329.77,
+      "clean": true,
+      "joined": true,
+      "log_sha256": "e509d3cdde69f0d27f5df2736d6c0f3b051236b17dcaf5917de88d5ead14cfcb"
+    },
+    {
+      "arm": "production-2-candidate",
+      "variant": "candidate",
+      "test_seconds": 40.65,
+      "apply_ms": 37258,
+      "cpu_total_s": 32.25,
+      "sampled_alloc_total_mb": 1644.07,
+      "helper_flat_mb_if_top30": null,
+      "clean": true,
+      "joined": true,
+      "log_sha256": "d88030109fc5565f7736e47d5e8877c9bed8a066240b2f899f1ea1189b3ce216"
+    },
+    {
+      "arm": "production-3-candidate",
+      "variant": "candidate",
+      "test_seconds": 40.64,
+      "apply_ms": 37228,
+      "cpu_total_s": 32.22,
+      "sampled_alloc_total_mb": 1634.28,
+      "helper_flat_mb_if_top30": null,
+      "clean": true,
+      "joined": true,
+      "log_sha256": "8d82e2cd56c61093a93910e5b350668b18ac56a62319de997417c34cebea603c"
+    },
+    {
+      "arm": "production-4-baseline",
+      "variant": "baseline",
+      "test_seconds": 40.51,
+      "apply_ms": 37107,
+      "cpu_total_s": 32.21,
+      "sampled_alloc_total_mb": 1985.44,
+      "helper_flat_mb_if_top30": 347.85,
+      "clean": true,
+      "joined": true,
+      "log_sha256": "efb77e3b34111feea252751b61dfdc5a97350090eb82d846a5ae56d1ece00563"
+    }
+  ],
+  "descriptive_medians_failed_populations_only": {
+    "test_seconds": {
+      "baseline_median": 40.745,
+      "candidate_median": 40.644999999999996,
+      "relative_percent": -0.24542888698000365
+    },
+    "apply_ms": {
+      "baseline_median": 37265.5,
+      "candidate_median": 37243.0,
+      "relative_percent": -0.060377561014879344
+    },
+    "cpu_total_s": {
+      "baseline_median": 32.269999999999996,
+      "candidate_median": 32.235,
+      "relative_percent": -0.10845986984814315
+    },
+    "sampled_alloc_total_mb": {
+      "baseline_median": 1961.96,
+      "candidate_median": 1639.175,
+      "relative_percent": -16.452170278700894
+    }
+  },
+  "race": "six dataplane scratch/parity tests PASS; original held WG source fixture HASH_INPUT16MiB; all four full race arms NOTRUN",
+  "limits": [
+    "All four production Apply attempts failed at original deadline; no successful-route latency claim.",
+    "Two observations per variant; CPU/alloc profiles include setup/cleanup and sampling variation.",
+    "Missing helper top30 entry is not zero allocation.",
+    "No race fullApply conclusion; no GC fatal observed in these four production logs."
+  ],
+  "root_raw_files_verified": 51,
+  "raw": {
+    "baseline-source-manifest.json": "30298c2a66559e3bffdf60a2df1e4a30794be241cae060c057e449a485547268",
+    "samples.partial.json": "20cbeb9cf842908d089819571c2558fb0df04d326d7493ee7c25334167d4d185",
+    "source-proof.json": "116fdb418e399163626d3bb2d7815296d48722401ce40d0659001558f741f165",
+    "candidate-source-manifest.json": "0e061ad8780c668b39dd983924ada4665e6d73e4327ca39813dc7d55bff477a0",
+    "gate-production/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "gate-production/native.log": "fd663d91d170e7a0167b4c7c9a7207437069d18b507b5d29deca5f1cdd489fd2",
+    "gate-production/gate-result.json": "acf61d959f56aee4ee569327dc3a2eb81d892f0ecafc0df980294a092905a98d",
+    "gate-production/supervisor.json": "e4fb57d71ca65d3e5c3a3970da30c9b77a94870c67ba483d290880816eb7ef46",
+    "gate-production/exit-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "gate-production/log-capture.json": "a6830742f84c9baae07f82e812bec3da6980bafb127f076930f96e7f59f0febd",
+    "gate-race/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "gate-race/native.log": "c4292495472be0e7a4fe3f402482d0188a59e5dbc2c4b3be1935fc341111d767",
+    "gate-race/gate-result.json": "23c03751693e5b6473b134b27cb9e0695f9d7f7fcaa721a8e65332237018b743",
+    "gate-race/supervisor.json": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5",
+    "gate-race/exit-status.txt": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "gate-race/log-capture.json": "981bd34a07134543dee73512be030792f3e0d1ff2df37540f5a4e2f77b1ad404",
+    "production-4-baseline/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "production-4-baseline/native.log": "efb77e3b34111feea252751b61dfdc5a97350090eb82d846a5ae56d1ece00563",
+    "production-4-baseline/supervisor.json": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5",
+    "production-4-baseline/exit-status.txt": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "production-4-baseline/log-capture.json": "4d9b846fc296bf3899e38ec70590b88920d8599ae0ec9c65175cb6b153d79231",
+    "control-failure/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "control-failure/native.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "control-failure/supervisor.json": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5",
+    "control-failure/exit-status.txt": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "control-failure/log-capture.json": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee",
+    "control-clean/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "control-clean/native.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "control-clean/supervisor.json": "e4fb57d71ca65d3e5c3a3970da30c9b77a94870c67ba483d290880816eb7ef46",
+    "control-clean/exit-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "control-clean/log-capture.json": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee",
+    "control-orphan/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "control-orphan/native.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "control-orphan/supervisor.json": "d92d6dd58687ee276d477f97f6c9887b3b3722a74ff553547486bee593815455",
+    "control-orphan/exit-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "control-orphan/log-capture.json": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee",
+    "production-2-candidate/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "production-2-candidate/native.log": "d88030109fc5565f7736e47d5e8877c9bed8a066240b2f899f1ea1189b3ce216",
+    "production-2-candidate/supervisor.json": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5",
+    "production-2-candidate/exit-status.txt": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "production-2-candidate/log-capture.json": "b5a16ddb381479660ea928265afe9fcb6905637fc7f8519830a242dac6d466ad",
+    "production-1-baseline/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "production-1-baseline/native.log": "e509d3cdde69f0d27f5df2736d6c0f3b051236b17dcaf5917de88d5ead14cfcb",
+    "production-1-baseline/supervisor.json": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5",
+    "production-1-baseline/exit-status.txt": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "production-1-baseline/log-capture.json": "01dc148621487ae85547fe19fb9d9f184d569969938ce5a0588242fa644b586e",
+    "production-3-candidate/log-status.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "production-3-candidate/native.log": "8d82e2cd56c61093a93910e5b350668b18ac56a62319de997417c34cebea603c",
+    "production-3-candidate/supervisor.json": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5",
+    "production-3-candidate/exit-status.txt": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "production-3-candidate/log-capture.json": "2375b89376de08e19b0a845b03e83c7fdfbe6c1c8a0b3c12f9674cfaaaacddc3"
+  },
+  "interpretation": "Sampled allocation reduction in four failed production arms, not successful full Apply latency. Full race blocked by the unrelated metadata helper exceeding startup maxImageBytes=16MiB; six reader contracts normal/race passed."
+}

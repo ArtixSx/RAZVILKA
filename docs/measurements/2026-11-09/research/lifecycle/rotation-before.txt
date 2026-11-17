@@ -1,0 +1,10 @@
+Captured tool result before production rotation fix; baseline production HEAD c4399c94 plus new regression test only.
+Command: C:/Projects/RAZVILKA/tools/go/bin/go.exe test ./internal/dataplane -run '^TestMihomoRetainedCheck(DefersRepeatedRotation|RotationRejectsLostCustody)$' -count=1
+Exit code: 1
+--- FAIL: TestMihomoRetainedCheckDefersRepeatedRotation (0.02s)
+    mihomo_live_health_rotation_check_test.go:55: original health check rejected its own repeated rotation dataplane transaction journal is unavailable
+FAIL
+FAIL github.com/ArtixSx/razvilka/internal/dataplane 0.358s
+FAIL
+
+This is a COMMON metadata model, not native runtime/LAN proof.

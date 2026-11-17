@@ -1,0 +1,101 @@
+{
+  "selected": {
+    "first-answer": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.199103ms"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.655038866s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.645246594s"
+      },
+      "kernel-observe": {
+        "calls": 4,
+        "bytes": 0,
+        "elapsed": "1.600952057s"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "3.794486211s"
+      },
+      "whole-executable-hash": {
+        "calls": 126,
+        "bytes": 4608753156,
+        "elapsed": "2.305699861s"
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.199103ms"
+      },
+      "mapping-compare": {
+        "calls": 13,
+        "bytes": 0,
+        "elapsed": "7.316574998s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.645246594s"
+      },
+      "kernel-observe": {
+        "calls": 14,
+        "bytes": 0,
+        "elapsed": "5.686794461s"
+      },
+      "process-current": {
+        "calls": 648,
+        "bytes": 0,
+        "elapsed": "6.404690993s"
+      },
+      "whole-executable-hash": {
+        "calls": 159,
+        "bytes": 5815807554,
+        "elapsed": "2.911666023s"
+      }
+    },
+    "outcome": "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.70s)",
+    "failure_stage": "selected TLS service4s deadline after DNS publication+exact mapping+excluded client checks"
+  },
+  "canceled": {
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "26.286448ms"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.483092115s"
+      },
+      "kernel-observe": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "83.858121ms"
+      },
+      "process-current": {
+        "calls": 281,
+        "bytes": 0,
+        "elapsed": "4.723327491s"
+      },
+      "whole-executable-hash": {
+        "calls": 123,
+        "bytes": 4499020938,
+        "elapsed": "3.25277561s"
+      }
+    },
+    "outcome": "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (14.10s)",
+    "failure_stage": "GEN1 DNS publication12s deadline"
+  }
+}

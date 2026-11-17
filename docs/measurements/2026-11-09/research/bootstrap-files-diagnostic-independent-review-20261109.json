@@ -1,0 +1,44 @@
+{
+  "status": "source-approved-diagnostics-only",
+  "base_sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "checks": [
+    "Stage assignment and deferred classification leave actual commands, checks and order unchanged",
+    "Closed28stage by12sentinel vocabulary, unknown labels refuse; no raw error/path/output",
+    "Existing nested quiesce diagnostics and errors.Is chains preserved",
+    "Native test failure ledger reads bounded16KiB actual fixed receipt only after command.Run joins; no Store, lock creation, writes or acceptance",
+    "Ledger output uses fixed phase/command allowlists and bounded counts/schema; arbitrary values become unknown",
+    "Outer post-review handoff, supervisor join and offline final publication failures now also classified; original operation/check order unchanged",
+    "Previously discarded sealFileHelperIdentity error now preserved, with identical refusal behavior"
+  ],
+  "limits": [
+    "Adds failure attribution, not successful bootstrap/restore acceptance",
+    "Pre-review failures retain existing closed preparation categories",
+    "No local Go execution; focused and actual public native workflow required"
+  ],
+  "files": [
+    {
+      "sha256": "f43160211053db279193731e0a6db13163a085be9ea719ea6e1704396ef6115f",
+      "path": "internal/updatecheck/external_bootstrap.go"
+    },
+    {
+      "sha256": "14af78381ffd3e4c2082e11ee8bd7af1e77036c0a068172ac1f8a32a6db78d23",
+      "path": "internal/updatecheck/external_bootstrap_preparation.go"
+    },
+    {
+      "sha256": "876cbd89d361f69076c22ea0c0074656280b066e09159a9e437bd7e84898f6fa",
+      "path": "internal/updatecheck/external_bootstrap_files_diagnostic.go"
+    },
+    {
+      "sha256": "44146be68f6e50d302ff376c8af298da70d54ac16018d85c275ce944a0b5e79a",
+      "path": "internal/updatecheck/external_bootstrap_files_diagnostic_test.go"
+    },
+    {
+      "sha256": "d5f0afe7f0625d699aa57f1d50af0cee9f4d8c8b1ebd52beeb1998178c9a042c",
+      "path": "cmd/razvilka/external_bootstrap_command_native_linux_test.go"
+    },
+    {
+      "sha256": "484ea451aafccc39c7e6e6b375abc199bc714aa5d7c93adbbb30a22831d7d548",
+      "path": "cmd/razvilka/external_bootstrap_ledger_native_linux_test.go"
+    }
+  ]
+}

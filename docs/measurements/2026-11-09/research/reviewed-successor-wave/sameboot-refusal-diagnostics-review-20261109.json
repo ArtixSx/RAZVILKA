@@ -1,0 +1,17 @@
+{
+  "decision": "APPROVED refusal-only fixed substage diagnostics",
+  "files": {
+    "internal/dataplane/mihomo_live_same_boot_command.go": "467fe88ceb3504b2147db44c99076224eea5c2777970e4389cd8cc6f1fa4cff3",
+    "internal/dataplane/mihomo_live_same_boot_measurements_native_linux.go": "2336c3d66345f55d1b145138c0988770dfc506b303fcae2de2dce93ed2533d79",
+    "internal/dataplane/mihomo_live_same_boot_measurements_other.go": "87719bc1f85d2d0479cd12c75fac826c76e7500de459b2aa5cbd84e56bf1ea88",
+    "internal/dataplane/mihomo_live_same_boot_failure_native_linux_test.go": "2a337bd5b668b67ca17294010475fec992c47bc6f088e454899203165d9c9676"
+  },
+  "contract": [
+    "Each original Current operand executes once, same lexical order and same errors.Join aggregation",
+    "Native helper returns exact original error identity without Error/Is/Unwrap inspection",
+    "Only12allowlisted failure stages, no success records or arbitrary labels; active measurement lifetime enforced",
+    "Production nonnative helper identity stub; no source reads, effects, deadlines or authority change"
+  ],
+  "tests": "Original panic-on-Error/Unwrap object preserved, exact bounded labels, nil-success unchanged, foreign/missing/expired contexts ignored",
+  "validation": "Source diff checked, no local Go; targeted normal/race native test pending"
+}

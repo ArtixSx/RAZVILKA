@@ -71,6 +71,37 @@ assert.match(card(), /Процесс запущен/);
 assert.equal(model.consoleEngineState('usque').tone,'unknown','process alone is not accepted runtime evidence');
 assert.match(card(), /data-component-action="update"[^>]*disabled/, 'unmanaged running component must not update in place');
 assert.match(card(), /data-component-action="remove"[^>]*disabled/);
+// The component's explicit unknown observation outranks retained running
+// booleans from every inventory source, without changing lifecycle authority.
+for (const running of [true, false, undefined]) {
+  for (const legacySource of ['component', 'engine', 'config']) {
+    const component = {...base, runtime_observation:'unknown', can_update:false, can_remove:false, lifecycle_block_reason:'Исходный runtime не подтверждён'};
+    state.components = [component]; state.engines = [{id:'usque',installed:true}]; state.engineConfigs = [{id:'usque'}];
+    if (running !== undefined) ({component,engine:state.engines[0],config:state.engineConfigs[0]})[legacySource].running = running;
+    const before = JSON.stringify(state), info = model.consoleEngineState('usque'), html = card();
+    assert.equal(info.label, 'Состояние процесса неизвестно', `${legacySource}/${running} hid unknown runtime`);
+    assert.equal(info.tone, 'unknown');
+    assert.match(html, /ui3-engine-meta"><span>Состояние процесса неизвестно<\/span>/);
+    assert.doesNotMatch(html, /Процесс запущен|Процесс не запущен|Процесс не обнаружен/);
+    assert.match(html, /data-component-action="update"[^>]*disabled/);
+    assert.match(html, /data-component-action="remove"[^>]*disabled/);
+    assert.match(html, /Исходный runtime не подтверждён/);
+    assert.equal(info.running, running === true, 'presentation must not weaken retained-running lifecycle gates');
+    assert.equal(JSON.stringify(state), before, 'render modified backend authority');
+  }
+}
+// A completed update receipt is not a fresh runtime observation.
+model.componentRecoverySummary = () => ({label:'Обновление принято',tone:'good',detail:'Журнал завершён'});
+assert.equal(model.consoleEngineState('usque').label, 'Состояние процесса неизвестно');
+assert.equal(model.consoleEngineState('usque').tone, 'unknown');
+delete model.componentRecoverySummary;
+// Known observations keep the existing presentation and action gates.
+for (const running of [true, false]) {
+  state.components = [{...base,runtime_observation:running?'running':'stopped',running}];
+  state.engines = []; state.engineConfigs = [];
+  assert.match(card(), running ? /Процесс запущен/ : /Процесс не запущен/);
+}
+state.engines = [{id:'usque',installed:true,version:'different runtime output'}];
 state.components[0] = {...base};
 state.services = [{applied_state:{enabled:true, route:'usque'}}];
 assert.match(card(), /data-component-action="remove"[^>]*disabled/);

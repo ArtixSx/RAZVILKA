@@ -1,0 +1,75 @@
+{
+  "sha": "0f0439020d10e1bbb15a8310be360517bf45581f",
+  "run": 42630488004,
+  "conclusion": "failure",
+  "verified_at_utc": "2026-11-09T14:13:49.8012575Z",
+  "cases": {
+    "manual_http": {
+      "test_seconds": 2.61,
+      "conclusion": "failure",
+      "phase": "fixture startup",
+      "job": 129205220148,
+      "reason": "Actual protected tool Acquire refused before preview/Apply/Stop; nested cause opaque on this SHA"
+    },
+    "postcas": {
+      "conclusion": "success",
+      "test_seconds": 62.59,
+      "desired_exact_restored": true,
+      "job": 129205220129,
+      "original_pending": false,
+      "rollback_verified": true
+    },
+    "lifecycle": {
+      "cycle_seconds": [
+        137.908316664,
+        137.653619313
+      ],
+      "official_child_normal_and_race": "pass",
+      "test_seconds": 277.94,
+      "apply_seconds": [
+        95.291498155,
+        95.10982124
+      ],
+      "job": 129205220320,
+      "stop_seconds": [
+        6.058994896,
+        6.032304977
+      ],
+      "conclusion": "success",
+      "both_physical_baselines_restored": true
+    },
+    "settlement": {
+      "apply_seconds": 87.143808457,
+      "conclusion": "success",
+      "test_seconds": 116.02,
+      "stop_seconds": 8.750381599,
+      "job": 129205219680,
+      "physical_baseline_restored": true,
+      "cycle_seconds": 113.372961722
+    }
+  },
+  "limitations": [
+    "Manual empty self-update journal fix not exercised because earlier tool acquisition refused",
+    "Previous intermittent activate errMihomoLiveMaterial not reproduced in these three successful cases; cause not established",
+    "Acquire aggregate operation timeout is2s but deadline cause is only a hypothesis until new tagged nested-stage diagnostics run",
+    "Generic full CI still in progress; no whole generic success or router readiness claim"
+  ],
+  "logs": [
+    {
+      "sha256": "56009C7C45EA9D82374EA62001F1512765C221114E65C91EC16973CB26B19801",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-0f043902\\mihomo-lifecycle.log"
+    },
+    {
+      "sha256": "7185D80C702B19EFA174226D8B27EB44848311205506C7C91AEDAFAC3F08B753",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-0f043902\\mihomo-settlement.log"
+    },
+    {
+      "sha256": "ED9683CDF74A4141235B0903021EA2AD3A740BCF8DBA6B6DAAFE2DE3BEF5B0A1",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-0f043902\\mihomo-postcas.log"
+    },
+    {
+      "sha256": "4D826ECCA84A3926F585E80081BD102C31C2813D8BF779CE1DE4CABF4BE6ED5C",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-0f043902\\mihomo-manual-http.log"
+    }
+  ]
+}

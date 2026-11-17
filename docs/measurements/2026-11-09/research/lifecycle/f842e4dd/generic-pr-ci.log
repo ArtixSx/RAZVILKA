@@ -1,0 +1,2298 @@
+﻿2026-11-09T11:34:00.9103809Z Current runner version: '2.338.2'
+2026-11-09T11:34:00.9125094Z ##[group]Runner Image Provisioner
+2026-11-09T11:34:00.9126051Z Hosted Compute Agent
+2026-11-09T11:34:00.9126623Z Version: 20261028.624
+2026-11-09T11:34:00.9127249Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T11:34:00.9127969Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T11:34:00.9128654Z Worker ID: {45942691-c36b-4302-9824-629f933930ea}
+2026-11-09T11:34:00.9129801Z Region: westcentralus
+2026-11-09T11:34:00.9130366Z Cloud: Azure
+2026-11-09T11:34:00.9130879Z ##[endgroup]
+2026-11-09T11:34:00.9132300Z ##[group]Operating System
+2026-11-09T11:34:00.9132928Z Ubuntu
+2026-11-09T11:34:00.9133508Z 24.04.5
+2026-11-09T11:34:00.9134011Z LTS
+2026-11-09T11:34:00.9134496Z ##[endgroup]
+2026-11-09T11:34:00.9135061Z ##[group]Runner Image
+2026-11-09T11:34:00.9135661Z Image: ubuntu-24.04
+2026-11-09T11:34:00.9136207Z Version: 20261101.360.1
+2026-11-09T11:34:00.9137430Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T11:34:00.9138898Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T11:34:00.9140137Z ##[endgroup]
+2026-11-09T11:34:00.9141305Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T11:34:00.9143218Z Contents: read
+2026-11-09T11:34:00.9143802Z Metadata: read
+2026-11-09T11:34:00.9144378Z ##[endgroup]
+2026-11-09T11:34:00.9146229Z Secret source: Actions
+2026-11-09T11:34:00.9147149Z Cache mode: write
+2026-11-09T11:34:00.9147797Z Prepare workflow directory
+2026-11-09T11:34:00.9679366Z Prepare all required actions
+2026-11-09T11:34:00.9726947Z Getting action download info
+2026-11-09T11:34:01.2606024Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T11:34:01.3748883Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T11:34:01.9061927Z Download action repository 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' (SHA:820762786026740c76f36085b0efc47a31fe5020)
+2026-11-09T11:34:02.2420646Z Complete job name: test
+2026-11-09T11:34:02.3314974Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T11:34:02.3316990Z with:
+2026-11-09T11:34:02.3318003Z   persist-credentials: false
+2026-11-09T11:34:02.3319473Z   repository: ArtixSx/RAZVILKA
+2026-11-09T11:34:02.3328226Z   token: ***
+2026-11-09T11:34:02.3329343Z   ssh-strict: true
+2026-11-09T11:34:02.3330425Z   ssh-user: git
+2026-11-09T11:34:02.3331425Z   clean: true
+2026-11-09T11:34:02.3332498Z   sparse-checkout-cone-mode: true
+2026-11-09T11:34:02.3333725Z   fetch-depth: 1
+2026-11-09T11:34:02.3334781Z   fetch-tags: false
+2026-11-09T11:34:02.3335864Z   show-progress: true
+2026-11-09T11:34:02.3336942Z   lfs: false
+2026-11-09T11:34:02.3337939Z   submodules: false
+2026-11-09T11:34:02.3339133Z   set-safe-directory: true
+2026-11-09T11:34:02.3340312Z   allow-unsafe-pr-checkout: false
+2026-11-09T11:34:02.3341834Z env:
+2026-11-09T11:34:02.3342777Z   GOTOOLCHAIN: local
+2026-11-09T11:34:02.3343867Z   RAZVILKA_BUILD_TARGETS: all
+2026-11-09T11:34:02.3345143Z ##[endgroup]
+2026-11-09T11:34:02.6010054Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T11:34:02.6014235Z ##[group]Getting Git version info
+2026-11-09T11:34:02.6016240Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T11:34:02.6019738Z [command]/usr/bin/git version
+2026-11-09T11:34:02.6086394Z git version 2.56.0
+2026-11-09T11:34:02.6110273Z ##[endgroup]
+2026-11-09T11:34:02.6121280Z Temporarily overriding HOME='/home/runner/work/_temp/f70ff4e0-e55a-431a-9399-5f9281d00474' before making global git config changes
+2026-11-09T11:34:02.6124893Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T11:34:02.6128317Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T11:34:02.6173611Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T11:34:02.6176773Z ##[group]Determining repository object format
+2026-11-09T11:34:02.6179326Z ##[endgroup]
+2026-11-09T11:34:02.6181285Z ##[group]Initializing the repository
+2026-11-09T11:34:02.6183375Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T11:34:02.6300271Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T11:34:02.6303643Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T11:34:02.6306846Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T11:34:02.6309160Z hint: call:
+2026-11-09T11:34:02.6310901Z hint:
+2026-11-09T11:34:02.6312862Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T11:34:02.6315447Z hint:
+2026-11-09T11:34:02.6317265Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T11:34:02.6319901Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T11:34:02.6322732Z hint:
+2026-11-09T11:34:02.6324123Z hint: 	git branch -m <name>
+2026-11-09T11:34:02.6325905Z hint:
+2026-11-09T11:34:02.6328036Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T11:34:02.6330929Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T11:34:02.6336765Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T11:34:02.6377566Z ##[endgroup]
+2026-11-09T11:34:02.6380044Z ##[group]Disabling automatic garbage collection
+2026-11-09T11:34:02.6382024Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T11:34:02.6416207Z ##[endgroup]
+2026-11-09T11:34:02.6419349Z ##[group]Setting up auth
+2026-11-09T11:34:02.6421468Z Removing SSH command configuration
+2026-11-09T11:34:02.6424207Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T11:34:02.6457881Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T11:34:02.6812737Z Removing HTTP extra header
+2026-11-09T11:34:02.6818810Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T11:34:02.6856680Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T11:34:02.7068657Z Removing includeIf entries pointing to credentials config files
+2026-11-09T11:34:02.7072962Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T11:34:02.7103283Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T11:34:02.7291040Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T11:34:02.7326397Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:02.7359597Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:02.7393735Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:02.7428335Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:02.7458528Z ##[endgroup]
+2026-11-09T11:34:02.7460545Z ##[group]Fetching the repository
+2026-11-09T11:34:02.7465219Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +d2e7cec39d40a9eeaa38e3c0fa7247505c688095:refs/remotes/pull/25/merge
+2026-11-09T11:34:04.9486015Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T11:34:04.9488050Z  * [new ref]         d2e7cec39d40a9eeaa38e3c0fa7247505c688095 -> pull/25/merge
+2026-11-09T11:34:04.9491782Z ##[endgroup]
+2026-11-09T11:34:04.9492965Z ##[group]Determining the checkout info
+2026-11-09T11:34:04.9495180Z ##[endgroup]
+2026-11-09T11:34:04.9499509Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T11:34:04.9554529Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T11:34:04.9587135Z ##[group]Checking out the ref
+2026-11-09T11:34:04.9590735Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/25/merge
+2026-11-09T11:34:05.2159589Z Note: switching to 'refs/remotes/pull/25/merge'.
+2026-11-09T11:34:05.2160608Z 
+2026-11-09T11:34:05.2161783Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-09T11:34:05.2163020Z changes and commit them, and you can discard any commits you make in this
+2026-11-09T11:34:05.2164381Z state without impacting any branches by switching back to a branch.
+2026-11-09T11:34:05.2165210Z 
+2026-11-09T11:34:05.2165615Z If you want to create a new branch to retain commits you create, you may
+2026-11-09T11:34:05.2166440Z do so (now or later) by using -c with the switch command. Example:
+2026-11-09T11:34:05.2166937Z 
+2026-11-09T11:34:05.2167185Z   git switch -c <new-branch-name>
+2026-11-09T11:34:05.2167556Z 
+2026-11-09T11:34:05.2167916Z Or undo this operation with:
+2026-11-09T11:34:05.2168275Z 
+2026-11-09T11:34:05.2168590Z   git switch -
+2026-11-09T11:34:05.2169232Z 
+2026-11-09T11:34:05.2169589Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-09T11:34:05.2170048Z 
+2026-11-09T11:34:05.2170401Z HEAD is now at d2e7cec Merge f842e4ddb89144a5310ea07f77018c60852c1fd0 into a2d1c3c77edd194741e5c46610de09ebb2570601
+2026-11-09T11:34:05.2186532Z ##[endgroup]
+2026-11-09T11:34:05.2237910Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T11:34:05.2269565Z d2e7cec39d40a9eeaa38e3c0fa7247505c688095
+2026-11-09T11:34:05.2277818Z ##[group]Removing auth
+2026-11-09T11:34:05.2278637Z Removing SSH command configuration
+2026-11-09T11:34:05.2281424Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T11:34:05.2313040Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T11:34:05.2507726Z Removing HTTP extra header
+2026-11-09T11:34:05.2511652Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T11:34:05.2539205Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T11:34:05.2728255Z Removing includeIf entries pointing to credentials config files
+2026-11-09T11:34:05.2733153Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T11:34:05.2758849Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T11:34:05.2759994Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T11:34:05.2760540Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T11:34:05.2760989Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T11:34:05.2766515Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T11:34:05.2788683Z /home/runner/work/_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:05.2803559Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-6aa89bd2\-50c6\-49dc\-8c9c\-c35fdbd8be4c\.config
+2026-11-09T11:34:05.2846044Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T11:34:05.2867044Z /home/runner/work/_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:05.2875946Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-6aa89bd2\-50c6\-49dc\-8c9c\-c35fdbd8be4c\.config
+2026-11-09T11:34:05.2909835Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T11:34:05.2932913Z /github/runner_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:05.2940689Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-6aa89bd2\-50c6\-49dc\-8c9c\-c35fdbd8be4c\.config
+2026-11-09T11:34:05.2976790Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T11:34:05.2998150Z /github/runner_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config
+2026-11-09T11:34:05.3004860Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-6aa89bd2\-50c6\-49dc\-8c9c\-c35fdbd8be4c\.config
+2026-11-09T11:34:05.3036668Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T11:34:05.3224598Z Removing credentials config '/home/runner/work/_temp/git-credentials-6aa89bd2-50c6-49dc-8c9c-c35fdbd8be4c.config'
+2026-11-09T11:34:05.3235816Z ##[endgroup]
+2026-11-09T11:34:05.3481133Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T11:34:05.3481676Z with:
+2026-11-09T11:34:05.3481999Z   go-version: 1.26.5
+2026-11-09T11:34:05.3482329Z   cache: false
+2026-11-09T11:34:05.3482632Z   check-latest: false
+2026-11-09T11:34:05.3484931Z   token: ***
+2026-11-09T11:34:05.3485248Z env:
+2026-11-09T11:34:05.3485562Z   GOTOOLCHAIN: local
+2026-11-09T11:34:05.3485880Z   RAZVILKA_BUILD_TARGETS: all
+2026-11-09T11:34:05.3486200Z ##[endgroup]
+2026-11-09T11:34:05.4664244Z Setup go version spec 1.26.5
+2026-11-09T11:34:05.4677207Z Attempting to download 1.26.5...
+2026-11-09T11:34:06.4484133Z matching 1.26.5...
+2026-11-09T11:34:06.4517753Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T11:34:07.1388173Z Extracting Go...
+2026-11-09T11:34:07.1506040Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/0d45adea-bc8c-4bd6-aa23-cff8e1717e7d -f /home/runner/work/_temp/9e938d58-82f1-4973-8803-475101834f4a
+2026-11-09T11:34:08.8082054Z Successfully extracted go to /home/runner/work/_temp/0d45adea-bc8c-4bd6-aa23-cff8e1717e7d
+2026-11-09T11:34:08.8083070Z Adding to the cache ...
+2026-11-09T11:34:12.8860673Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T11:34:12.8862377Z Added go to the path
+2026-11-09T11:34:12.8864265Z Successfully set up Go version 1.26.5
+2026-11-09T11:34:12.9087941Z go version go1.26.5 linux/amd64
+2026-11-09T11:34:12.9088197Z 
+2026-11-09T11:34:12.9088626Z ##[group]go env
+2026-11-09T11:34:13.0311700Z AR='ar'
+2026-11-09T11:34:13.0312059Z CC='gcc'
+2026-11-09T11:34:13.0312565Z CGO_CFLAGS='-O2 -g'
+2026-11-09T11:34:13.0312879Z CGO_CPPFLAGS=''
+2026-11-09T11:34:13.0313172Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T11:34:13.0313487Z CGO_ENABLED='1'
+2026-11-09T11:34:13.0313777Z CGO_FFLAGS='-O2 -g'
+2026-11-09T11:34:13.0314081Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T11:34:13.0314383Z CXX='g++'
+2026-11-09T11:34:13.0314682Z GCCGO='gccgo'
+2026-11-09T11:34:13.0314952Z GO111MODULE=''
+2026-11-09T11:34:13.0315217Z GOAMD64='v1'
+2026-11-09T11:34:13.0315498Z GOARCH='amd64'
+2026-11-09T11:34:13.0315757Z GOAUTH='netrc'
+2026-11-09T11:34:13.0316318Z GOBIN=''
+2026-11-09T11:34:13.0316612Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T11:34:13.0316982Z GOCACHEPROG=''
+2026-11-09T11:34:13.0317282Z GODEBUG=''
+2026-11-09T11:34:13.0317594Z GOENV='/home/runner/.config/go/env'
+2026-11-09T11:34:13.0317975Z GOEXE=''
+2026-11-09T11:34:13.0318253Z GOEXPERIMENT=''
+2026-11-09T11:34:13.0318548Z GOFIPS140='off'
+2026-11-09T11:34:13.0319122Z GOFLAGS=''
+2026-11-09T11:34:13.0320154Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build2788436157=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T11:34:13.0321123Z GOHOSTARCH='amd64'
+2026-11-09T11:34:13.0321413Z GOHOSTOS='linux'
+2026-11-09T11:34:13.0321706Z GOINSECURE=''
+2026-11-09T11:34:13.0322103Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T11:34:13.0322574Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T11:34:13.0322950Z GONOPROXY=''
+2026-11-09T11:34:13.0323291Z GONOSUMDB=''
+2026-11-09T11:34:13.0323577Z GOOS='linux'
+2026-11-09T11:34:13.0323880Z GOPATH='/home/runner/go'
+2026-11-09T11:34:13.0324186Z GOPRIVATE=''
+2026-11-09T11:34:13.0324565Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T11:34:13.0325004Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T11:34:13.0325395Z GOSUMDB='sum.golang.org'
+2026-11-09T11:34:13.0325698Z GOTELEMETRY='local'
+2026-11-09T11:34:13.0326038Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T11:34:13.0326437Z GOTMPDIR=''
+2026-11-09T11:34:13.0326707Z GOTOOLCHAIN='local'
+2026-11-09T11:34:13.0327155Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T11:34:13.0327627Z GOVCS=''
+2026-11-09T11:34:13.0327907Z GOVERSION='go1.26.5'
+2026-11-09T11:34:13.0328203Z GOWORK=''
+2026-11-09T11:34:13.0328476Z PKG_CONFIG='pkg-config'
+2026-11-09T11:34:13.0328687Z 
+2026-11-09T11:34:13.0329642Z ##[endgroup]
+2026-11-09T11:34:13.0518318Z ##[group]Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+2026-11-09T11:34:13.0518681Z with:
+2026-11-09T11:34:13.0518893Z   node-version: 24
+2026-11-09T11:34:13.0519473Z   package-manager-cache: false
+2026-11-09T11:34:13.0519731Z   check-latest: false
+2026-11-09T11:34:13.0521776Z   token: ***
+2026-11-09T11:34:13.0521982Z env:
+2026-11-09T11:34:13.0522182Z   GOTOOLCHAIN: local
+2026-11-09T11:34:13.0522409Z   RAZVILKA_BUILD_TARGETS: all
+2026-11-09T11:34:13.0522656Z ##[endgroup]
+2026-11-09T11:34:13.1808867Z Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64
+2026-11-09T11:34:13.1813054Z ##[group]Environment details
+2026-11-09T11:34:13.5977280Z node: v24.22.2
+2026-11-09T11:34:13.5977741Z npm: 11.19.1
+2026-11-09T11:34:13.5978048Z yarn: 1.22.22
+2026-11-09T11:34:13.5978688Z ##[endgroup]
+2026-11-09T11:34:13.6097683Z ##[group]Run sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static
+2026-11-09T11:34:13.6098369Z [36;1msudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static[0m
+2026-11-09T11:34:13.6124110Z shell: /usr/bin/bash -e {0}
+2026-11-09T11:34:13.6124401Z env:
+2026-11-09T11:34:13.6124646Z   GOTOOLCHAIN: local
+2026-11-09T11:34:13.6124885Z   RAZVILKA_BUILD_TARGETS: all
+2026-11-09T11:34:13.6125132Z ##[endgroup]
+2026-11-09T11:34:13.7145140Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T11:34:13.7748892Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T11:34:13.7750693Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T11:34:13.7810314Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T11:34:13.7897558Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T11:34:13.8018075Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T11:34:13.9554274Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [675 kB]
+2026-11-09T11:34:13.9742331Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [743 kB]
+2026-11-09T11:34:14.0156033Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T11:34:14.0243144Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T11:34:14.0300417Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T11:34:14.0370224Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T11:34:14.0411189Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T11:34:14.0515130Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T11:34:14.0553788Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T11:34:14.0570629Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T11:34:14.1354267Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T11:34:14.1418229Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T11:34:14.1877976Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T11:34:14.1943280Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T11:34:14.1965668Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T11:34:14.2178218Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T11:34:14.2207463Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T11:34:14.2220770Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T11:34:23.2137294Z Fetched 13.0 MB in 1s (8774 kB/s)
+2026-11-09T11:34:24.2810442Z Reading package lists...
+2026-11-09T11:34:24.3227561Z Reading package lists...
+2026-11-09T11:34:24.5400456Z Building dependency tree...
+2026-11-09T11:34:24.5408373Z Reading state information...
+2026-11-09T11:34:24.7329517Z busybox-static is already the newest version (1:1.36.1-6ubuntu3.1).
+2026-11-09T11:34:24.7330389Z busybox-static set to manually installed.
+2026-11-09T11:34:24.7331171Z 0 upgraded, 0 newly installed, 0 to remove and 27 not upgraded.
+2026-11-09T11:34:24.7388343Z ##[group]Run BASE_VERSION="$(tr -d '\r\n' < VERSION)"
+2026-11-09T11:34:24.7388759Z [36;1mBASE_VERSION="$(tr -d '\r\n' < VERSION)"[0m
+2026-11-09T11:34:24.7389405Z [36;1mexport RAZVILKA_VERSION="${BASE_VERSION}+${GITHUB_SHA::7}"[0m
+2026-11-09T11:34:24.7389900Z [36;1mexport RAZVILKA_COMMIT="$GITHUB_SHA"[0m
+2026-11-09T11:34:24.7390261Z [36;1mexport RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"[0m
+2026-11-09T11:34:24.7390686Z [36;1mexport RAZVILKA_DIRTY=false[0m
+2026-11-09T11:34:24.7391053Z [36;1m# Match the router UID for native process-ownership/recovery tests;[0m
+2026-11-09T11:34:24.7391504Z [36;1m# do not skip them or weaken the production root-only checks.[0m
+2026-11-09T11:34:24.7391894Z [36;1msudo env PATH="$PATH" GOTOOLCHAIN="$GOTOOLCHAIN" \[0m
+2026-11-09T11:34:24.7392358Z [36;1m  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \[0m
+2026-11-09T11:34:24.7392934Z [36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T11:34:24.7393390Z [36;1m  RAZVILKA_VERSION="$RAZVILKA_VERSION" RAZVILKA_COMMIT="$RAZVILKA_COMMIT" \[0m
+2026-11-09T11:34:24.7393879Z [36;1m  RAZVILKA_BUILD_TIME="$RAZVILKA_BUILD_TIME" RAZVILKA_DIRTY="$RAZVILKA_DIRTY" \[0m
+2026-11-09T11:34:24.7394356Z [36;1m  RAZVILKA_BUILD_TARGETS="$RAZVILKA_BUILD_TARGETS" ./scripts/check.sh[0m
+2026-11-09T11:34:24.7414125Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T11:34:24.7414466Z env:
+2026-11-09T11:34:24.7414682Z   GOTOOLCHAIN: local
+2026-11-09T11:34:24.7414924Z   RAZVILKA_BUILD_TARGETS: all
+2026-11-09T11:34:24.7415350Z ##[endgroup]
+2026-11-09T11:34:26.1684794Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T11:34:26.1840739Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T11:34:26.3229633Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T11:34:26.5528870Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T11:34:26.5576412Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T11:34:26.6059659Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T11:34:26.7390151Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T11:35:25.0811192Z ok  	github.com/ArtixSx/razvilka/cmd/nodeeval	0.452s
+2026-11-09T11:35:53.8980845Z ok  	github.com/ArtixSx/razvilka/cmd/razvilka	14.624s
+2026-11-09T11:35:56.6321012Z ok  	github.com/ArtixSx/razvilka/cmd/razvilka-offline-manual	2.732s
+2026-11-09T11:35:56.6379710Z ok  	github.com/ArtixSx/razvilka/cmd/strategy-pack	0.042s
+2026-11-09T11:35:56.6430241Z ok  	github.com/ArtixSx/razvilka/cmd/usque-owned-native	0.032s
+2026-11-09T11:35:56.6500075Z ?   	github.com/ArtixSx/razvilka/cmd/usque-owned-supervisor	[no test files]
+2026-11-09T11:35:56.6579954Z ok  	github.com/ArtixSx/razvilka/cmd/warp-candidate	0.215s
+2026-11-09T11:38:27.4601544Z ok  	github.com/ArtixSx/razvilka/internal/app	138.172s
+2026-11-09T11:38:27.4602463Z ok  	github.com/ArtixSx/razvilka/internal/auditlog	0.048s
+2026-11-09T11:38:27.4604769Z ok  	github.com/ArtixSx/razvilka/internal/autonomy	9.910s
+2026-11-09T11:38:27.4605637Z ok  	github.com/ArtixSx/razvilka/internal/awgprofile	0.030s
+2026-11-09T11:38:27.4606438Z ok  	github.com/ArtixSx/razvilka/internal/backendprofile	0.047s
+2026-11-09T11:38:27.4607111Z ok  	github.com/ArtixSx/razvilka/internal/catalog	0.014s
+2026-11-09T11:38:27.4607867Z ok  	github.com/ArtixSx/razvilka/internal/catalogsnapshot	0.008s
+2026-11-09T11:38:27.4608723Z ok  	github.com/ArtixSx/razvilka/internal/cloudflareprovider	20.863s
+2026-11-09T11:38:27.4609612Z ok  	github.com/ArtixSx/razvilka/internal/commandrun	1.126s
+2026-11-09T11:38:27.4610370Z ok  	github.com/ArtixSx/razvilka/internal/community	0.088s
+2026-11-09T11:38:27.4610986Z ok  	github.com/ArtixSx/razvilka/internal/components	11.391s
+2026-11-09T11:38:27.4611576Z ok  	github.com/ArtixSx/razvilka/internal/config	2.794s
+2026-11-09T11:38:27.4612223Z ok  	github.com/ArtixSx/razvilka/internal/conntrack	0.026s
+2026-11-09T11:38:27.4612930Z ok  	github.com/ArtixSx/razvilka/internal/customservices	0.170s
+2026-11-09T11:39:56.9019310Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	206.554s
+2026-11-09T11:39:56.9020509Z ok  	github.com/ArtixSx/razvilka/internal/defaultconsent	0.635s
+2026-11-09T11:39:56.9024751Z ok  	github.com/ArtixSx/razvilka/internal/devices	0.137s
+2026-11-09T11:39:56.9025393Z ok  	github.com/ArtixSx/razvilka/internal/dnscontrol	3.428s
+2026-11-09T11:39:56.9026033Z ok  	github.com/ArtixSx/razvilka/internal/engine	0.033s
+2026-11-09T11:39:56.9027840Z ok  	github.com/ArtixSx/razvilka/internal/engineconfig	0.539s
+2026-11-09T11:39:56.9028527Z ok  	github.com/ArtixSx/razvilka/internal/enginelab	0.017s
+2026-11-09T11:39:56.9029340Z ok  	github.com/ArtixSx/razvilka/internal/evidence	0.002s
+2026-11-09T11:39:56.9030028Z ?   	github.com/ArtixSx/razvilka/internal/installpath	[no test files]
+2026-11-09T11:39:56.9030744Z ok  	github.com/ArtixSx/razvilka/internal/maintenancebatch	0.003s
+2026-11-09T11:39:56.9031421Z ok  	github.com/ArtixSx/razvilka/internal/nativecheckfixture	0.223s
+2026-11-09T11:39:56.9032074Z ok  	github.com/ArtixSx/razvilka/internal/nativeenrollment	0.010s
+2026-11-09T11:39:56.9032599Z ok  	github.com/ArtixSx/razvilka/internal/netidentity	2.251s
+2026-11-09T11:39:56.9033467Z ok  	github.com/ArtixSx/razvilka/internal/netresolve	1.857s
+2026-11-09T11:39:56.9033905Z ok  	github.com/ArtixSx/razvilka/internal/nodecleanup	0.003s
+2026-11-09T11:39:56.9034380Z ok  	github.com/ArtixSx/razvilka/internal/nodequality	0.186s
+2026-11-09T11:39:56.9035016Z ok  	github.com/ArtixSx/razvilka/internal/nodestore	2.045s
+2026-11-09T11:39:56.9035436Z ok  	github.com/ArtixSx/razvilka/internal/onboarding	0.013s
+2026-11-09T11:39:56.9035892Z ok  	github.com/ArtixSx/razvilka/internal/operationgate	0.822s
+2026-11-09T11:39:56.9036821Z ok  	github.com/ArtixSx/razvilka/internal/ownedfs	0.194s
+2026-11-09T11:39:56.9037341Z ok  	github.com/ArtixSx/razvilka/internal/panelhealth	0.014s
+2026-11-09T11:39:56.9037783Z ok  	github.com/ArtixSx/razvilka/internal/physicalscope	3.162s
+2026-11-09T11:39:56.9038434Z ok  	github.com/ArtixSx/razvilka/internal/privatebackup	4.513s
+2026-11-09T11:39:56.9039262Z ok  	github.com/ArtixSx/razvilka/internal/privaterestore	4.715s
+2026-11-09T11:39:56.9039891Z ok  	github.com/ArtixSx/razvilka/internal/probecheck	0.007s
+2026-11-09T11:39:56.9040514Z ok  	github.com/ArtixSx/razvilka/internal/profileexchange	0.005s
+2026-11-09T11:39:56.9041146Z ok  	github.com/ArtixSx/razvilka/internal/projectmeta	0.007s
+2026-11-09T11:39:56.9041751Z ok  	github.com/ArtixSx/razvilka/internal/providerfeed	3.073s
+2026-11-09T11:39:56.9042391Z ok  	github.com/ArtixSx/razvilka/internal/providerprofile	0.022s
+2026-11-09T11:39:56.9042927Z ok  	github.com/ArtixSx/razvilka/internal/publicfetch	0.027s
+2026-11-09T11:39:56.9043357Z ok  	github.com/ArtixSx/razvilka/internal/recipehints	0.041s
+2026-11-09T11:39:56.9044018Z ok  	github.com/ArtixSx/razvilka/internal/restorejournal	1.086s
+2026-11-09T11:39:56.9044578Z ok  	github.com/ArtixSx/razvilka/internal/routeidentity	0.010s
+2026-11-09T11:39:56.9045002Z ok  	github.com/ArtixSx/razvilka/internal/routekind	0.002s
+2026-11-09T11:39:56.9045773Z ok  	github.com/ArtixSx/razvilka/internal/routeprobe	0.689s
+2026-11-09T11:39:56.9046198Z ok  	github.com/ArtixSx/razvilka/internal/routerstats	0.015s
+2026-11-09T11:39:56.9046872Z ok  	github.com/ArtixSx/razvilka/internal/routes	0.004s
+2026-11-09T11:39:56.9047492Z ok  	github.com/ArtixSx/razvilka/internal/security	22.236s
+2026-11-09T11:39:56.9048086Z ok  	github.com/ArtixSx/razvilka/internal/selfupdatejournal	4.159s
+2026-11-09T11:39:56.9048532Z ok  	github.com/ArtixSx/razvilka/internal/smartroute	0.021s
+2026-11-09T11:39:56.9049183Z ok  	github.com/ArtixSx/razvilka/internal/sources	1.194s
+2026-11-09T11:39:56.9049727Z ok  	github.com/ArtixSx/razvilka/internal/startuptools	0.105s
+2026-11-09T11:39:56.9050163Z ok  	github.com/ArtixSx/razvilka/internal/strategylab	8.128s
+2026-11-09T11:39:56.9050708Z ok  	github.com/ArtixSx/razvilka/internal/systemprobe	0.049s
+2026-11-09T11:39:56.9051286Z ok  	github.com/ArtixSx/razvilka/internal/telemetry	0.005s
+2026-11-09T11:39:56.9052233Z ok  	github.com/ArtixSx/razvilka/internal/testlab	0.802s
+2026-11-09T11:39:56.9052692Z ok  	github.com/ArtixSx/razvilka/internal/tunnelcheck	0.003s
+2026-11-09T11:39:56.9053266Z ok  	github.com/ArtixSx/razvilka/internal/updatecheck	99.794s
+2026-11-09T11:39:56.9053883Z ok  	github.com/ArtixSx/razvilka/internal/usquediag	0.770s
+2026-11-09T11:39:56.9054346Z ok  	github.com/ArtixSx/razvilka/internal/usquediag/nativeaccept	0.020s
+2026-11-09T11:39:56.9055171Z ok  	github.com/ArtixSx/razvilka/internal/usquediag/nativeowner	0.097s
+2026-11-09T11:39:56.9055610Z ok  	github.com/ArtixSx/razvilka/internal/warp	0.343s
+2026-11-09T11:39:56.9056204Z ok  	github.com/ArtixSx/razvilka/internal/wireguardprofile	0.011s
+2026-11-09T11:39:56.9056810Z ok  	github.com/ArtixSx/razvilka/internal/z2kimport	0.007s
+2026-11-09T11:39:56.9057233Z ok  	github.com/ArtixSx/razvilka/scripts/telegram-soak	22.153s
+2026-11-09T11:41:06.6380948Z ok  	github.com/ArtixSx/razvilka/cmd/nodeeval	1.624s
+2026-11-09T11:42:24.1712491Z ok  	github.com/ArtixSx/razvilka/cmd/razvilka	57.823s
+2026-11-09T11:42:24.1731577Z ok  	github.com/ArtixSx/razvilka/cmd/razvilka-offline-manual	3.634s
+2026-11-09T11:42:24.1750594Z ok  	github.com/ArtixSx/razvilka/cmd/strategy-pack	1.044s
+2026-11-09T11:42:24.1754077Z ok  	github.com/ArtixSx/razvilka/cmd/usque-owned-native	1.044s
+2026-11-09T11:42:24.1755832Z ?   	github.com/ArtixSx/razvilka/cmd/usque-owned-supervisor	[no test files]
+2026-11-09T11:42:24.1757592Z ok  	github.com/ArtixSx/razvilka/cmd/warp-candidate	3.362s
+2026-11-09T11:48:07.8472266Z ok  	github.com/ArtixSx/razvilka/internal/app	377.386s
+2026-11-09T11:48:07.8477388Z ok  	github.com/ArtixSx/razvilka/internal/auditlog	1.047s
+2026-11-09T11:48:07.8480226Z ok  	github.com/ArtixSx/razvilka/internal/autonomy	23.170s
+2026-11-09T11:48:07.8481607Z ok  	github.com/ArtixSx/razvilka/internal/awgprofile	1.056s
+2026-11-09T11:48:07.8482918Z ok  	github.com/ArtixSx/razvilka/internal/backendprofile	1.102s
+2026-11-09T11:48:07.8484167Z ok  	github.com/ArtixSx/razvilka/internal/catalog	1.024s
+2026-11-09T11:48:07.8485087Z ok  	github.com/ArtixSx/razvilka/internal/catalogsnapshot	1.018s
+2026-11-09T11:48:07.8486528Z ok  	github.com/ArtixSx/razvilka/internal/cloudflareprovider	125.947s
+2026-11-09T11:48:07.8487837Z ok  	github.com/ArtixSx/razvilka/internal/commandrun	2.166s
+2026-11-09T11:48:07.8489177Z ok  	github.com/ArtixSx/razvilka/internal/community	1.612s
+2026-11-09T11:48:07.8490376Z ok  	github.com/ArtixSx/razvilka/internal/components	36.470s
+2026-11-09T11:48:07.8491601Z ok  	github.com/ArtixSx/razvilka/internal/config	4.266s
+2026-11-09T11:48:07.8492760Z ok  	github.com/ArtixSx/razvilka/internal/conntrack	1.069s
+2026-11-09T11:48:07.8494027Z ok  	github.com/ArtixSx/razvilka/internal/customservices	1.250s
+2026-11-09T11:52:01.4959208Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	564.822s
+2026-11-09T11:52:01.4962741Z ok  	github.com/ArtixSx/razvilka/internal/defaultconsent	2.100s
+2026-11-09T11:52:01.4963403Z ok  	github.com/ArtixSx/razvilka/internal/devices	1.326s
+2026-11-09T11:52:01.4964358Z ok  	github.com/ArtixSx/razvilka/internal/dnscontrol	7.925s
+2026-11-09T11:52:01.4965255Z ok  	github.com/ArtixSx/razvilka/internal/engine	1.071s
+2026-11-09T11:52:01.4965987Z ok  	github.com/ArtixSx/razvilka/internal/engineconfig	1.666s
+2026-11-09T11:52:01.4966448Z ok  	github.com/ArtixSx/razvilka/internal/enginelab	1.080s
+2026-11-09T11:52:01.4966875Z ok  	github.com/ArtixSx/razvilka/internal/evidence	1.015s
+2026-11-09T11:52:01.4967358Z ?   	github.com/ArtixSx/razvilka/internal/installpath	[no test files]
+2026-11-09T11:52:01.4967872Z ok  	github.com/ArtixSx/razvilka/internal/maintenancebatch	1.017s
+2026-11-09T11:52:01.4968357Z ok  	github.com/ArtixSx/razvilka/internal/nativecheckfixture	2.517s
+2026-11-09T11:52:01.4968839Z ok  	github.com/ArtixSx/razvilka/internal/nativeenrollment	1.031s
+2026-11-09T11:52:01.4969455Z ok  	github.com/ArtixSx/razvilka/internal/netidentity	3.607s
+2026-11-09T11:52:01.4969885Z ok  	github.com/ArtixSx/razvilka/internal/netresolve	2.875s
+2026-11-09T11:52:01.4970661Z ok  	github.com/ArtixSx/razvilka/internal/nodecleanup	1.017s
+2026-11-09T11:52:01.4971109Z ok  	github.com/ArtixSx/razvilka/internal/nodequality	1.633s
+2026-11-09T11:52:01.4971526Z ok  	github.com/ArtixSx/razvilka/internal/nodestore	7.291s
+2026-11-09T11:52:01.4971945Z ok  	github.com/ArtixSx/razvilka/internal/onboarding	1.080s
+2026-11-09T11:52:01.4972376Z ok  	github.com/ArtixSx/razvilka/internal/operationgate	2.913s
+2026-11-09T11:52:01.4972798Z ok  	github.com/ArtixSx/razvilka/internal/ownedfs	1.364s
+2026-11-09T11:52:01.4973208Z ok  	github.com/ArtixSx/razvilka/internal/panelhealth	1.056s
+2026-11-09T11:52:01.4973648Z ok  	github.com/ArtixSx/razvilka/internal/physicalscope	5.649s
+2026-11-09T11:52:01.4974094Z ok  	github.com/ArtixSx/razvilka/internal/privatebackup	52.871s
+2026-11-09T11:52:01.4974545Z ok  	github.com/ArtixSx/razvilka/internal/privaterestore	15.513s
+2026-11-09T11:52:01.4974981Z ok  	github.com/ArtixSx/razvilka/internal/probecheck	1.027s
+2026-11-09T11:52:01.4975619Z ok  	github.com/ArtixSx/razvilka/internal/profileexchange	1.025s
+2026-11-09T11:52:01.4976078Z ok  	github.com/ArtixSx/razvilka/internal/projectmeta	1.049s
+2026-11-09T11:52:01.4976508Z ok  	github.com/ArtixSx/razvilka/internal/providerfeed	7.410s
+2026-11-09T11:52:01.4976951Z ok  	github.com/ArtixSx/razvilka/internal/providerprofile	1.098s
+2026-11-09T11:52:01.4977387Z ok  	github.com/ArtixSx/razvilka/internal/publicfetch	1.134s
+2026-11-09T11:52:01.4977802Z ok  	github.com/ArtixSx/razvilka/internal/recipehints	1.339s
+2026-11-09T11:52:01.4978243Z ok  	github.com/ArtixSx/razvilka/internal/restorejournal	3.387s
+2026-11-09T11:52:01.4978679Z ok  	github.com/ArtixSx/razvilka/internal/routeidentity	1.030s
+2026-11-09T11:52:01.4979446Z ok  	github.com/ArtixSx/razvilka/internal/routekind	1.015s
+2026-11-09T11:52:01.4979934Z ok  	github.com/ArtixSx/razvilka/internal/routeprobe	1.826s
+2026-11-09T11:52:01.4980358Z ok  	github.com/ArtixSx/razvilka/internal/routerstats	1.044s
+2026-11-09T11:52:01.4980766Z ok  	github.com/ArtixSx/razvilka/internal/routes	1.016s
+2026-11-09T11:52:01.4981191Z ok  	github.com/ArtixSx/razvilka/internal/security	205.074s
+2026-11-09T11:52:01.4981635Z ok  	github.com/ArtixSx/razvilka/internal/selfupdatejournal	6.766s
+2026-11-09T11:52:01.4982067Z ok  	github.com/ArtixSx/razvilka/internal/smartroute	1.040s
+2026-11-09T11:52:01.4982474Z ok  	github.com/ArtixSx/razvilka/internal/sources	2.309s
+2026-11-09T11:52:01.4982890Z ok  	github.com/ArtixSx/razvilka/internal/startuptools	1.182s
+2026-11-09T11:52:01.4983322Z ok  	github.com/ArtixSx/razvilka/internal/strategylab	13.588s
+2026-11-09T11:52:01.4983738Z ok  	github.com/ArtixSx/razvilka/internal/systemprobe	1.062s
+2026-11-09T11:52:01.4984152Z ok  	github.com/ArtixSx/razvilka/internal/telemetry	1.030s
+2026-11-09T11:52:01.4984553Z ok  	github.com/ArtixSx/razvilka/internal/testlab	2.412s
+2026-11-09T11:52:01.4984958Z ok  	github.com/ArtixSx/razvilka/internal/tunnelcheck	1.021s
+2026-11-09T11:54:43.2303389Z ok  	github.com/ArtixSx/razvilka/internal/updatecheck	551.139s
+2026-11-09T11:54:43.2304340Z ok  	github.com/ArtixSx/razvilka/internal/usquediag	2.047s
+2026-11-09T11:54:43.2304973Z ok  	github.com/ArtixSx/razvilka/internal/usquediag/nativeaccept	1.064s
+2026-11-09T11:54:43.2305696Z ok  	github.com/ArtixSx/razvilka/internal/usquediag/nativeowner	1.152s
+2026-11-09T11:54:43.2306346Z ok  	github.com/ArtixSx/razvilka/internal/warp	1.909s
+2026-11-09T11:54:43.2307006Z ok  	github.com/ArtixSx/razvilka/internal/wireguardprofile	1.049s
+2026-11-09T11:54:43.2307597Z ok  	github.com/ArtixSx/razvilka/internal/z2kimport	1.025s
+2026-11-09T11:54:43.2308214Z ok  	github.com/ArtixSx/razvilka/scripts/telegram-soak	23.208s
+2026-11-09T11:54:55.8881913Z NO_Z2K_RUNTIME_DEPENDENCY: PASS
+2026-11-09T11:54:56.0922894Z Candidate launcher isolation tests: PASS
+2026-11-09T11:54:57.3532298Z Isolated Entware bootstrap tests: PASS
+2026-11-09T11:54:57.4433013Z CLEAN_CONTROL_INSTALLER_MODELS_PASS cases=11 native_initialization=false
+2026-11-09T11:54:57.4668509Z dist/razvilka-linux-arm64: OK
+2026-11-09T11:54:57.4765896Z dist/razvilka-linux-arm64: OK
+2026-11-09T11:54:57.4766736Z dist/razvilka-linux-amd64: OK
+2026-11-09T11:54:57.4888306Z dist/razvilka-linux-arm64: OK
+2026-11-09T11:54:57.4888776Z dist/razvilka-linux-amd64: OK
+2026-11-09T11:54:57.5180450Z node:internal/modules/cjs/loader:1568
+2026-11-09T11:54:57.5181512Z   throw err;
+2026-11-09T11:54:57.5181904Z   ^
+2026-11-09T11:54:57.5182168Z 
+2026-11-09T11:54:57.5182659Z Error: Cannot find module '/tmp/razvilka-build-targets.P1dqNL/project/scripts/test-mihomo-node-apply-ui.mjs'
+2026-11-09T11:54:57.5183358Z     at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+2026-11-09T11:54:57.5183891Z     at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+2026-11-09T11:54:57.5184489Z     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+2026-11-09T11:54:57.5185072Z     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+2026-11-09T11:54:57.5185563Z     at Module._load (node:internal/modules/cjs/loader:1341:5)
+2026-11-09T11:54:57.5186048Z     at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+2026-11-09T11:54:57.5186609Z     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+2026-11-09T11:54:57.5187102Z     at node:internal/main/run_main_module:33:47 {
+2026-11-09T11:54:57.5187431Z   code: 'MODULE_NOT_FOUND',
+2026-11-09T11:54:57.5187694Z   requireStack: []
+2026-11-09T11:54:57.5187917Z }
+2026-11-09T11:54:57.5188032Z 
+2026-11-09T11:54:57.5188127Z Node.js v24.22.2
+2026-11-09T11:54:57.5199306Z RAZVILKA checks: OK
+2026-11-09T11:54:57.5294917Z dist/razvilka-linux-arm64: OK
+2026-11-09T11:54:57.5542643Z node:internal/modules/cjs/loader:1568
+2026-11-09T11:54:57.5543671Z   throw err;
+2026-11-09T11:54:57.5544045Z   ^
+2026-11-09T11:54:57.5544206Z 
+2026-11-09T11:54:57.5544965Z Error: Cannot find module '/tmp/razvilka-build-targets.P1dqNL/project/scripts/test-mihomo-node-apply-ui.mjs'
+2026-11-09T11:54:57.5546131Z     at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+2026-11-09T11:54:57.5546971Z     at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+2026-11-09T11:54:57.5547808Z     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+2026-11-09T11:54:57.5548662Z     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+2026-11-09T11:54:57.5549522Z     at Module._load (node:internal/modules/cjs/loader:1341:5)
+2026-11-09T11:54:57.5550147Z     at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+2026-11-09T11:54:57.5550718Z     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+2026-11-09T11:54:57.5551215Z     at node:internal/main/run_main_module:33:47 {
+2026-11-09T11:54:57.5551549Z   code: 'MODULE_NOT_FOUND',
+2026-11-09T11:54:57.5551811Z   requireStack: []
+2026-11-09T11:54:57.5552043Z }
+2026-11-09T11:54:57.5552153Z 
+2026-11-09T11:54:57.5552262Z Node.js v24.22.2
+2026-11-09T11:54:57.5561418Z RAZVILKA checks: OK
+2026-11-09T11:54:57.5642093Z dist/razvilka-linux-arm64: OK
+2026-11-09T11:54:57.5876152Z node:internal/modules/cjs/loader:1568
+2026-11-09T11:54:57.5876777Z   throw err;
+2026-11-09T11:54:57.5877076Z   ^
+2026-11-09T11:54:57.5877233Z 
+2026-11-09T11:54:57.5877850Z Error: Cannot find module '/tmp/razvilka-build-targets.P1dqNL/project/scripts/test-mihomo-node-apply-ui.mjs'
+2026-11-09T11:54:57.5878665Z     at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+2026-11-09T11:54:57.5879428Z     at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+2026-11-09T11:54:57.5880079Z     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+2026-11-09T11:54:57.5880659Z     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+2026-11-09T11:54:57.5881184Z     at Module._load (node:internal/modules/cjs/loader:1341:5)
+2026-11-09T11:54:57.5881680Z     at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+2026-11-09T11:54:57.5882608Z     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+2026-11-09T11:54:57.5883392Z     at node:internal/main/run_main_module:33:47 {
+2026-11-09T11:54:57.5884139Z   code: 'MODULE_NOT_FOUND',
+2026-11-09T11:54:57.5884514Z   requireStack: []
+2026-11-09T11:54:57.5884817Z }
+2026-11-09T11:54:57.5884970Z 
+2026-11-09T11:54:57.5885110Z Node.js v24.22.2
+2026-11-09T11:54:57.5895855Z RAZVILKA checks: OK
+2026-11-09T11:54:57.5992603Z dist/razvilka-linux-amd64: OK
+2026-11-09T11:54:57.5993135Z dist/razvilka-linux-arm64: OK
+2026-11-09T11:54:57.5993473Z dist/razvilka-linux-mips: OK
+2026-11-09T11:54:57.5993856Z dist/razvilka-linux-mipsle: OK
+2026-11-09T11:54:57.6243994Z node:internal/modules/cjs/loader:1568
+2026-11-09T11:54:57.6244601Z   throw err;
+2026-11-09T11:54:57.6249928Z   ^
+2026-11-09T11:54:57.6250203Z 
+2026-11-09T11:54:57.6251031Z Error: Cannot find module '/tmp/razvilka-build-targets.P1dqNL/project/scripts/test-mihomo-node-apply-ui.mjs'
+2026-11-09T11:54:57.6251787Z     at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+2026-11-09T11:54:57.6252369Z     at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+2026-11-09T11:54:57.6252992Z     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+2026-11-09T11:54:57.6253609Z     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+2026-11-09T11:54:57.6254096Z     at Module._load (node:internal/modules/cjs/loader:1341:5)
+2026-11-09T11:54:57.6254558Z     at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+2026-11-09T11:54:57.6255134Z     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+2026-11-09T11:54:57.6255814Z     at node:internal/main/run_main_module:33:47 {
+2026-11-09T11:54:57.6256145Z   code: 'MODULE_NOT_FOUND',
+2026-11-09T11:54:57.6256641Z   requireStack: []
+2026-11-09T11:54:57.6256863Z }
+2026-11-09T11:54:57.6256984Z 
+2026-11-09T11:54:57.6257083Z Node.js v24.22.2
+2026-11-09T11:54:57.6261173Z RAZVILKA checks: OK
+2026-11-09T11:54:57.6300597Z Build targets: PASS
+2026-11-09T11:54:58.2652835Z Isolated Entware uninstall tests: PASS
+2026-11-09T11:54:58.4004296Z PASS DNS rollback present
+2026-11-09T11:54:58.5068022Z PASS DNS rollback absent
+2026-11-09T11:54:58.6140405Z PASS DNS rollback legacy
+2026-11-09T11:54:58.6452468Z PASS DNS rollback legacy-unsupported
+2026-11-09T11:54:58.6597983Z PASS DNS rollback missing
+2026-11-09T11:54:58.6753624Z PASS DNS rollback unsafe-dir
+2026-11-09T11:54:58.6903645Z PASS DNS rollback unsafe-file
+2026-11-09T11:54:58.7041181Z PASS DNS rollback invalid
+2026-11-09T11:54:58.7095914Z PASS upgrade snapshots exact DNS schema before starting candidate
+2026-11-09T11:54:58.8272391Z PASS autonomy rollback present
+2026-11-09T11:54:58.9339418Z PASS autonomy rollback absent
+2026-11-09T11:54:59.0431604Z PASS autonomy rollback legacy
+2026-11-09T11:54:59.0748864Z PASS autonomy rollback legacy-unsupported
+2026-11-09T11:54:59.0899105Z PASS autonomy rollback missing
+2026-11-09T11:54:59.0969499Z PASS autonomy rollback unsafe-dir
+2026-11-09T11:54:59.1121601Z PASS autonomy rollback unsafe-file
+2026-11-09T11:54:59.1259556Z PASS autonomy rollback invalid
+2026-11-09T11:54:59.1315032Z PASS upgrade snapshots exact autonomy state before starting candidate
+2026-11-09T11:54:59.2232767Z PASS retained history rollback after-stop
+2026-11-09T11:54:59.3305646Z PASS retained history rollback after-recovery
+2026-11-09T11:54:59.4057689Z PASS retained history rollback stop-during-history
+2026-11-09T11:54:59.4799989Z PASS retained history rollback not-running
+2026-11-09T11:54:59.5136924Z interface.css: current
+2026-11-09T11:54:59.5468063Z PASS category AI
+2026-11-09T11:54:59.5471357Z PASS category ai
+2026-11-09T11:54:59.5472654Z PASS category ИИ
+2026-11-09T11:54:59.5473935Z PASS category ИИ-сервисы
+2026-11-09T11:54:59.5474659Z PASS category искусственный интеллект
+2026-11-09T11:54:59.5475269Z PASS other mapped to own services
+2026-11-09T11:54:59.5475768Z PASS default category
+2026-11-09T11:54:59.5476192Z PASS not infer from name
+2026-11-09T11:54:59.5476609Z PASS custom AI name
+2026-11-09T11:54:59.5477510Z PASS queued intent stays visible
+2026-11-09T11:54:59.5478406Z PASS paused management is not removal
+2026-11-09T11:54:59.5479572Z PASS future member not enrolled
+2026-11-09T11:54:59.5480192Z PASS selection copies do not mutate backend state
+2026-11-09T11:54:59.5480703Z PASS mixed selection
+2026-11-09T11:54:59.5481048Z PASS all selected
+2026-11-09T11:54:59.5481394Z PASS empty not checked
+2026-11-09T11:54:59.5481767Z PASS zero selected
+2026-11-09T11:54:59.5482632Z PASS only selected health
+2026-11-09T11:54:59.5482995Z PASS one failure
+2026-11-09T11:54:59.5483292Z PASS one unknown
+2026-11-09T11:54:59.5483731Z PASS mixed routes not merged
+2026-11-09T11:54:59.5484434Z PASS missing proof unknown
+2026-11-09T11:54:59.5484990Z PASS unselected bad ignored
+2026-11-09T11:54:59.5485429Z PASS empty unknown
+2026-11-09T11:54:59.5488034Z PASS AI groups exactly once
+2026-11-09T11:54:59.5488480Z PASS other not grouped
+2026-11-09T11:54:59.5496732Z PASS member IDs preserved
+2026-11-09T11:54:59.5497205Z PASS selected-only keeps category total
+2026-11-09T11:54:59.5498211Z PASS source immutable
+2026-11-09T11:54:59.5503493Z PASS search domain
+2026-11-09T11:54:59.5503906Z PASS search category
+2026-11-09T11:54:59.5504277Z PASS search case
+2026-11-09T11:54:59.5505136Z PASS filter selected
+2026-11-09T11:54:59.5505790Z PASS filter attention
+2026-11-09T11:54:59.5506262Z PASS filter category
+2026-11-09T11:54:59.5506772Z PASS query not URL network
+2026-11-09T11:54:59.5507336Z PASS new catalog addition not selected
+2026-11-09T11:54:59.5507651Z PASS invalid percent null
+2026-11-09T11:54:59.5507995Z PASS invalid percent undefined
+2026-11-09T11:54:59.5508524Z PASS invalid percent -1
+2026-11-09T11:54:59.5509163Z PASS invalid percent 101
+2026-11-09T11:54:59.5510180Z PASS invalid percent NaN
+2026-11-09T11:54:59.5510451Z PASS invalid percent Infinity
+2026-11-09T11:54:59.5510728Z PASS invalid percent 50
+2026-11-09T11:54:59.5510981Z PASS percent 0
+2026-11-09T11:54:59.5511200Z PASS percent 1
+2026-11-09T11:54:59.5511411Z PASS percent 50
+2026-11-09T11:54:59.5511628Z PASS percent 100
+2026-11-09T11:54:59.5511869Z PASS valid proof timestamp
+2026-11-09T11:54:59.5512189Z PASS invalid proof {"checked_at":""}
+2026-11-09T11:54:59.5512513Z PASS invalid proof {"checked_at":"bad"}
+2026-11-09T11:54:59.5512915Z PASS invalid proof {"checked_at":"2026-01-01T00:09:00Z"}
+2026-11-09T11:54:59.5513393Z PASS invalid proof {"fresh_until":"2026-01-01T00:01:00Z"}
+2026-11-09T11:54:59.5514040Z PASS invalid proof {"status":"stale"}
+2026-11-09T11:54:59.5514308Z PASS hy2 alias
+2026-11-09T11:54:59.5514520Z PASS ss alias
+2026-11-09T11:54:59.5514783Z PASS custom AI form
+2026-11-09T11:54:59.5515264Z PASS custom form default
+2026-11-09T11:54:59.5517327Z PASS custom bad category rejected
+2026-11-09T11:54:59.5517721Z PASS custom does not add shared route
+2026-11-09T11:54:59.5522351Z PASS capability refusal and exclusion are named with the autopilot message
+2026-11-09T11:54:59.5524864Z PASS expired managed runtime cannot turn a terminal failure into pending setup
+2026-11-09T11:54:59.5528358Z PASS expired runtime preserves independently current proof edits and saved exclusions
+2026-11-09T11:54:59.5529295Z {"suite":"interface-model","passed":63}
+2026-11-09T11:54:59.5864309Z ui icons: ok 213 flags 39 brands
+2026-11-09T11:54:59.6283841Z PASS pending changes: actual deselection, visible scope actions, filters, DNS, device navigation, no mutations
+2026-11-09T11:54:59.6605395Z PASS unique DOM IDs
+2026-11-09T11:54:59.6624526Z PASS all inherited controls retain IDs
+2026-11-09T11:54:59.6625996Z PASS 8 primary destinations
+2026-11-09T11:54:59.6627362Z PASS 21 retained views
+2026-11-09T11:54:59.6631404Z PASS quick setup does not announce a working connection before checking
+2026-11-09T11:54:59.6647773Z PASS saved exclusion switches keep checkbox sizing instead of full-width search styling
+2026-11-09T11:54:59.6657373Z PASS short authentication viewport has its own scroll and safe alignment with a start fallback
+2026-11-09T11:54:59.6658120Z PASS one compiled stylesheet
+2026-11-09T11:54:59.6704411Z PASS compiled CSS reproducible
+2026-11-09T11:54:59.6710416Z PASS home scope body has an inset while its header retains full card width
+2026-11-09T11:54:59.6721172Z PASS quick start spacing is scoped to visible setup and preserves responsive consent controls
+2026-11-09T11:54:59.6762755Z PASS first-run scope radios cannot inherit full-width text fields
+2026-11-09T11:54:59.6765236Z PASS current asset cache /theme.js?v=0.20.0
+2026-11-09T11:54:59.6768189Z PASS current asset cache /ui-icons.js?v=0.20.0
+2026-11-09T11:54:59.6773728Z PASS current asset cache /node-browser.js?v=0.20.0
+2026-11-09T11:54:59.6774467Z PASS current asset cache /mihomo-node-apply-ui.js?v=0.20.0
+2026-11-09T11:54:59.6775341Z PASS current asset cache /node-policy-ui.js?v=0.20.0
+2026-11-09T11:54:59.6776737Z PASS current asset cache /node-intent-ui.js?v=0.20.0
+2026-11-09T11:54:59.6780378Z PASS current asset cache /node-service-ui.js?v=0.20.0
+2026-11-09T11:54:59.6781076Z PASS current asset cache /node-activity-ui.js?v=0.20.0
+2026-11-09T11:54:59.6781750Z PASS current asset cache /workspace-controls.js?v=0.20.0
+2026-11-09T11:54:59.6782415Z PASS current asset cache /project-log.js?v=0.20.0
+2026-11-09T11:54:59.6783048Z PASS current asset cache /exclusions-ui.js?v=0.20.0
+2026-11-09T11:54:59.6785288Z PASS current asset cache /service-dashboard-ui.js?v=0.20.0
+2026-11-09T11:54:59.6786084Z PASS current asset cache /app-update-ui.js?v=0.20.0
+2026-11-09T11:54:59.6786705Z PASS current asset cache /panel-snapshot.js?v=0.20.0
+2026-11-09T11:54:59.6799771Z PASS current asset cache /panel-device-browse.js?v=0.20.0
+2026-11-09T11:54:59.6800233Z PASS current asset cache /panel-node-browse.js?v=0.20.0
+2026-11-09T11:54:59.6800688Z PASS current asset cache /panel-community-browse.js?v=0.20.0
+2026-11-09T11:54:59.6801448Z PASS current asset cache /operation-notifications.js?v=0.20.0
+2026-11-09T11:54:59.6810475Z PASS current asset cache /app.js?v=0.20.0
+2026-11-09T11:54:59.6811174Z PASS current asset cache /cloudflare-accounts.js?v=0.20.0
+2026-11-09T11:54:59.6812250Z PASS current asset cache /cloudflare-migration.js?v=0.20.0
+2026-11-09T11:54:59.6813140Z PASS current asset cache /cloudflare-backups.js?v=0.20.0
+2026-11-09T11:54:59.6814188Z PASS current asset cache /console.js?v=0.20.0
+2026-11-09T11:54:59.6817151Z PASS current asset cache /console-autonomy.js?v=0.20.0
+2026-11-09T11:54:59.6817733Z PASS current asset cache /autopilot-settings.js?v=0.20.0
+2026-11-09T11:54:59.6818354Z PASS current asset cache /nfqws-first-start-ui.js?v=0.20.0
+2026-11-09T11:54:59.6819051Z PASS current asset cache /proxy-sidecar-ui.js?v=0.20.0
+2026-11-09T11:54:59.6820606Z PASS current asset cache /component-recovery-ui.js?v=0.20.0
+2026-11-09T11:54:59.6821293Z PASS current asset cache /managed-nfq-bundle-ui.js?v=0.20.0
+2026-11-09T11:54:59.6822658Z PASS current asset cache /interface-model.js?v=0.20.0
+2026-11-09T11:54:59.6823890Z PASS current asset cache /resource-exclusions-ui.js?v=0.20.0
+2026-11-09T11:54:59.6825327Z PASS current asset cache /list-scope-ui.js?v=0.20.0
+2026-11-09T11:54:59.6830211Z PASS current asset cache /interface.js?v=0.20.0
+2026-11-09T11:54:59.6832591Z PASS current asset cache /simple-home.js?v=0.20.0
+2026-11-09T11:54:59.6834313Z PASS current asset cache /workflow-actions.js?v=0.20.0
+2026-11-09T11:54:59.6835000Z PASS current asset cache /awg-workspace.js?v=0.20.0
+2026-11-09T11:54:59.6835986Z PASS current asset cache /setup-workflows.js?v=0.20.0
+2026-11-09T11:54:59.6837249Z PASS current asset cache /dns-service-lab.js?v=0.20.0
+2026-11-09T11:54:59.6838090Z PASS current asset cache /dns-scoped.js?v=0.20.0
+2026-11-09T11:54:59.6838997Z PASS current asset cache /automation-setup.js?v=0.20.0
+2026-11-09T11:54:59.6840415Z PASS current asset cache /extension-lab.js?v=0.20.0
+2026-11-09T11:54:59.6841297Z PASS current asset cache /panel-availability.js?v=0.20.0
+2026-11-09T11:54:59.6842188Z PASS current asset cache /wireguard-profiles-ui.js?v=0.20.0
+2026-11-09T11:54:59.6842855Z PASS current asset cache /hev-recovery-ui.js?v=0.20.0
+2026-11-09T11:54:59.6843485Z PASS current asset cache /mihomo-recovery-ui.js?v=0.20.0
+2026-11-09T11:54:59.6856432Z PASS no preview transport in index.html
+2026-11-09T11:54:59.6861744Z PASS no preview transport in interface.js
+2026-11-09T11:54:59.6863582Z PASS no preview transport in interface-model.js
+2026-11-09T11:54:59.6867184Z PASS no preview transport in console-autonomy.js
+2026-11-09T11:54:59.6869355Z PASS no preview transport in console.js
+2026-11-09T11:54:59.6870340Z PASS no preview transport in awg-workspace.js
+2026-11-09T11:54:59.6871775Z PASS no preview transport in dns-service-lab.js
+2026-11-09T11:54:59.6873960Z PASS no external stylesheet/font
+2026-11-09T11:54:59.6877617Z PASS model never performs requests
+2026-11-09T11:54:59.6883547Z PASS group is not a new route
+2026-11-09T11:54:59.6890506Z PASS destructive action and Apply dialogs announce their actual title and explanation
+2026-11-09T11:54:59.6983344Z PASS every served static dialog has a name without referencing raw details or secret inputs
+2026-11-09T11:54:59.6996263Z PASS dynamically created app update dialog is named and reused
+2026-11-09T11:54:59.6997959Z PASS native inspector accessible name
+2026-11-09T11:54:59.7002108Z PASS retry fenced across authentication epochs
+2026-11-09T11:54:59.7006310Z PASS mutation timeout
+2026-11-09T11:54:59.7011236Z PASS side drawer always clears on session end
+2026-11-09T11:54:59.7020174Z PASS visible explanations omit obsolete implementation labels
+2026-11-09T11:54:59.7044103Z PASS palette uses navigation labels and retains old query aliases with exact destinations
+2026-11-09T11:54:59.7044735Z {"suite":"interface-contract","passed":76}
+2026-11-09T11:54:59.7394644Z {"suite":"console-route-hash","passed":6}
+2026-11-09T11:54:59.7739788Z PASS custom delete is visible without expanding details and blocked while removal is pending
+2026-11-09T11:54:59.7952743Z PASS cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority
+2026-11-09T11:54:59.7966738Z PASS cached metadata does not borrow PASS and unknown waiting does not promise self-repair
+2026-11-09T11:54:59.7985621Z PASS runtime expiry boundary keeps a ready service inspector unknown without disabling independent controls
+2026-11-09T11:54:59.8014805Z PASS quick add announces success only after explicitly accepted management
+2026-11-09T11:54:59.8023918Z PASS domain-route refusal is readable on the service card without advanced details
+2026-11-09T11:54:59.8033953Z PASS sidebar count updates outside home and first setup opens the wizard directly
+2026-11-09T11:54:59.8042994Z PASS metadata summary refresh replaces unknown inventory without redrawing the home form
+2026-11-09T11:54:59.8052468Z PASS known recovery refusal replaces loading without inventing inventory or statistics
+2026-11-09T11:54:59.8054255Z PASS primary destinations have eight unique owners
+2026-11-09T11:54:59.8055706Z PASS healthy and changed remains healthy with a separate actionable change
+2026-11-09T11:54:59.8056462Z PASS routine missing proof does not become manual intervention
+2026-11-09T11:54:59.8057138Z PASS unbound good summary without route is not service proof
+2026-11-09T11:54:59.8057720Z PASS another route cannot supply green status
+2026-11-09T11:54:59.8058363Z PASS desired deselection retains applied route and pending marker
+2026-11-09T11:54:59.8059156Z PASS removing is not green even with prior proof
+2026-11-09T11:54:59.8059905Z PASS stale display does not claim stopped or confirmed access
+2026-11-09T11:54:59.8060495Z PASS queued work does not produce manual alert
+2026-11-09T11:54:59.8061287Z PASS engine usage requires matching current proof instead of runtime history
+2026-11-09T11:54:59.8062167Z PASS historical healthy cannot confirm a new route or override a current failure
+2026-11-09T11:54:59.8062706Z PASS pending applied service waits for verification, not first setup
+2026-11-09T11:54:59.8063223Z PASS saved-only rows cannot borrow good proof even if loader says ready
+2026-11-09T11:54:59.8068477Z PASS global pause suppresses old running task and explains global pause
+2026-11-09T11:54:59.8075059Z PASS scope uses applied sources not desired all LAN
+2026-11-09T11:54:59.8081360Z PASS empty applied sources does not infer all LAN from draft
+2026-11-09T11:54:59.8090207Z PASS inspector reads current route scope and ownership after background update
+2026-11-09T11:54:59.8098293Z PASS inspector content is not replaced and focus not stolen on same service
+2026-11-09T11:54:59.8106640Z PASS deleted service cannot retain old route and action controls
+2026-11-09T11:54:59.8113568Z PASS auth revocation fences inspector updates
+2026-11-09T11:54:59.8123723Z PASS domain rendering is escaped and bounded
+2026-11-09T11:54:59.8131401Z PASS quick add releases lock when renderer throws
+2026-11-09T11:54:59.8140090Z PASS quick add releases lock when action and error renderer fail
+2026-11-09T11:54:59.8148857Z PASS two quick adds create one outstanding operation
+2026-11-09T11:54:59.8156214Z PASS existing manual selection is not silently taken over
+2026-11-09T11:54:59.8165515Z PASS check stays in place with one existing server check and no Apply
+2026-11-09T11:54:59.8174239Z PASS new accepted job is not hidden by old error message
+2026-11-09T11:54:59.8181113Z PASS missing config revision refuses start without replay
+2026-11-09T11:54:59.8188895Z PASS unconfirmed start never becomes service PASS
+2026-11-09T11:54:59.8195801Z PASS check UI throw does not wedge busy state
+2026-11-09T11:54:59.8204991Z PASS faulty navigation renderer cannot prevent other components
+2026-11-09T11:54:59.8214032Z PASS contextual changes filter appears only for actual changes
+2026-11-09T11:54:59.8221746Z PASS saved whole-service exclusion has neutral card and explicit editor action
+2026-11-09T11:54:59.8231811Z PASS two service lists wait for real supported contract and exclude saved negative from bypass view
+2026-11-09T11:54:59.8240495Z PASS home excludes intentional saved negative from failures while retaining applied assignment count
+2026-11-09T11:54:59.8250689Z PASS home shows services the autopilot is working on before working ones
+2026-11-09T11:54:59.8261428Z PASS home lists every service up to eight and links the rest
+2026-11-09T11:54:59.8279791Z PASS home still supports known zero resources and unknown data
+2026-11-09T11:54:59.8288023Z PASS paused home does not claim an old service check is still running
+2026-11-09T11:54:59.8298852Z PASS idle availability is quiet, busy/failure remains visible
+2026-11-09T11:54:59.8299508Z {
+2026-11-09T11:54:59.8299836Z   "suite": "unified-ui",
+2026-11-09T11:54:59.8300296Z   "mode": "checkout-functions",
+2026-11-09T11:54:59.8300778Z   "results": [
+2026-11-09T11:54:59.8301074Z     {
+2026-11-09T11:54:59.8301901Z       "name": "custom delete is visible without expanding details and blocked while removal is pending",
+2026-11-09T11:54:59.8302461Z       "status": "passed"
+2026-11-09T11:54:59.8302832Z     },
+2026-11-09T11:54:59.8303232Z     {
+2026-11-09T11:54:59.8304076Z       "name": "cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority",
+2026-11-09T11:54:59.8304889Z       "status": "passed"
+2026-11-09T11:54:59.8305305Z     },
+2026-11-09T11:54:59.8305645Z     {
+2026-11-09T11:54:59.8306458Z       "name": "cached metadata does not borrow PASS and unknown waiting does not promise self-repair",
+2026-11-09T11:54:59.8307138Z       "status": "passed"
+2026-11-09T11:54:59.8307595Z     },
+2026-11-09T11:54:59.8308062Z     {
+2026-11-09T11:54:59.8308874Z       "name": "runtime expiry boundary keeps a ready service inspector unknown without disabling independent controls",
+2026-11-09T11:54:59.8309955Z       "status": "passed"
+2026-11-09T11:54:59.8310367Z     },
+2026-11-09T11:54:59.8310785Z     {
+2026-11-09T11:54:59.8311517Z       "name": "quick add announces success only after explicitly accepted management",
+2026-11-09T11:54:59.8312114Z       "status": "passed"
+2026-11-09T11:54:59.8312577Z     },
+2026-11-09T11:54:59.8312943Z     {
+2026-11-09T11:54:59.8313707Z       "name": "domain-route refusal is readable on the service card without advanced details",
+2026-11-09T11:54:59.8314427Z       "status": "passed"
+2026-11-09T11:54:59.8314807Z     },
+2026-11-09T11:54:59.8315197Z     {
+2026-11-09T11:54:59.8316343Z       "name": "sidebar count updates outside home and first setup opens the wizard directly",
+2026-11-09T11:54:59.8317143Z       "status": "passed"
+2026-11-09T11:54:59.8317495Z     },
+2026-11-09T11:54:59.8317840Z     {
+2026-11-09T11:54:59.8318612Z       "name": "metadata summary refresh replaces unknown inventory without redrawing the home form",
+2026-11-09T11:54:59.8319446Z       "status": "passed"
+2026-11-09T11:54:59.8319938Z     },
+2026-11-09T11:54:59.8320466Z     {
+2026-11-09T11:54:59.8321332Z       "name": "known recovery refusal replaces loading without inventing inventory or statistics",
+2026-11-09T11:54:59.8321884Z       "status": "passed"
+2026-11-09T11:54:59.8322233Z     },
+2026-11-09T11:54:59.8322510Z     {
+2026-11-09T11:54:59.8322978Z       "name": "primary destinations have eight unique owners",
+2026-11-09T11:54:59.8323418Z       "status": "passed"
+2026-11-09T11:54:59.8323778Z     },
+2026-11-09T11:54:59.8324074Z     {
+2026-11-09T11:54:59.8324599Z       "name": "healthy and changed remains healthy with a separate actionable change",
+2026-11-09T11:54:59.8325278Z       "status": "passed"
+2026-11-09T11:54:59.8325704Z     },
+2026-11-09T11:54:59.8326143Z     {
+2026-11-09T11:54:59.8326872Z       "name": "routine missing proof does not become manual intervention",
+2026-11-09T11:54:59.8327546Z       "status": "passed"
+2026-11-09T11:54:59.8327989Z     },
+2026-11-09T11:54:59.8328341Z     {
+2026-11-09T11:54:59.8329139Z       "name": "unbound good summary without route is not service proof",
+2026-11-09T11:54:59.8329890Z       "status": "passed"
+2026-11-09T11:54:59.8330310Z     },
+2026-11-09T11:54:59.8330680Z     {
+2026-11-09T11:54:59.8331270Z       "name": "another route cannot supply green status",
+2026-11-09T11:54:59.8332059Z       "status": "passed"
+2026-11-09T11:54:59.8332507Z     },
+2026-11-09T11:54:59.8332847Z     {
+2026-11-09T11:54:59.8333512Z       "name": "desired deselection retains applied route and pending marker",
+2026-11-09T11:54:59.8334258Z       "status": "passed"
+2026-11-09T11:54:59.8334750Z     },
+2026-11-09T11:54:59.8335104Z     {
+2026-11-09T11:54:59.8335806Z       "name": "removing is not green even with prior proof",
+2026-11-09T11:54:59.8336368Z       "status": "passed"
+2026-11-09T11:54:59.8336738Z     },
+2026-11-09T11:54:59.8337107Z     {
+2026-11-09T11:54:59.8337768Z       "name": "stale display does not claim stopped or confirmed access",
+2026-11-09T11:54:59.8338550Z       "status": "passed"
+2026-11-09T11:54:59.8339103Z     },
+2026-11-09T11:54:59.8339494Z     {
+2026-11-09T11:54:59.8340139Z       "name": "queued work does not produce manual alert",
+2026-11-09T11:54:59.8340727Z       "status": "passed"
+2026-11-09T11:54:59.8341029Z     },
+2026-11-09T11:54:59.8341411Z     {
+2026-11-09T11:54:59.8341991Z       "name": "engine usage requires matching current proof instead of runtime history",
+2026-11-09T11:54:59.8342564Z       "status": "passed"
+2026-11-09T11:54:59.8342891Z     },
+2026-11-09T11:54:59.8343159Z     {
+2026-11-09T11:54:59.8343817Z       "name": "historical healthy cannot confirm a new route or override a current failure",
+2026-11-09T11:54:59.8344362Z       "status": "passed"
+2026-11-09T11:54:59.8344742Z     },
+2026-11-09T11:54:59.8345030Z     {
+2026-11-09T11:54:59.8345569Z       "name": "pending applied service waits for verification, not first setup",
+2026-11-09T11:54:59.8346096Z       "status": "passed"
+2026-11-09T11:54:59.8346481Z     },
+2026-11-09T11:54:59.8346784Z     {
+2026-11-09T11:54:59.8347340Z       "name": "saved-only rows cannot borrow good proof even if loader says ready",
+2026-11-09T11:54:59.8347820Z       "status": "passed"
+2026-11-09T11:54:59.8348154Z     },
+2026-11-09T11:54:59.8348516Z     {
+2026-11-09T11:54:59.8349336Z       "name": "global pause suppresses old running task and explains global pause",
+2026-11-09T11:54:59.8349853Z       "status": "passed"
+2026-11-09T11:54:59.8350164Z     },
+2026-11-09T11:54:59.8350487Z     {
+2026-11-09T11:54:59.8350977Z       "name": "scope uses applied sources not desired all LAN",
+2026-11-09T11:54:59.8351473Z       "status": "passed"
+2026-11-09T11:54:59.8351800Z     },
+2026-11-09T11:54:59.8352233Z     {
+2026-11-09T11:54:59.8352777Z       "name": "empty applied sources does not infer all LAN from draft",
+2026-11-09T11:54:59.8353269Z       "status": "passed"
+2026-11-09T11:54:59.8353650Z     },
+2026-11-09T11:54:59.8353933Z     {
+2026-11-09T11:54:59.8354493Z       "name": "inspector reads current route scope and ownership after background update",
+2026-11-09T11:54:59.8355053Z       "status": "passed"
+2026-11-09T11:54:59.8355389Z     },
+2026-11-09T11:54:59.8355669Z     {
+2026-11-09T11:54:59.8356271Z       "name": "inspector content is not replaced and focus not stolen on same service",
+2026-11-09T11:54:59.8356769Z       "status": "passed"
+2026-11-09T11:54:59.8357116Z     },
+2026-11-09T11:54:59.8357426Z     {
+2026-11-09T11:54:59.8357944Z       "name": "deleted service cannot retain old route and action controls",
+2026-11-09T11:54:59.8358473Z       "status": "passed"
+2026-11-09T11:54:59.8358771Z     },
+2026-11-09T11:54:59.8359265Z     {
+2026-11-09T11:54:59.8359718Z       "name": "auth revocation fences inspector updates",
+2026-11-09T11:54:59.8360152Z       "status": "passed"
+2026-11-09T11:54:59.8360502Z     },
+2026-11-09T11:54:59.8360785Z     {
+2026-11-09T11:54:59.8361258Z       "name": "domain rendering is escaped and bounded",
+2026-11-09T11:54:59.8361667Z       "status": "passed"
+2026-11-09T11:54:59.8361973Z     },
+2026-11-09T11:54:59.8362262Z     {
+2026-11-09T11:54:59.8362704Z       "name": "quick add releases lock when renderer throws",
+2026-11-09T11:54:59.8363198Z       "status": "passed"
+2026-11-09T11:54:59.8363510Z     },
+2026-11-09T11:54:59.8363780Z     {
+2026-11-09T11:54:59.8364292Z       "name": "quick add releases lock when action and error renderer fail",
+2026-11-09T11:54:59.8364881Z       "status": "passed"
+2026-11-09T11:54:59.8365258Z     },
+2026-11-09T11:54:59.8365530Z     {
+2026-11-09T11:54:59.8365992Z       "name": "two quick adds create one outstanding operation",
+2026-11-09T11:54:59.8366429Z       "status": "passed"
+2026-11-09T11:54:59.8366737Z     },
+2026-11-09T11:54:59.8367053Z     {
+2026-11-09T11:54:59.8367558Z       "name": "existing manual selection is not silently taken over",
+2026-11-09T11:54:59.8368002Z       "status": "passed"
+2026-11-09T11:54:59.8368322Z     },
+2026-11-09T11:54:59.8368593Z     {
+2026-11-09T11:54:59.8369816Z       "name": "check stays in place with one existing server check and no Apply",
+2026-11-09T11:54:59.8370479Z       "status": "passed"
+2026-11-09T11:54:59.8370845Z     },
+2026-11-09T11:54:59.8371141Z     {
+2026-11-09T11:54:59.8371640Z       "name": "new accepted job is not hidden by old error message",
+2026-11-09T11:54:59.8372079Z       "status": "passed"
+2026-11-09T11:54:59.8372396Z     },
+2026-11-09T11:54:59.8372708Z     {
+2026-11-09T11:54:59.8373193Z       "name": "missing config revision refuses start without replay",
+2026-11-09T11:54:59.8373658Z       "status": "passed"
+2026-11-09T11:54:59.8373981Z     },
+2026-11-09T11:54:59.8374235Z     {
+2026-11-09T11:54:59.8374710Z       "name": "unconfirmed start never becomes service PASS",
+2026-11-09T11:54:59.8375146Z       "status": "passed"
+2026-11-09T11:54:59.8375506Z     },
+2026-11-09T11:54:59.8375816Z     {
+2026-11-09T11:54:59.8376257Z       "name": "check UI throw does not wedge busy state",
+2026-11-09T11:54:59.8376660Z       "status": "passed"
+2026-11-09T11:54:59.8377054Z     },
+2026-11-09T11:54:59.8377365Z     {
+2026-11-09T11:54:59.8377903Z       "name": "faulty navigation renderer cannot prevent other components",
+2026-11-09T11:54:59.8378378Z       "status": "passed"
+2026-11-09T11:54:59.8378684Z     },
+2026-11-09T11:54:59.8379274Z     {
+2026-11-09T11:54:59.8379835Z       "name": "contextual changes filter appears only for actual changes",
+2026-11-09T11:54:59.8380329Z       "status": "passed"
+2026-11-09T11:54:59.8380658Z     },
+2026-11-09T11:54:59.8380924Z     {
+2026-11-09T11:54:59.8381538Z       "name": "saved whole-service exclusion has neutral card and explicit editor action",
+2026-11-09T11:54:59.8382119Z       "status": "passed"
+2026-11-09T11:54:59.8382457Z     },
+2026-11-09T11:54:59.8382740Z     {
+2026-11-09T11:54:59.8383507Z       "name": "two service lists wait for real supported contract and exclude saved negative from bypass view",
+2026-11-09T11:54:59.8384141Z       "status": "passed"
+2026-11-09T11:54:59.8384504Z     },
+2026-11-09T11:54:59.8384805Z     {
+2026-11-09T11:54:59.8385476Z       "name": "home excludes intentional saved negative from failures while retaining applied assignment count",
+2026-11-09T11:54:59.8386038Z       "status": "passed"
+2026-11-09T11:54:59.8386418Z     },
+2026-11-09T11:54:59.8386702Z     {
+2026-11-09T11:54:59.8387544Z       "name": "home shows services the autopilot is working on before working ones",
+2026-11-09T11:54:59.8388060Z       "status": "passed"
+2026-11-09T11:54:59.8388370Z     },
+2026-11-09T11:54:59.8388702Z     {
+2026-11-09T11:54:59.8389527Z       "name": "home lists every service up to eight and links the rest",
+2026-11-09T11:54:59.8390228Z       "status": "passed"
+2026-11-09T11:54:59.8390626Z     },
+2026-11-09T11:54:59.8390889Z     {
+2026-11-09T11:54:59.8391581Z       "name": "home still supports known zero resources and unknown data",
+2026-11-09T11:54:59.8392044Z       "status": "passed"
+2026-11-09T11:54:59.8392413Z     },
+2026-11-09T11:54:59.8392723Z     {
+2026-11-09T11:54:59.8393256Z       "name": "paused home does not claim an old service check is still running",
+2026-11-09T11:54:59.8393782Z       "status": "passed"
+2026-11-09T11:54:59.8394105Z     },
+2026-11-09T11:54:59.8394455Z     {
+2026-11-09T11:54:59.8394952Z       "name": "idle availability is quiet, busy/failure remains visible",
+2026-11-09T11:54:59.8395442Z       "status": "passed"
+2026-11-09T11:54:59.8395893Z     }
+2026-11-09T11:54:59.8396188Z   ]
+2026-11-09T11:54:59.8396487Z }
+2026-11-09T11:54:59.9040857Z PASS simple diagnostic cancels on logout and fences late bodies without unlocking a newer request
+2026-11-09T11:54:59.9044842Z PASS simple logout clears private diagnostic presentation and refuses protected requests
+2026-11-09T11:54:59.9050822Z PASS simple catalog coalesces identical queries and fences a prior login response
+2026-11-09T11:54:59.9057951Z PASS old simple import confirmation cannot write, announce success or unlock the new session
+2026-11-09T11:54:59.9063216Z PASS simple maintenance save fences old readback and preserves the newer write lock
+2026-11-09T11:54:59.9064311Z simple home: ok
+2026-11-09T11:54:59.9462099Z PASS quick policy interval is a minimum and queue delay is explicit
+2026-11-09T11:54:59.9491653Z PASS network loss keeps quick policy write unknown: Failed to fetch
+2026-11-09T11:54:59.9502430Z PASS network loss keeps quick policy write unknown: NetworkError when attempting to fetch resource.
+2026-11-09T11:54:59.9518715Z PASS network loss keeps quick policy write unknown: Load failed
+2026-11-09T11:54:59.9520546Z PASS network presentation preserves HTTP, auth and cancellation errors
+2026-11-09T11:54:59.9522029Z PASS ordinary edit preserves every authority-bearing and unknown future field
+2026-11-09T11:54:59.9525793Z PASS range and type constraints match server policy
+2026-11-09T11:54:59.9526600Z PASS first setup is not silently enabled by interval form
+2026-11-09T11:54:59.9528033Z PASS stale or fenced snapshot cannot enable save
+2026-11-09T11:54:59.9537961Z PASS navigation and normal polling never submit writes
+2026-11-09T11:54:59.9547114Z PASS unsaved fields survive newer published revision and save is fenced
+2026-11-09T11:54:59.9558071Z PASS unknown write remains fenced after unusable readback: missing-policy
+2026-11-09T11:54:59.9568359Z PASS unknown write remains fenced after unusable readback: invalid-time
+2026-11-09T11:54:59.9587749Z PASS unknown write remains fenced after unusable readback: older-snapshot
+2026-11-09T11:54:59.9597597Z PASS unknown write remains fenced after unusable readback: retained
+2026-11-09T11:54:59.9606752Z PASS unknown write remains fenced after unusable readback: blocked
+2026-11-09T11:54:59.9616060Z PASS late failed PUT cannot fence a new authenticated form
+2026-11-09T11:54:59.9626127Z PASS unknown write reconciliation coalesces repeated clicks and retains draft
+2026-11-09T11:54:59.9636947Z PASS successful PUT with invalid readback cannot report saved or discard draft
+2026-11-09T11:54:59.9653368Z PASS valid save preserves policy authority and waits for live revision
+2026-11-09T11:54:59.9662489Z PASS revision conflict retains draft and never repeats PUT automatically
+2026-11-09T11:54:59.9672097Z PASS late successful reconciliation cannot overwrite a new session draft
+2026-11-09T11:54:59.9679880Z PASS leaving warns only while quick policy changes remain unsaved
+2026-11-09T11:54:59.9689176Z PASS new process accepts an earlier server clock but fences drafts at the same policy revision
+2026-11-09T11:54:59.9700085Z PASS live readback without instance id retains the publication ordering context
+2026-11-09T11:54:59.9710114Z PASS process change while reconciling cannot unlock an unknown write using an old response
+2026-11-09T11:54:59.9718879Z PASS visibleReload reconciles unknown writes without replay
+2026-11-09T11:54:59.9728353Z PASS globalReload reconciles unknown writes without replay
+2026-11-09T11:54:59.9737394Z PASS visible read updates a CAS-conflicted policy while keeping draft
+2026-11-09T11:54:59.9740978Z PASS source priority is an ordered subset and never grants source permission
+2026-11-09T11:54:59.9745790Z PASS source names use safe metadata and do not assert manual privacy
+2026-11-09T11:54:59.9761622Z PASS priority add reorder remove stays local and save preserves consent and route types
+2026-11-09T11:54:59.9772430Z PASS revoked source remains visibly invalid until removed and cannot be submitted
+2026-11-09T11:54:59.9780103Z PASS priority controls preserve dirty edits across a changed revision and clear on logout
+2026-11-09T11:54:59.9781068Z {"suite":"autopilot-settings","tests":34}
+2026-11-09T11:55:00.0115181Z PASS entry is inert; explicit read enables only a closed draft choice
+2026-11-09T11:55:00.0133534Z PASS save stages exact revision and never calls plan apply or probe
+2026-11-09T11:55:00.0142376Z PASS stock fastpath auto remains an explicit CAS draft and has no live effect
+2026-11-09T11:55:00.0149464Z PASS all four recipes render draft=default applied=default
+2026-11-09T11:55:00.0155579Z PASS all four recipes render draft=default applied=stock-tls-circular-v1
+2026-11-09T11:55:00.0199742Z PASS all four recipes render draft=default applied=stock-tls-circular-auto-v1
+2026-11-09T11:55:00.0206757Z PASS all four recipes render draft=default applied=stock-tls-circular-observe-auto-v1
+2026-11-09T11:55:00.0213994Z PASS all four recipes render draft=stock-tls-circular-v1 applied=default
+2026-11-09T11:55:00.0220523Z PASS all four recipes render draft=stock-tls-circular-v1 applied=stock-tls-circular-v1
+2026-11-09T11:55:00.0227756Z PASS all four recipes render draft=stock-tls-circular-v1 applied=stock-tls-circular-auto-v1
+2026-11-09T11:55:00.0234000Z PASS all four recipes render draft=stock-tls-circular-v1 applied=stock-tls-circular-observe-auto-v1
+2026-11-09T11:55:00.0239773Z PASS all four recipes render draft=stock-tls-circular-auto-v1 applied=default
+2026-11-09T11:55:00.0245953Z PASS all four recipes render draft=stock-tls-circular-auto-v1 applied=stock-tls-circular-v1
+2026-11-09T11:55:00.0251798Z PASS all four recipes render draft=stock-tls-circular-auto-v1 applied=stock-tls-circular-auto-v1
+2026-11-09T11:55:00.0257381Z PASS all four recipes render draft=stock-tls-circular-auto-v1 applied=stock-tls-circular-observe-auto-v1
+2026-11-09T11:55:00.0272884Z PASS all four recipes render draft=stock-tls-circular-observe-auto-v1 applied=default
+2026-11-09T11:55:00.0278687Z PASS all four recipes render draft=stock-tls-circular-observe-auto-v1 applied=stock-tls-circular-v1
+2026-11-09T11:55:00.0284290Z PASS all four recipes render draft=stock-tls-circular-observe-auto-v1 applied=stock-tls-circular-auto-v1
+2026-11-09T11:55:00.0289994Z PASS all four recipes render draft=stock-tls-circular-observe-auto-v1 applied=stock-tls-circular-observe-auto-v1
+2026-11-09T11:55:00.0297444Z PASS observer recipe stages only exact CAS and keeps previous applied label
+2026-11-09T11:55:00.0305341Z PASS closed four-recipe snapshot refuses future draft
+2026-11-09T11:55:00.0311651Z PASS closed four-recipe snapshot refuses future applied
+2026-11-09T11:55:00.0317494Z PASS closed four-recipe snapshot refuses future menu ID
+2026-11-09T11:55:00.0323078Z PASS closed four-recipe snapshot refuses missing menu entry
+2026-11-09T11:55:00.0329171Z PASS closed four-recipe snapshot refuses extra menu entry
+2026-11-09T11:55:00.0335018Z PASS closed four-recipe snapshot refuses duplicate menu entry
+2026-11-09T11:55:00.0340900Z PASS closed four-recipe snapshot refuses null menu entry
+2026-11-09T11:55:00.0348738Z PASS lost write reply stays unconfirmed and requires independent read
+2026-11-09T11:55:00.0355655Z PASS confirmed selection requests the core fresh readback for the draft banner
+2026-11-09T11:55:00.0363855Z PASS revision conflict never overwrites or repeats the selection
+2026-11-09T11:55:00.0370852Z PASS logout fences late recipe success
+2026-11-09T11:55:00.0376899Z PASS logout fences late recipe abort
+2026-11-09T11:55:00.0383996Z PASS unknown recipe response cannot enable a draft write
+2026-11-09T11:55:00.0398051Z {"suite":"nfqws-first-start-ui","tests":33}
+2026-11-09T11:55:00.0746551Z Active workspace read budget, 21 destinations, cancellation/auth checks: PASS
+2026-11-09T11:55:00.1082703Z Inspector focus survives card refresh; logout/navigation do not steal focus
+2026-11-09T11:55:00.1438805Z Inspector controls: changed definition confirmation offered only for managed services
+2026-11-09T11:55:00.1923612Z PASS inspector deletion: accepted session request + fresh completed server state closes once; stale, pending, failed and unrelated missing states remain uncertain
+2026-11-09T11:55:00.2774117Z PASS component cards: truthful runtime unknown/stopped states, versions/inventory/update errors, protected actions, reviewed removal, single-flight refresh and auth fences
+2026-11-09T11:55:00.3102166Z PASS completed success stays compact, escapes text, and opens existing details only by click
+2026-11-09T11:55:00.3115119Z PASS success expires, closes explicitly and pauses while keyboard focus or hover uses its actions
+2026-11-09T11:55:00.3125002Z PASS bounded queue and auth invalidation release payloads and fence old details buttons
+2026-11-09T11:55:00.3135674Z PASS autoclosed details history is bounded and discarded history buttons cannot revive old payloads
+2026-11-09T11:55:00.3161436Z PASS errors, unknown outcomes and recovery remain persistent beside expiring successes
+2026-11-09T11:55:00.3188249Z PASS standalone confirmed draft save notifies, internal staging and uncertain saves do not
+2026-11-09T11:55:00.3223737Z PASS autonomy success still expires, errors stay visible and its close control has a separate right column
+2026-11-09T11:55:00.3236893Z Operation notifications: 7 modeled checks passed; no native/browser claim
+2026-11-09T11:55:00.3920736Z PASS saved native plus Lua success is historical, without a current-installation or connection claim
+2026-11-09T11:55:00.3940222Z PASS missing or invalid saved timestamp never borrows the current time
+2026-11-09T11:55:00.3957737Z PASS manual unchecked selection is neutral without a health or confidence claim
+2026-11-09T11:55:00.3966512Z PASS manual frozen degraded snapshot preserves genuine stale evidence reason
+2026-11-09T11:55:00.3976049Z PASS manual frozen healthy snapshot retains the genuine eligible result
+2026-11-09T11:55:00.4008260Z PASS legacy or stale PASS history does not manufacture a current timing or ready state
+2026-11-09T11:55:00.4017276Z PASS fresh current PASS retains its measured timing and eligibility without new requests
+2026-11-09T11:55:00.4048294Z PASS unknown snapshots preserve history without readiness, current timing or healthy presentation
+2026-11-09T11:55:00.4055430Z PASS partial/uncertain result does not become compatibility {"ok":true}
+2026-11-09T11:55:00.4062526Z PASS partial/uncertain result does not become compatibility {"ok":true,"native":true}
+2026-11-09T11:55:00.4067684Z PASS partial/uncertain result does not become compatibility {"ok":true,"lua_checked":true}
+2026-11-09T11:55:00.4073649Z PASS partial/uncertain result does not become compatibility {"ok":true,"native":true,"lua_checked":true,"quiescence_unknown":true}
+2026-11-09T11:55:00.4078232Z PASS partial/uncertain result does not become compatibility null
+2026-11-09T11:55:00.4084188Z PASS explicit compatibility rejection is separate from unconfirmed result
+2026-11-09T11:55:00.4090219Z PASS legacy native timeout remains unconfirmed rather than incompatible
+2026-11-09T11:55:00.4095464Z PASS uncertain completion takes precedence over an old rejection code
+2026-11-09T11:55:00.4102743Z PASS disabled executor preserves editable choice and historical pass without a probe affordance
+2026-11-09T11:55:00.4109704Z PASS partial legacy result is not counted or offered as a Lua-compatible probe
+2026-11-09T11:55:00.4117141Z PASS explicit false fences an old probe click before confirmation or POST
+2026-11-09T11:55:00.4123942Z PASS explicit true preserves an existing separate probe affordance without executing it
+2026-11-09T11:55:00.4131031Z PASS an older response without the availability field preserves the existing display
+2026-11-09T11:55:00.4150467Z PASS Validate uses the same one POST then saved-state GET, with no new body/grant/probe
+2026-11-09T11:55:00.4161768Z PASS saved historical timestamp wins over a newer POST receipt
+2026-11-09T11:55:00.4173147Z PASS saved rejection wins over an optimistic POST receipt
+2026-11-09T11:55:00.4181942Z PASS missing saved candidate cannot borrow compatibility from POST
+2026-11-09T11:55:00.4191680Z PASS failed saved-state read does not claim that successful native work was applied
+2026-11-09T11:55:00.4222780Z PASS manual action does not infer server admission from historical validation or probe availability
+2026-11-09T11:55:00.4232210Z PASS manual button is connected to the existing candidate listener without permission-like request fields
+2026-11-09T11:55:00.4245398Z PASS manual save sends the exact contract once then reads canonical state without network unlock
+2026-11-09T11:55:00.4266835Z PASS catalog service without probe URL can be chosen but cannot start a probe
+2026-11-09T11:55:00.4293402Z PASS missing candidate or malformed manual tuple does not send a mutation
+2026-11-09T11:55:00.4301527Z PASS ordinary HTTP manual contract does not offer unsupported voice UDP selection
+2026-11-09T11:55:00.4333839Z PASS actual source control Stop and busy refusals refresh read-only state without fallback or replay
+2026-11-09T11:55:00.4348486Z PASS authentication or permission refusal is not replayed or followed by another unauthorized read
+2026-11-09T11:55:00.4356975Z PASS failed refusal readback preserves the original server reason and last snapshot
+2026-11-09T11:55:00.4375593Z PASS successful manual POST cannot replace missing or failed canonical readback
+2026-11-09T11:55:00.4385061Z PASS manual single flight blocks a second click during the POST and releases after readback
+2026-11-09T11:55:00.4397403Z PASS manual POST deadline aborts without replay and releases the form after a read-only refresh
+2026-11-09T11:55:00.4411890Z PASS manual completion after authentication changes cannot publish a saved choice
+2026-11-09T11:55:00.4421713Z PASS late manual readback after leaving the laboratory does not reopen details in another view
+2026-11-09T11:55:00.4432325Z PASS manual tuple follows the chosen protocol and IP family without inheriting TCP IPv4
+2026-11-09T11:55:00.4447940Z PASS existing evidence selection and reset retain their original separate request contracts
+2026-11-09T11:55:00.4474186Z PASS compatibility validation stays single-flight through POST and canonical readback
+2026-11-09T11:55:00.4484766Z PASS compatibility delivery deadline aborts once, stays unconfirmed and releases pending UI
+2026-11-09T11:55:00.4514755Z PASS compatibility server refusals release buttons without retry or unauthorized readback
+2026-11-09T11:55:00.4536391Z PASS late compatibility completion cannot publish across authentication or navigation
+2026-11-09T11:55:00.4546170Z PASS an old compatibility action cannot clear a newer authenticated action
+2026-11-09T11:55:00.4546992Z {"suite":"strategy-compatibility-ui","mode":"production-functions-no-native","passed":47}
+2026-11-09T11:55:00.4930164Z PASS update needs matching original installed readback and cannot fall back to install
+2026-11-09T11:55:00.4971003Z PASS managed update posts one CAS to update and independently verifies the new receipt
+2026-11-09T11:55:00.4987962Z PASS rollback to previous bundle settles unknown update using its exact retained receipt
+2026-11-09T11:55:00.4990575Z PASS plan and installed readers reject partial, future and changed identity facts
+2026-11-09T11:55:00.4991596Z PASS receipt matching uses schema, exact transaction, provider, flavor and hash
+2026-11-09T11:55:00.5000748Z PASS stock component detection and rendering do not create managed proof or HTTP writes
+2026-11-09T11:55:00.5009592Z PASS plan/readback uses three bounded sequential GETs without competing with its own plan gate
+2026-11-09T11:55:00.5017970Z PASS a blocked plan remains readable without offering installation
+2026-11-09T11:55:00.5027294Z PASS actual unreviewed platform reason without a manifest stays visible and read-only
+2026-11-09T11:55:00.5047336Z PASS a busy plan stops the sequential read and cannot reuse an old ready plan or retry POST
+2026-11-09T11:55:00.5057750Z PASS an unavailable real lease never becomes installed from plan booleans
+2026-11-09T11:55:00.5066478Z PASS verified installed readback disables new installation and does not claim service compatibility
+2026-11-09T11:55:00.5078037Z PASS one explicit idle install posts only observed CAS, including revision zero and Safe Mode/Stop
+2026-11-09T11:55:00.5087048Z PASS a different independently read receipt fences an optimistic successful POST
+2026-11-09T11:55:00.5104467Z PASS changed bundle identity or missing POST receipt never claims completed installation
+2026-11-09T11:55:00.5113011Z PASS failed independent readback cannot turn successful native receipt into a success notice
+2026-11-09T11:55:00.5122321Z PASS clean refused 409 requires fresh plan and never repeats POST automatically
+2026-11-09T11:55:00.5131318Z PASS recovery-required 503 directs to the existing journal without install replay
+2026-11-09T11:55:00.5157811Z PASS network, timeout and generic conflicts keep an unknown write fenced after an absent read
+2026-11-09T11:55:00.5168449Z PASS confirmed schema 3 rollback plus new read settles the local fence without repeating installation
+2026-11-09T11:55:00.5194537Z PASS invalid, mismatched revision or idle-without-source journal cannot clear an unknown install
+2026-11-09T11:55:00.5210087Z PASS schema 3 receipt recovery requires the matching installed receipt after the terminal journal
+2026-11-09T11:55:00.5230994Z PASS stale or changed revisions fence installation and do not auto-refresh or post
+2026-11-09T11:55:00.5252876Z PASS stock component activity and recovery block POST while managed reads stay available
+2026-11-09T11:55:00.5308483Z PASS late GET and POST cannot revive proof or show a notice after logout
+2026-11-09T11:55:00.5318583Z PASS leaving a sent install releases UI busy state and requires independent read on return
+2026-11-09T11:55:00.5325979Z PASS hidden or obsolete reads release the read ticket and do not overwrite a newer session
+2026-11-09T11:55:00.5342146Z PASS current 401 closes the session and sanitized reason cannot create markup
+2026-11-09T11:55:00.5386908Z PASS the managed caller is wired in both actual and inherited cards, without stock action substitution
+2026-11-09T11:55:00.5387868Z {"suite":"managed-nfq-bundle-ui","mode":"production-caller-no-native","tests":29}
+2026-11-09T11:55:00.5734598Z PASS no positive acceptance from phase, candidate or historical receipt
+2026-11-09T11:55:00.5745547Z PASS historical unknown offers no force, replay or operator boolean
+2026-11-09T11:55:00.5747212Z PASS invalid, future, corrupt and inconsistent data fail closed
+2026-11-09T11:55:00.5752174Z PASS legacy schema 1/2 remain known and schema 2 idle acceptance stays neutral
+2026-11-09T11:55:00.5754117Z PASS server capabilities restrict actions; idle needs schema 2 and both trusted observations
+2026-11-09T11:55:00.5791125Z PASS matching idle POST and separate idle GET settle with a neutral label
+2026-11-09T11:55:00.5803681Z PASS idle result missing its exact acceptance fields cannot settle or replay
+2026-11-09T11:55:00.5815007Z PASS Home/login do not read recovery; navigation issues only single GET
+2026-11-09T11:55:00.5829538Z PASS POST has matching transaction and CAS, then independent journal read
+2026-11-09T11:55:00.5862913Z PASS 500/409 unknown writes require explicit read and never replay
+2026-11-09T11:55:00.5873530Z PASS 202-shaped pending response never shows settled or live acceptance
+2026-11-09T11:55:00.5884219Z PASS confirmation or cancellation cannot retain obsolete CAS authority
+2026-11-09T11:55:00.5903573Z PASS Safe Mode and Stop block repair without disabling GET
+2026-11-09T11:55:00.5930858Z PASS late POST/read/error cannot revive data after logout
+2026-11-09T11:55:00.5940627Z PASS current 401 closes the session; 503 keeps journal visible and fenced
+2026-11-09T11:55:00.5951450Z PASS stale enabled action gives a visible readback and never posts
+2026-11-09T11:55:00.5963201Z PASS leaving a pending action releases the ticket and allows explicit readback
+2026-11-09T11:55:00.5974368Z PASS leaving while review is pending cancels POST and releases buttons
+2026-11-09T11:55:00.5977566Z PASS schema 3 is only the managed NFQ file protocol with exact known phases
+2026-11-09T11:55:00.5980602Z PASS schema 3 actions come from explicit capabilities, without legacy acceptance or observed booleans as grants
+2026-11-09T11:55:00.5982146Z PASS all schema 3 terminal phases stay neutral even with a matching forged live receipt
+2026-11-09T11:55:00.5996166Z PASS schema 3 resume allows Safe Mode and Stop but uses only current CAS and existing transaction confirmation
+2026-11-09T11:55:00.6008614Z PASS schema 3 rollback-started only offers the actually advertised rollback action
+2026-11-09T11:55:00.6019090Z PASS schema 3 current revision still fences actions while Safe Mode and Stop stay allowed
+2026-11-09T11:55:00.6073235Z PASS schema 3 pending or a different readback transaction cannot settle the operation
+2026-11-09T11:55:00.6101675Z PASS schema 3 incomplete or route-changing acknowledgement cannot borrow a terminal result
+2026-11-09T11:55:00.6113708Z PASS schema 3 completed journal without matching installed receipt readback remains unconfirmed
+2026-11-09T11:55:00.6123596Z PASS recovery waits for the current panel batch with one read ticket
+2026-11-09T11:55:00.6132122Z PASS a replaced genuine panel batch is joined before recovery starts
+2026-11-09T11:55:00.6144317Z PASS exact transient busy retries only GET after backoff and settles from a fresh journal
+2026-11-09T11:55:00.6157425Z PASS four persistent busy responses stop automatically and allow a separate explicit read
+2026-11-09T11:55:00.6219793Z PASS other 409, unknown busy shape and permanent 503 never auto retry
+2026-11-09T11:55:00.6231380Z PASS busy after a previous clear journal expires its proof immediately
+2026-11-09T11:55:00.6261306Z PASS expired idle and completed journal snapshots cannot retain a current success heading
+2026-11-09T11:55:00.6286841Z PASS leave or logout aborts a queued busy retry and late completion cannot restart it
+2026-11-09T11:55:00.6295698Z PASS leaving a panel wait aborts it before any recovery request
+2026-11-09T11:55:00.6305874Z PASS a stalled panel wait hits the same finite deadline and remains visibly fenced
+2026-11-09T11:55:00.6315412Z PASS deadline fences an ignored-abort GET and discards its late clear journal
+2026-11-09T11:55:00.6326133Z PASS repair POST busy still never retries or automatically reads a journal
+2026-11-09T11:55:00.6340872Z PASS repair deadline releases busy into unknown read-only state without replay
+2026-11-09T11:55:00.6352567Z PASS repair completion before deadline clears timer and still reads journal
+2026-11-09T11:55:00.6363282Z PASS repair auth cancellation aborts transport and ignores late success
+2026-11-09T11:55:00.6374972Z PASS leaving recovery cancels repair wait but preserves unknown outcome
+2026-11-09T11:55:00.6375877Z {"suite":"component-recovery","tests":43}
+2026-11-09T11:55:00.6752021Z PASS each card step opens its exact engine and never starts a write
+2026-11-09T11:55:00.6766284Z PASS checks focus the real validator first and the service selector after a matching format receipt
+2026-11-09T11:55:00.6779259Z PASS reopening the same engine keeps dirty values without a switch review
+2026-11-09T11:55:00.6791998Z PASS declining a switch keeps the original engine, dirty draft and view
+2026-11-09T11:55:00.6804812Z PASS missing description cannot fall back to a different engine
+2026-11-09T11:55:00.6818754Z PASS independent read can provide the requested description
+2026-11-09T11:55:00.6839501Z PASS a revoked navigation read cannot open an engine even if a retained description appears
+2026-11-09T11:55:00.6853804Z PASS busy missing-catalog navigation preserves the chosen engine and local dirty profile
+2026-11-09T11:55:00.6868442Z PASS leaving during a switch review revokes the old selection
+2026-11-09T11:55:00.6882553Z PASS newer card request wins over a late older confirmation
+2026-11-09T11:55:00.6906412Z PASS logout while confirmation or read is pending cannot open private settings
+2026-11-09T11:55:00.6929222Z PASS engine operation blocks navigation and disabled Apply explains preparation
+2026-11-09T11:55:00.6953544Z PASS current read 401 closes auth; old read errors cannot replace new notices
+2026-11-09T11:55:00.6965769Z PASS unknown step and engine are inert
+2026-11-09T11:55:00.6986563Z PASS choose service opens the visible catalog after an excluded or filtered view without writing
+2026-11-09T11:55:00.7009536Z PASS a queued choose-service focus cannot pull the user back after navigation or logout
+2026-11-09T11:55:00.7031147Z PASS choose service stays inert during an engine operation or without a selected engine
+2026-11-09T11:55:00.7060397Z PASS missing-file validation is readable, native execution is separate and raw output stays collapsed
+2026-11-09T11:55:00.7076937Z PASS safe profile summaries translate fixed fields and draft notices without changing wire data
+2026-11-09T11:55:00.7078009Z {"suite":"engine-card-flow","tests":19}
+2026-11-09T11:55:00.7426130Z PASS observed process is separate from installation and ownership; known modes and domain note translated; wire data retained
+2026-11-09T11:55:00.7772152Z PASS mutation fence applies even to login, probes, Stop, recovery and Apply
+2026-11-09T11:55:00.7775020Z PASS same-origin reads only, forced refresh and foreign origins blocked
+2026-11-09T11:55:00.7785556Z PASS credential URL, ambiguous auth and unspecified fixture rejected
+2026-11-09T11:55:00.7788079Z PASS pending streams, aborted writes and cross-view API paths counted distinctly
+2026-11-09T11:55:00.7792187Z PASS headed visibility measurement is explicit opt-in and defaults to headless
+2026-11-09T11:55:00.7795215Z PASS raw visibility sample spans an observer interval and cleanup owns only its Chrome profile
+2026-11-09T11:55:00.7805304Z PASS renderer reset and missing metrics stay unavailable
+2026-11-09T11:55:00.7806571Z PASS stock catalog is not a loaded fixture and unread metadata is not empty
+2026-11-09T11:55:00.7807649Z PASS LAN discovery and device policies are observations outside the user library
+2026-11-09T11:55:00.7828527Z PASS own checks retain a fixed code/message and only known navigation IDs
+2026-11-09T11:55:00.7830291Z PASS foreign exceptions cannot publish DOM, credentials, stacks or spoofed assertion metadata
+2026-11-09T11:55:00.7831245Z {"suite":"ui-http-perf-boundaries","passed":11}
+2026-11-09T11:55:00.8658210Z PASS project log: readable issues/events, honest request outcomes, ordering/bounds, escaping, drawer integration, confirmation reuse and valid export
+2026-11-09T11:55:00.8665261Z PASS active audit search survives replacement of rows during refresh
+2026-11-09T11:55:00.8668003Z PASS project log distinguishes busy retained control from fresh state and retains Stop receipt
+2026-11-09T11:55:00.9013743Z Onboarding steps render catalog names as text
+2026-11-09T11:55:00.9135290Z PASS wizard closes on auth loss and old component/refresh/service completions cannot reopen or advance it
+2026-11-09T11:55:00.9753755Z PASS theme: dark first visit, explicit light, reload, invalid preference, blocked storage, early paint
+2026-11-09T11:55:01.0152919Z PASS lost panel read has useful wording: Failed to fetch
+2026-11-09T11:55:01.0166115Z PASS lost panel read has useful wording: NetworkError when attempting to fetch resource.
+2026-11-09T11:55:01.0176496Z PASS lost panel read has useful wording: Load failed
+2026-11-09T11:55:01.0347996Z PASS lost mutation response cannot announce completion or replay the write
+2026-11-09T11:55:01.0371989Z PASS auth abort stays silent while same-session timeout retains its own wording
+2026-11-09T11:55:01.0392825Z PASS consent row hides unchanged authority and returns for broader device permission
+2026-11-09T11:55:01.0422877Z PASS initial setup discovery is not canceled by an early protected autonomy read
+2026-11-09T11:55:01.0435079Z PASS auth notice creates a keyboard button that dismisses the notice
+2026-11-09T11:55:01.0454178Z PASS initial 401 notice clears on restored login and fresh state is requested
+2026-11-09T11:55:01.0475046Z PASS late pre-login 401 cannot reopen authentication or undo current loading admission
+2026-11-09T11:55:01.0504256Z PASS authentication epoch checked again after delayed JSON parsing
+2026-11-09T11:55:01.0515003Z PASS logout rejects late refresh http-error
+2026-11-09T11:55:01.0525318Z PASS logout rejects late refresh network-error
+2026-11-09T11:55:01.0533081Z PASS logout rejects late refresh success
+2026-11-09T11:55:01.0556945Z PASS late source failure cannot replace a post-login notice or source state
+2026-11-09T11:55:01.0577496Z PASS late busy mutation is rejected before scheduling an automatic retry
+2026-11-09T11:55:01.0599104Z PASS already scheduled retry cannot replay a mutation in a new session
+2026-11-09T11:55:01.0616400Z PASS pause completion cannot announce success after logout during its readback
+2026-11-09T11:55:01.0636948Z PASS ordinary core refresh hideAuth calls preserve active mutation and open inspector
+2026-11-09T11:55:01.0659879Z PASS actual logout and login still invalidate the previous mutation and close inspector
+2026-11-09T11:55:01.0688042Z PASS before first setup the hero action opens the wizard without writing
+2026-11-09T11:55:01.0741610Z PASS quick start saves a whole-network policy through the shared consent path
+2026-11-09T11:55:01.0756197Z PASS advanced setup keeps the full four-step wizard
+2026-11-09T11:55:01.0780907Z PASS changed starter definition preserves subset and revokes previous consent
+2026-11-09T11:55:01.0801510Z PASS unchanged starter refresh keeps choice and consent
+2026-11-09T11:55:01.0827690Z PASS forced read waits for earlier poll and then obtains a newer snapshot
+2026-11-09T11:55:01.0865205Z PASS queued forced read is discarded across authentication change
+2026-11-09T11:55:01.0889249Z PASS services navigation publishes settled runtime through the normal cached read
+2026-11-09T11:55:01.0909165Z PASS services polling keeps reading runtime without navigation and coalesces in-flight reads
+2026-11-09T11:55:01.0935591Z PASS services refresh stays behind authentication and rejects late old-session publication
+2026-11-09T11:55:01.0957220Z PASS ordinary polling uses published snapshot and retained data cannot report enabled
+2026-11-09T11:55:01.0977365Z PASS poll preceding completed write cannot overwrite its direct readback
+2026-11-09T11:55:01.1001108Z PASS expired or malformed publication never starts an unprotected live fallback
+2026-11-09T11:55:01.1017142Z PASS source removal readback preserves unsaved wizard fields
+2026-11-09T11:55:01.1031581Z PASS login during worker operation shows saved permissions with stale status
+2026-11-09T11:55:01.1049204Z PASS home navigation and panel refresh retry an unavailable publication without replacing edits
+2026-11-09T11:55:01.1065678Z PASS logout fences a late read started by the general refresh button
+2026-11-09T11:55:01.1087973Z PASS dirty source form keeps rendered revision across a newer source read
+2026-11-09T11:55:01.1105082Z PASS older source reload cannot replace a newer response or later edits
+2026-11-09T11:55:01.1124908Z PASS one-off preset opens existing save form without fetching or writing
+2026-11-09T11:55:01.1142067Z PASS custom one-off keeps source context without reconstructing secret URL
+2026-11-09T11:55:01.1159500Z PASS editing while source save is pending preserves dirty form after success
+2026-11-09T11:55:01.1184288Z PASS wizard explicit discard does not discard edits made during its read
+2026-11-09T11:55:01.1205394Z PASS wizard discard waits for pending poll without consuming newer edits
+2026-11-09T11:55:01.1231576Z PASS wizard ordinary confirmed discard loads the new revision
+2026-11-09T11:55:01.1293568Z PASS wizard save readback preserves edits made while PUT was pending
+2026-11-09T11:55:01.1330202Z PASS wizard save immediately shows configured services without worker state: paused
+2026-11-09T11:55:01.1364673Z PASS wizard save immediately shows configured services without worker state: enabled
+2026-11-09T11:55:01.1386713Z PASS overview navigation renders the configured saved snapshot before the next read settles
+2026-11-09T11:55:01.1402470Z PASS reloadButton asynchronous cancel preserves dirty fields and sends no read
+2026-11-09T11:55:01.1418875Z PASS reloadButton rejects late consent after logout
+2026-11-09T11:55:01.1433386Z PASS reloadButton rejects late consent after view
+2026-11-09T11:55:01.1447441Z PASS reloadButton rejects late consent after new-edit
+2026-11-09T11:55:01.1462175Z PASS reloadSources asynchronous cancel preserves dirty fields and sends no read
+2026-11-09T11:55:01.1543173Z PASS reloadSources rejects late consent after logout
+2026-11-09T11:55:01.1557160Z PASS reloadSources rejects late consent after view
+2026-11-09T11:55:01.1570518Z PASS reloadSources rejects late consent after new-edit
+2026-11-09T11:55:01.1586098Z PASS remove service async consent cancel
+2026-11-09T11:55:01.1600602Z PASS remove service async consent logout
+2026-11-09T11:55:01.1615411Z PASS remove service async consent view
+2026-11-09T11:55:01.1631741Z PASS remove service async consent revision
+2026-11-09T11:55:01.1646415Z PASS remove service async consent accept
+2026-11-09T11:55:01.1686518Z PASS quick policy save shares its live revision with pause/resume before a passive refresh
+2026-11-09T11:55:01.1764453Z PASS older or retained policy readbacks cannot regress the console revision
+2026-11-09T11:55:01.1782433Z PASS shared readback keeps unsaved wizard edits and ignores logged-out publications
+2026-11-09T11:55:01.1783526Z {"status":"passed","tests":65}
+2026-11-09T11:55:01.2293370Z PASS source cards: one-off versus saved actions, explicit timezone, localized statuses, escaped values
+2026-11-09T11:55:01.2646285Z PASS provider catalog: one card per preset, exact actions, new presets, unavailable data and escaping
+2026-11-09T11:55:01.3032593Z Initial cookie session, repeated refresh and re-login lifecycle: PASS
+2026-11-09T11:55:01.3035553Z PASS focus and inert lifecycle for logout, setup and recovery
+2026-11-09T11:55:01.3285534Z PASS interface request rejects late parsed response 401
+2026-11-09T11:55:01.3295775Z PASS interface request rejects late parsed response 200
+2026-11-09T11:55:01.3311591Z PASS interface old mutation 401 preserves the new session read and presentation
+2026-11-09T11:55:01.3324208Z PASS interface old mutation 200 preserves the new session read and presentation
+2026-11-09T11:55:01.3333644Z PASS interface current 401 still revokes authentication
+2026-11-09T11:55:01.3350214Z PASS interface current mutation still invalidates reads before and after writing
+2026-11-09T11:55:01.3360146Z PASS interface request preserves credentials and mutation body
+2026-11-09T11:55:01.3372338Z PASS workflow request rejects late parsed response 401
+2026-11-09T11:55:01.3381875Z PASS workflow request rejects late parsed response 200
+2026-11-09T11:55:01.3392042Z PASS workflow old mutation 401 preserves the new session read and presentation
+2026-11-09T11:55:01.3403378Z PASS workflow old mutation 200 preserves the new session read and presentation
+2026-11-09T11:55:01.3411255Z PASS workflow current 401 still revokes authentication
+2026-11-09T11:55:01.3421719Z PASS workflow current mutation still invalidates reads before and after writing
+2026-11-09T11:55:01.3429434Z PASS workflow request preserves credentials and mutation body
+2026-11-09T11:55:01.3811289Z PASS submitLogin combines repeated submits while pending
+2026-11-09T11:55:01.3820857Z PASS submitSetup combines repeated submits while pending
+2026-11-09T11:55:01.3828606Z PASS recoverAccount combines repeated submits while pending
+2026-11-09T11:55:01.3837895Z PASS submitLogin ignores late resolve after auth revocation
+2026-11-09T11:55:01.3846990Z PASS submitLogin ignores late reject after auth revocation
+2026-11-09T11:55:01.3854325Z PASS submitSetup ignores late resolve after auth revocation
+2026-11-09T11:55:01.3871291Z PASS submitSetup ignores late reject after auth revocation
+2026-11-09T11:55:01.3877458Z PASS recoverAccount ignores late resolve after auth revocation
+2026-11-09T11:55:01.3884911Z PASS recoverAccount ignores late reject after auth revocation
+2026-11-09T11:55:01.3893420Z PASS revoked login cannot clear the new pending action
+2026-11-09T11:55:01.3905453Z PASS logout closes the panel before HTTP and survives failed status read
+2026-11-09T11:55:01.3912357Z PASS current login error uses the actual HTTP error
+2026-11-09T11:55:01.3918855Z PASS current invalid credentials retain the clear login message
+2026-11-09T11:55:01.3927082Z PASS login stops before plan and SSE when post-login reads are revoked
+2026-11-09T11:55:01.3935996Z PASS unknown logout offers explicit retry and late status error cannot affect next session
+2026-11-09T11:55:01.3936742Z {"suite":"auth-actions","tests":15}
+2026-11-09T11:55:01.4320584Z PASS connection lifecycle: visible scope, single-flight, hidden cancellation, logout, late REST/SSE, navigation, re-login and 401
+2026-11-09T11:55:01.4909466Z PASS only configured public non-negative DoH
+2026-11-09T11:55:01.4911338Z PASS empty state
+2026-11-09T11:55:01.4913647Z PASS explicit consent request
+2026-11-09T11:55:01.4914237Z PASS HTTPS has explicit intent
+2026-11-09T11:55:01.4916534Z PASS HTTPS limits DNS shortlist to two
+2026-11-09T11:55:01.4918045Z PASS no consent
+2026-11-09T11:55:01.4918591Z PASS no service
+2026-11-09T11:55:01.4919230Z PASS empty profiles
+2026-11-09T11:55:01.4919753Z PASS duplicates
+2026-11-09T11:55:01.4920227Z PASS too many
+2026-11-09T11:55:01.4920908Z PASS unsafe revision
+2026-11-09T11:55:01.4921545Z PASS fraction revision
+2026-11-09T11:55:01.4930661Z PASS negative revision
+2026-11-09T11:55:01.4931437Z PASS url input
+2026-11-09T11:55:01.4931992Z PASS service injection
+2026-11-09T11:55:01.4932687Z PASS DNS result cannot be service PASS
+2026-11-09T11:55:01.4933329Z PASS escape data
+2026-11-09T11:55:01.4934018Z PASS NXDOMAIN is a DNS answer, not a connection error
+2026-11-09T11:55:01.4934831Z PASS no fabricated negative lifetime without SOA
+2026-11-09T11:55:01.4935686Z PASS explain local resolver failure without blaming the site
+2026-11-09T11:55:01.4936431Z PASS reject claimed service_verified
+2026-11-09T11:55:01.4937106Z PASS reject claimed route_verified
+2026-11-09T11:55:01.4937741Z PASS reject claimed eligible_for_apply
+2026-11-09T11:55:01.4938368Z PASS missing result
+2026-11-09T11:55:01.4939242Z PASS bind complete reply to selected profiles and revision
+2026-11-09T11:55:01.4940070Z PASS reject changed current revision
+2026-11-09T11:55:01.4940768Z PASS reject changed backend revision
+2026-11-09T11:55:01.4941428Z PASS reject missing backend revision
+2026-11-09T11:55:01.4942129Z PASS reject partial profile batch
+2026-11-09T11:55:01.4942882Z PASS reject duplicate family hiding missing answer
+2026-11-09T11:55:01.4943604Z PASS reject substituted profile
+2026-11-09T11:55:01.4944283Z PASS HTTPS proves only its address
+2026-11-09T11:55:01.4944875Z PASS reject substituted address
+2026-11-09T11:55:01.4945418Z PASS reject missing TLS
+2026-11-09T11:55:01.4945954Z PASS reject invented route
+2026-11-09T11:55:01.4946928Z PASS reject different DNS generation
+2026-11-09T11:55:01.4947569Z PASS reject unmeasured count
+2026-11-09T11:55:01.4948274Z PASS missing HTTPS observation is not success
+2026-11-09T11:55:01.4948888Z PASS expired answer explained
+2026-11-09T11:55:01.4957210Z PASS dc1Form exists once
+2026-11-09T11:55:01.4957801Z PASS dc1Inputs exists once
+2026-11-09T11:55:01.4959285Z PASS dc1Service exists once
+2026-11-09T11:55:01.4960427Z PASS dc1Profiles exists once
+2026-11-09T11:55:01.4961508Z PASS dc1Consent exists once
+2026-11-09T11:55:01.4962571Z PASS dc1Results exists once
+2026-11-09T11:55:01.4963669Z PASS dc1Submit exists once
+2026-11-09T11:55:01.4964869Z PASS dc1Cancel exists once
+2026-11-09T11:55:01.4966322Z PASS dc1Status exists once
+2026-11-09T11:55:01.4969910Z PASS script integrated with the interface cache version
+2026-11-09T11:55:01.4998484Z PASS stylesheet compiled into existing bundle
+2026-11-09T11:55:01.5001670Z PASS no independent polling or raw result HTML
+2026-11-09T11:55:01.5003039Z PASS job descriptor binds its request
+2026-11-09T11:55:01.5003775Z PASS runtime action cannot be interpreted as DNS
+2026-11-09T11:55:01.5039716Z PASS async browser success
+2026-11-09T11:55:01.5049988Z PASS async browser cancel
+2026-11-09T11:55:01.5059699Z PASS async browser logout
+2026-11-09T11:55:01.5068772Z PASS async browser changed-revision
+2026-11-09T11:55:01.5078033Z PASS async browser missing-result
+2026-11-09T11:55:01.5086310Z PASS async browser malformed-result
+2026-11-09T11:55:01.5098283Z PASS lost reply reuses token; completed observation allows new comparison
+2026-11-09T11:55:01.5109816Z PASS logout ignores late ACK; next login restores result without POST
+2026-11-09T11:55:01.5118064Z PASS result arriving before current status undefined
+2026-11-09T11:55:01.5125716Z PASS result arriving before current status 3
+2026-11-09T11:55:01.5133016Z PASS restored HTTPS option restores submit label and logout resets it
+2026-11-09T11:55:01.5133901Z {"tests":64,"status":"passed"}
+2026-11-09T11:55:01.5743557Z PASS bind apply to applied client
+2026-11-09T11:55:01.5746425Z PASS explicit confirmation after full scope review
+2026-11-09T11:55:01.5749393Z PASS reject substituted profile
+2026-11-09T11:55:01.5750325Z PASS reject substituted device
+2026-11-09T11:55:01.5751141Z PASS reject substituted service
+2026-11-09T11:55:01.5752060Z PASS reject substituted scope
+2026-11-09T11:55:01.5752682Z PASS reject substituted listener
+2026-11-09T11:55:01.5753247Z PASS reject substituted revision
+2026-11-09T11:55:01.5754013Z PASS reject substituted digest
+2026-11-09T11:55:01.5757017Z PASS reject substituted mutation
+2026-11-09T11:55:01.5757643Z PASS reject changed current revision
+2026-11-09T11:55:01.5758202Z PASS reject unsupported build
+2026-11-09T11:55:01.5758761Z PASS reject unapplied device scope
+2026-11-09T11:55:01.5764294Z PASS remove stopped policy without an apply candidate
+2026-11-09T11:55:01.5765739Z PASS saved policy never means working
+2026-11-09T11:55:01.5766362Z PASS stopped policy is visible
+2026-11-09T11:55:01.5766947Z PASS validate public job identity
+2026-11-09T11:55:01.5767751Z PASS completed job is history, not current health
+2026-11-09T11:55:01.5768403Z PASS reject different action
+2026-11-09T11:55:01.5782023Z PASS unique element dnsScopedForm
+2026-11-09T11:55:01.5782925Z PASS unique element dnsScopedFields
+2026-11-09T11:55:01.5783683Z PASS unique element dnsScopedService
+2026-11-09T11:55:01.5784561Z PASS unique element dnsScopedProfile
+2026-11-09T11:55:01.5785414Z PASS unique element dnsScopedListener
+2026-11-09T11:55:01.5786250Z PASS unique element dnsScopedIngress
+2026-11-09T11:55:01.5787213Z PASS unique element dnsScopedCurrent
+2026-11-09T11:55:01.5787965Z PASS unique element dnsScopedEligibility
+2026-11-09T11:55:01.5788774Z PASS unique element dnsScopedPreview
+2026-11-09T11:55:01.5789796Z PASS unique element dnsScopedRemove
+2026-11-09T11:55:01.5790658Z PASS unique element dnsScopedConfirm
+2026-11-09T11:55:01.5791562Z PASS unique element dnsScopedCancel
+2026-11-09T11:55:01.5792644Z PASS unique element dnsScopedReview
+2026-11-09T11:55:01.5793328Z PASS unique element dnsScopedStatus
+2026-11-09T11:55:01.5794335Z PASS shared reader, no independent polling
+2026-11-09T11:55:01.5840803Z PASS browser complete
+2026-11-09T11:55:01.5853017Z PASS browser lost-response
+2026-11-09T11:55:01.5865432Z PASS late response after logout ignored
+2026-11-09T11:55:01.5876799Z PASS browser cancel
+2026-11-09T11:55:01.5885515Z PASS changed revision invalidates review
+2026-11-09T11:55:01.5893720Z PASS late history vs new active job
+2026-11-09T11:55:01.5901060Z PASS empty DNS choices explain eligibility and recover on fresh candidates
+2026-11-09T11:55:01.5901903Z 41 scoped DNS checks passed
+2026-11-09T11:55:01.6499640Z PASS visible control awgWorkspace
+2026-11-09T11:55:01.6502299Z PASS visible control awgProfilePane
+2026-11-09T11:55:01.6502878Z PASS visible control awgWarpIntro
+2026-11-09T11:55:01.6503761Z PASS visible control awgImportDialog
+2026-11-09T11:55:01.6504512Z PASS visible control awgPreviewImport
+2026-11-09T11:55:01.6505859Z PASS visible control awgStageImport
+2026-11-09T11:55:01.6508425Z PASS visible control awgCanary
+2026-11-09T11:55:01.6508830Z PASS visible control awgCanaryService
+2026-11-09T11:55:01.6509459Z PASS visible control awgCancelCanary
+2026-11-09T11:55:01.6510013Z PASS visible control warpAllowAccountRefresh
+2026-11-09T11:55:01.6510472Z PASS visible control warpHealthInterval
+2026-11-09T11:55:01.6510858Z PASS one generator surface
+2026-11-09T11:55:01.6511990Z PASS local API only
+2026-11-09T11:55:01.6512541Z PASS no browser scheduler
+2026-11-09T11:55:01.6513166Z PASS secret never stored in browser preferences
+2026-11-09T11:55:01.6514095Z PASS preview before stage
+2026-11-09T11:55:01.6514611Z PASS staging explicit consent
+2026-11-09T11:55:01.6515057Z PASS explicit bounded canary
+2026-11-09T11:55:01.6515512Z PASS Safe Mode prevents UI probe
+2026-11-09T11:55:01.6515936Z PASS cannot silently apply import
+2026-11-09T11:55:01.6516382Z PASS auth clears secret input
+2026-11-09T11:55:01.6516944Z PASS separate account refresh consent
+2026-11-09T11:55:01.6517409Z PASS dirty editor preserved
+2026-11-09T11:55:01.6518032Z PASS no fake ready
+2026-11-09T11:55:01.6518488Z PASS proof bound to profile service runtime and time
+2026-11-09T11:55:01.6519352Z {"suite":"awg-workspace-contract","passed":25}
+2026-11-09T11:55:01.6679898Z PASS named WG CRUD: typed metadata, exact CAS payloads, references, unknown receipts, single-flight and auth/navigation fences
+2026-11-09T11:55:01.6688382Z PASS retained WG catalog return requires explicit fresh GET before deletion
+2026-11-09T11:55:01.6781566Z PASS real WG harness settings and request boundary; actual Handler CRUD remains the coordinator gate
+2026-11-09T11:55:01.8445783Z autonomy capability presentation: OK
+2026-11-09T11:55:01.8749679Z runtime lifecycle presentation: OK
+2026-11-09T11:55:01.9066243Z PASS proxy sidecar UI: boot intent, exact CAS, no implicit restart, unknown schema, auth epoch, no replay
+2026-11-09T11:55:01.9409310Z PASS HEV recovery UI: exact identity/revision, auth epoch and no replay after unknown result
+2026-11-09T11:55:01.9755262Z PASS Mihomo recovery UI: exact identity/revision, auth epoch and no replay after unknown result
+2026-11-09T11:55:02.0057022Z node job queue/total/readback timing: OK
+2026-11-09T11:55:02.0482641Z PASS valid policy
+2026-11-09T11:55:02.0487809Z PASS empty scope
+2026-11-09T11:55:02.0489578Z PASS ambiguous scope
+2026-11-09T11:55:02.0492507Z PASS global CIDR
+2026-11-09T11:55:02.0494463Z PASS domain as source
+2026-11-09T11:55:02.0496550Z PASS localhost
+2026-11-09T11:55:02.0498204Z PASS no sources or local routes
+2026-11-09T11:55:02.0500442Z PASS source URL not ID
+2026-11-09T11:55:02.0502481Z PASS unknown protocol
+2026-11-09T11:55:02.0504615Z PASS empty protocol
+2026-11-09T11:55:02.0506449Z PASS fast check
+2026-11-09T11:55:02.0508085Z PASS fast reserve
+2026-11-09T11:55:02.0509882Z PASS unbounded batch
+2026-11-09T11:55:02.0511247Z PASS unbounded reserve
+2026-11-09T11:55:02.0511844Z PASS no zone
+2026-11-09T11:55:02.0512621Z PASS unknown zone
+2026-11-09T11:55:02.0513593Z PASS local zone
+2026-11-09T11:55:02.0514843Z PASS unknown mode
+2026-11-09T11:55:02.0517096Z PASS unsupported component prepare
+2026-11-09T11:55:02.0518757Z PASS empty days
+2026-11-09T11:55:02.0520626Z PASS equal window
+2026-11-09T11:55:02.0522120Z PASS bad time
+2026-11-09T11:55:02.0523548Z PASS unknown preferred
+2026-11-09T11:55:02.0525001Z PASS bad switches
+2026-11-09T11:55:02.0526658Z PASS bad quorum
+2026-11-09T11:55:02.0530320Z PASS local routes do not require subscriptions
+2026-11-09T11:55:02.0537938Z PASS autonomy-ui.js validates ordered source priority within existing consent
+2026-11-09T11:55:02.0567398Z PASS console-autonomy.js validates ordered source priority within existing consent
+2026-11-09T11:55:02.0571879Z PASS reordering already permitted sources grants no new authority
+2026-11-09T11:55:02.0574308Z PASS explicit all LAN
+2026-11-09T11:55:02.0576055Z PASS cross midnight
+2026-11-09T11:55:02.0578179Z PASS prepare only application
+2026-11-09T11:55:02.0582542Z PASS reject website http://example.org
+2026-11-09T11:55:02.0584933Z PASS reject website ***example.org
+2026-11-09T11:55:02.0586146Z PASS reject website https://localhost
+2026-11-09T11:55:02.0587081Z PASS reject website https://192.168.1.1
+2026-11-09T11:55:02.0588017Z PASS reject website https://[::1]
+2026-11-09T11:55:02.0588833Z PASS reject website https://host.local
+2026-11-09T11:55:02.0590009Z PASS reject website https://example.org:8443
+2026-11-09T11:55:02.0591038Z PASS reject website javascript:alert(1)
+2026-11-09T11:55:02.0591789Z PASS reject website 
+2026-11-09T11:55:02.0595126Z PASS generic service no hardcoding
+2026-11-09T11:55:02.0596123Z PASS no query secret in probe
+2026-11-09T11:55:02.0596637Z PASS normalizes hostname
+2026-11-09T11:55:02.0597234Z PASS missing name
+2026-11-09T11:55:02.0597632Z PASS safe escaping
+2026-11-09T11:55:02.0599152Z PASS deduplicates user selection
+2026-11-09T11:55:02.0599654Z PASS strict minutes
+2026-11-09T11:55:02.0600142Z PASS invalid minute
+2026-11-09T11:55:02.0609034Z PASS autonomy-ui.js describes component installation as requiring acceptance
+2026-11-09T11:55:02.0611905Z PASS autonomy-ui.js explains scoped cooldown
+2026-11-09T11:55:02.0612704Z PASS autonomy-ui.js hides expired cooldown
+2026-11-09T11:55:02.0613366Z PASS autonomy-ui.js hides future cooldown
+2026-11-09T11:55:02.0613903Z PASS autonomy-ui.js hides unbounded cooldown
+2026-11-09T11:55:02.0614513Z PASS autonomy-ui.js hides partial cooldown
+2026-11-09T11:55:02.0615115Z PASS console-autonomy.js describes component installation as requiring acceptance
+2026-11-09T11:55:02.0615947Z PASS console-autonomy.js explains scoped cooldown
+2026-11-09T11:55:02.0616648Z PASS console-autonomy.js hides expired cooldown
+2026-11-09T11:55:02.0617368Z PASS console-autonomy.js hides future cooldown
+2026-11-09T11:55:02.0617977Z PASS console-autonomy.js hides unbounded cooldown
+2026-11-09T11:55:02.0618427Z PASS console-autonomy.js hides partial cooldown
+2026-11-09T11:55:02.0631292Z PASS autonomy-ui.js accepts every local route with a probe
+2026-11-09T11:55:02.0633183Z PASS console-autonomy.js accepts every local route with a probe
+2026-11-09T11:55:02.0637153Z PASS every local route can be chosen before node selection
+2026-11-09T11:55:02.0639313Z PASS autonomy-ui.js labels every autopilot runtime state
+2026-11-09T11:55:02.0639869Z PASS console-autonomy.js labels every autopilot runtime state
+2026-11-09T11:55:02.0640338Z AUTONOMY_UI_PURE_TESTS=66
+2026-11-09T11:55:02.1493764Z PASS real response is not total check duration
+2026-11-09T11:55:02.1499477Z PASS zero is measured <1ms; missing is not fake zero
+2026-11-09T11:55:02.1500484Z PASS legacy-only history never fabricates response ping
+2026-11-09T11:55:02.1501188Z PASS wrong service
+2026-11-09T11:55:02.1501757Z PASS wrong network
+2026-11-09T11:55:02.1502230Z PASS wrong executor
+2026-11-09T11:55:02.1502907Z PASS exact Xray observation retains its response timing
+2026-11-09T11:55:02.1503824Z PASS new Xray check invalidates older Sing-box timing
+2026-11-09T11:55:02.1506416Z PASS wrong exact check
+2026-11-09T11:55:02.1507417Z PASS expired measurement
+2026-11-09T11:55:02.1507970Z PASS future measurement
+2026-11-09T11:55:02.1508635Z PASS no extension of proof expiry
+2026-11-09T11:55:02.1509545Z PASS newer check invalidates old timing
+2026-11-09T11:55:02.1510127Z PASS disabled node
+2026-11-09T11:55:02.1510616Z PASS expired node
+2026-11-09T11:55:02.1511292Z PASS failed check does not show positive proxy latency
+2026-11-09T11:55:02.1512132Z PASS direct leak does not show positive proxy latency
+2026-11-09T11:55:02.1512865Z PASS malformed metric numbers rejected
+2026-11-09T11:55:02.1513590Z PASS TCP result available from automatic service check
+2026-11-09T11:55:02.1514366Z PASS newer explicit negative TCP beats old success
+2026-11-09T11:55:02.1515081Z PASS expired separate ping is not shown
+2026-11-09T11:55:02.1515785Z PASS metric helpers do not mutate input
+2026-11-09T11:55:02.1519790Z PASS ready check is published while fallback status is pending
+2026-11-09T11:55:02.1520846Z PASS secondary API error does not discard node checks
+2026-11-09T11:55:02.1525840Z PASS auth error in either reader still logs out
+2026-11-09T11:55:02.1526640Z PASS primary API error is not hidden by fallback success
+2026-11-09T11:55:02.1527355Z Node measurement UI: 26 cases passed
+2026-11-09T11:55:02.4053591Z Probe UI verdict checks passed
+2026-11-09T11:55:02.4059272Z Source freshness UI checks passed
+2026-11-09T11:55:02.4183861Z Source diff UI checks passed
+2026-11-09T11:55:02.4571881Z Cloudflare copy UI checks passed
+2026-11-09T11:55:02.4938699Z Cloudflare archive UI checks passed
+2026-11-09T11:55:02.5289629Z Cloudflare migration UI checks passed
+2026-11-09T11:55:02.5688451Z Private backup import outcomes and actionable export refusal UI checks passed
+2026-11-09T11:55:02.6076632Z Device persistence warning UI checks passed
+2026-11-09T11:55:02.6400971Z Device addresses: long lists collapse after four entries without losing any
+2026-11-09T11:55:02.6775602Z Exclusions: site normalisation, own/default split, covered suggestions, drafts and policy toggle
+2026-11-09T11:55:02.7058800Z PASS five explicit match kinds retain values and scope
+2026-11-09T11:55:02.7062686Z PASS manual and Russian provenance are separate
+2026-11-09T11:55:02.7063583Z PASS disabled Russian catalog retains the accepted snapshot
+2026-11-09T11:55:02.7064904Z PASS missing optional persisted pointer is distinct from unavailable data
+2026-11-09T11:55:02.7065842Z PASS nil manual slice displays empty without generating a clear command
+2026-11-09T11:55:02.7066456Z PASS invalid persisted shape is unavailable {"schema":2}
+2026-11-09T11:55:02.7067308Z PASS invalid persisted shape is unavailable {"revision":-1}
+2026-11-09T11:55:02.7068124Z PASS invalid persisted shape is unavailable {"revision":1.5}
+2026-11-09T11:55:02.7069173Z PASS invalid persisted shape is unavailable {"manual":{}}
+2026-11-09T11:55:02.7072554Z PASS invalid persisted shape is unavailable {"manual":[{"kind":"tld","value":"ru"}]}
+2026-11-09T11:55:02.7073862Z PASS invalid persisted shape is unavailable {"manual":[{"kind":"exact","value":""}]}
+2026-11-09T11:55:02.7074840Z PASS invalid accepted snapshot is unavailable {"entries":[]}
+2026-11-09T11:55:02.7075765Z PASS invalid accepted snapshot is unavailable {"catalog_id":""}
+2026-11-09T11:55:02.7076824Z PASS invalid accepted snapshot is unavailable {"revision":-1}
+2026-11-09T11:55:02.7077879Z PASS invalid accepted snapshot is unavailable {"digest":"untrusted"}
+2026-11-09T11:55:02.7079440Z PASS invalid accepted snapshot is unavailable {"entries":[{"kind":"asn","value":"AS1"}]}
+2026-11-09T11:55:02.7080664Z PASS display copies cannot edit the persisted source
+2026-11-09T11:55:02.7081641Z PASS extra labels and health claims cannot override provenance or become proof
+2026-11-09T11:55:02.7082505Z PASS domain ending in ru does not become a Russian entry
+2026-11-09T11:55:02.7083278Z PASS service display matches exact ID rather than name or domain
+2026-11-09T11:55:02.7083992Z {"suite":"resource-exclusions-model","passed":20}
+2026-11-09T11:55:02.7470825Z PASS complete actual DTO supports Go nil client slices and retained snapshot
+2026-11-09T11:55:02.7497095Z PASS fresh nil policy remains readable without an editor unlock
+2026-11-09T11:55:02.7521554Z PASS invalid/inconsistent response cannot replace an accepted base 2
+2026-11-09T11:55:02.7534677Z PASS invalid/inconsistent response cannot replace an accepted base 3
+2026-11-09T11:55:02.7545551Z PASS invalid/inconsistent response cannot replace an accepted base 4
+2026-11-09T11:55:02.7558252Z PASS invalid/inconsistent response cannot replace an accepted base 5
+2026-11-09T11:55:02.7576963Z PASS invalid/inconsistent response cannot replace an accepted base 6
+2026-11-09T11:55:02.7588087Z PASS invalid/inconsistent response cannot replace an accepted base 7
+2026-11-09T11:55:02.7601028Z PASS invalid/inconsistent response cannot replace an accepted base 8
+2026-11-09T11:55:02.7604390Z PASS partial domain/IP and device-scoped negatives do not exclude a whole service
+2026-11-09T11:55:02.7606205Z PASS manual and active RU service IDs have independent provenance
+2026-11-09T11:55:02.7607633Z PASS disabled RU snapshot remains visible without an active service negative
+2026-11-09T11:55:02.7610717Z PASS historical explicit broad zone is labelled as historical, never an accepted RU entry
+2026-11-09T11:55:02.7611934Z PASS prototype-shaped service ID remains a detached ordinary entry
+2026-11-09T11:55:02.7617761Z PASS excluded service is neutral with the prior applied assignment still visible
+2026-11-09T11:55:02.7618675Z PASS unavailable observation does not create a fresh excluded or healthy status
+2026-11-09T11:55:02.7621087Z PASS response view and client/legacy copies cannot edit source payload
+2026-11-09T11:55:02.7637454Z PASS only one explicit POST with all three CAS revisions and independent GET
+2026-11-09T11:55:02.7649293Z PASS explicit empty manual array preserves accepted RU without a fabricated source/confirm
+2026-11-09T11:55:02.7660887Z PASS known source flags are submitted only after explicit editing
+2026-11-09T11:55:02.7669453Z PASS background refresh keeps the full dirty draft and original CAS base
+2026-11-09T11:55:02.7681741Z PASS 409 keeps the draft, refuses a second write and requires an explicit reset
+2026-11-09T11:55:02.7693622Z PASS timeout cannot replay a mutation or clear its draft during a read/reset
+2026-11-09T11:55:02.7707080Z PASS success receipt plus mismatched read stays unconfirmed, never claims not saved
+2026-11-09T11:55:02.7719635Z PASS success receipt followed by GET busy is not mistaken for a rejected POST
+2026-11-09T11:55:02.7733170Z PASS validation rejection explicitly says unsaved and preserves entered records without an automatic retry
+2026-11-09T11:55:02.7742756Z PASS unavailable read prohibits writing using the retained snapshot
+2026-11-09T11:55:02.7753431Z PASS late POST after logout cannot issue GET or restore private draft
+2026-11-09T11:55:02.7775079Z PASS late verification read after auth change cannot replace the next session
+2026-11-09T11:55:02.7788002Z PASS double Save during an outstanding request produces one POST
+2026-11-09T11:55:02.7798746Z PASS render, add draft, and unrelated navigation cannot write or clear exclusions
+2026-11-09T11:55:02.7855139Z PASS paged search is bounded while retaining every manual entry for a save
+2026-11-09T11:55:02.7863873Z PASS provenance values render as text and never executable markup
+2026-11-09T11:55:02.7874383Z PASS explicit empty inactive storage enables only the manual editor at config revision zero
+2026-11-09T11:55:02.7887749Z PASS inactive Save advances config/exclusion only and verifies a separate GET
+2026-11-09T11:55:02.7929216Z PASS whole-network list offers Apply only while pending, never while stopped, through the exclusions scope
+2026-11-09T11:55:02.7939360Z PASS inactive explicit manual clear never constructs RU/scope/consent or positive activation
+2026-11-09T11:55:02.7957579Z PASS cleared-document receipt is accepted only for an explicit inactive clear
+2026-11-09T11:55:02.7965462Z PASS inactive source flag edit is fenced even if a disabled control emits a synthetic event
+2026-11-09T11:55:02.7966948Z PASS incomplete/contradictory inactive capability cannot unlock writing 39
+2026-11-09T11:55:02.7967953Z PASS incomplete/contradictory inactive capability cannot unlock writing 40
+2026-11-09T11:55:02.7969306Z PASS incomplete/contradictory inactive capability cannot unlock writing 41
+2026-11-09T11:55:02.7970389Z PASS incomplete/contradictory inactive capability cannot unlock writing 42
+2026-11-09T11:55:02.7971324Z PASS incomplete/contradictory inactive capability cannot unlock writing 43
+2026-11-09T11:55:02.7972221Z PASS incomplete/contradictory inactive capability cannot unlock writing 44
+2026-11-09T11:55:02.7973324Z PASS incomplete/contradictory inactive capability cannot unlock writing 45
+2026-11-09T11:55:02.7973940Z PASS incomplete/contradictory inactive capability cannot unlock writing 46
+2026-11-09T11:55:02.7974541Z PASS incomplete/contradictory inactive capability cannot unlock writing 47
+2026-11-09T11:55:02.7975151Z PASS incomplete/contradictory inactive capability cannot unlock writing 48
+2026-11-09T11:55:02.7981552Z PASS first API without new storage fields preserves its nil-policy read-only boundary
+2026-11-09T11:55:02.7990226Z PASS explicit scope activation read retains manual entries and fences an older inactive draft
+2026-11-09T11:55:02.8000065Z PASS scope activation between POST and GET cannot become a confirmed inactive receipt
+2026-11-09T11:55:02.8023622Z PASS domain kind choices explain NFQWS2 subdomain matching in both modes without changing stored rules
+2026-11-09T11:55:02.8034057Z PASS Apply stays disabled during local request or observed global write and rejects stale clicks
+2026-11-09T11:55:02.8049358Z PASS confirmed applied snapshot clears only obsolete saved Apply instruction
+2026-11-09T11:55:02.8060224Z PASS device guidance opens existing NFQWS2 policy settings while retaining experimental scope navigation
+2026-11-09T11:55:02.8061129Z {"suite":"resource-exclusions-ui","passed":56}
+2026-11-09T11:55:02.8646433Z PASS render and draft editing do not save, Apply, or construct a provider grant
+2026-11-09T11:55:02.8684972Z PASS whole-policy save preserves null slices, rules, resources, existing grants and raw alias
+2026-11-09T11:55:02.8720111Z PASS null and empty grant arrays remain distinct
+2026-11-09T11:55:02.8738090Z PASS first scope requires explicit actual segment and carries inactive resources without guessed grants
+2026-11-09T11:55:02.8750622Z PASS selected devices use stable IDs and base membership; negative IDs survive mode changes
+2026-11-09T11:55:02.8763167Z PASS new selected device cannot be added without its reviewed home segment
+2026-11-09T11:55:02.8780089Z PASS unavailable source preserves all negative refs and permits explicit removal of only a saved ID
+2026-11-09T11:55:02.8807904Z PASS expired or mismatched options cannot add new IDs or authorize a synthetic draft
+2026-11-09T11:55:02.8816795Z PASS fresh observation alone cannot approve an uncorroborated cached or invented ID
+2026-11-09T11:55:02.8827677Z PASS partial source offers per-row candidates without removing saved unavailable refs
+2026-11-09T11:55:02.8838256Z PASS desired and applied snapshots remain separate and mixed revisions have no applied claim
+2026-11-09T11:55:02.8850480Z PASS background drift preserves full local draft and original CAS base
+2026-11-09T11:55:02.8866540Z PASS 409 prevents replay and retains the draft until an explicit reset
+2026-11-09T11:55:02.8883839Z PASS double click during save produces one POST and one independent verification GET
+2026-11-09T11:55:02.8903089Z PASS timeout is unknown and neither a background read nor reset can replay it
+2026-11-09T11:55:02.8917956Z PASS acknowledged save followed by a different read remains unconfirmed
+2026-11-09T11:55:02.8930484Z PASS unsupported save is shown and cannot look like successful Apply
+2026-11-09T11:55:02.8942758Z PASS late save reply after logout cannot read back or restore a previous session
+2026-11-09T11:55:02.8959626Z PASS late verification GET cannot overwrite the next authenticated session
+2026-11-09T11:55:02.8972975Z PASS late options after logout cannot resurrect private references
+2026-11-09T11:55:02.8989750Z PASS explicit fresh read can resolve an unknown stored result without another mutation
+2026-11-09T11:55:02.9001105Z PASS an in-flight Apply prevents policy writes without clearing the draft
+2026-11-09T11:55:02.9044528Z PASS options capture is first-entry/explicit only and never common periodic polling
+2026-11-09T11:55:02.9056747Z PASS invalid options cannot replace retained data and labels cannot inject markup
+2026-11-09T11:55:02.9067899Z PASS devices without a name show the host name or address, never only a raw ID
+2026-11-09T11:55:02.9095586Z PASS bounded displayed choices preserve every negative ID and null/empty distinction
+2026-11-09T11:55:02.9113382Z PASS one shared editor is integrated; exclusions and wizard navigate to it
+2026-11-09T11:55:02.9114330Z {"suite":"list-scope-ui","passed":27}
+2026-11-09T11:55:02.9439605Z USQUE DNS candidate UI behavior checks passed
+2026-11-09T11:55:02.9796762Z Partial provider import UI checks passed
+2026-11-09T11:55:03.0200598Z Node reviewed apply, double submission and cancellation checks passed
+2026-11-09T11:55:03.1116226Z Node browser filtering, proof expiry, transport labels, focus, polling, logout, durable retries and subscription removal passed
+2026-11-09T11:55:03.1350477Z Fulfilled A + pending B/C cannot cross mutation or auth epoch: PASS
+2026-11-09T11:55:03.1761052Z PASS group save: single flight, known success/readback failure, unknown outcome consent, auth fences and busy recovery
+2026-11-09T11:55:03.1775612Z PASS group editor pending close/reopen guard and feedback restoration across auth changes
+2026-11-09T11:55:03.1786106Z PASS actual group deadline releases editor, ignores late create ACK and refuses blind retry
+2026-11-09T11:55:03.2198211Z PASS data writes: closed routes, deadline/ignored abort, no replay, late ACK, new edits, owned auth cancellation, queue uncertainty
+2026-11-09T11:55:03.2570478Z PASS all 83 VLESS across filters/pages, normalised protocol
+2026-11-09T11:55:03.2585289Z PASS one server-side selector, not a 64-ID page
+2026-11-09T11:55:03.2585816Z PASS explicit consent, generation and service
+2026-11-09T11:55:03.2586845Z PASS durable revision and idempotency token included
+2026-11-09T11:55:03.2588437Z PASS returned job adopted, submission flag cleared
+2026-11-09T11:55:03.2595029Z PASS old backend does not silently run a partial batch
+2026-11-09T11:55:03.2602956Z PASS declined confirmation makes no POST
+2026-11-09T11:55:03.2610904Z PASS session change after dialog revokes submission
+2026-11-09T11:55:03.2620937Z PASS lost POST response uses GET, never replay
+2026-11-09T11:55:03.2641843Z PASS busy read uses dated selection and exact generation, server still admits it
+2026-11-09T11:55:03.2649999Z PASS selection fingerprint accompanies generation when backend provides it
+2026-11-09T11:55:03.2657947Z PASS server rejects old catalogue without replay or invented job
+2026-11-09T11:55:03.2665065Z PASS busy read without valid snapshot does not submit
+2026-11-09T11:55:03.2672430Z PASS only operation-busy permits retained selection: fenced
+2026-11-09T11:55:03.2677501Z PASS only operation-busy permits retained selection: login
+2026-11-09T11:55:03.2683451Z PASS only operation-busy permits retained selection: conflict
+2026-11-09T11:55:03.2688589Z PASS double click rejected before any request
+2026-11-09T11:55:03.2694190Z PASS existing active job blocks submission
+2026-11-09T11:55:03.2695119Z PASS all-delete request and review are distinct from selected IDs
+2026-11-09T11:55:03.2696054Z PASS no account credentials or localStorage added
+2026-11-09T11:55:03.2696558Z {"suite":"node-bulk-ui","passed":20}
+2026-11-09T11:55:03.3268553Z PASS select auto apply enables policy and candidate in draft
+2026-11-09T11:55:03.3271132Z PASS never grants Cloudflare TOS or makes a network write
+2026-11-09T11:55:03.3272241Z PASS one assigned WARP service with threshold two is explained
+2026-11-09T11:55:03.3273112Z PASS disable clears dependent operations, not secret permissions
+2026-11-09T11:55:03.3284042Z PASS unsupported AWG displays selected compatibility plan, never installs
+2026-11-09T11:55:03.3292071Z PASS installed component is not reinstalled
+2026-11-09T11:55:03.3299816Z PASS external component is not adopted
+2026-11-09T11:55:03.3314139Z PASS available selected component enters existing reviewed install workflow
+2026-11-09T11:55:03.3321841Z PASS auth epoch after refresh blocks install
+2026-11-09T11:55:03.3332995Z PASS pasted source posts data preview once, not import or Apply
+2026-11-09T11:55:03.3333602Z PASS preview accepted only with SHA contract
+2026-11-09T11:55:03.3349130Z PASS missing backend guard never creates import authority
+2026-11-09T11:55:03.3356545Z PASS both URL and text rejected before network
+2026-11-09T11:55:03.3366725Z PASS oversized paste rejected
+2026-11-09T11:55:03.3377729Z PASS late preview after logout not accepted and text cleared
+2026-11-09T11:55:03.3385759Z PASS edited source invalidates reviewed image
+2026-11-09T11:55:03.3424078Z PASS single WARP manager and canonical warp-wg placement
+2026-11-09T11:55:03.3428032Z PASS master shows explicit extras and sends one combined request
+2026-11-09T11:55:03.3461811Z PASS unused NFQ prompt can be hidden on another engine only
+2026-11-09T11:55:03.3462736Z {"suite":"setup-repair","passed":19}
+2026-11-09T11:55:03.3881919Z Single-action node flow, explicit scope, fresh-proof shortcut, revision and cancellation fences passed
+2026-11-09T11:55:03.4285836Z Service selectors: bounded rendering, explicit service, applied vs selected scope and escaped labels passed
+2026-11-09T11:55:03.4624258Z Service policy UI: explicit node/source trust, fixed device scope, revision, no implicit route apply and cancellation passed
+2026-11-09T11:55:03.5078851Z App update UI: truthful badge, read-only opening, explicit prepare/install, bound review, duplicate and stale cancellation passed
+2026-11-09T11:55:03.5623885Z PASS future proof not current
+2026-11-09T11:55:03.5626519Z PASS stale metadata never offers prepare
+2026-11-09T11:55:03.5760050Z PASS explicit channel in summary
+2026-11-09T11:55:03.5760965Z PASS stable is wizard default
+2026-11-09T11:55:03.5766310Z PASS auto install is explicit and distinguishes verified rollback from unknown outcome
+2026-11-09T11:55:03.5767778Z PASS no address result stays unknown
+2026-11-09T11:55:03.5769090Z PASS failed address status not healthy
+2026-11-09T11:55:03.5773650Z PASS mode inputs present once
+2026-11-09T11:55:03.5775953Z PASS declaration alone not canary
+2026-11-09T11:55:03.5792370Z PASS NFQWS setup clears expired-session notices after successful login without reading or granting consent
+2026-11-09T11:55:03.5805200Z PASS pre-login NFQWS read cannot restore old review or error after login
+2026-11-09T11:55:03.5824776Z PASS Discord repair request requires a fresh reviewed configuration
+2026-11-09T11:55:03.5834568Z PASS Discord repair button stages through its own endpoint
+2026-11-09T11:55:03.5893485Z PASS schedule identifies preview and stable channels
+2026-11-09T11:55:03.5902114Z PASS paused schedule preserves windows and permissions without promising active installs
+2026-11-09T11:55:03.5910013Z PASS off schedule never describes checking or installation as active
+2026-11-09T11:55:03.5917088Z PASS install schedule qualifies rollback and component acceptance
+2026-11-09T11:55:03.5930222Z PASS check and prepare modes cannot promise installation
+2026-11-09T11:55:03.5936485Z PASS missing policy keeps setup action and unavailable explanation
+2026-11-09T11:55:03.5937265Z {"suite":"maintenance-ui","passed":19}
+2026-11-09T11:55:03.6491654Z PASS selected node is converted to zero-based index
+2026-11-09T11:55:03.6495454Z PASS reject bad index/port 0:18090
+2026-11-09T11:55:03.6496232Z PASS reject bad index/port 1:53
+2026-11-09T11:55:03.6496927Z PASS reject bad index/port 1:65536
+2026-11-09T11:55:03.6497526Z PASS reject bad index/port 1.1:18090
+2026-11-09T11:55:03.6498203Z PASS reject bad index/port 513:18090
+2026-11-09T11:55:03.6498758Z PASS reject absent source
+2026-11-09T11:55:03.6503255Z PASS reject oversized content
+2026-11-09T11:55:03.6504083Z PASS export requires review
+2026-11-09T11:55:03.6507271Z PASS export requires exact confirmation operation
+2026-11-09T11:55:03.6508280Z PASS native validation requires current review and distinct confirmation
+2026-11-09T11:55:03.6511911Z PASS probe registration is tri-state and never a readiness observation
+2026-11-09T11:55:03.6514651Z PASS service probe binds review, catalog id and current revision with distinct confirmation
+2026-11-09T11:55:03.6515776Z PASS service proof accepts distinct pinned profile only with joined cleanup
+2026-11-09T11:55:03.6518854Z PASS service proof rejects stale service, missing cleanup and live claims
+2026-11-09T11:55:03.6520284Z PASS native validation reports config acceptance without runtime proof
+2026-11-09T11:55:03.6523818Z PASS native result rejects stale digest, hidden config and manufactured runtime claims
+2026-11-09T11:55:03.6524888Z PASS import requires review
+2026-11-09T11:55:03.6525516Z PASS signed flag and review retained
+2026-11-09T11:55:03.6526270Z PASS never display earned runtime for passive result null
+2026-11-09T11:55:03.6527213Z PASS never display earned runtime for passive result {}
+2026-11-09T11:55:03.6528195Z PASS never display earned runtime for passive result {"live_applied":true}
+2026-11-09T11:55:03.6529669Z PASS never display earned runtime for passive result {"live_applied":false,"service_verified":true}
+2026-11-09T11:55:03.6530985Z PASS never display earned runtime for passive result {"live_applied":false,"native_validated":true}
+2026-11-09T11:55:03.6531858Z PASS passive result accepted
+2026-11-09T11:55:03.6535022Z PASS Mihomo summary describes selected connection and no successful network proof
+2026-11-09T11:55:03.6536448Z PASS Mihomo summary never serializes config or additional secret fields
+2026-11-09T11:55:03.6538261Z PASS Mihomo summary brackets IPv6 endpoints and identifies plain TCP
+2026-11-09T11:55:03.6539457Z PASS Mihomo summary refuses missing selected node and false runtime claims
+2026-11-09T11:55:03.6591294Z PASS one dialog and all referenced DOM controls exist
+2026-11-09T11:55:03.6592508Z PASS no independent polling/localStorage/remote requests
+2026-11-09T11:55:03.6594008Z PASS passive tools not new routes
+2026-11-09T11:55:03.6635300Z PASS native validation late response cannot survive input
+2026-11-09T11:55:03.6648135Z PASS native validation late response cannot survive logout
+2026-11-09T11:55:03.6660279Z PASS native validation late response cannot survive cancel
+2026-11-09T11:55:03.6672524Z PASS native validation late response cannot survive close
+2026-11-09T11:55:03.6696424Z PASS native service proof late response cannot survive service
+2026-11-09T11:55:03.6706945Z PASS native service proof late response cannot survive input
+2026-11-09T11:55:03.6717509Z PASS native service proof late response cannot survive logout
+2026-11-09T11:55:03.6727294Z PASS native service proof late response cannot survive cancel
+2026-11-09T11:55:03.6738129Z PASS native service proof late response cannot survive close
+2026-11-09T11:55:03.6749992Z PASS preview lifecycle controls probe availability without claiming ready registered
+2026-11-09T11:55:03.6758718Z PASS preview lifecycle controls probe availability without claiming ready absent
+2026-11-09T11:55:03.6767460Z PASS preview lifecycle controls probe availability without claiming ready unknown
+2026-11-09T11:55:03.6778656Z PASS status reread uses same lifecycle and cold no-owner never means cleanup
+2026-11-09T11:55:03.6788396Z PASS file read blocks preview of previous content until new contents arrive
+2026-11-09T11:55:03.6798654Z PASS failed or oversized replacement cannot leave previous profile under new filename
+2026-11-09T11:55:03.6806884Z PASS canceled file read cannot overwrite newer pasted content
+2026-11-09T11:55:03.6815711Z PASS logout clears content and fences pending local file read
+2026-11-09T11:55:03.6816308Z {"suite":"extension-lab","passed":49}
+2026-11-09T11:55:03.7211602Z Workspace controls: exact revision, no implicit routes, double-click/refusal/logout guards, shared reads and factual versions passed
+2026-11-09T11:55:03.7226719Z PASS Stop uses async confirmation with cancellation, single flight, revision and auth fences
+2026-11-09T11:55:03.7234846Z PASS busy control read keeps prior snapshot and Stop authority without setup/running claims; fresh read restores both UI modes
+2026-11-09T11:55:03.7610037Z PASS service removal: async consent, cancellation, single flight, stale service/view/revision and auth ownership
+2026-11-09T11:55:03.7626632Z PASS custom deletion uses reviewed queued removal; built-in definition deletion refused
+2026-11-09T11:55:03.7725100Z PASS unassigned custom deletion: single flight, cancellation, changed definition, auth and queued/failed outcome
+2026-11-09T11:55:03.8071230Z PASS custom delete is visible without expanding details and blocked while removal is pending
+2026-11-09T11:55:03.8206089Z PASS cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority
+2026-11-09T11:55:03.8226994Z PASS cached metadata does not borrow PASS and unknown waiting does not promise self-repair
+2026-11-09T11:55:03.8244822Z PASS runtime expiry boundary keeps a ready service inspector unknown without disabling independent controls
+2026-11-09T11:55:03.8275258Z PASS quick add announces success only after explicitly accepted management
+2026-11-09T11:55:03.8284441Z PASS domain-route refusal is readable on the service card without advanced details
+2026-11-09T11:55:03.8294015Z PASS sidebar count updates outside home and first setup opens the wizard directly
+2026-11-09T11:55:03.8303103Z PASS metadata summary refresh replaces unknown inventory without redrawing the home form
+2026-11-09T11:55:03.8312304Z PASS known recovery refusal replaces loading without inventing inventory or statistics
+2026-11-09T11:55:03.8314430Z PASS primary destinations have eight unique owners
+2026-11-09T11:55:03.8315700Z PASS healthy and changed remains healthy with a separate actionable change
+2026-11-09T11:55:03.8316674Z PASS routine missing proof does not become manual intervention
+2026-11-09T11:55:03.8317628Z PASS unbound good summary without route is not service proof
+2026-11-09T11:55:03.8318251Z PASS another route cannot supply green status
+2026-11-09T11:55:03.8318895Z PASS desired deselection retains applied route and pending marker
+2026-11-09T11:55:03.8320087Z PASS removing is not green even with prior proof
+2026-11-09T11:55:03.8320794Z PASS stale display does not claim stopped or confirmed access
+2026-11-09T11:55:03.8321323Z PASS queued work does not produce manual alert
+2026-11-09T11:55:03.8321893Z PASS engine usage requires matching current proof instead of runtime history
+2026-11-09T11:55:03.8322546Z PASS historical healthy cannot confirm a new route or override a current failure
+2026-11-09T11:55:03.8323217Z PASS pending applied service waits for verification, not first setup
+2026-11-09T11:55:03.8323819Z PASS saved-only rows cannot borrow good proof even if loader says ready
+2026-11-09T11:55:03.8327911Z PASS global pause suppresses old running task and explains global pause
+2026-11-09T11:55:03.8334028Z PASS scope uses applied sources not desired all LAN
+2026-11-09T11:55:03.8339999Z PASS empty applied sources does not infer all LAN from draft
+2026-11-09T11:55:03.8348365Z PASS inspector reads current route scope and ownership after background update
+2026-11-09T11:55:03.8357266Z PASS inspector content is not replaced and focus not stolen on same service
+2026-11-09T11:55:03.8366024Z PASS deleted service cannot retain old route and action controls
+2026-11-09T11:55:03.8373817Z PASS auth revocation fences inspector updates
+2026-11-09T11:55:03.8383577Z PASS domain rendering is escaped and bounded
+2026-11-09T11:55:03.8391309Z PASS quick add releases lock when renderer throws
+2026-11-09T11:55:03.8399714Z PASS quick add releases lock when action and error renderer fail
+2026-11-09T11:55:03.8408621Z PASS two quick adds create one outstanding operation
+2026-11-09T11:55:03.8415770Z PASS existing manual selection is not silently taken over
+2026-11-09T11:55:03.8424918Z PASS check stays in place with one existing server check and no Apply
+2026-11-09T11:55:03.8434473Z PASS new accepted job is not hidden by old error message
+2026-11-09T11:55:03.8441678Z PASS missing config revision refuses start without replay
+2026-11-09T11:55:03.8450265Z PASS unconfirmed start never becomes service PASS
+2026-11-09T11:55:03.8456840Z PASS check UI throw does not wedge busy state
+2026-11-09T11:55:03.8466110Z PASS faulty navigation renderer cannot prevent other components
+2026-11-09T11:55:03.8475609Z PASS contextual changes filter appears only for actual changes
+2026-11-09T11:55:03.8483258Z PASS saved whole-service exclusion has neutral card and explicit editor action
+2026-11-09T11:55:03.8492871Z PASS two service lists wait for real supported contract and exclude saved negative from bypass view
+2026-11-09T11:55:03.8501494Z PASS home excludes intentional saved negative from failures while retaining applied assignment count
+2026-11-09T11:55:03.8511418Z PASS home shows services the autopilot is working on before working ones
+2026-11-09T11:55:03.8521642Z PASS home lists every service up to eight and links the rest
+2026-11-09T11:55:03.8539566Z PASS home still supports known zero resources and unknown data
+2026-11-09T11:55:03.8549387Z PASS paused home does not claim an old service check is still running
+2026-11-09T11:55:03.8561260Z PASS idle availability is quiet, busy/failure remains visible
+2026-11-09T11:55:03.8562066Z {
+2026-11-09T11:55:03.8562620Z   "suite": "unified-ui",
+2026-11-09T11:55:03.8563184Z   "mode": "checkout-functions",
+2026-11-09T11:55:03.8563841Z   "results": [
+2026-11-09T11:55:03.8564346Z     {
+2026-11-09T11:55:03.8565340Z       "name": "custom delete is visible without expanding details and blocked while removal is pending",
+2026-11-09T11:55:03.8566639Z       "status": "passed"
+2026-11-09T11:55:03.8567132Z     },
+2026-11-09T11:55:03.8567521Z     {
+2026-11-09T11:55:03.8569296Z       "name": "cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority",
+2026-11-09T11:55:03.8570402Z       "status": "passed"
+2026-11-09T11:55:03.8571017Z     },
+2026-11-09T11:55:03.8571525Z     {
+2026-11-09T11:55:03.8572614Z       "name": "cached metadata does not borrow PASS and unknown waiting does not promise self-repair",
+2026-11-09T11:55:03.8573631Z       "status": "passed"
+2026-11-09T11:55:03.8574174Z     },
+2026-11-09T11:55:03.8574698Z     {
+2026-11-09T11:55:03.8575965Z       "name": "runtime expiry boundary keeps a ready service inspector unknown without disabling independent controls",
+2026-11-09T11:55:03.8576984Z       "status": "passed"
+2026-11-09T11:55:03.8577555Z     },
+2026-11-09T11:55:03.8578002Z     {
+2026-11-09T11:55:03.8579192Z       "name": "quick add announces success only after explicitly accepted management",
+2026-11-09T11:55:03.8580123Z       "status": "passed"
+2026-11-09T11:55:03.8580641Z     },
+2026-11-09T11:55:03.8581176Z     {
+2026-11-09T11:55:03.8582271Z       "name": "domain-route refusal is readable on the service card without advanced details",
+2026-11-09T11:55:03.8583605Z       "status": "passed"
+2026-11-09T11:55:03.8584184Z     },
+2026-11-09T11:55:03.8584586Z     {
+2026-11-09T11:55:03.8585524Z       "name": "sidebar count updates outside home and first setup opens the wizard directly",
+2026-11-09T11:55:03.8587307Z       "status": "passed"
+2026-11-09T11:55:03.8587795Z     },
+2026-11-09T11:55:03.8588265Z     {
+2026-11-09T11:55:03.8589346Z       "name": "metadata summary refresh replaces unknown inventory without redrawing the home form",
+2026-11-09T11:55:03.8590236Z       "status": "passed"
+2026-11-09T11:55:03.8590644Z     },
+2026-11-09T11:55:03.8591001Z     {
+2026-11-09T11:55:03.8591915Z       "name": "known recovery refusal replaces loading without inventing inventory or statistics",
+2026-11-09T11:55:03.8592712Z       "status": "passed"
+2026-11-09T11:55:03.8593178Z     },
+2026-11-09T11:55:03.8593555Z     {
+2026-11-09T11:55:03.8594223Z       "name": "primary destinations have eight unique owners",
+2026-11-09T11:55:03.8594920Z       "status": "passed"
+2026-11-09T11:55:03.8595396Z     },
+2026-11-09T11:55:03.8595797Z     {
+2026-11-09T11:55:03.8596827Z       "name": "healthy and changed remains healthy with a separate actionable change",
+2026-11-09T11:55:03.8597579Z       "status": "passed"
+2026-11-09T11:55:03.8598029Z     },
+2026-11-09T11:55:03.8598382Z     {
+2026-11-09T11:55:03.8599313Z       "name": "routine missing proof does not become manual intervention",
+2026-11-09T11:55:03.8599925Z       "status": "passed"
+2026-11-09T11:55:03.8600388Z     },
+2026-11-09T11:55:03.8600752Z     {
+2026-11-09T11:55:03.8601456Z       "name": "unbound good summary without route is not service proof",
+2026-11-09T11:55:03.8602213Z       "status": "passed"
+2026-11-09T11:55:03.8602646Z     },
+2026-11-09T11:55:03.8603065Z     {
+2026-11-09T11:55:03.8603691Z       "name": "another route cannot supply green status",
+2026-11-09T11:55:03.8604263Z       "status": "passed"
+2026-11-09T11:55:03.8604706Z     },
+2026-11-09T11:55:03.8605180Z     {
+2026-11-09T11:55:03.8605974Z       "name": "desired deselection retains applied route and pending marker",
+2026-11-09T11:55:03.8606618Z       "status": "passed"
+2026-11-09T11:55:03.8606927Z     },
+2026-11-09T11:55:03.8607222Z     {
+2026-11-09T11:55:03.8607698Z       "name": "removing is not green even with prior proof",
+2026-11-09T11:55:03.8608137Z       "status": "passed"
+2026-11-09T11:55:03.8608461Z     },
+2026-11-09T11:55:03.8608738Z     {
+2026-11-09T11:55:03.8609433Z       "name": "stale display does not claim stopped or confirmed access",
+2026-11-09T11:55:03.8609893Z       "status": "passed"
+2026-11-09T11:55:03.8610269Z     },
+2026-11-09T11:55:03.8610550Z     {
+2026-11-09T11:55:03.8610982Z       "name": "queued work does not produce manual alert",
+2026-11-09T11:55:03.8611584Z       "status": "passed"
+2026-11-09T11:55:03.8611912Z     },
+2026-11-09T11:55:03.8612225Z     {
+2026-11-09T11:55:03.8612787Z       "name": "engine usage requires matching current proof instead of runtime history",
+2026-11-09T11:55:03.8613279Z       "status": "passed"
+2026-11-09T11:55:03.8613606Z     },
+2026-11-09T11:55:03.8613892Z     {
+2026-11-09T11:55:03.8614450Z       "name": "historical healthy cannot confirm a new route or override a current failure",
+2026-11-09T11:55:03.8615020Z       "status": "passed"
+2026-11-09T11:55:03.8615329Z     },
+2026-11-09T11:55:03.8615611Z     {
+2026-11-09T11:55:03.8616148Z       "name": "pending applied service waits for verification, not first setup",
+2026-11-09T11:55:03.8616659Z       "status": "passed"
+2026-11-09T11:55:03.8617034Z     },
+2026-11-09T11:55:03.8617298Z     {
+2026-11-09T11:55:03.8617861Z       "name": "saved-only rows cannot borrow good proof even if loader says ready",
+2026-11-09T11:55:03.8618368Z       "status": "passed"
+2026-11-09T11:55:03.8618665Z     },
+2026-11-09T11:55:03.8619086Z     {
+2026-11-09T11:55:03.8619677Z       "name": "global pause suppresses old running task and explains global pause",
+2026-11-09T11:55:03.8620184Z       "status": "passed"
+2026-11-09T11:55:03.8620533Z     },
+2026-11-09T11:55:03.8620790Z     {
+2026-11-09T11:55:03.8621283Z       "name": "scope uses applied sources not desired all LAN",
+2026-11-09T11:55:03.8621754Z       "status": "passed"
+2026-11-09T11:55:03.8622113Z     },
+2026-11-09T11:55:03.8622381Z     {
+2026-11-09T11:55:03.8622845Z       "name": "empty applied sources does not infer all LAN from draft",
+2026-11-09T11:55:03.8623323Z       "status": "passed"
+2026-11-09T11:55:03.8623631Z     },
+2026-11-09T11:55:03.8623981Z     {
+2026-11-09T11:55:03.8624543Z       "name": "inspector reads current route scope and ownership after background update",
+2026-11-09T11:55:03.8625032Z       "status": "passed"
+2026-11-09T11:55:03.8625381Z     },
+2026-11-09T11:55:03.8625653Z     {
+2026-11-09T11:55:03.8626280Z       "name": "inspector content is not replaced and focus not stolen on same service",
+2026-11-09T11:55:03.8626771Z       "status": "passed"
+2026-11-09T11:55:03.8627071Z     },
+2026-11-09T11:55:03.8627381Z     {
+2026-11-09T11:55:03.8627875Z       "name": "deleted service cannot retain old route and action controls",
+2026-11-09T11:55:03.8628410Z       "status": "passed"
+2026-11-09T11:55:03.8628826Z     },
+2026-11-09T11:55:03.8629286Z     {
+2026-11-09T11:55:03.8629768Z       "name": "auth revocation fences inspector updates",
+2026-11-09T11:55:03.8630197Z       "status": "passed"
+2026-11-09T11:55:03.8630545Z     },
+2026-11-09T11:55:03.8630878Z     {
+2026-11-09T11:55:03.8631283Z       "name": "domain rendering is escaped and bounded",
+2026-11-09T11:55:03.8631728Z       "status": "passed"
+2026-11-09T11:55:03.8632033Z     },
+2026-11-09T11:55:03.8632334Z     {
+2026-11-09T11:55:03.8632790Z       "name": "quick add releases lock when renderer throws",
+2026-11-09T11:55:03.8633258Z       "status": "passed"
+2026-11-09T11:55:03.8633600Z     },
+2026-11-09T11:55:03.8633902Z     {
+2026-11-09T11:55:03.8634406Z       "name": "quick add releases lock when action and error renderer fail",
+2026-11-09T11:55:03.8634876Z       "status": "passed"
+2026-11-09T11:55:03.8635194Z     },
+2026-11-09T11:55:03.8635598Z     {
+2026-11-09T11:55:03.8636105Z       "name": "two quick adds create one outstanding operation",
+2026-11-09T11:55:03.8636552Z       "status": "passed"
+2026-11-09T11:55:03.8636879Z     },
+2026-11-09T11:55:03.8637148Z     {
+2026-11-09T11:55:03.8637670Z       "name": "existing manual selection is not silently taken over",
+2026-11-09T11:55:03.8638142Z       "status": "passed"
+2026-11-09T11:55:03.8638453Z     },
+2026-11-09T11:55:03.8638741Z     {
+2026-11-09T11:55:03.8639545Z       "name": "check stays in place with one existing server check and no Apply",
+2026-11-09T11:55:03.8640171Z       "status": "passed"
+2026-11-09T11:55:03.8640514Z     },
+2026-11-09T11:55:03.8640793Z     {
+2026-11-09T11:55:03.8641403Z       "name": "new accepted job is not hidden by old error message",
+2026-11-09T11:55:03.8641842Z       "status": "passed"
+2026-11-09T11:55:03.8642168Z     },
+2026-11-09T11:55:03.8642509Z     {
+2026-11-09T11:55:03.8642981Z       "name": "missing config revision refuses start without replay",
+2026-11-09T11:55:03.8643445Z       "status": "passed"
+2026-11-09T11:55:03.8643761Z     },
+2026-11-09T11:55:03.8644085Z     {
+2026-11-09T11:55:03.8644523Z       "name": "unconfirmed start never becomes service PASS",
+2026-11-09T11:55:03.8644993Z       "status": "passed"
+2026-11-09T11:55:03.8645319Z     },
+2026-11-09T11:55:03.8645594Z     {
+2026-11-09T11:55:03.8646055Z       "name": "check UI throw does not wedge busy state",
+2026-11-09T11:55:03.8646468Z       "status": "passed"
+2026-11-09T11:55:03.8646817Z     },
+2026-11-09T11:55:03.8647105Z     {
+2026-11-09T11:55:03.8647606Z       "name": "faulty navigation renderer cannot prevent other components",
+2026-11-09T11:55:03.8648121Z       "status": "passed"
+2026-11-09T11:55:03.8648437Z     },
+2026-11-09T11:55:03.8648697Z     {
+2026-11-09T11:55:03.8649488Z       "name": "contextual changes filter appears only for actual changes",
+2026-11-09T11:55:03.8649965Z       "status": "passed"
+2026-11-09T11:55:03.8650327Z     },
+2026-11-09T11:55:03.8650603Z     {
+2026-11-09T11:55:03.8651146Z       "name": "saved whole-service exclusion has neutral card and explicit editor action",
+2026-11-09T11:55:03.8651732Z       "status": "passed"
+2026-11-09T11:55:03.8652044Z     },
+2026-11-09T11:55:03.8652461Z     {
+2026-11-09T11:55:03.8653215Z       "name": "two service lists wait for real supported contract and exclude saved negative from bypass view",
+2026-11-09T11:55:03.8653759Z       "status": "passed"
+2026-11-09T11:55:03.8654143Z     },
+2026-11-09T11:55:03.8654470Z     {
+2026-11-09T11:55:03.8655295Z       "name": "home excludes intentional saved negative from failures while retaining applied assignment count",
+2026-11-09T11:55:03.8655921Z       "status": "passed"
+2026-11-09T11:55:03.8656292Z     },
+2026-11-09T11:55:03.8656607Z     {
+2026-11-09T11:55:03.8657288Z       "name": "home shows services the autopilot is working on before working ones",
+2026-11-09T11:55:03.8657851Z       "status": "passed"
+2026-11-09T11:55:03.8658176Z     },
+2026-11-09T11:55:03.8658473Z     {
+2026-11-09T11:55:03.8659203Z       "name": "home lists every service up to eight and links the rest",
+2026-11-09T11:55:03.8659922Z       "status": "passed"
+2026-11-09T11:55:03.8660276Z     },
+2026-11-09T11:55:03.8660586Z     {
+2026-11-09T11:55:03.8661105Z       "name": "home still supports known zero resources and unknown data",
+2026-11-09T11:55:03.8661665Z       "status": "passed"
+2026-11-09T11:55:03.8662008Z     },
+2026-11-09T11:55:03.8662401Z     {
+2026-11-09T11:55:03.8662961Z       "name": "paused home does not claim an old service check is still running",
+2026-11-09T11:55:03.8663447Z       "status": "passed"
+2026-11-09T11:55:03.8663856Z     },
+2026-11-09T11:55:03.8664154Z     {
+2026-11-09T11:55:03.8664785Z       "name": "idle availability is quiet, busy/failure remains visible",
+2026-11-09T11:55:03.8665282Z       "status": "passed"
+2026-11-09T11:55:03.8665611Z     }
+2026-11-09T11:55:03.8665912Z   ]
+2026-11-09T11:55:03.8666276Z }
+2026-11-09T11:55:03.8950340Z PASS transient notices expire; errors persist with manual dismissal; replacement cancels stale timers
+2026-11-09T11:55:03.9345315Z PASS autonomy controls: save notification survives navigation; review focus; pause single flight, readback and auth ownership
+2026-11-09T11:55:04.0286538Z Service dashboard: applied/evidence/ping distinction, focus/details, job identity and cancellation, stale schedule scope, auth/edit fences, and hostname-only confirmed discovery passed
+2026-11-09T11:55:04.0302217Z R3 service evidence timestamp regression: passed
+2026-11-09T11:55:04.0426759Z Autonomous observations: latest result, home polling, bounded reads, visibility and mutation fences passed
+2026-11-09T11:55:04.0671846Z PASS named WG draft writer: frozen config/profile CAS, syntax-only options, retained binding and withdrawal, no obsolete hash, unconfirmed-write readback and auth fences
+2026-11-09T11:55:04.0722717Z PASS named WG scoped writers: actual service scope and device confirmation preserve the frozen route/revision pair
+2026-11-09T11:55:04.0749163Z PASS scope UI controls: all/selected updates enabled fields, manual addresses and checkbox changes without API writes
+2026-11-09T11:55:04.1244477Z Engine single-action staging, reviewed file guards, failed-save stop, local editing, cancellation/auth and late-response fences passed
+2026-11-09T11:55:04.1247534Z Guided read failure preserves settings, ends loading and supports explicit retry
+2026-11-09T11:55:04.1258020Z Guided arguments use escaped multiline textarea and preserve the complete save payload
+2026-11-09T11:55:04.1262512Z Guided empty and unknown enum values remain selected instead of becoming the first option
+2026-11-09T11:55:04.1397800Z Engine progress completes actual reviewed Apply + fresh typed probe and clears on profile/revision/generation/negative/Stop changes
+2026-11-09T11:55:04.1403327Z PASS one engine workflow: staged format→Apply→fresh service test, matching card/workspace receipts, selected-file isolation and no legacy process/route PASS
+2026-11-09T11:55:04.1407224Z PASS explicit cfg0 format binding without missing-revision proof; unresolved/stale binary keeps installation first with a real metadata read CTA
+2026-11-09T11:55:04.1785262Z Busy operation cancel, memory-only polling and logout fencing passed
+2026-11-09T11:55:04.2248571Z PASS engines waits for status settlement before protected reads and keeps inventory parallel
+2026-11-09T11:55:04.2294968Z PASS engines busy status stays busy while independent metadata succeeds and existing retry can recover
+2026-11-09T11:55:04.2331427Z PASS engines preserves independent metadata after an ordinary status error
+2026-11-09T11:55:04.2475174Z PASS engines revokes queued metadata on status 401, auth epoch, navigation or mutation cancellation
+2026-11-09T11:55:04.2506915Z PASS other views retain concurrent metadata while status is pending
+2026-11-09T11:55:04.2553616Z PASS legacy unowned metadata refresh duplicates active navigation and exposes its 409
+2026-11-09T11:55:04.2593763Z PASS missing-catalog card joins the actual navigation snapshot and selects its exact engine
+2026-11-09T11:55:04.2742489Z PASS same-owner status or catalog failure rejects the card without a fallback read
+2026-11-09T11:55:04.2783475Z PASS ordinary refresh joins navigation and a subsequent explicit refresh obtains one fresh pair
+2026-11-09T11:55:04.2813356Z PASS card with an existing description starts no metadata fallback
+2026-11-09T11:55:04.2848196Z PASS navigation without a snapshot owner shares active metadata GETs and never their completed bodies
+2026-11-09T11:55:04.2909585Z PASS unowned navigation exposes current 409 and 401 without admitting catalog or status
+2026-11-09T11:55:04.2941587Z PASS post-write engine readback remains independent of pre-write passive transports
+2026-11-09T11:55:04.3081635Z PASS old navigation owner cannot open a card after auth, view, request or snapshot changes
+2026-11-09T11:55:04.3170427Z PASS passive navigation metadata cannot replace state after its auth, view or request is revoked
+2026-11-09T11:55:04.3195314Z PASS passive readers share transport while navigation cancels only its subscription
+2026-11-09T11:55:04.3220995Z PASS brief list cache is copied, expires, and never caches auth, gates or review journals
+2026-11-09T11:55:04.3244786Z PASS read failure is exposed, never cached, and the next observer retries immediately
+2026-11-09T11:55:04.3269672Z PASS new auth epoch fences ignored cancellation without clearing the newer read
+2026-11-09T11:55:04.3296677Z PASS canceled subscriber and invalidated ticket cannot admit a delayed protected GET
+2026-11-09T11:55:04.3322587Z PASS late old 401 is a canceled read and cannot revoke a newer auth epoch
+2026-11-09T11:55:04.3361662Z PASS same-view bootstrap notifications join the snapshot instead of restarting authentication
+2026-11-09T11:55:04.3398344Z PASS navigation joins recent lists and explicit refresh reads them again
+2026-11-09T11:55:04.3452979Z PASS general refresh requests protected auxiliary data only after authentication
+2026-11-09T11:55:04.3481916Z PASS inventory heartbeat recovers stale metadata while a protected panel read is still pending
+2026-11-09T11:55:04.3509544Z PASS inventory heartbeat shares a flight, fences logout and never redraws editable forms
+2026-11-09T11:55:04.3540548Z PASS inventory reads memory endpoint, stamps age and rejects pre-write data without comparing clocks
+2026-11-09T11:55:04.3570543Z PASS empty expired and invalid inventory never turn unavailable into uninstalled
+2026-11-09T11:55:04.3604300Z PASS pending inventory keeps retrying and its notice clears when the heartbeat recovers
+2026-11-09T11:55:04.3637892Z PASS recovery removes only resolved sections and never dismisses a newer action notice
+2026-11-09T11:55:04.3671601Z PASS Apply failure survives a new busy refresh notice and later automatic recovery
+2026-11-09T11:55:04.3700121Z PASS loading details explain each pending section without a successful operation claim
+2026-11-09T11:55:04.3730997Z PASS slow services cannot hold settings, engine metadata or other completed reads
+2026-11-09T11:55:04.3762206Z PASS refresh coalesces and performs at most four reads in parallel
+2026-11-09T11:55:04.3806078Z PASS failed services preserves last valid list and automatically retries only failed GET
+2026-11-09T11:55:04.3838116Z PASS incomplete successful JSON does not erase the last valid services list
+2026-11-09T11:55:04.3873924Z PASS refreshAfterMutation fences pre-write reads and obtains a post-write snapshot
+2026-11-09T11:55:04.3911635Z PASS refreshCoreAfterEdit fences pre-write reads and obtains a post-write snapshot
+2026-11-09T11:55:04.3948852Z PASS public runtime metadata renders before the unauthenticated early return
+2026-11-09T11:55:04.4156152Z PASS late services refresh only the active dependent UI without replacing DNS provider inputs
+2026-11-09T11:55:04.4184211Z PASS late route options refresh the already rendered test matrix
+2026-11-09T11:55:04.4213811Z PASS late DNS plan only redraws plan/actions and preserves typed provider fields
+2026-11-09T11:55:04.4243134Z PASS auxiliary activity read failure does not block core loading
+2026-11-09T11:55:04.4275542Z PASS activity cannot gate reads; a busy section retries without suppressing unrelated sections
+2026-11-09T11:55:04.4305175Z PASS late pre-logout read cannot restore protected data or schedule retries
+2026-11-09T11:55:04.4332908Z PASS section 401 cancels sibling reads and opens login without stale responses
+2026-11-09T11:55:04.4542050Z PASS GET deadline also covers delayed JSON body, aborts fetch and releases its timer
+2026-11-09T11:55:04.4555811Z PASS mutation uses caller cancellation without read timeout or automatic replay
+2026-11-09T11:55:04.4587882Z PASS activity initial failed journal read renders unavailable and retry instead of empty success
+2026-11-09T11:55:04.4600115Z PASS busy release metadata updates sidebar and footer together without admitting foreign or invalid version text
+2026-11-09T11:55:04.4601172Z {"status":"passed","tests":50}
+2026-11-09T11:55:04.5373533Z PASS source offline UI: exact GET view, immutable live data/dates, truthful warning labels, disabled writes and real panel/auth epoch fences
+2026-11-09T11:55:04.5691603Z PASS source refresh distinguishes partial/all/none/failure and keeps raw errors in technical details
+2026-11-09T11:55:04.6064984Z PASS fresh login during busy gets saved desired/applied scope without proof
+2026-11-09T11:55:04.6074088Z PASS late saved image cannot overwrite a completed live read
+2026-11-09T11:55:04.6082991Z PASS older publication and malformed success preserve the valid snapshot
+2026-11-09T11:55:04.6091419Z PASS expired images stop supplying cards even after a later busy error clears metadata
+2026-11-09T11:55:04.6101993Z PASS logout clears saved private presentation and fences delayed HTTP body
+2026-11-09T11:55:04.6111312Z PASS snapshot 401 revokes the session but a timeout never erases valid settings
+2026-11-09T11:55:04.6125210Z PASS fallback card has no action able to apply incomplete state
+2026-11-09T11:55:04.6159520Z PASS unknown and busy settings do not claim saved state
+2026-11-09T11:55:04.6160438Z {"status":"passed","tests":8}
+2026-11-09T11:55:04.6713603Z PASS busy/fenced browse preserves historical fields without creating live identity or actions
+2026-11-09T11:55:04.6750779Z PASS late fallback never replaces fresh live cards and old revisions cannot replace newer history
+2026-11-09T11:55:04.6784012Z PASS saved transition closes open editors and fences policy confirmation even after live returns
+2026-11-09T11:55:04.6816937Z PASS ordinary loading preserves typed fields but fences saves and old confirmations
+2026-11-09T11:55:04.6848872Z PASS empty live read restores live empty copy after saved expiry and filtered fallback
+2026-11-09T11:55:04.6944412Z PASS auth change fences delayed bodies and clears private historical presentation
+2026-11-09T11:55:04.6980284Z PASS mutation invalidation rejects in-flight and old backend publications until a new capture
+2026-11-09T11:55:04.7043518Z PASS TTL expires locally without another response and empty/expired do not claim deleted devices
+2026-11-09T11:55:04.7078874Z PASS restart replaces only saved process provenance and malformed or proof-bearing DTO is refused
+2026-11-09T11:55:04.7082528Z Device saved browse: 9 modeled lifecycle checks passed (no native/browser claim)
+2026-11-09T11:55:04.7479407Z PASS busy catalog explains the blocked operation without treating saved data as import authority
+2026-11-09T11:55:04.7511506Z PASS busy live list renders separate historical definitions and local search with no actions
+2026-11-09T11:55:04.7547418Z PASS late memory response never replaces successful live search or its actionable list
+2026-11-09T11:55:04.7575273Z PASS accepted live catalog replaces only the empty retained preview notice
+2026-11-09T11:55:04.7605772Z PASS failed retry ends the loading notice and restores an explicit read retry without snapshot actions
+2026-11-09T11:55:04.7632301Z PASS live list refresh and late retained metadata preserve a user-selected preview
+2026-11-09T11:55:04.7661604Z PASS native click event filters saved rows and only literal true forces a live retry
+2026-11-09T11:55:04.7688250Z PASS saved transition fences pending preview and delayed import confirmation after live returns
+2026-11-09T11:55:04.7714903Z PASS source-form capture guard blocks preview submit while historical and preserves fields
+2026-11-09T11:55:04.7785303Z PASS auth denial and logout clear presentation and reject delayed protected bodies
+2026-11-09T11:55:04.7833842Z PASS capture TTL and clock rollback expire historical cards without enabling source or import
+2026-11-09T11:55:04.7860734Z PASS mutation, process and revision fences preserve only current display bytes
+2026-11-09T11:55:04.7893116Z PASS unknown source/proof DTO fields and oversized or old-success bodies grant no presentation
+2026-11-09T11:55:04.7961257Z PASS bundled Telegram import needs explicit snapshot confirmation before POST
+2026-11-09T11:55:04.7986995Z PASS bundled Telegram preview shows snapshot date and source without claiming a live fetch
+2026-11-09T11:55:04.8023465Z Community saved browse: 15 modeled checks passed; no native/browser claim
+2026-11-09T11:55:04.8676406Z PASS busy snapshot stays detached, searchable and free of live health or actions
+2026-11-09T11:55:04.8722336Z PASS late saved response never replaces successful live list or an accepted newer revision
+2026-11-09T11:55:04.8757643Z PASS ordinary refresh preserves edits while disabling save and invalidating old confirmation
+2026-11-09T11:55:04.8792328Z PASS saved transition closes editors, reviews, secret presentation and delayed reveal
+2026-11-09T11:55:04.8830024Z PASS late all-VLESS confirmation cannot submit after saved mode and live recovery
+2026-11-09T11:55:04.8937204Z PASS auth and mutation epochs reject delayed and pre-mutation publications
+2026-11-09T11:55:04.9013710Z PASS local TTL, backwards clock and empty endpoint cannot claim nodes deleted
+2026-11-09T11:55:04.9048509Z PASS explicit live read works independently from route metadata and failed read remains readonly
+2026-11-09T11:55:04.9089540Z PASS process and strict field bounds never add secret, health or source authority
+2026-11-09T11:55:04.9124369Z PASS new process revokes prior live editors but cannot revoke a newer successful live response
+2026-11-09T11:55:04.9187943Z PASS logout clears historical DOM even away from nodes and malformed live payload grants no action
+2026-11-09T11:55:04.9227076Z PASS real poll function separates job-status errors from protected-list refusal and recovery
+2026-11-09T11:55:04.9268754Z PASS temporary known busy retains full readonly browser and filters without health or action identity
+2026-11-09T11:55:04.9526234Z PASS temporary full browser requires prior live receipt, same process/auth and bounded freshness
+2026-11-09T11:55:04.9559335Z PASS expired temporary view cannot leave its historical notice over a fresh live read
+2026-11-09T11:55:04.9560519Z Node saved browse: 15 modeled lifecycle checks passed (no native/browser claim)
+2026-11-09T11:55:04.9993690Z PASS slow status no longer gates services and engine sections
+2026-11-09T11:55:05.0025948Z PASS status HTTP 409 preserves independent sections
+2026-11-09T11:55:05.0051807Z PASS status HTTP 503 preserves independent sections
+2026-11-09T11:55:05.0077790Z PASS status HTTP 500 preserves independent sections
+2026-11-09T11:55:05.0103843Z PASS slow activity cannot block bootstrap and core reads
+2026-11-09T11:55:05.0131297Z PASS busy activity is not treated as a global UI read lock
+2026-11-09T11:55:05.0167766Z PASS concurrency remains bounded to four and refresh coalesces
+2026-11-09T11:55:05.0200477Z PASS null service JSON never erases the last valid catalogue
+2026-11-09T11:55:05.0227567Z PASS 401 cancels sibling results and opens login
+2026-11-09T11:55:05.0264811Z PASS post-write readback rejects a late pre-write snapshot
+2026-11-09T11:55:05.0292043Z PASS one renderer failure does not suppress completed sibling reads
+2026-11-09T11:55:05.0330476Z PASS failed-only retries do not reload every successful section
+2026-11-09T11:55:05.0398600Z PASS exclusions initial refresh waits for exclusive status before protected metadata
+2026-11-09T11:55:05.0428526Z PASS exclusions busy retry waits for exclusive status before protected metadata
+2026-11-09T11:55:05.0459472Z PASS devices initial refresh waits for exclusive status before protected metadata
+2026-11-09T11:55:05.0486916Z PASS devices busy retry waits for exclusive status before protected metadata
+2026-11-09T11:55:05.0516443Z PASS a failed scope read keeps successfully read exclusion controls ready
+2026-11-09T11:55:05.0548859Z PASS ordered editor loading leaves memory-only inventory parallel with status
+2026-11-09T11:55:05.0574460Z PASS leaving exclusions while status is pending cannot start old-view metadata
+2026-11-09T11:55:05.0599562Z PASS navigation is local and survives broken optional renderers
+2026-11-09T11:55:05.0609920Z PASS double confirmation invocation cannot approve two actions
+2026-11-09T11:55:05.0617233Z PASS Escape never reuses an earlier approval
+2026-11-09T11:55:05.0624328Z PASS logout revokes a pending confirmation and releases it
+2026-11-09T11:55:05.0632584Z PASS showModal error fails closed without wedging the next dialog
+2026-11-09T11:55:05.0846434Z PASS GET deadline undefined clamps to 20000
+2026-11-09T11:55:05.0853512Z PASS GET deadline 3000 clamps to 3000
+2026-11-09T11:55:05.0859770Z PASS GET deadline 1 clamps to 250
+2026-11-09T11:55:05.0866534Z PASS GET deadline 110000 clamps to 110000
+2026-11-09T11:55:05.0873274Z PASS GET deadline 200000 clamps to 110000
+2026-11-09T11:55:05.0886260Z PASS read deadline also aborts a delayed response body
+2026-11-09T11:55:05.0899058Z PASS mutations keep caller cancellation and are never automatically replayed
+2026-11-09T11:55:05.0910210Z PASS policy: unchanged approved policy
+2026-11-09T11:55:05.0911119Z PASS policy: check interval
+2026-11-09T11:55:05.0912729Z PASS policy: reserve budget within server bounds
+2026-11-09T11:55:05.0913904Z PASS policy: pause
+2026-11-09T11:55:05.0915607Z PASS policy: same-permission schedule
+2026-11-09T11:55:05.0916567Z PASS policy: remove a protocol
+2026-11-09T11:55:05.0940293Z PASS policy: remove a source
+2026-11-09T11:55:05.0942195Z PASS policy: disable inheritance
+2026-11-09T11:55:05.0942796Z PASS policy: new source
+2026-11-09T11:55:05.0943407Z PASS policy: new protocol
+2026-11-09T11:55:05.0943948Z PASS policy: new transport
+2026-11-09T11:55:05.0944444Z PASS policy: wider scope
+2026-11-09T11:55:05.0944829Z PASS policy: different device
+2026-11-09T11:55:05.0945323Z PASS policy: preview updates
+2026-11-09T11:55:05.0945873Z PASS policy: prepare instead of check
+2026-11-09T11:55:05.0946593Z PASS policy: unknown future update mode
+2026-11-09T11:55:05.0947240Z PASS policy: new future permission field
+2026-11-09T11:55:05.0948134Z PASS policy: unknown update-window field
+2026-11-09T11:55:05.0948656Z PASS policy: first setup and Safe Mode release still require consent
+2026-11-09T11:55:05.0949615Z PASS policy: enabling future-service inheritance requires consent
+2026-11-09T11:55:05.0950507Z PASS availability validates shape and never accepts a route-health claim
+2026-11-09T11:55:05.0951455Z PASS heartbeat single-flight and busy retry are bounded
+2026-11-09T11:55:05.0951970Z PASS heartbeat backoff avoids request storms
+2026-11-09T11:55:05.0952501Z PASS stopped heartbeat discards late results and cancels its request
+2026-11-09T11:55:05.0953276Z PASS 401 stops heartbeat and requests authentication once
+2026-11-09T11:55:05.0954013Z PASS 404 mixed-version response stops automatic retries
+2026-11-09T11:55:05.0954664Z PASS old heartbeat response cannot supersede a new session
+2026-11-09T11:55:05.0955344Z PASS heartbeat descriptions do not fabricate service availability
+2026-11-09T11:55:05.0956703Z PASS busy heartbeat names the running operation
+2026-11-09T11:55:05.0961813Z PASS autonomy progress names its observed phase and known service without claiming route health
+2026-11-09T11:55:05.0965510Z PASS known progress phases remain bounded presentation labels
+2026-11-09T11:55:05.0972468Z PASS invalid optional progress retains liveness and the generic busy fallback
+2026-11-09T11:55:05.0974081Z PASS deadline expiry and recovery never make an active operation available
+2026-11-09T11:55:05.0976614Z PASS progress heartbeats keep the existing scheduler and announce phases rather than elapsed ticks
+2026-11-09T11:55:05.1006699Z {"suite":"ux-stage1","mode":"repository-files","passed":65,"failed":0,"tests":[{"name":"slow status no longer gates services and engine sections","status":"passed"},{"name":"status HTTP 409 preserves independent sections","status":"passed"},{"name":"status HTTP 503 preserves independent sections","status":"passed"},{"name":"status HTTP 500 preserves independent sections","status":"passed"},{"name":"slow activity cannot block bootstrap and core reads","status":"passed"},{"name":"busy activity is not treated as a global UI read lock","status":"passed"},{"name":"concurrency remains bounded to four and refresh coalesces","status":"passed"},{"name":"null service JSON never erases the last valid catalogue","status":"passed"},{"name":"401 cancels sibling results and opens login","status":"passed"},{"name":"post-write readback rejects a late pre-write snapshot","status":"passed"},{"name":"one renderer failure does not suppress completed sibling reads","status":"passed"},{"name":"failed-only retries do not reload every successful section","status":"passed"},{"name":"exclusions initial refresh waits for exclusive status before protected metadata","status":"passed"},{"name":"exclusions busy retry waits for exclusive status before protected metadata","status":"passed"},{"name":"devices initial refresh waits for exclusive status before protected metadata","status":"passed"},{"name":"devices busy retry waits for exclusive status before protected metadata","status":"passed"},{"name":"a failed scope read keeps successfully read exclusion controls ready","status":"passed"},{"name":"ordered editor loading leaves memory-only inventory parallel with status","status":"passed"},{"name":"leaving exclusions while status is pending cannot start old-view metadata","status":"passed"},{"name":"navigation is local and survives broken optional renderers","status":"passed"},{"name":"double confirmation invocation cannot approve two actions","status":"passed"},{"name":"Escape never reuses an earlier approval","status":"passed"},{"name":"logout revokes a pending confirmation and releases it","status":"passed"},{"name":"showModal error fails closed without wedging the next dialog","status":"passed"},{"name":"GET deadline undefined clamps to 20000","status":"passed"},{"name":"GET deadline 3000 clamps to 3000","status":"passed"},{"name":"GET deadline 1 clamps to 250","status":"passed"},{"name":"GET deadline 110000 clamps to 110000","status":"passed"},{"name":"GET deadline 200000 clamps to 110000","status":"passed"},{"name":"read deadline also aborts a delayed response body","status":"passed"},{"name":"mutations keep caller cancellation and are never automatically replayed","status":"passed"},{"name":"policy: unchanged approved policy","status":"passed"},{"name":"policy: check interval","status":"passed"},{"name":"policy: reserve budget within server bounds","status":"passed"},{"name":"policy: pause","status":"passed"},{"name":"policy: same-permission schedule","status":"passed"},{"name":"policy: remove a protocol","status":"passed"},{"name":"policy: remove a source","status":"passed"},{"name":"policy: disable inheritance","status":"passed"},{"name":"policy: new source","status":"passed"},{"name":"policy: new protocol","status":"passed"},{"name":"policy: new transport","status":"passed"},{"name":"policy: wider scope","status":"passed"},{"name":"policy: different device","status":"passed"},{"name":"policy: preview updates","status":"passed"},{"name":"policy: prepare instead of check","status":"passed"},{"name":"policy: unknown future update mode","status":"passed"},{"name":"policy: new future permission field","status":"passed"},{"name":"policy: unknown update-window field","status":"passed"},{"name":"policy: first setup and Safe Mode release still require consent","status":"passed"},{"name":"policy: enabling future-service inheritance requires consent","status":"passed"},{"name":"availability validates shape and never accepts a route-health claim","status":"passed"},{"name":"heartbeat single-flight and busy retry are bounded","status":"passed"},{"name":"heartbeat backoff avoids request storms","status":"passed"},{"name":"stopped heartbeat discards late results and cancels its request","status":"passed"},{"name":"401 stops heartbeat and requests authentication once","status":"passed"},{"name":"404 mixed-version response stops automatic retries","status":"passed"},{"name":"old heartbeat response cannot supersede a new session","status":"passed"},{"name":"heartbeat descriptions do not fabricate service availability","status":"passed"},{"name":"busy heartbeat names the running operation","status":"passed"},{"name":"autonomy progress names its observed phase and known service without claiming route health","status":"passed"},{"name":"known progress phases remain bounded presentation labels","status":"passed"},{"name":"invalid optional progress retains liveness and the generic busy fallback","status":"passed"},{"name":"deadline expiry and recovery never make an active operation available","status":"passed"},{"name":"progress heartbeats keep the existing scheduler and announce phases rather than elapsed ticks","status":"passed"}]}
+2026-11-09T11:55:05.1372341Z PASS unified build contract: assets, CSS, pending controls, navigation and CI wiring
+2026-11-09T11:55:05.1723785Z WARP native generation, offline recovery and unproven timeout UI gates: PASS
+2026-11-09T11:55:05.2181891Z Restore busy supervision, private recovery and migration layout checks passed
+2026-11-09T11:55:05.2953818Z Native enrollment upgrade/rollback compatibility gates: PASS
+2026-11-09T11:55:05.9462945Z Component update upgrade/rollback schema gates: PASS
+2026-11-09T11:55:06.1067425Z Self update retained receipt upgrade/rollback schema gates: PASS
+2026-11-09T11:55:06.3192662Z Raw replacement refused for retained control/file protocol and managed controllers: PASS
+2026-11-09T11:55:12.1909778Z rollback-entware.sh retained protocol fence, strict bounded metadata and retained rechecks: PASS
+2026-11-09T11:55:18.0709396Z upgrade-entware.sh retained protocol fence, strict bounded metadata and retained rechecks: PASS
+2026-11-09T11:55:18.1238347Z Retained node history target downgrade consumers before/after Stop: PASS
+2026-11-09T11:55:18.1642473Z Native opkg launcher pinned runtime/offline opt-in contract: PASS (stubs only)
+2026-11-09T11:57:41.6973338Z dist/razvilka-linux-amd64: OK
+2026-11-09T11:57:41.7245492Z dist/razvilka-linux-arm64: OK
+2026-11-09T11:57:41.7563629Z dist/razvilka-linux-mips: OK
+2026-11-09T11:57:41.7872648Z dist/razvilka-linux-mipsle: OK
+2026-11-09T11:57:42.8890165Z Isolated Entware ancestor path refusal: PASS
+2026-11-09T11:57:43.6892381Z Installer architecture selection tests: PASS
+2026-11-09T11:57:43.6893378Z Installer mandatory checksum tests: PASS
+2026-11-09T11:57:43.9894627Z Pre-0.20 layout guard tests: PASS cases=12 skipped=0
+2026-11-09T11:57:45.8899597Z Удалены старые снимки обновлений: 2 (хранятся последние 5).
+2026-11-09T11:57:46.6650268Z 2026/11/09 11:57:46 Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: manager-platform
+2026-11-09T11:57:51.0028805Z 2026/11/09 11:57:51 Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: manager-platform
+2026-11-09T11:57:54.8752534Z 2026/11/09 11:57:54 Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: manager-platform
+2026-11-09T11:57:55.1893221Z 2026/11/09 11:57:55 Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: manager-platform
+2026-11-09T11:57:57.6070209Z 2026/11/09 11:57:57 Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: manager-platform
+2026-11-09T11:57:57.9451138Z 2026/11/09 11:57:57 Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: manager-platform
+2026-11-09T11:58:00.3512320Z 2026/11/09 11:58:00 Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: manager-platform
+2026-11-09T11:58:00.3834535Z Entware actual shell/S99/Main transaction (test-only modeled native initializer), readonly metadata and reader3 raw refusal: OK
+2026-11-09T11:58:00.3836150Z Canonical Linux clean control and first consent POST before Prepare require the separate genuine clean-install probe.
+2026-11-09T11:58:00.3836993Z Journaled update, durable Stop settlement and Resume acceptance are separate D11 gates.
+2026-11-09T11:58:00.4181973Z Mihomo manual UI: exact reviewed scope, stale identity and unknown registration tests PASS
+2026-11-09T11:58:00.4215087Z RAZVILKA checks: OK
+2026-11-09T11:58:00.4339360Z Post job cleanup.
+2026-11-09T11:58:00.5581807Z Post job cleanup.
+2026-11-09T11:58:00.7169625Z Post job cleanup.
+2026-11-09T11:58:00.8099967Z [command]/usr/bin/git version
+2026-11-09T11:58:00.8149232Z git version 2.56.0
+2026-11-09T11:58:00.8192557Z Temporarily overriding HOME='/home/runner/work/_temp/aa00b070-5443-41ff-bc83-a13e499fd6c6' before making global git config changes
+2026-11-09T11:58:00.8193925Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T11:58:00.8199734Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T11:58:00.8243947Z Removing SSH command configuration
+2026-11-09T11:58:00.8252326Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T11:58:00.8304268Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T11:58:00.8532378Z Removing HTTP extra header
+2026-11-09T11:58:00.8537533Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T11:58:00.8568767Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T11:58:00.8770093Z Removing includeIf entries pointing to credentials config files
+2026-11-09T11:58:00.8777128Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T11:58:00.8806616Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T11:58:00.9182286Z Cleaning up orphan processes

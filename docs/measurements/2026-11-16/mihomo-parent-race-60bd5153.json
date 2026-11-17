@@ -1,0 +1,68 @@
+{
+  "sha": "60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4",
+  "run_id": 43926086704,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43926086704",
+  "conclusion": "failure",
+  "mode": "race",
+  "jobs": [
+    {
+      "name": "original-parent-native (race)",
+      "conclusion": "success",
+      "databaseId": 133505821222
+    },
+    {
+      "name": "original-private-set (race)",
+      "conclusion": "success",
+      "databaseId": 133505821745
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "conclusion": "failure",
+      "databaseId": 133510036033
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "conclusion": "success",
+      "databaseId": 133510036048
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "conclusion": "failure",
+      "databaseId": 133510036068
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "conclusion": "failure",
+      "databaseId": 133510036098
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "conclusion": "success",
+      "databaseId": 133510036126
+    }
+  ],
+  "failures": [
+    "completed.json",
+    "terminal-transaction",
+    "terminal-global"
+  ],
+  "failure_detail": "Each original parent test exhausted unchanged 120s; retirement prepare_stage=absence-source-opening, canceled=false, deadline=true. No nested absence stage was reported.",
+  "limits": [
+    "Prior normal e2fb result does not establish race acceptance.",
+    "The separate HEV diagnostic is not a recovery PASS.",
+    "No router/LAN qualification."
+  ],
+  "raw_directory": "C:/RAZVILKA-research-20261116/sameboot-race-60bd5153",
+  "raw_sha256": [
+    {
+      "file": "run.json",
+      "bytes": 17985,
+      "sha256": "62f4fbb6cfd4d047f4f61ba97827a14960dfa3567191c28ead177bb5ad1239f8"
+    },
+    {
+      "file": "run.log",
+      "bytes": 1128700,
+      "sha256": "411afdcbad26b559d6c2c74ac6904516b0d5738e6995240152f82d7f8f6f61fb"
+    }
+  ]
+}

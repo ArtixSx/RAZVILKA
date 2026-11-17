@@ -139,6 +139,20 @@ func (w *domainTCPPoolListenerWitness) cleanupAbsent(ctx context.Context, old *X
 }
 
 func (w *domainTCPPoolListenerWitness) current(ctx context.Context, old *XrayDomainTCPExecutionResource) error {
+	return w.currentWithSuccessorRead(ctx, old, nil)
+}
+func (w *domainTCPPoolListenerWitness) currentWithSuccessorRead(ctx context.Context, old *XrayDomainTCPExecutionResource, files *domainTCPSuccessorRead) (result error) {
+	if files != nil {
+		if err := files.current(ctx, w, old); err != nil {
+			return err
+		}
+		defer func() {
+			result = errors.Join(result, files.current(ctx, w, old), ctx.Err())
+			if result == nil {
+				domainTCPMeasure("successor-listener-derived-complete")(0)
+			}
+		}()
+	}
 	if err := w.original(old); err != nil {
 		return err
 	}
@@ -178,7 +192,18 @@ func (w *domainTCPPoolListenerWitness) current(ctx context.Context, old *XrayDom
 		return readErr
 	}
 	defer closeRead()
-	observed, err := r.observeDomainListener(read)
+	var observed xraySelectedTCPListenerObservation
+	var err error
+	if files == nil {
+		observed, err = r.observeDomainListener(read)
+	} else {
+		nested, revoke, deriveErr := files.derive(ctx, read, w, old)
+		if deriveErr != nil {
+			return deriveErr
+		}
+		defer revoke()
+		observed, err = r.observeDomainListenerUsingFiles(read, nested)
+	}
 	if err != nil || observed.inode != w.inode || observed.endpoint != w.endpoint || !w.frozenBirth.same(observed.process) {
 		return errors.Join(ErrXrayDomainTCPOriginal, err)
 	}
@@ -234,25 +259,45 @@ func (w *domainTCPPoolListenerWitness) authoredProcessRecordForCleanup(ctx conte
 // Ordinary native shutdown still proves global absence. Only a prior pool
 // standby can accept the fresh exact owned listener of the current successor.
 func (p *XrayDomainTCPExecutionResource) observeRetainedDomainListener(ctx context.Context) error {
+	return p.observeRetainedDomainListenerWithSuccessorRead(ctx, nil)
+}
+func (p *XrayDomainTCPExecutionResource) observeRetainedDomainListenerWithSuccessorRead(ctx context.Context, read *domainTCPSuccessorRead) error {
 	if p == nil || p.self != p || p.scope == nil || p.scope.manager == nil {
 		return ErrXrayDomainTCPOriginal
+	}
+	if read != nil {
+		if err := read.current(ctx, read.witness, p); err != nil {
+			return err
+		}
 	}
 	m := p.scope.manager
 	m.retainedXrayMu.Lock()
 	pool := m.domainPool
 	m.retainedXrayMu.Unlock()
 	if pool == nil {
+		if read != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
 		return p.observeDomainListenerAbsent(ctx)
 	}
 	pool.mu.Lock()
 	c := pool.successor
 	pool.mu.Unlock()
 	if c == nil {
+		if read != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
 		return p.observeDomainListenerAbsent(ctx)
 	}
 	w := c.listener.Load()
 	if w == nil || w.resource == p || w.endpoint != p.definition.PrivateEndpoint {
+		if read != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
 		return p.observeDomainListenerAbsent(ctx)
+	}
+	if read != nil && (c != read.cursor || w != read.witness || domainTCPFailureCleanupOwner(ctx, c.scope)) {
+		return ErrDomainPolicyTCPConsumer
 	}
 	if domainTCPFailureCleanupOwner(ctx, c.scope) {
 		return w.cleanupAbsent(ctx, p)
@@ -262,8 +307,11 @@ func (p *XrayDomainTCPExecutionResource) observeRetainedDomainListener(ctx conte
 	}
 	select {
 	case <-w.process.done:
+		if read != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
 		return p.observeDomainListenerAbsent(ctx)
 	default:
 	}
-	return w.current(ctx, p)
+	return w.currentWithSuccessorRead(ctx, p, read)
 }

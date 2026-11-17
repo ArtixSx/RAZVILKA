@@ -1,0 +1,91 @@
+{
+  "reviewer": "verification",
+  "head_sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+  "run": 42642213651,
+  "conclusion": "success",
+  "logs": [
+    {
+      "sha256": "5CCBFF4B6B5A87A9286E449E815D52A44388CA87B2811BE6B22774E747D6EC0A",
+      "path": "C:/RAZVILKA-research-20261109/lifecycle-4cc9f869/mihomo-lifecycle.log"
+    },
+    {
+      "sha256": "D0A0ACB96A94C76C41CA8C3D3BE4A4D540F2E62888CA06C7640D6F3D27F6D9FD",
+      "path": "C:/RAZVILKA-research-20261109/lifecycle-4cc9f869/mihomo-manual-http.log"
+    },
+    {
+      "sha256": "856E72B31D8E6AAEE92720AD529AFF45DB8A656AA1FEC6C63F24C6E1597BC421",
+      "path": "C:/RAZVILKA-research-20261109/lifecycle-4cc9f869/mihomo-postcas.log"
+    },
+    {
+      "sha256": "3B98FC06259ECB77E413AA764CDB571F705E7D1FD89098CE79E777B376B437F7",
+      "path": "C:/RAZVILKA-research-20261109/lifecycle-4cc9f869/mihomo-settlement.log"
+    }
+  ],
+  "cases": {
+    "lifecycle": {
+      "stop_seconds": [
+        6.228095334,
+        6.157382437
+      ],
+      "test_seconds": 284.15,
+      "official_child_normal_race": "PASS",
+      "conclusion": "success",
+      "physical_baselines_restored": 2,
+      "second_closing_retry": true,
+      "job": 129245975060,
+      "cycle_seconds": [
+        141.129100088,
+        140.657169404
+      ],
+      "apply_seconds": [
+        97.346047322,
+        97.023783958
+      ]
+    },
+    "postcas": {
+      "conclusion": "success",
+      "desired_exact_restored": true,
+      "original_pending": false,
+      "job": 129245974800,
+      "rollback_verified": true,
+      "http": 503,
+      "test_seconds": 81.23
+    },
+    "settlement": {
+      "cycle_seconds": 112.187878872,
+      "conclusion": "success",
+      "apply_seconds": 86.355107736,
+      "job": 129245974512,
+      "stop_seconds": 8.513341645,
+      "physical_baseline_restored": true,
+      "test_seconds": 114.31
+    },
+    "manual_http": {
+      "stop_seconds": [
+        6.382235545,
+        6.289013404
+      ],
+      "test_seconds": 290.69,
+      "conclusion": "success",
+      "physical_baselines_restored": 2,
+      "second_closing_retry": true,
+      "contract": "Actual handler preview/token/Apply/LAN/authenticatedStop and fresh cycle. Stale/all-source/removed-runtime/replay refusal; general AUTO closed.",
+      "job": 129245975128,
+      "cycle_seconds": [
+        144.254178133,
+        143.96401692
+      ],
+      "apply_seconds": [
+        100.812489612,
+        100.624963245
+      ]
+    }
+  },
+  "limitations": [
+    "Native isolated Ubuntu configured original-owner test; no physical router/Entware acceptance.",
+    "All four closed scenarios passed; broader transports/scopes/AUTO and separately dispatched same-boot restart/ACK cuts remain separate.",
+    "Cross-run elapsed times are not paired optimization measurements.",
+    "Generic CI same SHA still executing at report creation; no generic success implied.",
+    "Later native ABI fixture fixes are not covered by this SHA; public pair and pinned1.8.11 workflow failed independently."
+  ]
+}

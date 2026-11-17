@@ -1,0 +1,137 @@
+{
+  "sha": "5289a7d8cace5c63641d14218ca1f48b4d17fa2e",
+  "run_id": 42680358563,
+  "attempt": 1,
+  "conclusion": "failure",
+  "passed": 11,
+  "failed": 3,
+  "jobs": [
+    {
+      "job_id": 129372912168,
+      "name": "original-parent-native (race)",
+      "conclusion": "success",
+      "log": "sameboot-parent-race.log",
+      "sha256": "bb858951a52ab1a95b3373bab7b125bcd980c0c9a8768471bdd6aec9a258f255",
+      "consumer_outcome": "PASS",
+      "consumer_s": 99.97
+    },
+    {
+      "job_id": 129372912322,
+      "name": "original-private-set (normal)",
+      "conclusion": "success"
+    },
+    {
+      "job_id": 129372912458,
+      "name": "original-private-set (race)",
+      "conclusion": "success"
+    },
+    {
+      "job_id": 129372912721,
+      "name": "original-parent-native (normal)",
+      "conclusion": "success",
+      "log": "sameboot-parent-normal.log",
+      "sha256": "44738e5d721735e34bf2c35b2ee0dff1362aae34bbe4d6d0aaf109a52247da4a",
+      "consumer_outcome": "PASS",
+      "consumer_s": 42.87
+    },
+    {
+      "job_id": 129376237051,
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "conclusion": "failure",
+      "log": "sameboot-ack-race-completed.log",
+      "sha256": "d912a6d601107212f0649ffeaad7377e21ddeae71b99bde568245add858fd8fb",
+      "consumer_outcome": "FAIL",
+      "consumer_s": 70.06
+    },
+    {
+      "job_id": 129376237104,
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "conclusion": "success",
+      "log": "sameboot-ack-race-terminal-global.log",
+      "sha256": "bf67f53180b362f13d27d0c69981e56d5bbb8da4f13545d7f0182133eb9562b9",
+      "consumer_outcome": "PASS",
+      "consumer_s": 104.04
+    },
+    {
+      "job_id": 129376237131,
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "conclusion": "failure",
+      "log": "sameboot-ack-race-terminal-transaction.log",
+      "sha256": "dc35f6a8464ec500e8984420d773ea2d5c0dc3e1f3ab7cd7c5a0a45f767c1217",
+      "consumer_outcome": "not reached: original producer failed before policy ACK"
+    },
+    {
+      "job_id": 129376237146,
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "conclusion": "success",
+      "log": "sameboot-ack-normal-completed.log",
+      "sha256": "455d2d8fd227c75c8128e5f5ff1d010e075c2300631948203531a9049f0add97",
+      "consumer_outcome": "PASS",
+      "consumer_s": 57.77
+    },
+    {
+      "job_id": 129376237156,
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "conclusion": "success",
+      "log": "sameboot-ack-normal-terminal-global.log",
+      "sha256": "6edfd298d0b09a9d236e43bb7ba13cd258bc977a60b0fc938ddbb9e31a8bdf1c",
+      "consumer_outcome": "PASS",
+      "consumer_s": 66.13
+    },
+    {
+      "job_id": 129376237246,
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "conclusion": "success",
+      "log": "sameboot-ack-race-retirement.log",
+      "sha256": "33a3c9e635646fa2e8d122dd0802220b4b788d55bebbbd6f623d22b68e0cd4bb",
+      "consumer_outcome": "PASS",
+      "consumer_s": 107.21
+    },
+    {
+      "job_id": 129376237256,
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "conclusion": "failure",
+      "log": "sameboot-ack-normal-retirement.log",
+      "sha256": "5bc982d4d26cadfcbc89eb51cdc047bcac2ceb713fc4b678edf5bb63ee2e1dcf",
+      "consumer_outcome": "not reached: original producer failed before policy ACK"
+    },
+    {
+      "job_id": 129376237275,
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "conclusion": "success",
+      "log": "sameboot-ack-normal-runtime-history.log",
+      "sha256": "c77651e275d7872445a31fd1d679b9e7b2967373dc223c707f52bfc093f44f0b",
+      "consumer_outcome": "PASS",
+      "consumer_s": 49.56
+    },
+    {
+      "job_id": 129376237369,
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "conclusion": "success",
+      "log": "sameboot-ack-race-runtime-history.log",
+      "sha256": "15541142c115e96d192e8f563f7c0d85ce794094d5b979681a11e1aa948d4dc5",
+      "consumer_outcome": "PASS",
+      "consumer_s": 93.79
+    },
+    {
+      "job_id": 129376237450,
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "conclusion": "success",
+      "log": "sameboot-ack-normal-terminal-transaction.log",
+      "sha256": "9211bf63ab171d41a39c9940642d8787803b8bd2a7d22979491c30c220119628",
+      "consumer_outcome": "PASS",
+      "consumer_s": 74.91
+    }
+  ],
+  "failures": [
+    "normal retirement: original producer sidecar-child-exited/material refusal before policyACK; no consumer/cut executed",
+    "race terminal-transaction: original producer sidecar-start route-process-unavailable before policyACK; no consumer/cut executed",
+    "race completed: consumer70.06s refusal at absence-source-closing before requested cut; not120s timeout"
+  ],
+  "limits": [
+    "Original aggregate CLI120s unchanged; all14 jobs materialized",
+    "Native table read parity and metadata/fullSHA closing tests passed in completed logs",
+    "No causal cross-run speed gain; hardware/router readiness remains separate",
+    "All ACK cuts are required;11/14 is not complete readiness"
+  ]
+}

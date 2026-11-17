@@ -1,0 +1,67 @@
+name: Original component source read comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/source-read-comparison-20261117']
+permissions:
+  contents: read
+jobs:
+  comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Obtain exact reviewed Mihomo bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/razvilka-source-mihomo.gz
+          echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/razvilka-source-mihomo.gz' | sha256sum --check --strict
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/platform.txt
+      - name: Full original source current and same-host paired measurements
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            flags=()
+            if [ "$mode" = race ]; then flags=(-race); fi
+            RAZVILKA_MIHOMO_ARCHIVE=/tmp/razvilka-source-mihomo.gz RAZVILKA_SOURCE_CURRENT_MEASURE=1 \
+              go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/components \
+              -run '^TestMihomoLiveSourceNativeCurrent$|^TestMihomoLiveSourceCurrentNative' \
+              2>&1 | tee "artifacts/$mode.log"
+            for name in TestMihomoLiveSourceNativeCurrent TestMihomoLiveSourceCurrentNativeSourceParity TestMihomoLiveSourceCurrentNativePaired; do
+              grep -F -- "--- PASS: $name " "artifacts/$mode.log"
+            done
+            if grep -F -- '--- SKIP:' "artifacts/$mode.log"; then exit 1; fi
+            python3 - "$mode" <<'PY'
+          import json,pathlib,sys
+          mode=sys.argv[1]
+          text=pathlib.Path('artifacts',mode+'.log').read_text()
+          rows=[json.loads(line.split('SOURCE_CURRENT_PAIR ',1)[1]) for line in text.splitlines() if 'SOURCE_CURRENT_PAIR ' in line]
+          assert len(rows)==16
+          variants=['original-serial-source-current','parallel-two-sha-source-current']
+          for pair in range(8):
+              group=[r for r in rows if r['pair']==pair]
+              assert [r['variant'] for r in group]==(variants if pair%2==0 else variants[::-1])
+              for r in group:
+                  assert r['samples']==2 and r['artifact_bytes']==62017662 and r['fresh_artifact_streams_per_current']==2
+                  assert r['controller_bytes']>0 and r['wall_ns']>0 and r['total_process_cpu_ns']>0
+          pathlib.Path('artifacts',mode+'-samples.json').write_text(json.dumps(rows,indent=2)+'\n')
+          PY
+          done
+      - name: Preserve full checks and both populations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: component-source-comparison-${{ github.sha }}
+          path: artifacts/

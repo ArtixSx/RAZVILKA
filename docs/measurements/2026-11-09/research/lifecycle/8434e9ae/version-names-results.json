@@ -1,0 +1,135 @@
+{
+  "sha": "8434e9ae2183ef926a123b1fe4217bc0114d214a",
+  "scope": "actual complete fresh original metadata traversal; not route readiness or router performance",
+  "decision": "candidate supports memory-only promotion; no meaningful wall speed claim",
+  "modes": {
+    "production": {
+      "samples": {
+        "before_append": [
+          {
+            "ns_op": 897299,
+            "bytes_op": 42226,
+            "allocs_op": 548,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 891033,
+            "bytes_op": 42224,
+            "allocs_op": 548,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 893216,
+            "bytes_op": 42288,
+            "allocs_op": 548,
+            "extensions": 122.0,
+            "nodes": 166.0
+          }
+        ],
+        "reserved_candidate": [
+          {
+            "ns_op": 888361,
+            "bytes_op": 37786,
+            "allocs_op": 542,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 893698,
+            "bytes_op": 37810,
+            "allocs_op": 542,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 891464,
+            "bytes_op": 37764,
+            "allocs_op": 542,
+            "extensions": 122.0,
+            "nodes": 166.0
+          }
+        ]
+      },
+      "medians": {
+        "before_append": {
+          "ns_op": 893216,
+          "bytes_op": 42226,
+          "allocs_op": 548
+        },
+        "reserved_candidate": {
+          "ns_op": 891464,
+          "bytes_op": 37786,
+          "allocs_op": 542
+        }
+      },
+      "source_parity_passes": 3,
+      "actual_parity_passes": 3
+    },
+    "race": {
+      "samples": {
+        "before_append": [
+          {
+            "ns_op": 1723254,
+            "bytes_op": 50898,
+            "allocs_op": 616,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 1681448,
+            "bytes_op": 50981,
+            "allocs_op": 617,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 1686159,
+            "bytes_op": 50492,
+            "allocs_op": 616,
+            "extensions": 122.0,
+            "nodes": 166.0
+          }
+        ],
+        "reserved_candidate": [
+          {
+            "ns_op": 1690439,
+            "bytes_op": 46680,
+            "allocs_op": 608,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 1683744,
+            "bytes_op": 46004,
+            "allocs_op": 610,
+            "extensions": 122.0,
+            "nodes": 166.0
+          },
+          {
+            "ns_op": 1689117,
+            "bytes_op": 46510,
+            "allocs_op": 609,
+            "extensions": 122.0,
+            "nodes": 166.0
+          }
+        ]
+      },
+      "medians": {
+        "before_append": {
+          "ns_op": 1686159,
+          "bytes_op": 50898,
+          "allocs_op": 616
+        },
+        "reserved_candidate": {
+          "ns_op": 1689117,
+          "bytes_op": 46510,
+          "allocs_op": 609
+        }
+      },
+      "source_parity_passes": 3,
+      "actual_parity_passes": 3
+    }
+  }
+}

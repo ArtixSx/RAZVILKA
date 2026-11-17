@@ -21,7 +21,7 @@ func closedNodeCheckStages(stages []dataplane.NodeCheckStage) []nodeCheckDiagnos
 	var out []nodeCheckDiagnosticStage
 	for _, s := range stages[:min(len(stages), 32)] {
 		switch s.ID {
-		case "dns", "tcp_connect", "transport", "configuration", "protocol", "route_identity", "egress", "service", "service_ip", "connectivity", "cleanup":
+		case "dns", "tcp_connect", "transport", "configuration", "protocol", "runtime_start", "runtime_ready", "route_identity", "egress", "service", "service_ip", "connectivity", "cleanup":
 		default:
 			continue
 		}

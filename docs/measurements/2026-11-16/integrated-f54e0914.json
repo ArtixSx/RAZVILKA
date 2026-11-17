@@ -1,0 +1,885 @@
+{
+  "schema": 1,
+  "requested_checkpoint_utc": "2026-11-17T10:10:00Z",
+  "observation_interval_utc": [
+    "2026-11-17T10:11:06Z",
+    "2026-11-17T10:11:13Z"
+  ],
+  "timestamp_note": "Requested10:10 checkpoint; final API refresh completed10:11:06\u201313UTC. No backdated terminal assertion.",
+  "revision": "f54e091482effc536d38124066e219e4970b4493",
+  "complete": false,
+  "runs": [
+    {
+      "id": 44061043012,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043012",
+      "name": "CI",
+      "sha": "f54e091482effc536d38124066e219e4970b4493",
+      "status": "in_progress",
+      "conclusion": null,
+      "snapshot_file": "run-44061043012.json",
+      "snapshot_sha256": "32cfbd95d974802868483c134c788ad4955437be59125c3662a00609088b13a9",
+      "saved_utc": "2026-11-17T10:11:06.966665+00:00",
+      "jobs": [
+        {
+          "id": 133962690144,
+          "name": "test",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043012/job/133962690144",
+          "status": "in_progress",
+          "conclusion": null
+        }
+      ]
+    },
+    {
+      "id": 44061053510,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061053510",
+      "name": "CI",
+      "sha": "f54e091482effc536d38124066e219e4970b4493",
+      "status": "in_progress",
+      "conclusion": null,
+      "snapshot_file": "run-44061053510.json",
+      "snapshot_sha256": "46ceb57bef7c5e9eb68a72e14409e84b428b50fca76d16ec68884bac7c60b9c5",
+      "saved_utc": "2026-11-17T10:11:08.223049+00:00",
+      "jobs": [
+        {
+          "id": 133962728397,
+          "name": "test",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061053510/job/133962728397",
+          "status": "in_progress",
+          "conclusion": null
+        }
+      ]
+    },
+    {
+      "id": 44061043128,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128",
+      "name": "Research lifecycle / all / f54e091482effc536d38124066e219e4970b4493",
+      "sha": "f54e091482effc536d38124066e219e4970b4493",
+      "status": "in_progress",
+      "conclusion": null,
+      "snapshot_file": "run-44061043128.json",
+      "snapshot_sha256": "0132d1923e8c249071df077c573c40f82aa8002b9e14c4f0e40f13b9372e3c35",
+      "saved_utc": "2026-11-17T10:11:09.843967+00:00",
+      "jobs": [
+        {
+          "id": 133962692229,
+          "name": "strategy-pair",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692229",
+          "status": "in_progress",
+          "conclusion": null
+        },
+        {
+          "id": 133962692641,
+          "name": "Modern public update and known rollback (isolated lab)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692641",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692688,
+          "name": "DNS preparation recovery pair (diagnostic 30s)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692688",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692698,
+          "name": "Startup loader closure (normal)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692698",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692707,
+          "name": "Managed scope all (race)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692707",
+          "status": "in_progress",
+          "conclusion": null
+        },
+        {
+          "id": 133962692719,
+          "name": "Domain native strict / direct-deny",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692719",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692746,
+          "name": "Configured old193 public paired restore / history",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692746",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692748,
+          "name": "Startup loader closure (race)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692748",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692785,
+          "name": "Managed scope all (production)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692785",
+          "status": "in_progress",
+          "conclusion": null
+        },
+        {
+          "id": 133962692788,
+          "name": "Domain native strict / selected",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692788",
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "id": 133962692845,
+          "name": "Configured old193 public paired restore / draft",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692845",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692886,
+          "name": "Exact iptables 1.8.11 / production",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692886",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692908,
+          "name": "Exact iptables 1.8.11 / race",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692908",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962692945,
+          "name": "Domain native strict / canceled-ready",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692945",
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "id": 133962693148,
+          "name": "Configured old193 public paired restore / empty",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962693148",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 44061043098,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098",
+      "name": "Mihomo actual LAN lifecycle",
+      "sha": "f54e091482effc536d38124066e219e4970b4493",
+      "status": "in_progress",
+      "conclusion": null,
+      "snapshot_file": "run-44061043098.json",
+      "snapshot_sha256": "9a846702d57e6072a755bbbc82b2deb42d7766049ddb348418115c55eeaa411f",
+      "saved_utc": "2026-11-17T10:11:11.210420+00:00",
+      "jobs": [
+        {
+          "id": 133962690421,
+          "name": "live-native (lifecycle)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962690421",
+          "status": "in_progress",
+          "conclusion": null
+        },
+        {
+          "id": 133962690954,
+          "name": "live-native (check-settlement)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962690954",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962690960,
+          "name": "live-native (manual-http)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962690960",
+          "status": "in_progress",
+          "conclusion": null
+        },
+        {
+          "id": 133962691051,
+          "name": "live-native (postcas-failure)",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962691051",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 44061043360,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043360",
+      "name": "Research probe comparison",
+      "sha": "f54e091482effc536d38124066e219e4970b4493",
+      "status": "completed",
+      "conclusion": "success",
+      "snapshot_file": "run-44061043360.json",
+      "snapshot_sha256": "503f006bfad9512e3ce2f0d6752c4f076eb7723d4c1fb2d6423073bb75f21859",
+      "saved_utc": "2026-11-17T10:11:12.727498+00:00",
+      "jobs": [
+        {
+          "id": 133962691301,
+          "name": "mihomo-handler-native",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043360/job/133962691301",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 133962691881,
+          "name": "paired-native",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043360/job/133962691881",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "reviewed_findings": [
+    {
+      "scope": "current strict selected",
+      "result": "FAIL",
+      "test_seconds": 23.17,
+      "cause": "Selected HTTPS returned successfully; unknown.example.com mismatch exceeded original4s client timeout. Opaque request not reached.",
+      "evidence": "raw/14318157522/native.log"
+    },
+    {
+      "scope": "current strict canceled-ready",
+      "result": "FAIL",
+      "test_seconds": 36.63,
+      "cause": "Actual GEN2 child/listener cancellation witness was not reached.",
+      "evidence": "raw/14318271975/native.log"
+    },
+    {
+      "scope": "current strict direct-deny",
+      "result": "PASS",
+      "test_seconds": 24.15,
+      "proof": "Published alias and actual accepted client; positive same-FD passive observer; FORWARD DROP/OUTPUT ACCEPT produces zero outbound targetSYN; original policy restored and observer joined.",
+      "evidence": "raw/14317658833/native.log"
+    },
+    {
+      "scope": "current Mihomo manual only",
+      "result": "PASS",
+      "test_seconds": 267.25,
+      "evidence": "raw/14319016154/mihomo-manual-http/native.log",
+      "limit": "Full workflow/job still active including historical comparator; this current PASS does not assert historical result."
+    },
+    {
+      "scope": "probe workflow",
+      "result": "SUCCESS",
+      "actual_service_seconds": 9.9,
+      "actual_http_seconds": 4.07,
+      "evidence": "raw/14317873385/native.log"
+    }
+  ],
+  "historical_baseline": "No new historical-baseline failure established in this snapshot. Do not import997 historical4cc failure into f54. Mihomo comparisons still running.",
+  "fixture_fidelity": {
+    "current_strict_dns_build_mode": "debug",
+    "test_elf_bytes": 59238855,
+    "limit": "Original default debug fixture differs from production-strip sourceABBA. No direct cross-population latency comparison."
+  },
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "id": 14319016154,
+        "name": "mihomo-manual-http-f54e091482effc536d38124066e219e4970b4493",
+        "zip_bytes": 227193,
+        "zip_sha256": "274e7bbaf5aedb16991aeb972481a50f4056507fc1c7cf25571d0ea3fcdd68e8",
+        "selected_logs_reports": [
+          {
+            "file": "raw/14319016154/mihomo-manual-http/native.log",
+            "bytes": 9355,
+            "sha256": "fdbf29744cec3916ed2a372f79b3278fc4ab01dbe26f7249cc7dfd7446779078"
+          },
+          {
+            "file": "raw/14319016154/mihomo-live-profile/cpu-top.txt",
+            "bytes": 3822,
+            "sha256": "045399a40eb163b727c413d38024ff757db9338c2848005cbd71326500679e01"
+          },
+          {
+            "file": "raw/14319016154/mihomo-live-profile/status.txt",
+            "bytes": 287,
+            "sha256": "bc56f7b072f8041b0fd685d845a48089553b201f77c300d1f2880e8e79c75c78"
+          }
+        ]
+      },
+      {
+        "id": 14318686504,
+        "name": "mihomo-live-cpu-f54e091482effc536d38124066e219e4970b4493",
+        "zip_bytes": 176484,
+        "zip_sha256": "275f1b5bca448d8660d90fc81e5922ffa49fec51bbfb1d388a6da6acc2a9b5f6",
+        "selected_logs_reports": [
+          {
+            "file": "raw/14318686504/cpu-top.txt",
+            "bytes": 4000,
+            "sha256": "a1c0ba29aea9766218fed79d3a1ff5efe605b1c612b7c7cb162a961162110f65"
+          },
+          {
+            "file": "raw/14318686504/status.txt",
+            "bytes": 287,
+            "sha256": "bc56f7b072f8041b0fd685d845a48089553b201f77c300d1f2880e8e79c75c78"
+          }
+        ]
+      },
+      {
+        "id": 14318271975,
+        "name": "research-domain-canceled-ready-f54e091482effc536d38124066e219e4970b4493",
+        "zip_bytes": 260942,
+        "zip_sha256": "67ffc9ef845211e11ab2855015aa8226fba468ece526173267f26d04a057d84a",
+        "selected_logs_reports": [
+          {
+            "file": "raw/14318271975/accepted-stages-normal.log",
+            "bytes": 348,
+            "sha256": "3b810ebe1d2528a74b3d2579cc440ad959458c0914b332b099fdc05620682ad5"
+          },
+          {
+            "file": "raw/14318271975/accepted-stages-race.log",
+            "bytes": 348,
+            "sha256": "0da3ffce30adf2a572559226c76b68a3a2e53dbfa29ee7903fe6714dd28ae8e9"
+          },
+          {
+            "file": "raw/14318271975/allocs-analysis-status.txt",
+            "bytes": 66,
+            "sha256": "8fde5ac6da969a050f4c08e49b7867bf2a3dfa6548ce9b59602453ba5d8f99d5"
+          },
+          {
+            "file": "raw/14318271975/allocs-objects.txt",
+            "bytes": 3061,
+            "sha256": "9f1ab339bd6ead628baac2bfb4a7da31f4685541f283879cf97c2011267b5b51"
+          },
+          {
+            "file": "raw/14318271975/allocs-processes.txt",
+            "bytes": 5813,
+            "sha256": "bb054669d04d220345d8c047bd14057246a4b38ac8c0edf80f6b55a62648b9cd"
+          },
+          {
+            "file": "raw/14318271975/allocs-space.txt",
+            "bytes": 3432,
+            "sha256": "e03256d9ac034b1236e5af21ea7afcf44f3d075e5f1892cae68b47e115d1365b"
+          },
+          {
+            "file": "raw/14318271975/binary.json",
+            "bytes": 693,
+            "sha256": "a3cd1f2f5e2f3cd6c9d4f32098696d34d8f2127327d1e92cb51782bafd1c89cd"
+          },
+          {
+            "file": "raw/14318271975/cpu-cumulative.txt",
+            "bytes": 4798,
+            "sha256": "13e85220592b8d433ac783e45641d6218f97f4020f965a4ede7066e890f79df0"
+          },
+          {
+            "file": "raw/14318271975/cpu-top.txt",
+            "bytes": 3477,
+            "sha256": "13b05b58f5371a3b90389ed12c154098479728305c17a97d69105119958d0e99"
+          },
+          {
+            "file": "raw/14318271975/gate-timing-normal.log",
+            "bytes": 297,
+            "sha256": "a1b08f8b9dc2c7bfc210763f66e8e94d780204eb8e1f2f55bdbe4bfcd7142c78"
+          },
+          {
+            "file": "raw/14318271975/gate-timing-race.log",
+            "bytes": 297,
+            "sha256": "6966666a1e9161ab2843ff9b73d3f58d52d01bc55b7531850bd87c4a7c3fe673"
+          },
+          {
+            "file": "raw/14318271975/identity-mount-measurement.log",
+            "bytes": 421,
+            "sha256": "29f354d4e9fbf4586404947d02a90daf5ab45954f1388c1b0fc1feb6f3dd6262"
+          },
+          {
+            "file": "raw/14318271975/identity-mount-normal.log",
+            "bytes": 748,
+            "sha256": "5e1b5221179f31da47283ee280d005046e3de3b2737ec9de62ae71978d9abd85"
+          },
+          {
+            "file": "raw/14318271975/identity-mount-race.log",
+            "bytes": 748,
+            "sha256": "f70f7231895597dc8ed8336bf6b8077c267abca1c037309e3138f597fd39af7f"
+          },
+          {
+            "file": "raw/14318271975/image-scope-normal.log",
+            "bytes": 3116,
+            "sha256": "ba847997657096339061f2ab12028d56414165411083fdf376366b3e90b50c57"
+          },
+          {
+            "file": "raw/14318271975/image-scope-race.log",
+            "bytes": 3116,
+            "sha256": "da30dbaa54b985e9ddccc5ab9df7c4af307020704434854b0801f1f2defcc222"
+          },
+          {
+            "file": "raw/14318271975/mountinfo-read-contract-normal.log",
+            "bytes": 7634,
+            "sha256": "d3ff3d6dbd74f656169d5351361a7dddf4ae45145551cabb2a24d3a78ff44ddb"
+          },
+          {
+            "file": "raw/14318271975/mountinfo-read-contract-race.log",
+            "bytes": 7634,
+            "sha256": "f505adff5cf16667bcb433847dc9a7c05d8236567dfaf7016a3b8810b8293397"
+          },
+          {
+            "file": "raw/14318271975/mountinfo-read-measurement.log",
+            "bytes": 4637,
+            "sha256": "bca196cd9c11a1c9ed387ee700b1018062e35d279a6ef886bab5bf0c4e77c814"
+          },
+          {
+            "file": "raw/14318271975/native.log",
+            "bytes": 21382,
+            "sha256": "efc5742cb5523a26d7362aa72265923b6680c3405eb59f9446645646e7353f12"
+          },
+          {
+            "file": "raw/14318271975/preadd-child-race.log",
+            "bytes": 1204,
+            "sha256": "563fc497bc18b3391fd048faf420f897c8bb3dff8f28f439ebfae9cca88c063c"
+          },
+          {
+            "file": "raw/14318271975/preadd-child-normal.log",
+            "bytes": 1204,
+            "sha256": "fe8043b35bfe2daaada62c5f1d2dbaea420897313cddeff7ccd9db2c45d07f9d"
+          },
+          {
+            "file": "raw/14318271975/read-primitives.log",
+            "bytes": 3177,
+            "sha256": "e576833c51bc1d5e7c3d746248cc05f197b9cd5c0521a2bedfc1cac416178d3f"
+          },
+          {
+            "file": "raw/14318271975/status.txt",
+            "bytes": 192,
+            "sha256": "34c74a8d0a96e2a07cd15bf9259ae1823ac98f7b456fc61bfff3e41dbbe3a90e"
+          },
+          {
+            "file": "raw/14318271975/successor-profile-normal.log",
+            "bytes": 1228,
+            "sha256": "e1803a8a2aecc191ede22d219ba539eba82d1af5c98ae1590e2d2c08c7fd8e1a"
+          },
+          {
+            "file": "raw/14318271975/successor-profile-race.log",
+            "bytes": 1228,
+            "sha256": "977c6ecbccd76276312d73a8ff420d793823870a269c174647b2faf90771e4da"
+          },
+          {
+            "file": "raw/14318271975/successor-read-normal.log",
+            "bytes": 740,
+            "sha256": "811b95edcb53c97cc26035c849630bed0f0574cffee0bd4e32735a44cfcded5d"
+          },
+          {
+            "file": "raw/14318271975/successor-read-race.log",
+            "bytes": 740,
+            "sha256": "fd4af7d8d210209dcbb3343018a7d69e5e13edea1dae0f9f5b63629b39fb3aca"
+          }
+        ]
+      },
+      {
+        "id": 14318157522,
+        "name": "research-domain-selected-f54e091482effc536d38124066e219e4970b4493",
+        "zip_bytes": 278208,
+        "zip_sha256": "ba98840257dac3a39b8eb75b8799b3e1f23469e749bbebd24daf1cfca696c816",
+        "selected_logs_reports": [
+          {
+            "file": "raw/14318157522/allocs-analysis-status.txt",
+            "bytes": 66,
+            "sha256": "8fde5ac6da969a050f4c08e49b7867bf2a3dfa6548ce9b59602453ba5d8f99d5"
+          },
+          {
+            "file": "raw/14318157522/allocs-objects.txt",
+            "bytes": 3006,
+            "sha256": "50801f6ebda51e2545a3681dfbfc66294922138173d3110d959dcc52c45980d0"
+          },
+          {
+            "file": "raw/14318157522/accepted-stages-race.log",
+            "bytes": 348,
+            "sha256": "7f52fd448c2c290bc7da850ef38c3e3651e2cbd1cd22c4ee270bbc94f325afb0"
+          },
+          {
+            "file": "raw/14318157522/accepted-stages-normal.log",
+            "bytes": 348,
+            "sha256": "414bd98ad25fb732738a6d7516e3f29738afa377896533299a1c5adab95baaf0"
+          },
+          {
+            "file": "raw/14318157522/allocs-space.txt",
+            "bytes": 3329,
+            "sha256": "4dc90084d40f5f587497c40dd6f873e6fcd6563ff1491a6d39202ab80e5f33f5"
+          },
+          {
+            "file": "raw/14318157522/allocs-processes.txt",
+            "bytes": 6240,
+            "sha256": "226e9f031a50246df57cba84384d17a307678cc296c3c83ab2d5164f49b08078"
+          },
+          {
+            "file": "raw/14318157522/binary.json",
+            "bytes": 693,
+            "sha256": "c2f99a56129d44f1ec9922600554e6b33eec30f9655ecd7d097788dec5d7fc44"
+          },
+          {
+            "file": "raw/14318157522/cpu-cumulative.txt",
+            "bytes": 5207,
+            "sha256": "f30e413e6036ce237e07a0b79cfb7f9fbfe30fe58095ce47064d0eba5f66930a"
+          },
+          {
+            "file": "raw/14318157522/cpu-top.txt",
+            "bytes": 3161,
+            "sha256": "16f0a665cf5919deed8721b11cfcb35836314e2403c0f9d94a47b143944e0159"
+          },
+          {
+            "file": "raw/14318157522/gate-timing-normal.log",
+            "bytes": 297,
+            "sha256": "a1b08f8b9dc2c7bfc210763f66e8e94d780204eb8e1f2f55bdbe4bfcd7142c78"
+          },
+          {
+            "file": "raw/14318157522/gate-timing-race.log",
+            "bytes": 297,
+            "sha256": "201aa78d1526b5abf1ebc987924ea4dd4e204993469b3ef68ef540a8caefe9f0"
+          },
+          {
+            "file": "raw/14318157522/hash-chunks-measurement.log",
+            "bytes": 3622,
+            "sha256": "dbc1c49f841245b8efb57d342247dc0270bf92cf38cd15fbea2ca29d813f937d"
+          },
+          {
+            "file": "raw/14318157522/hash-chunks-normal.log",
+            "bytes": 5902,
+            "sha256": "1650a89658fb1f0efddb2021669e563597f3ecc842769662145eaf0b8c8623bf"
+          },
+          {
+            "file": "raw/14318157522/hash-chunks-race.log",
+            "bytes": 5902,
+            "sha256": "86d1573712e365782214897d222917257328a29d6927010080e7c6eddfa3007d"
+          },
+          {
+            "file": "raw/14318157522/identity-mount-measurement.log",
+            "bytes": 421,
+            "sha256": "0496b9cbccb80395589eead7108bda80aec843667d0ef0295d1ef6a94cb74faf"
+          },
+          {
+            "file": "raw/14318157522/identity-mount-normal.log",
+            "bytes": 748,
+            "sha256": "e8ff4bea244711cb416e6bf3d65b6546b04ab858b53d64545ede17394c7994c1"
+          },
+          {
+            "file": "raw/14318157522/identity-mount-race.log",
+            "bytes": 748,
+            "sha256": "f70f7231895597dc8ed8336bf6b8077c267abca1c037309e3138f597fd39af7f"
+          },
+          {
+            "file": "raw/14318157522/image-scope-normal.log",
+            "bytes": 3116,
+            "sha256": "6ec66bd0147080d8e1d74a542116290d8fe62501849e18e283c56b4d1f6cfe01"
+          },
+          {
+            "file": "raw/14318157522/image-scope-race.log",
+            "bytes": 3116,
+            "sha256": "b4c79daba2b7bcbcb2d98200fca4e4849373a311f464efbc9529e928a1e6ac90"
+          },
+          {
+            "file": "raw/14318157522/ledger-decode-normal.log",
+            "bytes": 4388,
+            "sha256": "4030abc66e4c7f494b660314665bdbb3778f407543ede5825762c42d0fe38681"
+          },
+          {
+            "file": "raw/14318157522/ledger-decode-race.log",
+            "bytes": 4388,
+            "sha256": "451d2fd02f7718830ea234f9e5fce17e2bb3fb9588a707ffb9eb88034abe483e"
+          },
+          {
+            "file": "raw/14318157522/mountinfo-read-contract-normal.log",
+            "bytes": 7634,
+            "sha256": "4d8daddbd5215f599572a75f4bf68b8b6a091141c413ac778142938f20bfc6cd"
+          },
+          {
+            "file": "raw/14318157522/mountinfo-read-contract-race.log",
+            "bytes": 7634,
+            "sha256": "873882a04e02cc3d3f7d3424bd23008603ce08616e2e21fd2156bd87e19d5fac"
+          },
+          {
+            "file": "raw/14318157522/mountinfo-read-measurement.log",
+            "bytes": 4614,
+            "sha256": "633fdba651f5d4a69c93772206450291cdb88a7b4ba6ffbf0dc9e47ddbc1ee5d"
+          },
+          {
+            "file": "raw/14318157522/native.log",
+            "bytes": 33225,
+            "sha256": "895ef730fe6867eae9d2d0ecde4071144c60a3534cf5a8b2a6e8b9bff87bb643"
+          },
+          {
+            "file": "raw/14318157522/preadd-child-race.log",
+            "bytes": 1204,
+            "sha256": "3ff2ff4b7c08d33b09237a22b4792b75f5a13fcbc52135c7caa1dfff4ca2bc7c"
+          },
+          {
+            "file": "raw/14318157522/preadd-child-normal.log",
+            "bytes": 1204,
+            "sha256": "e3841a4a698777043a7b037aed33fc419db00da2541b0eae0c2e5ba49bea1a5f"
+          },
+          {
+            "file": "raw/14318157522/read-primitives.log",
+            "bytes": 3177,
+            "sha256": "dbb51b00cd3b37f7660260cbe9a4a580feaf69336489b7998a777ba5f20b9328"
+          },
+          {
+            "file": "raw/14318157522/status.txt",
+            "bytes": 182,
+            "sha256": "dd07be5c1633b6e3d3ea075634618325a9131ea50eb9d9a1ca85b7ddb4536fa5"
+          },
+          {
+            "file": "raw/14318157522/successor-profile-normal.log",
+            "bytes": 1228,
+            "sha256": "631f3a57374af49cf7decebc4a6877498cef7a51436856d7e6170c28dc2ab815"
+          },
+          {
+            "file": "raw/14318157522/successor-profile-race.log",
+            "bytes": 1228,
+            "sha256": "61037f01f6a3ecaeec4f2fe9f66d07ce8f5e84fd4657b27ffdb27998e1933825"
+          },
+          {
+            "file": "raw/14318157522/successor-read-normal.log",
+            "bytes": 740,
+            "sha256": "a6acf932c56b0ee931b87f07d439db68d33bc9f5643eec9cb58c3596ad35b4cc"
+          },
+          {
+            "file": "raw/14318157522/successor-read-race.log",
+            "bytes": 740,
+            "sha256": "0846ce11b416e8e188c5e5d47fb62a30e74e7c6d284e577d776b68e12ca125f5"
+          }
+        ]
+      },
+      {
+        "id": 14317658833,
+        "name": "research-domain-direct-deny-f54e091482effc536d38124066e219e4970b4493",
+        "zip_bytes": 205406,
+        "zip_sha256": "089fe59a421d08bb306f67cca85868d9784bbd884daf7a3c17228b262f1d58a3",
+        "selected_logs_reports": [
+          {
+            "file": "raw/14317658833/accepted-stages-race.log",
+            "bytes": 348,
+            "sha256": "a74e1305cc3117653deb5a9ae16c565fe7f78ede462e60438e490e54add62c9e"
+          },
+          {
+            "file": "raw/14317658833/allocs-analysis-status.txt",
+            "bytes": 66,
+            "sha256": "8fde5ac6da969a050f4c08e49b7867bf2a3dfa6548ce9b59602453ba5d8f99d5"
+          },
+          {
+            "file": "raw/14317658833/accepted-stages-normal.log",
+            "bytes": 348,
+            "sha256": "6e66a04baed1ee43efb9e23d920fc5c19ae5d58581aad28874599bbe7f69e858"
+          },
+          {
+            "file": "raw/14317658833/allocs-objects.txt",
+            "bytes": 3078,
+            "sha256": "2b1fc2ca13b7e0b13f2bbfc0c397977b407ffb460c282d34d3fe2245646a92fa"
+          },
+          {
+            "file": "raw/14317658833/allocs-processes.txt",
+            "bytes": 6156,
+            "sha256": "6aa018ce93c8c51b1a3e626e7a1da7ec6293be8bbdded4c2d806437c7c47286a"
+          },
+          {
+            "file": "raw/14317658833/allocs-space.txt",
+            "bytes": 3343,
+            "sha256": "a1bfa82b18597dbb10ec77c91f36bfa2b4f54b5c133e309f1b570d4fba4024ba"
+          },
+          {
+            "file": "raw/14317658833/binary.json",
+            "bytes": 693,
+            "sha256": "244265bb58bfc08c7ded899237d150d9c9253251ae147b0651ebe4d4c0e4bc44"
+          },
+          {
+            "file": "raw/14317658833/cpu-cumulative.txt",
+            "bytes": 4831,
+            "sha256": "2988feec562c766a2ec5e3962999497528c861793043e303d0b65c6164ec4b7d"
+          },
+          {
+            "file": "raw/14317658833/cpu-top.txt",
+            "bytes": 3317,
+            "sha256": "719dd9aa1f2af0d1011f793b61ac06267f26e1d914ab1a753aba8ff54afd67bc"
+          },
+          {
+            "file": "raw/14317658833/gate-timing-normal.log",
+            "bytes": 297,
+            "sha256": "8f9b972de9a0e176c64032e99d3e915dfb1d17882de9cdc60e9f03d19dc7bae0"
+          },
+          {
+            "file": "raw/14317658833/gate-timing-race.log",
+            "bytes": 297,
+            "sha256": "f17bbfba62911d719a0c0a46a1d4cfa019a3d245f2dab16dc6921c20307b61ef"
+          },
+          {
+            "file": "raw/14317658833/identity-mount-measurement.log",
+            "bytes": 422,
+            "sha256": "b18af569faaf58754c2e068e1c09014f00fb1ebbde597c386cfeeee5476947c6"
+          },
+          {
+            "file": "raw/14317658833/identity-mount-normal.log",
+            "bytes": 748,
+            "sha256": "5e1b5221179f31da47283ee280d005046e3de3b2737ec9de62ae71978d9abd85"
+          },
+          {
+            "file": "raw/14317658833/identity-mount-race.log",
+            "bytes": 748,
+            "sha256": "8460f9632c1ddb30098d3b3ed816db2ed6384ca31dbe1de6e101e19d84b54793"
+          },
+          {
+            "file": "raw/14317658833/image-scope-normal.log",
+            "bytes": 3116,
+            "sha256": "9b891e20ec04db210beaf26aff02dddcfc53324d504716a1b1430f7e488c70f0"
+          },
+          {
+            "file": "raw/14317658833/image-scope-race.log",
+            "bytes": 3116,
+            "sha256": "037ed43001357e3163e49310e30dbffeec7c00bbabd4435193c64b1da74c5398"
+          },
+          {
+            "file": "raw/14317658833/mountinfo-read-contract-normal.log",
+            "bytes": 7634,
+            "sha256": "bde8f3623173f4018936ca49934ba3d847ee928ca36e3e6eceefa30be61e330f"
+          },
+          {
+            "file": "raw/14317658833/mountinfo-read-contract-race.log",
+            "bytes": 7634,
+            "sha256": "264e272d8a39ec75e3e474fe9f63f496c40bc84b011e67de7574343c8692c51d"
+          },
+          {
+            "file": "raw/14317658833/mountinfo-read-measurement.log",
+            "bytes": 4637,
+            "sha256": "e0fbafb197b8bc9abf8baa923732a7ee36508ce807bc1d1115617281d4281f11"
+          },
+          {
+            "file": "raw/14317658833/native.log",
+            "bytes": 12661,
+            "sha256": "9ca18e340a5fc7b5fa58f84c47bdf2a707131364751a7ecef1e3086c7bae3440"
+          },
+          {
+            "file": "raw/14317658833/preadd-child-normal.log",
+            "bytes": 1204,
+            "sha256": "57cbe59f657572750cbea6b1810107b10c5d0993535b502bec3d2038dc5c4ae1"
+          },
+          {
+            "file": "raw/14317658833/preadd-child-race.log",
+            "bytes": 1204,
+            "sha256": "9e45e36d86571c4a6b3e3ab458d02dddf2f73f2295b07a8ff3302899413ddf50"
+          },
+          {
+            "file": "raw/14317658833/read-primitives.log",
+            "bytes": 3179,
+            "sha256": "35af8944c40e2326f5d964774ed8113e960870c938992fb1bb3bcf7833741d69"
+          },
+          {
+            "file": "raw/14317658833/status.txt",
+            "bytes": 186,
+            "sha256": "a4d453af2602a9509ddf7c6d23559d8dbc3e12b3f8023e7d53cc741564164a55"
+          },
+          {
+            "file": "raw/14317658833/successor-profile-normal.log",
+            "bytes": 1228,
+            "sha256": "87f1836a548ee88a49025590970218ce22c7e6ef768ff0e738984c105c2cde59"
+          },
+          {
+            "file": "raw/14317658833/successor-profile-race.log",
+            "bytes": 1228,
+            "sha256": "6ed02b591499c378d86a81daa4f50a876b27c33ee1a8abd59385b42468e36307"
+          },
+          {
+            "file": "raw/14317658833/successor-read-normal.log",
+            "bytes": 740,
+            "sha256": "264679a7af94fab0f2873287243076bec221d42f26a764227714eb5064cccbdd"
+          },
+          {
+            "file": "raw/14317658833/successor-read-race.log",
+            "bytes": 740,
+            "sha256": "4637aeb28cef65b93215cede9538e1d97b71309bb1e1d0b3751925a4fc58666a"
+          }
+        ]
+      },
+      {
+        "id": 14318591289,
+        "name": "research-probes-f54e091482effc536d38124066e219e4970b4493",
+        "zip_bytes": 111047,
+        "zip_sha256": "9f92b3f22e8ef3bd963c5cb6fb5699bf9832bdda744290e01733d8e6631ab5cc",
+        "selected_logs_reports": [
+          {
+            "file": "raw/14318591289/baseline/environment.txt",
+            "bytes": 1441,
+            "sha256": "b7d6c14cf145c383fe93e7af21f084941853dfadaaa27380a29cad9e2ff3f8d6"
+          },
+          {
+            "file": "raw/14318591289/baseline/native-performance.log",
+            "bytes": 1550,
+            "sha256": "728dac54b7ea4ffe0183914fbee39ba06a55b49649a70860951d7ca246647669"
+          },
+          {
+            "file": "raw/14318591289/baseline/resource-helper.log",
+            "bytes": 350,
+            "sha256": "c5ffa796f1864fe658af8ed445334dc053bff15ebf84ef2ca0c16e90ca7af291"
+          },
+          {
+            "file": "raw/14318591289/candidate/environment.txt",
+            "bytes": 1441,
+            "sha256": "bed91505104970a11b27326a77cb4adb773484be6077a9e642a4ea22164a2dc8"
+          },
+          {
+            "file": "raw/14318591289/candidate/native-performance.log",
+            "bytes": 1549,
+            "sha256": "edb1c34b949edf84d3074e8261e803145621f7a8f48d427170761a3bf3371528"
+          },
+          {
+            "file": "raw/14318591289/candidate/resource-helper.log",
+            "bytes": 350,
+            "sha256": "719dd3b763085066facb8cf509a1ed63c104bdb2c5e429a2eff060a9607f33a6"
+          },
+          {
+            "file": "raw/14318591289/comparison.txt",
+            "bytes": 352,
+            "sha256": "6689936dce63da2e10ab2e927b2f11a409cf8d55ddc47ac9ef8314a74984bbbb"
+          },
+          {
+            "file": "raw/14318591289/profile/environment.txt",
+            "bytes": 1441,
+            "sha256": "bed91505104970a11b27326a77cb4adb773484be6077a9e642a4ea22164a2dc8"
+          },
+          {
+            "file": "raw/14318591289/profile/native-performance.log",
+            "bytes": 94890,
+            "sha256": "fd51cc88d7f39d0e9ae528760fb7ebb7b2f5d524a20315516cb517956251176e"
+          },
+          {
+            "file": "raw/14318591289/profile/queue-cpu-cumulative.txt",
+            "bytes": 4448,
+            "sha256": "4d614ff0e6d5042c0686eb8ac98117f26f621371a260109343328a2c1dc95c9e"
+          },
+          {
+            "file": "raw/14318591289/profile/queue-cpu-top.txt",
+            "bytes": 3677,
+            "sha256": "560474504ecacc22de243c0827354f12fc3e536ff913c36fe115e3dd8bcea904"
+          },
+          {
+            "file": "raw/14318591289/profile/resource-helper.log",
+            "bytes": 350,
+            "sha256": "719dd3b763085066facb8cf509a1ed63c104bdb2c5e429a2eff060a9607f33a6"
+          }
+        ]
+      },
+      {
+        "id": 14317873385,
+        "name": "mihomo-handler-native-f54e091482effc536d38124066e219e4970b4493",
+        "zip_bytes": 1166,
+        "zip_sha256": "d1755472301ac157e599a14937ae26186cd1c830b9a47882ceb4958a049c2b00",
+        "selected_logs_reports": [
+          {
+            "file": "raw/14317873385/native.log",
+            "bytes": 3524,
+            "sha256": "7ee6c65777d612fe57630e8f6e2d5a44668d6c543044e9c3dab61802dc0f4e28"
+          }
+        ]
+      }
+    ],
+    "selection": "Only small needed log/report artifacts; profiles not extracted"
+  },
+  "limits": [
+    "Four runs remain in_progress; only probe is terminalSUCCESS at checkpoint.",
+    "Existing failed jobs are reported separately from pending workflow conclusion.",
+    "Small needed ZIP artifacts verified against API digest; only logs/reports extracted, not profiles.",
+    "Namespace corrected and identity evidence handled separately by product; not duplicated.",
+    "Read-only collection; no reruns, cancellation or repository edits."
+  ]
+}

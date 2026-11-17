@@ -1,0 +1,44 @@
+File: app.test
+Build ID: ec0a179444bd6aa116f4176ecfcb5f857c380c96
+Type: cpu
+Time: 2026-11-09 16:00:44 UTC
+Duration: 23.72s, Total samples = 22.44s (94.61%)
+Showing nodes accounting for 18.73s, 83.47% of 22.44s total
+Dropped 690 nodes (cum <= 0.11s)
+Showing top 35 nodes out of 444
+      flat  flat%   sum%        cum   cum%
+    11.06s 49.29% 49.29%     11.06s 49.29%  internal/runtime/syscall/linux.Syscall6
+     5.78s 25.76% 75.04%      5.78s 25.76%  crypto/internal/fips140/sha256.blockSHANI
+     0.30s  1.34% 76.38%      0.35s  1.56%  runtime.tryDeferToSpanScan
+     0.17s  0.76% 77.14%      0.53s  2.36%  runtime.scanObject
+     0.14s  0.62% 77.76%      0.16s  0.71%  runtime.(*bucket).mp
+     0.14s  0.62% 78.39%      0.20s  0.89%  strings.Fields
+     0.13s  0.58% 78.97%      0.13s  0.58%  runtime.nextFreeFast (inline)
+     0.13s  0.58% 79.55%      0.16s  0.71%  runtime.typePointers.next
+     0.09s   0.4% 79.95%     11.02s 49.11%  syscall.RawSyscall6
+     0.07s  0.31% 80.26%      0.32s  1.43%  runtime.mallocgcSmallScanNoHeader
+     0.06s  0.27% 80.53%      0.14s  0.62%  runtime.exitsyscall
+     0.06s  0.27% 80.79%      0.83s  3.70%  runtime.mallocgc
+     0.06s  0.27% 81.06%      0.30s  1.34%  runtime.mallocgcSmallNoscan
+     0.05s  0.22% 81.28%      3.16s 14.08%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.05s  0.22% 81.51%      2.42s 10.78%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.05s  0.22% 81.73%      0.16s  0.71%  runtime.entersyscall
+     0.04s  0.18% 81.91%      0.47s  2.09%  internal/poll.(*FD).RawControl
+     0.03s  0.13% 82.04%      0.13s  0.58%  encoding/json.(*Decoder).readValue
+     0.03s  0.13% 82.17%      0.36s  1.60%  os.(*File).readdir
+     0.03s  0.13% 82.31%      0.50s  2.23%  os.(*rawConn).Control
+     0.03s  0.13% 82.44%      4.79s 21.35%  syscall.Syscall
+     0.02s 0.089% 82.53%      0.15s  0.67%  encoding/json.structEncoder.encode
+     0.02s 0.089% 82.62%      4.07s 18.14%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+     0.02s 0.089% 82.71%      0.56s  2.50%  github.com/ArtixSx/razvilka/internal/restorejournal.readTarget
+     0.02s 0.089% 82.80%      3.28s 14.62%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+     0.02s 0.089% 82.89%      0.25s  1.11%  os.newFile
+     0.02s 0.089% 82.98%      0.15s  0.67%  reflect.deepValueEqual
+     0.02s 0.089% 83.07%      0.13s  0.58%  syscall.ByteSliceFromString
+     0.02s 0.089% 83.16%      6.56s 29.23%  syscall.Syscall6
+     0.02s 0.089% 83.24%      0.97s  4.32%  syscall.fstatat
+     0.01s 0.045% 83.29%      0.15s  0.67%  encoding/json.(*decodeState).array
+     0.01s 0.045% 83.33%      0.24s  1.07%  encoding/json.(*decodeState).object
+     0.01s 0.045% 83.38%      0.19s  0.85%  encoding/json.Marshal
+     0.01s 0.045% 83.42%      0.34s  1.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).domainKernelImage
+     0.01s 0.045% 83.47%      0.15s  0.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).network

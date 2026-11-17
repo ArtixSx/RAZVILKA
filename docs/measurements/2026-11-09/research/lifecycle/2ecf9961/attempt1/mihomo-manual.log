@@ -1,0 +1,834 @@
+live-native (manual-http)	Set up job	﻿2026-11-09T18:20:14.9877364Z Current runner version: '2.338.2'
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9894062Z ##[group]Runner Image Provisioner
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9894783Z Hosted Compute Agent
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9895217Z Version: 20261028.624
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9895584Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9896026Z Build Date: 2026-10-28T21:51:42Z
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9896471Z Worker ID: {29b3eb1b-7a50-4269-85cb-986fe2763f69}
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9896878Z Region: westus3
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9897236Z Cloud: Azure
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9897557Z ##[endgroup]
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9898394Z ##[group]Operating System
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9898793Z Ubuntu
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9899104Z 24.04.5
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9899441Z LTS
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9899749Z ##[endgroup]
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9900059Z ##[group]Runner Image
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9900478Z Image: ubuntu-24.04
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9900815Z Version: 20261101.360.1
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9901427Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9902429Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9903050Z ##[endgroup]
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9903689Z ##[group]GITHUB_TOKEN Permissions
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9905009Z Contents: read
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9905355Z Metadata: read
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9905799Z ##[endgroup]
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9907059Z Secret source: Actions
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9907612Z Cache mode: write
+live-native (manual-http)	Set up job	2026-11-09T18:20:14.9908201Z Prepare workflow directory
+live-native (manual-http)	Set up job	2026-11-09T18:20:15.0108241Z Prepare all required actions
+live-native (manual-http)	Set up job	2026-11-09T18:20:15.0138774Z Getting action download info
+live-native (manual-http)	Set up job	2026-11-09T18:20:15.3023651Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+live-native (manual-http)	Set up job	2026-11-09T18:20:15.4219017Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+live-native (manual-http)	Set up job	2026-11-09T18:20:16.0717518Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+live-native (manual-http)	Set up job	2026-11-09T18:20:16.2737875Z Complete job name: live-native (manual-http)
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	﻿2026-11-09T18:20:16.3250578Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3251128Z with:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3251378Z   persist-credentials: false
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3251672Z   repository: ArtixSx/RAZVILKA
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3253712Z   token: ***
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3253950Z   ssh-strict: true
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3254199Z   ssh-user: git
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3254620Z   clean: true
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3254876Z   sparse-checkout-cone-mode: true
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3255169Z   fetch-depth: 1
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3255417Z   fetch-tags: false
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3255673Z   show-progress: true
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3255940Z   lfs: false
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3256187Z   submodules: false
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3256443Z   set-safe-directory: true
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3256732Z   allow-unsafe-pr-checkout: false
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.3257125Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5509903Z Syncing repository: ArtixSx/RAZVILKA
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5512709Z ##[group]Getting Git version info
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5513208Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5513890Z [command]/usr/bin/git version
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5543556Z git version 2.56.0
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5560186Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5568669Z Temporarily overriding HOME='/home/runner/work/_temp/01aa6696-bfe4-41f2-a694-d859dd0a2d31' before making global git config changes
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5570019Z Adding repository directory to the temporary git global config as a safe directory
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5573402Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5626446Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5629362Z ##[group]Determining repository object format
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5630487Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5630898Z ##[group]Initializing the repository
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5634520Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5736232Z hint: Using 'master' as the name for the initial branch. This default branch name
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5737359Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5737903Z hint: to use in all of your new repositories, which will suppress this warning,
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5738316Z hint: call:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5738543Z hint:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5738853Z hint: 	git config --global init.defaultBranch <name>
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5739201Z hint:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5739523Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5740043Z hint: 'development'. The just-created branch can be renamed via this command:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5740458Z hint:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5740695Z hint: 	git branch -m <name>
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5740963Z hint:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5741325Z hint: Disable this message with "git config set advice.defaultBranchName false"
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5746137Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5754132Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5795860Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5796334Z ##[group]Disabling automatic garbage collection
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5799571Z [command]/usr/bin/git config --local gc.auto 0
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5831166Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5832256Z ##[group]Setting up auth
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5833057Z Removing SSH command configuration
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5836738Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.5873045Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6209640Z Removing HTTP extra header
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6214399Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6251396Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6488343Z Removing includeIf entries pointing to credentials config files
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6492061Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6528383Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6850684Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.6949801Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.7032342Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.7102596Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.7173148Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.7230784Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.7231250Z ##[group]Fetching the repository
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:16.7243083Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +2ecf9961ee9586381e7aae005de23bceed4986fd:refs/remotes/origin/work/research-build-20261109
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1392746Z From https://github.com/ArtixSx/RAZVILKA
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1393506Z  * [new ref]         2ecf9961ee9586381e7aae005de23bceed4986fd -> origin/work/research-build-20261109
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1400088Z [command]/usr/bin/git branch --list --remote origin/work/research-build-20261109
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1432933Z   origin/work/research-build-20261109
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1437619Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-build-20261109
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1468294Z 2ecf9961ee9586381e7aae005de23bceed4986fd
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1471638Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1472114Z ##[group]Determining the checkout info
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1472718Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1475909Z [command]/usr/bin/git sparse-checkout disable
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1528379Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1564060Z ##[group]Checking out the ref
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.1567099Z [command]/usr/bin/git checkout --progress --force -B work/research-build-20261109 refs/remotes/origin/work/research-build-20261109
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4540867Z Switched to a new branch 'work/research-build-20261109'
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4544133Z branch 'work/research-build-20261109' set up to track 'origin/work/research-build-20261109'.
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4616524Z ##[endgroup]
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4619149Z [command]/usr/bin/git log -1 --format=%H
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4651808Z 2ecf9961ee9586381e7aae005de23bceed4986fd
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4659570Z ##[group]Removing auth
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4659840Z Removing SSH command configuration
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4662263Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4699102Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4902368Z Removing HTTP extra header
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4905751Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.4942714Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5127584Z Removing includeIf entries pointing to credentials config files
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5130092Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5166805Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5167246Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5167634Z includeif.gitdir:/github/workspace/.git.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5168000Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5173002Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5202693Z /home/runner/work/_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5215179Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-27601c91\-9ba6\-4a6f\-895d\-957337891388\.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5253965Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5282589Z /home/runner/work/_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5288466Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-27601c91\-9ba6\-4a6f\-895d\-957337891388\.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5327098Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5356623Z /github/runner_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5362254Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-27601c91\-9ba6\-4a6f\-895d\-957337891388\.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5399799Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5428590Z /github/runner_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5433824Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-27601c91\-9ba6\-4a6f\-895d\-957337891388\.config
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5471624Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5652169Z Removing credentials config '/home/runner/work/_temp/git-credentials-27601c91-9ba6-4a6f-895d-957337891388.config'
+live-native (manual-http)	Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:20:22.5658756Z ##[endgroup]
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	﻿2026-11-09T18:20:22.5831598Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.5831818Z with:
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.5831930Z   go-version: 1.26.5
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.5832045Z   cache: false
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.5832162Z   check-latest: false
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.5833470Z   token: ***
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.5833578Z ##[endgroup]
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.6566298Z Setup go version spec 1.26.5
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:22.6577035Z Attempting to download 1.26.5...
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:23.6491212Z matching 1.26.5...
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:23.6507606Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:24.1609105Z Extracting Go...
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:24.1708101Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/ec6dea69-0e21-4057-b2fb-8ca428f31730 -f /home/runner/work/_temp/8a267360-809e-419c-a55b-2d4e5959031f
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:25.3249804Z Successfully extracted go to /home/runner/work/_temp/ec6dea69-0e21-4057-b2fb-8ca428f31730
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:25.3250376Z Adding to the cache ...
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.5007754Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.5009088Z Added go to the path
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.5010702Z Successfully set up Go version 1.26.5
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.5214558Z go version go1.26.5 linux/amd64
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.5214739Z 
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.5214995Z ##[group]go env
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6306917Z AR='ar'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6307184Z CC='gcc'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6307364Z CGO_CFLAGS='-O2 -g'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6307554Z CGO_CPPFLAGS=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6307734Z CGO_CXXFLAGS='-O2 -g'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6307928Z CGO_ENABLED='1'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6308092Z CGO_FFLAGS='-O2 -g'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6308289Z CGO_LDFLAGS='-O2 -g'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6308461Z CXX='g++'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6308654Z GCCGO='gccgo'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6308819Z GO111MODULE=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6308985Z GOAMD64='v1'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6309145Z GOARCH='amd64'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6309309Z GOAUTH='netrc'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6309487Z GOBIN=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6309667Z GOCACHE='/home/runner/.cache/go-build'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6309889Z GOCACHEPROG=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6310081Z GODEBUG=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6310260Z GOENV='/home/runner/.config/go/env'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6310471Z GOEXE=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6310628Z GOEXPERIMENT=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6310796Z GOFIPS140='off'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6310958Z GOFLAGS=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6311494Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build3696452757=/tmp/go-build -gno-record-gcc-switches'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6312025Z GOHOSTARCH='amd64'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6312200Z GOHOSTOS='linux'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6312373Z GOINSECURE=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6312630Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6313150Z GOMODCACHE='/home/runner/go/pkg/mod'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6313372Z GONOPROXY=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6313536Z GONOSUMDB=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6313697Z GOOS='linux'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6313876Z GOPATH='/home/runner/go'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6314067Z GOPRIVATE=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6314469Z GOPROXY='https://proxy.golang.org,direct'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6314751Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6314999Z GOSUMDB='sum.golang.org'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6315197Z GOTELEMETRY='local'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6315422Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6315681Z GOTMPDIR=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6315849Z GOTOOLCHAIN='local'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6316117Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6316413Z GOVCS=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6316578Z GOVERSION='go1.26.5'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6316757Z GOWORK=''
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6316927Z PKG_CONFIG='pkg-config'
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6317049Z 
+live-native (manual-http)	Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	2026-11-09T18:20:28.6317381Z ##[endgroup]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	﻿2026-11-09T18:20:28.6472709Z ##[group]Run set -euo pipefail
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6472949Z ^[[36;1mset -euo pipefail^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6473086Z ^[[36;1msudo apt-get update^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6473566Z ^[[36;1msudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6474076Z ^[[36;1msh scripts/fetch-native-fixture.sh xray-26.10.31 /tmp/xray.zip^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6474817Z ^[[36;1mecho 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6475140Z ^[[36;1munzip /tmp/xray.zip xray -d /tmp/xray-extracted^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6475351Z ^[[36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6475615Z ^[[36;1msudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6475872Z ^[[36;1m/usr/local/lib/razvilka-fixtures/xray version^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6476123Z ^[[36;1m# The real local CA fixture uses the compiler's reviewed 26.3.27.^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6476363Z ^[[36;1m# 26.10.31 defaults to a bundled CA pool instead of system roots.^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6476612Z ^[[36;1msh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6476984Z ^[[36;1mecho '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6477355Z ^[[36;1munzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6477602Z ^[[36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6477917Z ^[[36;1msudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6478235Z ^[[36;1msh scripts/fetch-native-fixture.sh hev-2.17.1 /tmp/hev-socks5-tunnel^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6478593Z ^[[36;1mecho 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6478985Z ^[[36;1msudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6479283Z ^[[36;1msh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/mihomo.gz^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6479623Z ^[[36;1mecho '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6479978Z ^[[36;1msudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz^[[0m
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6500738Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6500935Z env:
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6501043Z   GOTOOLCHAIN: local
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.6501179Z ##[endgroup]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.7099237Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.7370508Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.7855518Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.7949494Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [678 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.7978757Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.7994464Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8008902Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8137208Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [747 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8684927Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8752704Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8775051Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8835160Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8847696Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8929536Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8937699Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.8941302Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.9455984Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.9505004Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.9921656Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.9958725Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:28.9971218Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:29.0024161Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:29.0038560Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:29.0043890Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:31.6582739Z Fetched 13.0 MB in 1s (13.8 MB/s)
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.2877582Z Reading package lists...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.3180371Z Reading package lists...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.4693304Z Building dependency tree...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.4698576Z Reading state information...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5753436Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5754154Z iptables is already the newest version (1.8.10-3ubuntu2).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5754796Z iptables set to manually installed.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5755238Z nftables is already the newest version (1.0.9-1ubuntu0.1).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5755761Z kmod is already the newest version (31+20240202-2ubuntu7.2).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5756179Z kmod set to manually installed.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5756530Z curl is already the newest version (8.5.0-2ubuntu10.16).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5757015Z openssl is already the newest version (3.0.13-0ubuntu3.16).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5757517Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5757990Z unzip is already the newest version (6.0-28ubuntu4.1).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5758482Z busybox-static is already the newest version (1:1.36.1-6ubuntu3.1).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5758954Z busybox-static set to manually installed.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5759393Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5760330Z libnfnetlink0 is already the newest version (1.0.2-2build1).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5760635Z libnfnetlink0 set to manually installed.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5760935Z zlib1g is already the newest version (1:1.3.dfsg-3.1ubuntu2.3).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5761257Z libmnl0 is already the newest version (1.0.5-2build1).
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5761513Z libmnl0 set to manually installed.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5761696Z The following additional packages will be installed:
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5761897Z   libipset13 libluajit-5.1-common
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5913048Z The following NEW packages will be installed:
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5913754Z   conntrack ipset libipset13 libluajit-5.1-2 libluajit-5.1-common
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.5916108Z   libnetfilter-queue1
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.6073285Z 0 upgraded, 6 newly installed, 0 to remove and 28 not upgraded.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.6073635Z Need to get 472 kB of archives.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.6073957Z After this operation, 1391 kB of additional disk space will be used.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.6074488Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.6875308Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 conntrack amd64 1:1.4.8-1ubuntu1 [37.9 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.7330905Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libipset13 amd64 7.19-1ubuntu2 [61.5 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.7781619Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-common all 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [49.5 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.8232300Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-2 amd64 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [276 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.8689809Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnetfilter-queue1 amd64 1.0.5-4build1 [15.1 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:32.9138052Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 ipset amd64 7.19-1ubuntu2 [32.6 kB]
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1073182Z Fetched 472 kB in 0s (1491 kB/s)
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1248602Z Selecting previously unselected package conntrack.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1482243Z (Reading database ... 
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1482687Z (Reading database ... 5%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1482953Z (Reading database ... 10%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1483165Z (Reading database ... 15%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1483373Z (Reading database ... 20%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1483569Z (Reading database ... 25%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1483733Z (Reading database ... 30%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1483922Z (Reading database ... 35%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1484132Z (Reading database ... 40%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1484455Z (Reading database ... 45%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1484667Z (Reading database ... 50%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.1523402Z (Reading database ... 55%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.3430781Z (Reading database ... 60%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.4898305Z (Reading database ... 65%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.7380859Z (Reading database ... 70%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:33.8895957Z (Reading database ... 75%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.0872716Z (Reading database ... 80%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.2873700Z (Reading database ... 85%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.4903549Z (Reading database ... 90%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.6544710Z (Reading database ... 95%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.6544960Z (Reading database ... 100%
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.6545262Z (Reading database ... 215960 files and directories currently installed.)
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.6579860Z Preparing to unpack .../0-conntrack_1%3a1.4.8-1ubuntu1_amd64.deb ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.6596557Z Unpacking conntrack (1:1.4.8-1ubuntu1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7113674Z Selecting previously unselected package libipset13:amd64.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7212988Z Preparing to unpack .../1-libipset13_7.19-1ubuntu2_amd64.deb ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7227441Z Unpacking libipset13:amd64 (7.19-1ubuntu2) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7420957Z Selecting previously unselected package libluajit-5.1-common.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7517365Z Preparing to unpack .../2-libluajit-5.1-common_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_all.deb ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7523167Z Unpacking libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7728237Z Selecting previously unselected package libluajit-5.1-2:amd64.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7825814Z Preparing to unpack .../3-libluajit-5.1-2_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_amd64.deb ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.7832286Z Unpacking libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8036647Z Selecting previously unselected package libnetfilter-queue1:amd64.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8133809Z Preparing to unpack .../4-libnetfilter-queue1_1.0.5-4build1_amd64.deb ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8141780Z Unpacking libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8324683Z Selecting previously unselected package ipset.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8422493Z Preparing to unpack .../5-ipset_7.19-1ubuntu2_amd64.deb ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8428139Z Unpacking ipset (7.19-1ubuntu2) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8805275Z Setting up conntrack (1:1.4.8-1ubuntu1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8822023Z Setting up libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8841544Z Setting up libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8857319Z Setting up libipset13:amd64 (7.19-1ubuntu2) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8872618Z Setting up ipset (7.19-1ubuntu2) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8888071Z Setting up libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8904050Z Processing triggers for man-db (2.12.0-4build2) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8922314Z Not building database; man-db/auto-update is not 'true'.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:34.8930825Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0672425Z 
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0672969Z Running kernel seems to be up-to-date.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0673194Z 
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0673293Z No services need to be restarted.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0673449Z 
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0673544Z No containers need to be restarted.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0673695Z 
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0673814Z No user sessions are running outdated binaries.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0674022Z 
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:37.0674195Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.1281634Z /tmp/xray.zip.download.XM7uBS: OK
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.1398933Z /tmp/xray.zip: OK
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.1537874Z Archive:  /tmp/xray.zip
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.3463537Z   inflating: /tmp/xray-extracted/xray  
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.3741559Z Xray 26.10.31 (Xray, Penetrates Everything.) a4a3dff (go1.27.3 linux/amd64)
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.3742310Z A unified platform for anti-censorship.
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.9159697Z /tmp/xray-node.zip.download.ofJCma: OK
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.9299659Z /tmp/xray-node.zip: OK
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:38.9310854Z Archive:  /tmp/xray-node.zip
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:39.1289899Z   inflating: /tmp/xray-node-fixture/xray  
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:39.5054156Z /tmp/hev-socks5-tunnel.download.qKBEJk: OK
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:39.5085701Z /tmp/hev-socks5-tunnel: OK
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:39.9043362Z /tmp/mihomo.gz.download.Q7KPA5: OK
+live-native (manual-http)	Pinned official Xray and disposable namespace tools	2026-11-09T18:20:39.9195396Z /tmp/mihomo.gz: OK
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	﻿2026-11-09T18:20:39.9348411Z ##[group]Run set -euo pipefail
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9348620Z ^[[36;1mset -euo pipefail^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9348751Z ^[[36;1msudo modprobe tun^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9348954Z ^[[36;1mmkdir -p artifacts/mihomo-manual-http artifacts/mihomo-live-profile^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9349183Z ^[[36;1mchmod 700 artifacts/mihomo-live-profile^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9349409Z ^[[36;1mtrap 'sudo chown -R "$(id -u):$(id -g)" artifacts/mihomo-live-profile' EXIT^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9349639Z ^[[36;1msudo env PATH="$PATH" GOTOOLCHAIN=local \^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9349853Z ^[[36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9350070Z ^[[36;1m  RAZVILKA_MIHOMO_LIVE_TEST_CASE=manual-http \^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9350329Z ^[[36;1m  RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/mihomo-live-profile" \^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9350644Z ^[[36;1m  RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9351053Z ^[[36;1m  RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9351339Z ^[[36;1m  RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9351654Z ^[[36;1m  sh scripts/test-mihomo-live-native.sh 2>&1 | tee artifacts/mihomo-manual-http/native.log^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9352031Z ^[[36;1mgrep -F -- '--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop ' artifacts/mihomo-manual-http/native.log^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9352384Z ^[[36;1mif grep -F -- '--- SKIP:' artifacts/mihomo-manual-http/native.log; then exit 1; fi^[[0m
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9368513Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9368691Z env:
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9368809Z   GOTOOLCHAIN: local
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:39.9368936Z ##[endgroup]
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.0224195Z CI-only platform classification; original protected tool closure: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.0886440Z go: downloading golang.org/x/sys v0.47.0
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.1342763Z go: downloading golang.org/x/net v0.56.0
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.3570636Z go: downloading gopkg.in/yaml.v3 v3.0.1
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.3666604Z go: downloading github.com/quic-go/quic-go v0.61.0
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.4565683Z go: downloading golang.org/x/crypto v0.54.0
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.4880807Z go: downloading golang.org/x/text v0.40.0
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:20:40.7614890Z go: downloading github.com/quic-go/qpack v0.6.0
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:21.0813703Z === RUN   TestMihomoLiveOriginalManualHTTPApplyStop
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:21.0816403Z     mihomo_live_native_linux_test.go:66: native_fixture_budgets rounds=2 aggregate=10m0s round=5m0s operation=1m50s production_apply=8m0s
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:22.6097297Z     mihomo_live_native_linux_test.go:382: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.2245509Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.4171569Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.5492245Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.5494799Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.6121459Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.6122468Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.6128340Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.6129256Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:29.9996465Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:30.3842258Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:31.4895423Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:31.4901692Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:39.5352095Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:39.7300334Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:21:39.7301015Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:22:33.9149060Z     mihomo_live_native_linux_test.go:408: actual_manual_http_apply committed=true replay_refused=true
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:22:33.9151245Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m11.425507231s mandatory_probes=2
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:04.5225684Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=4.381659316s closing_retry=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:04.5716451Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=1m42.08310347s fixture_elapsed=1m43.490184288s restored_physical_baseline=true
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:04.6900885Z     mihomo_live_native_linux_test.go:382: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.3089042Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.5010306Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.6314525Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.6316826Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.6919169Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.6920094Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.6925877Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:11.6926441Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:12.1205070Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:12.5047234Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:13.6396297Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:13.6402347Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:21.4732075Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:21.6667932Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:23:21.6668584Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:15.9888785Z     mihomo_live_native_linux_test.go:408: actual_manual_http_apply committed=true replay_refused=true
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:15.9889474Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m11.416798576s mandatory_probes=2
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:46.6002489Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=4.363289236s closing_retry=true
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:46.6496009Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=1m42.077951333s fixture_elapsed=3m25.568152536s restored_physical_baseline=true
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.1214742Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (206.04s)
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.1215589Z PASS
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3664573Z File: app.test
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3664927Z Build ID: 97a77474067c195384074aaec97de86c1a1b8aa8
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3665209Z Type: cpu
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3665376Z Time: 2026-11-09 18:21:21 UTC
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3665611Z Duration: 206.04s, Total samples = 262310ms (127.31%)
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3665880Z Showing nodes accounting for 258330ms, 98.48% of 262310ms total
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3666074Z Dropped 997 nodes (cum <= 1311.55ms)
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3666225Z Showing top 35 nodes out of 190
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3666394Z       flat  flat%   sum%        cum   cum%
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3667063Z   216510ms 82.54% 82.54%   216510ms 82.54%  crypto/internal/fips140/sha256.blockSHANI
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3667537Z    40870ms 15.58% 98.12%    40870ms 15.58%  internal/runtime/syscall/linux.Syscall6
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3667956Z      170ms 0.065% 98.19%    40950ms 15.61%  syscall.RawSyscall6
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3668310Z      130ms  0.05% 98.23%   171160ms 65.25%  io.copyBuffer
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3668531Z       80ms  0.03% 98.27%    11060ms  4.22%  syscall.Syscall
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3668752Z       70ms 0.027% 98.29%    26450ms 10.08%  os.(*File).ReadAt
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3668974Z       60ms 0.023% 98.31%    30410ms 11.59%  syscall.Syscall6
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3669253Z       50ms 0.019% 98.33%   216610ms 82.58%  crypto/internal/fips140/sha256.(*Digest).Write
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3669551Z       50ms 0.019% 98.35%   216560ms 82.56%  crypto/internal/fips140/sha256.block
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3669796Z       50ms 0.019% 98.37%    26310ms 10.03%  syscall.pread
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3670141Z       40ms 0.015% 98.39%     9590ms  3.66%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3670477Z       40ms 0.015% 98.40%    26380ms 10.06%  internal/poll.(*FD).Pread
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3670704Z       40ms 0.015% 98.42%     8380ms  3.19%  syscall.read
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3671007Z       30ms 0.011% 98.43%    70990ms 27.06%  github.com/ArtixSx/razvilka/internal/components.originHash
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3671430Z       30ms 0.011% 98.44%    26030ms  9.92%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3671766Z       30ms 0.011% 98.45%     8110ms  3.09%  io.(*LimitedReader).Read
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3672010Z       30ms 0.011% 98.46%    18930ms  7.22%  io.(*SectionReader).Read
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3672252Z       20ms 0.0076% 98.47%    26330ms 10.04%  syscall.Pread (inline)
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3672646Z       10ms 0.0038% 98.48%    70790ms 26.99%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveSource).currentPrefixLocked
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3673078Z       10ms 0.0038% 98.48%     7450ms  2.84%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3673373Z       10ms 0.0038% 98.48%     1540ms  0.59%  os.ignoringEINTR (inline)
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3673809Z          0     0% 98.48%   105200ms 40.11%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3674484Z          0     0% 98.48%   105200ms 40.11%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3675238Z          0     0% 98.48%   105200ms 40.11%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3675710Z          0     0% 98.48%    96450ms 36.77%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane (inline)
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3676185Z          0     0% 98.48%    96450ms 36.77%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplaneOriginal
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3676614Z          0     0% 98.48%    96450ms 36.77%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3677186Z          0     0% 98.48%     8490ms  3.24%  github.com/ArtixSx/razvilka/internal/app.(*App).executeManagedServiceRuntime
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3677644Z          0     0% 98.48%     8490ms  3.24%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3678124Z          0     0% 98.48%     8490ms  3.24%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime.func4
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3678566Z          0     0% 98.48%    96710ms 36.87%  github.com/ArtixSx/razvilka/internal/app.(*App).mihomoNodeAction
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3678969Z          0     0% 98.48%    96590ms 36.82%  github.com/ArtixSx/razvilka/internal/app.(*App).mihomoNodeApply
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3679382Z          0     0% 98.48%    31290ms 11.93%  github.com/ArtixSx/razvilka/internal/app.(*App).observeCommittedMihomo
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3679889Z          0     0% 98.48%     8490ms  3.24%  github.com/ArtixSx/razvilka/internal/app.(*App).serviceControlRuntime
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3680363Z          0     0% 98.48%    32380ms 12.34%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalManualHTTPApplyStop
+live-native (manual-http)	Explicit manual preview, token Apply, LAN and HTTP Stop	2026-11-09T18:24:47.3758639Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (206.04s)
+live-native (manual-http)	Retain actual manual HTTP result	﻿2026-11-09T18:24:47.3931409Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3931650Z with:
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3931829Z   name: mihomo-manual-http-2ecf9961ee9586381e7aae005de23bceed4986fd
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3932092Z   path: artifacts/mihomo-manual-http
+live-native (manual-http)	Retain actual manual HTTP result	artifacts/mihomo-live-profile
+live-native (manual-http)	Retain actual manual HTTP result	
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3932299Z   if-no-files-found: warn
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3932439Z   compression-level: 6
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3932566Z   overwrite: false
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3932690Z   include-hidden-files: false
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3932821Z env:
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3932927Z   GOTOOLCHAIN: local
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.3933053Z ##[endgroup]
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.4989114Z (node:7631) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.4989817Z (Use `node --trace-deprecation ...` to show where the warning was created)
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.5035162Z Multiple search paths detected. Calculating the least common ancestor of all paths
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.5035954Z The least common ancestor is /home/runner/work/RAZVILKA/RAZVILKA/artifacts. This will be the root directory of the artifact
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.5036282Z With the provided path, there will be 4 files uploaded
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.5036572Z Artifact name is valid!
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.5036787Z Root directory input is valid!
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.8252938Z Beginning upload of artifact content to blob storage
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:47.8466530Z (node:7631) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:48.2006182Z Uploaded bytes 194958
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:48.2545445Z Finished uploading artifact content to blob storage!
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:48.2545978Z SHA256 digest of uploaded artifact zip is ae155c43f9f87f0102dfb5633436f42a524383902a8e0d8345f92dd70828a34f
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:48.2547240Z Finalizing artifact upload
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:48.6368674Z Artifact mihomo-manual-http-2ecf9961ee9586381e7aae005de23bceed4986fd.zip successfully finalized. Artifact ID 13699891349
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:48.6369315Z Artifact mihomo-manual-http-2ecf9961ee9586381e7aae005de23bceed4986fd has been successfully uploaded! Final size is 194958 bytes. Artifact ID is 13699891349
+live-native (manual-http)	Retain actual manual HTTP result	2026-11-09T18:24:48.6372521Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42673010405/artifacts/13699891349
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	﻿2026-11-09T18:24:48.6556438Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6556652Z with:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6556791Z   ref: 4cc9f869974713c9cebd833fccca383c03c102b7
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6556967Z   path: baseline4cc
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6557097Z   persist-credentials: false
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6557242Z   repository: ArtixSx/RAZVILKA
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6558590Z   token: ***
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6558705Z   ssh-strict: true
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6558819Z   ssh-user: git
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6558931Z   clean: true
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559057Z   sparse-checkout-cone-mode: true
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559204Z   fetch-depth: 1
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559318Z   fetch-tags: false
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559441Z   show-progress: true
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559563Z   lfs: false
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559670Z   submodules: false
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559793Z   set-safe-directory: true
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6559939Z   allow-unsafe-pr-checkout: false
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6560078Z env:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6560188Z   GOTOOLCHAIN: local
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.6560334Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7125473Z Syncing repository: ArtixSx/RAZVILKA
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7126177Z ##[group]Getting Git version info
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7126867Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc'
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7132540Z [command]/usr/bin/git version
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7169443Z git version 2.56.0
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7181262Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7193441Z Temporarily overriding HOME='/home/runner/work/_temp/c603f51e-50df-4b7e-951c-49aebf1860f1' before making global git config changes
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7195862Z Adding repository directory to the temporary git global config as a safe directory
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7197063Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7224608Z ##[group]Determining repository object format
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7225925Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7226259Z ##[group]Initializing the repository
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7229173Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7266796Z hint: Using 'master' as the name for the initial branch. This default branch name
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7267977Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7268422Z hint: to use in all of your new repositories, which will suppress this warning,
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7268745Z hint: call:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7268898Z hint:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7269045Z hint: 	git config --global init.defaultBranch <name>
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7269207Z hint:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7269482Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7269921Z hint: 'development'. The just-created branch can be renamed via this command:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7270241Z hint:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7270423Z hint: 	git branch -m <name>
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7270632Z hint:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7270920Z hint: Disable this message with "git config set advice.defaultBranchName false"
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7271434Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7286193Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7307852Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7308229Z ##[group]Disabling automatic garbage collection
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7310845Z [command]/usr/bin/git config --local gc.auto 0
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7337781Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7338128Z ##[group]Setting up auth
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7338686Z Removing SSH command configuration
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7342119Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7368664Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7592171Z Removing HTTP extra header
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7597646Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7632191Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7829555Z Removing includeIf entries pointing to credentials config files
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7835363Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.7873524Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8056706Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8095585Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path /home/runner/work/_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8130596Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8166377Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/baseline4cc/.git.path /github/runner_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8201232Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path /github/runner_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8236390Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8236692Z ##[group]Fetching the repository
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:48.8240169Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin 4cc9f869974713c9cebd833fccca383c03c102b7
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6740511Z From https://github.com/ArtixSx/RAZVILKA
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6740878Z  * branch            4cc9f869974713c9cebd833fccca383c03c102b7 -> FETCH_HEAD
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6748499Z [command]/usr/bin/git rev-parse --verify --quiet 4cc9f869974713c9cebd833fccca383c03c102b7^{object}
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6783763Z 4cc9f869974713c9cebd833fccca383c03c102b7
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6787295Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6787632Z ##[group]Determining the checkout info
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6788141Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6790807Z [command]/usr/bin/git sparse-checkout disable
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6835736Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6872366Z ##[group]Checking out the ref
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.6875250Z [command]/usr/bin/git checkout --progress --force 4cc9f869974713c9cebd833fccca383c03c102b7
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9464924Z Note: switching to '4cc9f869974713c9cebd833fccca383c03c102b7'.
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9465284Z 
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9465476Z You are in 'detached HEAD' state. You can look around, make experimental
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9465880Z changes and commit them, and you can discard any commits you make in this
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9466292Z state without impacting any branches by switching back to a branch.
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9466527Z 
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9466693Z If you want to create a new branch to retain commits you create, you may
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467064Z do so (now or later) by using -c with the switch command. Example:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467274Z 
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467382Z   git switch -c <new-branch-name>
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467526Z 
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467617Z Or undo this operation with:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467745Z 
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467827Z   git switch -
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9467924Z 
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9468108Z Turn off this advice by setting config variable advice.detachedHead to false
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9468357Z 
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9468612Z HEAD is now at 4cc9f86 Validate public recovery and pinned tools with reviewed allocation measurements
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9488157Z ##[endgroup]
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9535033Z [command]/usr/bin/git log -1 --format=%H
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9567115Z 4cc9f869974713c9cebd833fccca383c03c102b7
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9573599Z ##[group]Removing auth
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9573829Z Removing SSH command configuration
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9576144Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9612043Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9797621Z Removing HTTP extra header
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9799907Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:51.9834983Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0016928Z Removing includeIf entries pointing to credentials config files
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0018840Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0048432Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0048939Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0049369Z includeif.gitdir:/github/workspace/baseline4cc/.git.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0049757Z includeif.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0054797Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0091468Z /home/runner/work/_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0098389Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-293aabf0\-1441\-41bb\-8482\-971da66ce412\.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0137408Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0166279Z /home/runner/work/_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0171917Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline4cc/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-293aabf0\-1441\-41bb\-8482\-971da66ce412\.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0211794Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/baseline4cc/.git.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0240537Z /github/runner_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0246341Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/baseline4cc/.git.path \/github\/runner_temp\/git\-credentials\-293aabf0\-1441\-41bb\-8482\-971da66ce412\.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0283073Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0312508Z /github/runner_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0317737Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/baseline4cc/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-293aabf0\-1441\-41bb\-8482\-971da66ce412\.config
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0354602Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0540602Z Removing credentials config '/home/runner/work/_temp/git-credentials-293aabf0-1441-41bb-8482-971da66ce412.config'
+live-native (manual-http)	Preserved4cc matching baseline on the same runner	2026-11-09T18:24:52.0541387Z ##[endgroup]
+live-native (manual-http)	Compare original warm scenario without changing its deadline	﻿2026-11-09T18:24:52.0643861Z ##[group]Run set -euo pipefail
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0644044Z ^[[36;1mset -euo pipefail^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0644179Z ^[[36;1mcase "$SCENARIO" in^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0644609Z ^[[36;1m  lifecycle) expected=TestMihomoLiveOriginalApplyStopAndFreshApply ;;^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0644914Z ^[[36;1m  manual-http) expected=TestMihomoLiveOriginalManualHTTPApplyStop ;;^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0645130Z ^[[36;1m  *) exit 2 ;;^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0645252Z ^[[36;1mesac^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0645435Z ^[[36;1moutput="$GITHUB_WORKSPACE/baseline4cc/artifacts/mihomo-live-profile"^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0645646Z ^[[36;1mmkdir -p "$output"^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0645783Z ^[[36;1mchmod 700 "$output"^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0645952Z ^[[36;1mtrap 'sudo chown -R "$(id -u):$(id -g)" "$output"' EXIT^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0646405Z ^[[36;1mprintf 'baseline=4cc9f869974713c9cebd833fccca383c03c102b7 candidate=%s scenario=%s order=candidate-then-baseline diagnostic_only=true\n' "$GITHUB_SHA" "$SCENARIO" > "$output/comparison.txt"^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0646836Z ^[[36;1mcd baseline4cc^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0647026Z ^[[36;1mtest "$(git rev-parse HEAD)" = 4cc9f869974713c9cebd833fccca383c03c102b7^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0647375Z ^[[36;1msudo env PATH="$PATH" GOTOOLCHAIN=local \^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0647591Z ^[[36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0647807Z ^[[36;1m  RAZVILKA_MIHOMO_LIVE_TEST_CASE="$SCENARIO" \^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0648067Z ^[[36;1m  RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$output" \^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0648318Z ^[[36;1m  RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0648603Z ^[[36;1m  RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0648874Z ^[[36;1m  RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0649151Z ^[[36;1m  sh scripts/test-mihomo-live-native.sh 2>&1 | tee "$output/native.log"^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0649402Z ^[[36;1mgrep -F -- "--- PASS: $expected " "$output/native.log"^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0649627Z ^[[36;1mif grep -F -- '--- SKIP:' "$output/native.log"; then exit 1; fi^[[0m
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0665445Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0665621Z env:
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0665735Z   GOTOOLCHAIN: local
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0665860Z   SCENARIO: manual-http
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.0665984Z ##[endgroup]
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:24:52.1241923Z CI-only platform classification; original protected tool closure: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:17.8022637Z === RUN   TestMihomoLiveOriginalManualHTTPApplyStop
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:17.8024613Z     mihomo_live_native_linux_test.go:66: native_fixture_budgets rounds=2 aggregate=10m0s round=5m0s operation=1m50s production_apply=8m0s
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:19.0729855Z     mihomo_live_native_linux_test.go:382: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:25.7602895Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:25.9517470Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.0838373Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.0855160Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.1473350Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.1474740Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.1480653Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.1481332Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.5419642Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:26.9290240Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:28.0548787Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:28.0554925Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:35.8219533Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:36.0144025Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:25:36.0144910Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:26:30.3399077Z     mihomo_live_native_linux_test.go:408: actual_manual_http_apply committed=true replay_refused=true
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:26:30.3405062Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m11.387602939s mandatory_probes=2
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:00.8873160Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=4.30630062s closing_retry=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:00.9354966Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=1m41.9839323s fixture_elapsed=1m43.133067366s restored_physical_baseline=true
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:01.0518726Z     mihomo_live_native_linux_test.go:382: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.5850097Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.7776278Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.9102284Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.9104887Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.9700509Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.9701677Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.9706941Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:07.9707328Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:08.3566552Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:08.7417869Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:09.8518249Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:09.8525277Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:17.6451880Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:17.8370109Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:27:17.8370606Z actual_mihomo_activate stage=policy-ack failed=false material=false canceled=false deadline=false
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:12.1604723Z     mihomo_live_native_linux_test.go:408: actual_manual_http_apply committed=true replay_refused=true
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:12.1605858Z     mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m11.224554797s mandatory_probes=2
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:42.6448139Z     mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=4.303859898s closing_retry=true
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:42.6935562Z     mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=1m41.758045408s fixture_elapsed=3m24.891134126s restored_physical_baseline=true
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.1647174Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (205.36s)
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.1647653Z PASS
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4046564Z File: app.test
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4046831Z Build ID: 0ff875c0d5c60a4db51b50a23b37938ce017bb1c
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4047028Z Type: cpu
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4047148Z Time: 2026-11-09 18:25:17 UTC
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4047392Z Duration: 205.36s, Total samples = 262410ms (127.78%)
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4047731Z Showing nodes accounting for 258100ms, 98.36% of 262410ms total
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4048039Z Dropped 1005 nodes (cum <= 1312.05ms)
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4048318Z Showing top 35 nodes out of 189
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4048594Z       flat  flat%   sum%        cum   cum%
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4049420Z   216080ms 82.34% 82.34%   216080ms 82.34%  crypto/internal/fips140/sha256.blockSHANI
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4049897Z    41140ms 15.68% 98.02%    41140ms 15.68%  internal/runtime/syscall/linux.Syscall6
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4050337Z      270ms   0.1% 98.13%    41220ms 15.71%  syscall.RawSyscall6
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4050696Z      140ms 0.053% 98.18%   171210ms 65.25%  io.copyBuffer
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4051054Z       70ms 0.027% 98.21%    30470ms 11.61%  syscall.Syscall6
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4051427Z       60ms 0.023% 98.23%    26860ms 10.24%  os.(*File).ReadAt
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4052060Z       50ms 0.019% 98.25%    27100ms 10.33%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4052637Z       40ms 0.015% 98.26%     8260ms  3.15%  io.(*LimitedReader).Read
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4053104Z       30ms 0.011% 98.27%   216130ms 82.36%  crypto/internal/fips140/sha256.(*Digest).Write
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4053557Z       30ms 0.011% 98.29%    19880ms  7.58%  io.(*SectionReader).Read
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4053938Z       30ms 0.011% 98.30%     8040ms  3.06%  os.(*File).Read
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4054679Z       30ms 0.011% 98.31%    26720ms 10.18%  syscall.pread
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4054967Z       20ms 0.0076% 98.32%   216100ms 82.35%  crypto/internal/fips140/sha256.block
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4055234Z       20ms 0.0076% 98.32%     7990ms  3.04%  internal/poll.(*FD).Read
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4055479Z       20ms 0.0076% 98.33%    26740ms 10.19%  syscall.Pread (inline)
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4055872Z       10ms 0.0038% 98.33%    70710ms 26.95%  github.com/ArtixSx/razvilka/internal/components.originHash
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4056516Z       10ms 0.0038% 98.34%    80500ms 30.68%  github.com/ArtixSx/razvilka/internal/dataplane.(*mihomoLiveResource).currentLiveObserved.func1
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4057077Z       10ms 0.0038% 98.34%     1740ms  0.66%  github.com/ArtixSx/razvilka/internal/dataplane.inspectOriginalNodeRouterBackendSocketsWithSOCKSUDP
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4057782Z       10ms 0.0038% 98.35%     9580ms  3.65%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4058254Z       10ms 0.0038% 98.35%     9670ms  3.69%  github.com/ArtixSx/razvilka/internal/startuptools.(*policyRunner).RunMihomoLiveRead
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4058583Z       10ms 0.0038% 98.35%    11340ms  4.32%  syscall.Syscall
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4058908Z       10ms 0.0038% 98.36%     8570ms  3.27%  syscall.read
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4059592Z          0     0% 98.36%   104840ms 39.95%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4060408Z          0     0% 98.36%   104840ms 39.95%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4061209Z          0     0% 98.36%   104840ms 39.95%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4062118Z          0     0% 98.36%    96230ms 36.67%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane (inline)
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4062832Z          0     0% 98.36%    96230ms 36.67%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplaneOriginal
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4063538Z          0     0% 98.36%    96230ms 36.67%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4064376Z          0     0% 98.36%     8350ms  3.18%  github.com/ArtixSx/razvilka/internal/app.(*App).executeManagedServiceRuntime
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4065131Z          0     0% 98.36%     8350ms  3.18%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4065920Z          0     0% 98.36%     8350ms  3.18%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime.func4
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4066640Z          0     0% 98.36%    96490ms 36.77%  github.com/ArtixSx/razvilka/internal/app.(*App).mihomoNodeAction
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4067304Z          0     0% 98.36%    96370ms 36.72%  github.com/ArtixSx/razvilka/internal/app.(*App).mihomoNodeApply
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4068096Z          0     0% 98.36%    31190ms 11.89%  github.com/ArtixSx/razvilka/internal/app.(*App).observeCommittedMihomo
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4068801Z          0     0% 98.36%     8350ms  3.18%  github.com/ArtixSx/razvilka/internal/app.(*App).serviceControlRuntime
+live-native (manual-http)	Compare original warm scenario without changing its deadline	2026-11-09T18:28:43.4132523Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (205.36s)
+live-native (manual-http)	Retain same-runner preserved matching baseline	﻿2026-11-09T18:28:43.4266110Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4266395Z with:
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4266678Z   name: mihomo-baseline4cc-manual-http-2ecf9961ee9586381e7aae005de23bceed4986fd
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4267096Z   path: baseline4cc/artifacts/mihomo-live-profile
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4267358Z   if-no-files-found: error
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4277138Z   compression-level: 6
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4277293Z   overwrite: false
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4277420Z   include-hidden-files: false
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4277553Z env:
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4277663Z   GOTOOLCHAIN: local
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.4277794Z ##[endgroup]
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.5256438Z (node:9611) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.5256975Z (Use `node --trace-deprecation ...` to show where the warning was created)
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.5292911Z With the provided path, there will be 5 files uploaded
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.5296072Z Artifact name is valid!
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.5296460Z Root directory input is valid!
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.8767481Z Beginning upload of artifact content to blob storage
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:43.8953336Z (node:9611) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:44.2417452Z Uploaded bytes 195970
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:44.2959183Z Finished uploading artifact content to blob storage!
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:44.2959605Z SHA256 digest of uploaded artifact zip is 3228b70b98ed64fdcf2e0778f2ec2243e150cc9667916ecfb3ab2317a7de1da3
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:44.2960759Z Finalizing artifact upload
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:44.6803512Z Artifact mihomo-baseline4cc-manual-http-2ecf9961ee9586381e7aae005de23bceed4986fd.zip successfully finalized. Artifact ID 13699193092
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:44.6804182Z Artifact mihomo-baseline4cc-manual-http-2ecf9961ee9586381e7aae005de23bceed4986fd has been successfully uploaded! Final size is 195970 bytes. Artifact ID is 13699193092
+live-native (manual-http)	Retain same-runner preserved matching baseline	2026-11-09T18:28:44.6808014Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42673010405/artifacts/13699193092
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	﻿2026-11-09T18:28:44.6971443Z Post job cleanup.
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7548130Z [command]/usr/bin/git version
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7580989Z git version 2.56.0
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7604405Z Temporarily overriding HOME='/home/runner/work/_temp/f007316d-3bcf-4075-b7c1-ce20b38ac9de' before making global git config changes
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7604923Z Adding repository directory to the temporary git global config as a safe directory
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7607492Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA/baseline4cc
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7636650Z Removing SSH command configuration
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7640860Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7669541Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7870362Z Removing HTTP extra header
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7875300Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.7915765Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.8107406Z Removing includeIf entries pointing to credentials config files
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.8112485Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+live-native (manual-http)	Post Preserved4cc matching baseline on the same runner	2026-11-09T18:28:44.8152411Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+live-native (manual-http)	Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e	﻿2026-11-09T18:28:44.8443814Z Post job cleanup.
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	﻿2026-11-09T18:28:44.9280456Z Post job cleanup.
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9838788Z [command]/usr/bin/git version
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9871901Z git version 2.56.0
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9893410Z Temporarily overriding HOME='/home/runner/work/_temp/ef6f0f7b-9a1a-4b5a-86aa-cfd3e6f9e13a' before making global git config changes
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9894511Z Adding repository directory to the temporary git global config as a safe directory
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9896506Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9923660Z Removing SSH command configuration
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9927744Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:44.9965943Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:45.0166202Z Removing HTTP extra header
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:45.0168035Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:45.0206173Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:45.0412564Z Removing includeIf entries pointing to credentials config files
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:45.0419032Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+live-native (manual-http)	Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1	2026-11-09T18:28:45.0457094Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+live-native (manual-http)	Complete job	﻿2026-11-09T18:28:45.0762187Z Cleaning up orphan processes
+live-native (manual-http)	Complete job	2026-11-09T18:28:45.1032194Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

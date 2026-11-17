@@ -31,7 +31,7 @@ import (
 // production-root selection and the complete dataplane registry remain Root's
 // genuine future Stop acceptance, never a fixture environment override.
 func TestNativeCandidateStoppedCompletionTwoCuts(t *testing.T) {
-	for _, cut := range []string{"before", "after", "strategy", "strategy-crash", "strategy-drift"} {
+	for _, cut := range []string{"before", "after", "strategy", "strategy-crash", "strategy-drift", "strategy-rollback-files", "strategy-rollback-private"} {
 		t.Run(cut, func(t *testing.T) {
 			a, u, review, profile := nativeFileFixture(t, "candidate-stopped-"+cut)
 			oldJob := filepath.Join(a.directory, review.ID)
@@ -316,9 +316,23 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 	saveStoppedReview(t, a, u, review)
 	checkpoint("strategy-pair")
 	strategyPath := filepath.Join(a.installation, "razvilka/state/strategy-lab.json")
+	lateStop := profile.Scenario == "candidate-stopped-strategy-rollback-files" || profile.Scenario == "candidate-stopped-strategy-rollback-private"
 	var beforeStrategy []byte
 	if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
 		beforeStrategy = []byte(`{"schema_version":4,"candidates":{},"evidence":[],"selections":{}}`)
+		if lateStop {
+			// Saved history/manual intent is data, not a reconstructed live
+			// validation owner. The exact bytes must survive mid-rollback Stop.
+			beforeStrategy, err = json.Marshal(strategylab.State{
+				SchemaVersion: 4,
+				Candidates:    map[string]strategylab.Candidate{"candidate": {ID: "candidate", PoolID: "tcp-tls", Name: "retained manual choice", Arguments: "--filter-tcp=443", Origin: "expert"}},
+				Evidence:      []strategylab.Evidence{{CandidateID: "candidate", ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", CheckedAt: "2026-11-16T00:00:00Z"}},
+				Selections:    map[string]strategylab.Selection{"service|tcp|ipv4": {ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", CandidateID: "candidate", Mode: strategylab.ModeManual, Frozen: true, Status: "manual-unchecked", SelectedAt: "2026-11-16T00:00:00Z"}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 		retainedFile(t, a.installation, "razvilka/state/strategy-lab.json", beforeStrategy)
 		pair, err := a.sealStrategyPair(ctx, review)
 		if err != nil {
@@ -362,7 +376,9 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		checkpoint("candidate-death")
 		w, final := nativeStoppedCandidateDeath(t, held, a, store, binary, job, id)
 		var recentStrategy []byte
-		if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
+		if lateStop {
+			recentStrategy = bytes.Clone(beforeStrategy)
+		} else if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
 			// Model a manual StrategyLab write after candidate boot through its
 			// actual Store writer. Native H/S/C/R/Wait/Stop facts stay genuine.
 			manager, err := strategylab.New(strategyPath)
@@ -380,12 +396,26 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 				return ErrStrategyStateAdmission
 			}
 		}
+		var controlBefore, requestBefore []byte
+		stopRequests := 0
 		request := func() {
+			stopRequests++
+			if stopRequests != 1 {
+				t.Fatal("Stop cut fired more than once")
+			}
 			if _, err := operationgate.RequestSelfUpdateStop(held, profile.Control, id, review.Revision); err != nil {
 				t.Fatal(err)
 			}
+			controlBefore, err = os.ReadFile(filepath.Join(profile.Control, "current-v1.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			requestBefore, err = os.ReadFile(filepath.Join(profile.Control, "stop-"+id+".json"))
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-		if profile.Scenario == "candidate-stopped-before" || strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
+		if !lateStop && (profile.Scenario == "candidate-stopped-before" || strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy")) {
 			request()
 		}
 		checkpoint("stop-candidate-and-retain-history")
@@ -449,24 +479,28 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		if profile.Scenario == "candidate-stopped-after" {
 			request()
 		}
-		controlBefore, err := os.ReadFile(filepath.Join(profile.Control, "current-v1.json"))
-		if err != nil {
-			return err
-		}
-		requestBefore, err := os.ReadFile(filepath.Join(profile.Control, "stop-"+id+".json"))
-		if err != nil {
-			return err
-		}
 		admit := func(c context.Context, effect string, begin func() error) error {
-			return a.EffectAdmission(c, id, "replace-to-rollback", effect, begin)
+			err := a.EffectAdmission(c, id, "replace-to-rollback", effect, begin)
+			if err == nil && profile.Scenario == "candidate-stopped-strategy-rollback-files" && effect == "rollback-file-2" {
+				request() // After the real CAS, outside its short control lock.
+			}
+			return err
 		}
 		checkpoint("restore-files")
 		if err := store.RestoreAdmitted(held, id, okay, quiet, admit); err != nil {
 			return err
 		}
 		checkpoint("restore-private-state")
-		if err := store.Execute(held, id, "restore-private-state", okay, func(c context.Context) error { return a.Run(c, id, "restore-private-state") }); err != nil {
+		if err := store.Execute(held, id, "restore-private-state", okay, func(c context.Context) error {
+			if profile.Scenario == "candidate-stopped-strategy-rollback-private" {
+				request() // The real command-started intent is already durable.
+			}
+			return a.Run(c, id, "restore-private-state")
+		}); err != nil {
 			return err
+		}
+		if stopRequests != 1 || len(controlBefore) == 0 || len(requestBefore) == 0 {
+			return ErrFileProtocol
 		}
 		if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
 			actual, err := os.ReadFile(strategyPath)
@@ -476,6 +510,19 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 			snapshot, err := a.privateSnapshot(held, id)
 			if err != nil || string(snapshot.Images["strategy"].Data) != string(beforeStrategy) {
 				return errors.Join(ErrStrategyStateAdmission, err)
+			}
+			if lateStop {
+				manager, err := strategylab.New(strategyPath)
+				if err != nil {
+					return err
+				}
+				view := manager.SnapshotWithContext(held)
+				if len(view.Evidence) != 1 || len(view.Selections) != 1 || view.Selections[0].Mode != strategylab.ModeManual || !view.Selections[0].Frozen || view.Selections[0].Healthy {
+					return ErrStrategyStateAdmission
+				}
+				if _, err := os.Stat(filepath.Join(job, "start-rollback-panel.process.json")); !errors.Is(err, os.ErrNotExist) {
+					return ErrFileProtocol
+				}
 			}
 		}
 		r, present, err := store.Current()

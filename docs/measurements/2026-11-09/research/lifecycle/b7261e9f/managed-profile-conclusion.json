@@ -1,0 +1,60 @@
+{
+  "head_sha": "b7261e9f1d8cd7ea3c0af4b6f8e78c94d24688b4",
+  "run_id": 42568035565,
+  "production_job": 128998776581,
+  "race_job": 128998776628,
+  "verdict": "remaining software performance/recovery task; not a hardware blocker",
+  "setup": "Official pinned assets verified; native tests actually executed",
+  "production": {
+    "core_app_http_and_closing_checks": "PASS",
+    "lan_app_http_seconds": 58.29,
+    "manual_lan_seconds": 22.53,
+    "first_failure": "native-apply / lan-preflight-inventory-read-close-scope / DEADLINE_EXCEEDED",
+    "active_execution_ms": 19129,
+    "activation_seconds": 16.079707239,
+    "activation_budget_seconds": 15,
+    "cleanup_failure": "retire.policy-remove; COMMON unknown receipt retained; rollback_verified=false",
+    "inclusive_phases": {
+      "active_lan": {"calls": 9, "seconds": 10.444429189},
+      "prepared_active": {"calls": 1, "seconds": 4.454657635},
+      "policy_apply": {"calls": 1, "seconds": 7.823765117},
+      "policy_readback": {"calls": 6, "seconds": 15.934699914},
+      "active_inventory_capture": {"calls": 14, "seconds": 0.463612492},
+      "active_read_pair": {"calls": 7, "seconds": 0.795908319},
+      "owners": {"calls": 430, "seconds": 4.158768234}
+    },
+    "manual_cpu": {
+      "profile_wall_seconds": 19.50,
+      "cpu_sample_seconds": 17.68,
+      "syscall_flat_seconds": 10.99,
+      "syscall_flat_percent": 62.16,
+      "sha256_flat_seconds": 1.78,
+      "sha256_flat_percent": 10.07,
+      "heldReview_pathsCurrent_cumulative_seconds": 4.18,
+      "LANPolicyRuntime_Preflight_cumulative_seconds": 9.26,
+      "BackendInventory_Read_cumulative_seconds": 9.13,
+      "verifyLANObserved_cumulative_seconds": 8.36
+    },
+    "lan_http_cpu": {
+      "profile_wall_seconds": 55.15,
+      "cpu_sample_seconds": 52.34,
+      "syscall_flat_seconds": 27.29,
+      "syscall_flat_percent": 52.14,
+      "sha256_flat_seconds": 10.28,
+      "sha256_flat_percent": 19.64,
+      "scope": "Whole App HTTP scenario includes three candidate probes and activation"
+    }
+  },
+  "race": {
+    "core_consumer_seconds": 19.25,
+    "consumer_execute_seconds": 15.016139843,
+    "first_failure": "probe counter closing capture / READ_OBSERVATION_SCOPE / READ_DEADLINE / context deadline exceeded",
+    "lan_app_http_seconds": 21.91,
+    "manual_lan_seconds": 33.09,
+    "manual_failure": "lan-preflight-inventory-nfq-consumer-open / DEADLINE_EXCEEDED / retire.policy-remove"
+  },
+  "code_inspection": "verifyLAN already wraps observeActiveTools. Nested WithReadOnlyToolObservation reuses the same original marker and does not repeat opening/closing full SHA. Existing owner/receipt bookends surround runtime.Verify callbacks; no proven redundant callback-free comparison identified for removal.",
+  "next_work": "Profile/count metadata and owner comparisons within the original synchronous observation, preserve per-effect freshness and all source/kernel/COMMON unknown fences; validate any optimization with the same native LAN scenario.",
+  "limitations": "Inclusive phase/cumulative CPU values overlap and must not be summed. No paired speedup claim. Raw .pprof files were not uploaded by managed jobs; pprof text is retained in artifacts/lan.log and manual.log. Physical router remains a separate validation scope.",
+  "evidence": ["managed-production.log", "managed-race.log", "managed-production-artifacts/lan.log", "managed-production-artifacts/manual.log", "managed-race-artifacts/probe.log"]
+}

@@ -1,0 +1,213 @@
+diff --git a/internal/app/domain_tcp_original_native_linux_test.go b/internal/app/domain_tcp_original_native_linux_test.go
+--- a/internal/app/domain_tcp_original_native_linux_test.go
++++ b/internal/app/domain_tcp_original_native_linux_test.go
+@@ -90,6 +90,14 @@
+ 	runDomainTCPOriginalNative(t, false)
+ }
+ 
++func TestDomainTCPOriginalNativeFailedPreparationRetirement(t *testing.T) {
++	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
++	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
++	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
++	t.Setenv("RAZVILKA_DOMAIN_PREPARATION_CUT", "1")
++	runDomainTCPOriginalNative(t, false)
++}
++
+ func TestDomainTCPOriginalNativeCanceledReadyRetirement(t *testing.T) {
+ 	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+ 	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+@@ -133,13 +141,17 @@
+ 	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
+ 	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
+ 	canceledChild := os.Getenv("RAZVILKA_DOMAIN_CANCELED_CHILD") == "1"
++	preparationCut := os.Getenv("RAZVILKA_DOMAIN_PREPARATION_CUT") == "1"
++	if preparationCut && (!coexist || canceledChild || joinedFailure || neverIssuedSuccessor || initialCut != "") {
++		t.Fatal("failed preparation requires its separate original successor case")
++	}
+ 	canceledReady := os.Getenv("RAZVILKA_DOMAIN_CANCELED_READY") == "1"
+ 	canceledPublished := os.Getenv("RAZVILKA_DOMAIN_CANCELED_PUBLISHED") == "1"
+ 	if canceledPublished && !canceledReady {
+ 		t.Fatal("published cancellation requires its ready case")
+ 	}
+ 	failedACK := os.Getenv("RAZVILKA_DOMAIN_FAILURE_ACK")
+-	if failedACK != "" && (!canceledReady || failedACK != "process" && failedACK != "capture" && failedACK != "standby" && failedACK != "alias" && failedACK != "capture-transaction" && failedACK != "standby-transaction") {
++	if failedACK != "" && (!canceledReady && !preparationCut || failedACK != "process" && failedACK != "capture" && failedACK != "standby" && failedACK != "alias" && failedACK != "capture-transaction" && failedACK != "standby-transaction") {
+ 		t.Fatal("invalid failed generation ACK cut")
+ 	}
+ 	if canceledReady && !canceledChild {
+@@ -932,13 +944,20 @@
+ 				}
+ 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
+ 			})
+-			if canceledChild {
+-				if !cancelRequested {
++			if canceledChild || preparationCut {
++				if !preparationCut && !cancelRequested {
+ 					t.Fatal("actual original child/readiness cancellation witness was not reached", err)
+ 				}
+ 				var failure *dataplane.DomainTCPCleanupFailure
+-				if !errors.Is(err, context.Canceled) || !errors.As(err, &failure) {
++				expected := error(context.Canceled)
++				if preparationCut {
++					expected = dataplane.ErrNativeDomainPreparationCut
++				}
++				if !errors.Is(err, expected) || !errors.As(err, &failure) {
+ 					t.Fatal("original cancellation/custody capsule lost", err)
++				}
++				if preparationCut {
++					t.Log("ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation")
+ 				}
+ 				if failedACK != "" {
+ 					if err := dataplane.ConfigureNativeDomainFailureACK(secondHeld, failure, failedACK); err != nil {
+@@ -962,7 +981,7 @@
+ 				if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
+ 					t.Fatal("original child survived cleanup join")
+ 				}
+-				if canceledReady {
++				if canceledReady || preparationCut {
+ 					retireErr := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure)
+ 					if failedACK != "" && failedACK != "process" {
+ 						if !errors.Is(retireErr, dataplane.ErrNativeDomainFailureACK) {
+@@ -974,6 +993,9 @@
+ 						}
+ 					} else if retireErr != nil {
+ 						domainOriginalPublicationDiagnostics(t, manager.StateRoot)
++						if preparationCut {
++							t.Log("ACTUAL_PREPARATION_CLEANUP_REFUSED: original nil-kernel successor retirement did not complete")
++						}
+ 						t.Fatal("original failed ready generation retirement", retireErr)
+ 					}
+ 					if err := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure); err != nil {
+@@ -1003,6 +1025,8 @@
+ 					}
+ 					if canceledPublished {
+ 						t.Log("actual published successor canceled; source/handler/native joins and capture Remove retain original restorative standby; actual cached late-SYN tuple preserved, published alias removal refused")
++					} else if preparationCut {
++						t.Log("ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved")
+ 					} else {
+ 						t.Log("actual ready but never-issued successor canceled; same original source/handler/native joins, capture Remove and restorative handoff, actual zero-issued baseline Remove→keeper and repeat ACK; old published alias remains original baseline")
+ 					}
+diff --git a/internal/app/domain_tcp_coexistence_native_linux_test.go b/internal/app/domain_tcp_coexistence_native_linux_test.go
+--- a/internal/app/domain_tcp_coexistence_native_linux_test.go
++++ b/internal/app/domain_tcp_coexistence_native_linux_test.go
+@@ -85,6 +85,16 @@
+ 	resource, err := dataplane.AcquireXrayDomainTCPExecutionResource(ctx, material)
+ 	if err != nil {
+ 		return fmt.Errorf("successor original COMMON issuer: %w", err)
++	}
++	preparationCut := os.Getenv("RAZVILKA_DOMAIN_PREPARATION_CUT") == "1"
++	if preparationCut {
++		if captured == nil {
++			return errors.New("failed preparation requires original owner custody")
++		}
++		*captured = owner
++		if err := dataplane.ConfigureNativeDomainPreparationCut(ctx, owner); err != nil {
++			return err
++		}
+ 	}
+ 	stopMetrics := dataplane.StartDomainTCPNativeMeasurement()
+ 	defer func() {
+@@ -107,6 +117,17 @@
+ 			}
+ 		}
+ 	}()
++	if preparationCut {
++		// Real successor construction only: no DNS send, Ready assertion or
++		// widening of the original operation's finite deadline.
++		select {
++		case err := <-done:
++			joined = true
++			return err
++		case <-ctx.Done():
++			return ctx.Err()
++		}
++	}
+ 	deadline := time.Now().Add(domainOriginalPublicationBudget(t))
+ 	if cancelOriginal, ok := ctx.Value(domainOriginalCancelAfterStartKey{}).(context.CancelFunc); ok {
+ 		if captured != nil {
+diff --git a/scripts/test-domain-original-native.sh b/scripts/test-domain-original-native.sh
+--- a/scripts/test-domain-original-native.sh
++++ b/scripts/test-domain-original-native.sh
+@@ -91,6 +91,11 @@
+    1) test "${RAZVILKA_DOMAIN_CANCELED_READY:-0}" = 1 || exit 2; domain_case=TestDomainTCPOriginalNativeCanceledPublishedStandby ;;
+    *) exit 2 ;;
+   esac
++  case "${RAZVILKA_DOMAIN_PREPARATION_CUT:-0}" in
++   0) ;;
++   1) test "${RAZVILKA_DOMAIN_CANCELED_CHILD:-0}" = 0 || exit 2; test "${RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR:-0}" = 0 || exit 2; test "${RAZVILKA_DOMAIN_JOINED_FAILURE:-0}" = 0 || exit 2; test -z "${RAZVILKA_DOMAIN_INITIAL_ACK:-}" || exit 2; domain_case=TestDomainTCPOriginalNativeFailedPreparationRetirement ;;
++   *) exit 2 ;;
++  esac
+   domain_test_timeout=240s ;;
+  *) exit 2 ;;
+ esac
+diff --git a/internal/dataplane/domain_tcp_unpublished_fixture_linux.go b/internal/dataplane/domain_tcp_unpublished_fixture_linux.go
+new file mode 100644
+--- /dev/null
++++ b/internal/dataplane/domain_tcp_unpublished_fixture_linux.go
+@@ -0,0 +1,40 @@
++//go:build linux && razvilka_native_fixture
++
++package dataplane
++
++import (
++	"context"
++	"errors"
++	"os"
++	"sync/atomic"
++)
++
++var ErrNativeDomainPreparationCut = errors.New("native fixture stopped after original capture preparation before kernel issuance")
++
++// Refusal only after genuine capture preparation and original journal ACKs.
++// No caller rows, callbacks, source, success result or deadline are accepted.
++func ConfigureNativeDomainPreparationCut(ctx context.Context, o *DomainTCPOriginalScope) error {
++	if o == nil || o.self != o || o.baseCurrent(ctx) != nil {
++		return ErrDomainPolicyTCPConsumer
++	}
++	for _, name := range []string{"net", "mnt"} {
++		current, e1 := os.Readlink("/proc/self/ns/" + name)
++		initial, e2 := os.Readlink("/proc/1/ns/" + name)
++		if os.Geteuid() != 0 || e1 != nil || e2 != nil || current == initial {
++			return ErrDomainPolicyTCPConsumer
++		}
++	}
++	o.mu.Lock()
++	defer o.mu.Unlock()
++	if o.process != nil || o.preparationFault != nil || o.closed || o.publicationOpen || o.kernel != nil {
++		return ErrDomainPolicyTCPConsumer
++	}
++	var used atomic.Bool
++	o.preparationFault = func() error {
++		if used.CompareAndSwap(false, true) {
++			return ErrNativeDomainPreparationCut
++		}
++		return ErrDomainPolicyTCPConsumer
++	}
++	return nil
++}
+diff --git a/internal/dataplane/domain_tcp_original_coordinator.go b/internal/dataplane/domain_tcp_original_coordinator.go
+--- a/internal/dataplane/domain_tcp_original_coordinator.go
++++ b/internal/dataplane/domain_tcp_original_coordinator.go
+@@ -43,6 +43,7 @@
+ 	standbyRetirement  *domainTCPStandbyRetirement
+ 	dnsDetachment      *DomainTCPDetachedStandby
+ 	dnsDetachmentFault func(string) error // Private CI-only lost-ACK seam; no grant.
++	preparationFault func() error // CI-only refusal after actual preparation, never readiness.
+ }
+ 
+ func (m *Manager) NewDomainTCPOriginalScope(ctx context.Context, binding *SyntheticDNSExecutionBinding, backend *BackendInventory) (*DomainTCPOriginalScope, error) {
+@@ -167,7 +168,13 @@
+ 	o.mu.Lock()
+ 	o.prepared = prepared
+ 	resource := o.captureResource
+-	o.mu.Unlock()
++	fault := o.preparationFault
++	o.mu.Unlock()
++	if fault != nil {
++		if err := fault(); err != nil {
++			return err
++		}
++	}
+ 	kernel, err := newDomainTCPBaselineKernelOwner(ctx, resource, baseline)
+ 	if err != nil {
+ 		return err

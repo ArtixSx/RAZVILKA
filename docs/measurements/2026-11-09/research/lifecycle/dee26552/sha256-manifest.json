@@ -1,0 +1,9 @@
+{
+  ".gitattributes": "ffe82f3c5b968ed009c2577fa38f32c83be167799ee565d40a18e3440c57b342",
+  "compile-fix-independent-review.json": "249cfeac3b7d28fabd6ccb587efb63d109d3c84806264ac29e6a238eea4475eb",
+  "generic-failure.log": "54b5a47b9642947a8f5d6474f93e80881a7faa1a18995d10b56984d0e1301b4a",
+  "managed-production.log": "7104be4cd648bf0908c1619afc0e816d8585b91a6975263ac4b49c0b0dc2cbc1",
+  "managed-race.log": "669bc515bbba392036999626aba86ce44ce08def141c689078f7089b642a61dc",
+  "managed-results.json": "924ebb0cefd963fd5408e75c8bf928b7955d13329bed8e7203a6778b52765e8f",
+  "mihomo-manual-http.log": "43106d8d1a2202f1aad9826d469fda8590eb2d04b0073ecf3c22f4a283acddf6"
+}

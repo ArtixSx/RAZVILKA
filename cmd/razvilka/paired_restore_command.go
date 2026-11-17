@@ -48,7 +48,7 @@ func runPairedRestoreCommand(args []string, roots selfUpdateJournalRoots) (bool,
 		return true, 3
 	}
 	defer owner.close()
-	if checkSelfUpdateJournalState(ctx, roots, updatecheck.SelfUpdateReadVersion) != nil {
+	if checkPairedOfflineRestoreJournalState(ctx, roots) != nil {
 		fmt.Fprintln(os.Stderr, "paired offline restore requires readable matching retained evidence")
 		return true, 3
 	}
@@ -165,9 +165,13 @@ func (o *pairedRestoreOwner) current(ctx context.Context, id string) error {
 }
 
 func (o *pairedRestoreOwner) admit(ctx context.Context, id, effect string, begin func() error) error {
-	index := strings.TrimPrefix(effect, "paired-offline-file-")
-	n, err := strconv.Atoi(index)
-	if begin == nil || !strings.HasPrefix(effect, "paired-offline-file-") || err != nil || n < 0 || n >= 40000 || strconv.Itoa(n) != index || o.current(ctx, id) != nil {
+	allowed := effect == "paired-offline-plan" || effect == "paired-offline-pending" || effect == "paired-offline-complete"
+	if !allowed {
+		index := strings.TrimPrefix(effect, "paired-offline-file-")
+		n, err := strconv.Atoi(index)
+		allowed = strings.HasPrefix(effect, "paired-offline-file-") && err == nil && n >= 0 && n < 40000 && strconv.Itoa(n) == index
+	}
+	if begin == nil || !allowed || o.current(ctx, id) != nil {
 		return updatecheck.ErrPairedOfflineRestore
 	}
 	return o.gate.WithExclusiveContext(ctx, func() error {

@@ -84,6 +84,13 @@ func validPairedReceipt(r Receipt) bool {
 }
 
 func (s *Store) verifyPairedEvidence(ctx context.Context, r Receipt) error {
+	if r.Schema == OfflineRetrySchema {
+		var ok bool
+		r, ok = originalOfflineReceipt(r)
+		if !ok {
+			return ErrMismatch
+		}
+	}
 	if r.Schema != PairedSchema {
 		return nil
 	}
@@ -94,6 +101,13 @@ func (s *Store) verifyPairedEvidence(ctx context.Context, r Receipt) error {
 }
 
 func (s *Store) verifyPairedInventory(ctx context.Context, r Receipt, pendingID string, formatOnly bool) error {
+	if r.Schema == OfflineRetrySchema {
+		var ok bool
+		r, ok = originalOfflineReceipt(r)
+		if !ok {
+			return ErrMismatch
+		}
+	}
 	if r.Schema != PairedSchema {
 		return nil
 	}

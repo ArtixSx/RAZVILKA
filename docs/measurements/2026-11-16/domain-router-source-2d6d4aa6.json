@@ -1,0 +1,31 @@
+{
+  "revision": "2d6d4aa68e44b5a8a465c4afa458b62784f723c2",
+  "run": 43957616364,
+  "conclusion": "success",
+  "seconds": 1.15,
+  "scope": "Isolated three-network-namespace ordinary router socket mechanism; original compiler collision retained.",
+  "direct_echo": true,
+  "accepted_relay_echo": true,
+  "same_client_port_distinct_destinations": true,
+  "server_observed_outbound": "1.1.1.1:55814",
+  "legacy_collision_raw_delta": 7,
+  "legacy_collision_mark_delta": 7,
+  "original_effects_removed": true,
+  "children_joined": true,
+  "peer_policy_proven": false,
+  "application_owner_proof": false,
+  "router_ready": false,
+  "artifact_root": "C:\\RAZVILKA-research-20261117\\domain-router-source-2d6d4aa6",
+  "files": [
+    {
+      "path": "domain-tuple-collision-2d6d4aa68e44b5a8a465c4afa458b62784f723c2/collision.log",
+      "bytes": 1427,
+      "sha256": "41c8dd8701db5808600f422c7a90fd65949f50b2c55a71f7c9bd21cf7ae46c78"
+    },
+    {
+      "path": "domain-tuple-collision-2d6d4aa68e44b5a8a465c4afa458b62784f723c2/platform.txt",
+      "bytes": 3352,
+      "sha256": "64a23e384775d8ec546c421ab4ed30d18b707e54c5f1caec62ea4389dbcd7fa7"
+    }
+  ]
+}

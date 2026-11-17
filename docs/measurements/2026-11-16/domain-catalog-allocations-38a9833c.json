@@ -1,0 +1,448 @@
+{
+  "run": 44033141459,
+  "job": 133869589948,
+  "head": "38a9833c933901db071db934389a4d4ffc99b6e6",
+  "overall": "FAIL",
+  "writer_contract_tests": "3 exact PASS/no SKIP",
+  "selected_returned": true,
+  "mismatch_returned": false,
+  "opaque_reached": false,
+  "mixed_failure": "original mismatch request4s; direct local route completed13.478462ms, direct-current-pre entered/not completed",
+  "total_test_seconds": 23.73,
+  "supervisor": {
+    "subreaper": true,
+    "initial_exit_status": 1,
+    "adopted_children_reaped": 0,
+    "descendants_absent": true,
+    "forced_cleanup": false,
+    "no_overlap_boundary": true,
+    "original_cleanup_success": "not inferred from descendant absence"
+  },
+  "alloc_profile": {
+    "sha256": "7040f2ca3241ff48d854dd604b701c948259dddb99a787ee7f41d0de46487fa1",
+    "bytes": 188254,
+    "complete": true,
+    "joined": true,
+    "sampling_rate": 524288,
+    "alloc_space_mib": 3536.07,
+    "alloc_objects": 22351635,
+    "limit": "cumulative process allocations including setup and possible GC-cycle lag; no forced GC or altered sampling; not Run-only"
+  },
+  "cpu": {
+    "seconds": 19.24,
+    "duration_seconds": 22.02
+  },
+  "catalog_attribution": {
+    "providerByIDFor_alloc_mib": 629.72,
+    "providerByIDFor_alloc_pct": 17.81,
+    "providerByIDFor_cpu_seconds": 0.33,
+    "ScopedDNSResolver_check_alloc_mib": 444.42,
+    "profileDefinitionIdentity_alloc_mib": 185.3
+  },
+  "pprof_analysis_all_exit_zero": true,
+  "candidate": "private code-only provider templates; detached per-call selected-provider DTO; no DNS/config/current/evidence cache",
+  "raw_manifest": "manifest.json",
+  "leaf_benchmark": "provider-catalog-measurement.json",
+  "limit": "No new full mixed route success or wholeflow performance result yet.",
+  "leaf_measurement": {
+    "baseline": "38a9833c933901db071db934389a4d4ffc99b6e6",
+    "environment": "Windows amd64 Go1.26.5 Ryzen7 7800X3D",
+    "command": "go test ./internal/dnscontrol -run ^$ -bench ^BenchmarkProviderCatalogLookup$ -benchmem -benchtime=250ms -count=5",
+    "population": "original then candidate fixed subbenchmark order, five samples each; not full-flow ABBA",
+    "raw_sha256": "fafb54063308abac63800046b9eb28dd4c26d78aafb7697e94917606eaf7358f",
+    "medians": [
+      {
+        "scenario": "known",
+        "original": {
+          "ns_op": 13464.0,
+          "bytes_op": 46112,
+          "allocs_op": 115
+        },
+        "candidate": {
+          "ns_op": 339.3,
+          "bytes_op": 832,
+          "allocs_op": 5
+        }
+      },
+      {
+        "scenario": "nextdns-changing",
+        "original": {
+          "ns_op": 17748.0,
+          "bytes_op": 46656,
+          "allocs_op": 120
+        },
+        "candidate": {
+          "ns_op": 728.6,
+          "bytes_op": 576,
+          "allocs_op": 6
+        }
+      },
+      {
+        "scenario": "custom-changing",
+        "original": {
+          "ns_op": 18243.0,
+          "bytes_op": 46368,
+          "allocs_op": 117
+        },
+        "candidate": {
+          "ns_op": 535.9,
+          "bytes_op": 272,
+          "allocs_op": 3
+        }
+      },
+      {
+        "scenario": "unknown",
+        "original": {
+          "ns_op": 16175.0,
+          "bytes_op": 46112,
+          "allocs_op": 115
+        },
+        "candidate": {
+          "ns_op": 246.8,
+          "bytes_op": 16,
+          "allocs_op": 1
+        }
+      }
+    ],
+    "samples": [
+      {
+        "scenario": "known",
+        "variant": "original",
+        "iterations": 22492,
+        "ns_op": 13403.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "known",
+        "variant": "original",
+        "iterations": 21796,
+        "ns_op": 13506.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "known",
+        "variant": "original",
+        "iterations": 22311,
+        "ns_op": 13357.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "known",
+        "variant": "original",
+        "iterations": 21757,
+        "ns_op": 13464.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "known",
+        "variant": "original",
+        "iterations": 22098,
+        "ns_op": 13845.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "known",
+        "variant": "candidate",
+        "iterations": 917936,
+        "ns_op": 308.4,
+        "bytes_op": 832,
+        "allocs_op": 5
+      },
+      {
+        "scenario": "known",
+        "variant": "candidate",
+        "iterations": 900738,
+        "ns_op": 317.3,
+        "bytes_op": 832,
+        "allocs_op": 5
+      },
+      {
+        "scenario": "known",
+        "variant": "candidate",
+        "iterations": 902852,
+        "ns_op": 347.6,
+        "bytes_op": 832,
+        "allocs_op": 5
+      },
+      {
+        "scenario": "known",
+        "variant": "candidate",
+        "iterations": 719578,
+        "ns_op": 350.7,
+        "bytes_op": 832,
+        "allocs_op": 5
+      },
+      {
+        "scenario": "known",
+        "variant": "candidate",
+        "iterations": 976371,
+        "ns_op": 339.3,
+        "bytes_op": 832,
+        "allocs_op": 5
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "original",
+        "iterations": 18838,
+        "ns_op": 15788.0,
+        "bytes_op": 46656,
+        "allocs_op": 120
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "original",
+        "iterations": 18858,
+        "ns_op": 16231.0,
+        "bytes_op": 46656,
+        "allocs_op": 120
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "original",
+        "iterations": 18867,
+        "ns_op": 17774.0,
+        "bytes_op": 46656,
+        "allocs_op": 120
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "original",
+        "iterations": 16143,
+        "ns_op": 18283.0,
+        "bytes_op": 46656,
+        "allocs_op": 120
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "original",
+        "iterations": 16171,
+        "ns_op": 17748.0,
+        "bytes_op": 46656,
+        "allocs_op": 120
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "candidate",
+        "iterations": 471460,
+        "ns_op": 728.6,
+        "bytes_op": 576,
+        "allocs_op": 6
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "candidate",
+        "iterations": 441934,
+        "ns_op": 743.9,
+        "bytes_op": 576,
+        "allocs_op": 6
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "candidate",
+        "iterations": 359544,
+        "ns_op": 758.6,
+        "bytes_op": 576,
+        "allocs_op": 6
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "candidate",
+        "iterations": 351374,
+        "ns_op": 717.9,
+        "bytes_op": 576,
+        "allocs_op": 6
+      },
+      {
+        "scenario": "nextdns-changing",
+        "variant": "candidate",
+        "iterations": 461062,
+        "ns_op": 717.6,
+        "bytes_op": 576,
+        "allocs_op": 6
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "original",
+        "iterations": 17340,
+        "ns_op": 17290.0,
+        "bytes_op": 46368,
+        "allocs_op": 117
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "original",
+        "iterations": 17553,
+        "ns_op": 18262.0,
+        "bytes_op": 46368,
+        "allocs_op": 117
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "original",
+        "iterations": 17635,
+        "ns_op": 18243.0,
+        "bytes_op": 46368,
+        "allocs_op": 117
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "original",
+        "iterations": 16854,
+        "ns_op": 18373.0,
+        "bytes_op": 46368,
+        "allocs_op": 117
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "original",
+        "iterations": 16878,
+        "ns_op": 16842.0,
+        "bytes_op": 46368,
+        "allocs_op": 117
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "candidate",
+        "iterations": 477501,
+        "ns_op": 535.9,
+        "bytes_op": 272,
+        "allocs_op": 3
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "candidate",
+        "iterations": 581102,
+        "ns_op": 535.2,
+        "bytes_op": 272,
+        "allocs_op": 3
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "candidate",
+        "iterations": 416973,
+        "ns_op": 612.5,
+        "bytes_op": 272,
+        "allocs_op": 3
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "candidate",
+        "iterations": 590830,
+        "ns_op": 558.5,
+        "bytes_op": 272,
+        "allocs_op": 3
+      },
+      {
+        "scenario": "custom-changing",
+        "variant": "candidate",
+        "iterations": 655064,
+        "ns_op": 436.6,
+        "bytes_op": 272,
+        "allocs_op": 3
+      },
+      {
+        "scenario": "unknown",
+        "variant": "original",
+        "iterations": 19188,
+        "ns_op": 14659.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "unknown",
+        "variant": "original",
+        "iterations": 19780,
+        "ns_op": 14170.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "unknown",
+        "variant": "original",
+        "iterations": 19890,
+        "ns_op": 16549.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "unknown",
+        "variant": "original",
+        "iterations": 18162,
+        "ns_op": 16476.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "unknown",
+        "variant": "original",
+        "iterations": 18027,
+        "ns_op": 16175.0,
+        "bytes_op": 46112,
+        "allocs_op": 115
+      },
+      {
+        "scenario": "unknown",
+        "variant": "candidate",
+        "iterations": 1000000,
+        "ns_op": 253.9,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      {
+        "scenario": "unknown",
+        "variant": "candidate",
+        "iterations": 1212663,
+        "ns_op": 246.8,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      {
+        "scenario": "unknown",
+        "variant": "candidate",
+        "iterations": 1241836,
+        "ns_op": 245.5,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      {
+        "scenario": "unknown",
+        "variant": "candidate",
+        "iterations": 1000000,
+        "ns_op": 260.1,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      {
+        "scenario": "unknown",
+        "variant": "candidate",
+        "iterations": 1274275,
+        "ns_op": 241.1,
+        "bytes_op": 16,
+        "allocs_op": 1
+      }
+    ],
+    "limit": "Leaf-only CPU/allocation comparison, no claim of original12/4s mixed-route acceptance. Current Linux baseline cumulative catalog allocation629.72MiB/0.33CPU is an attribution, not measured whole-flow savings."
+  },
+  "source_parity": {
+    "baseline": "38a9833c933901db071db934389a4d4ffc99b6e6",
+    "exact_builder_parity_after_name_only_change": true,
+    "original_and_candidate_builder_sha256": "eb7cdef1b6b952087d3ab4b3d285071bfe977d6d8a3d1a373f65ad497a9264fe",
+    "mutable_provider_slices": [
+      "ServiceHints",
+      "Servers",
+      "Filters",
+      "Warnings",
+      "RecommendedFor",
+      "Endpoints",
+      "Endpoints[].BootstrapIPs"
+    ],
+    "proof_scope": "source proof for this comparison, not permanent catalog-content pin"
+  },
+  "candidate_commit": "d88fd384201674d65e61a73d6830096f66921bd7",
+  "followup": "domain-provider-catalog-3a9b0e1c.json"
+}

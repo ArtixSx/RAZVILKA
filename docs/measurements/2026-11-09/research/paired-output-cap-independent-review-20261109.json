@@ -1,0 +1,27 @@
+{
+  "limitations": [
+    "Await focused normal/race and public native scenario; this cap fix is not bootstrap readiness."
+  ],
+  "reviewer": "verification",
+  "decision": "APPROVE source; tests pending CI",
+  "findings": [
+    "Native-test helper only. Explicit ReadFrom hides promoted Buffer.ReadFrom and delegates all chunks to unchanged bounded Write.",
+    "Independent review found source strings.Reader.WriteTo selects promoted WriteString; fixed by explicit same-limit WriteString, regression retained.",
+    "64KiB cap applies to destination ReaderFrom and source WriterTo dispatch; no raw diagnostic output introduced.",
+    "Actual child test bounds both separate streams and requires joined ProcessState/second Wait refusal under finite context."
+  ],
+  "validation": [
+    "Source inspection including Go1.26 strings.Reader.WriteTo and io.WriteString dispatch.",
+    "git diff --check PASS; no local Go build."
+  ],
+  "files": [
+    {
+      "sha256": "3fd4ddc19716141d92b81690d414d0c590c1d35e68239f8629737b628be7f5db",
+      "path": "cmd/razvilka/paired_restore_command_native_linux_test.go"
+    },
+    {
+      "sha256": "ce0230112cfd8669a5b4f0192ba4e0b47e55b1d18e8f71c852c25f1b65de01b0",
+      "path": "cmd/razvilka/paired_restore_output_linux_test.go"
+    }
+  ]
+}

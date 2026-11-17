@@ -42,6 +42,13 @@ func init() {
 // metadata helpers so the production opening/closing checks run unchanged.
 func wgKernelLinkHeldSourceFixture(t *testing.T) (*Lease, string) {
 	t.Helper()
+	// The complete metadata reader requires protected canonical ancestors too.
+	// Keep testing's original TempDir/cleanup ownership, but place this opt-in
+	// root-only model under /root rather than the deliberately writable /tmp.
+	if os.Geteuid() != 0 {
+		t.Fatal("original held metadata fixture requires root")
+	}
+	t.Setenv("TMPDIR", "/root")
 	l, root := wgInactivityHeldChildFixture(t)
 	data, err := os.ReadFile(l.profile.ipAlias)
 	if err != nil {
@@ -79,6 +86,25 @@ func wgKernelLinkHeldSourceFixture(t *testing.T) (*Lease, string) {
 	}
 	l.profile.ipVersion = ubuntuPolicyProfile().ipVersion
 	l.review.profile = l.profile
+	// Capture named images, every parent and symlink using the same resolver
+	// as acquisition. Hand-inserting only final image nodes would omit the
+	// original resolution graph and its fresh opening/closing checks.
+	for path, image := range l.review.images {
+		canonical, err := l.review.resolve(path)
+		if err != nil || canonical != image.path || !sameNode(l.review.nodes[canonical].info, image.info) {
+			t.Fatal("private held image canonical metadata", err)
+		}
+	}
+	canonical, err := l.review.resolve(l.profile.extension)
+	if err != nil {
+		t.Fatal("private extension canonical metadata", err)
+	}
+	if err := l.review.retainExtensionPath(canonical); err != nil {
+		t.Fatal("private extension source binding", err)
+	}
+	if err := l.review.versionMetadataCurrent(ctx); err != nil {
+		t.Fatal("complete private metadata fixture", err)
+	}
 	return l, root
 }
 
@@ -93,6 +119,37 @@ func TestNativeWGKernelLinkOriginalHeldSource(t *testing.T) {
 	// Two independently bounded observations exercise both original wrappers.
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	t.Run("fresh-parent-mode", func(t *testing.T) {
+		before, err := os.Stat(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(root, 0777); err != nil {
+			t.Fatal(err)
+		}
+		err = l.review.versionMetadataCurrent(ctx)
+		restoreErr := os.Chmod(root, before.Mode().Perm())
+		if restoreErr != nil || err == nil {
+			t.Fatal("fresh canonical parent guard", err, restoreErr)
+		}
+		if err := l.review.versionMetadataCurrent(ctx); err != nil {
+			t.Fatal("restored original parent", err)
+		}
+	})
+	t.Run("fresh-extension-membership", func(t *testing.T) {
+		path := filepath.Join(l.profile.extension, "unexpected.so")
+		if err := os.WriteFile(path, []byte("fixture membership only"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		err := l.review.versionMetadataCurrent(ctx)
+		removeErr := os.Remove(path)
+		if removeErr != nil || err == nil {
+			t.Fatal("fresh extension membership guard", err, removeErr)
+		}
+		if err := l.review.versionMetadataCurrent(ctx); err != nil {
+			t.Fatal("restored original membership", err)
+		}
+	})
 	if err := l.Check(ctx, l.identity); err != nil {
 		t.Fatal("private held metadata fixture incomplete", err)
 	}
@@ -106,6 +163,43 @@ func TestNativeWGKernelLinkOriginalHeldSource(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(root, "started")); !os.IsNotExist(err) {
 		t.Fatal("kernel observer executed the modeled route/effect CLI")
+	}
+	// Actual original held-byte scope and kernel reads. Cleanup/control lifetime
+	// is separately covered by dataplane tests and the full Apply/rollback gate;
+	// these modeled version helpers do not prove that complete scenario.
+	var scopedLinks int
+	err = r.WithWGInactivityCleanupToolObservation(ctx, l.identity, l.digest, func(c context.Context) error {
+		if _, present := readObservationMarker(c); !present {
+			return fmt.Errorf("missing original byte observation")
+		}
+		if err := readObservationEffectRefusal(c); err == nil {
+			return fmt.Errorf("read scope permitted an effect")
+		}
+		if err := r.CheckWG(c, l.identity); err != nil {
+			return err
+		}
+		rows, err := r.ReadWGKernelLinks(c, l.identity)
+		if err != nil {
+			return err
+		}
+		scopedLinks = len(rows)
+		return r.CheckWG(c, l.identity)
+	})
+	if err != nil || scopedLinks == 0 {
+		t.Fatal("original cleanup tool leaf refused actual full read pair", err)
+	}
+	t.Log("actual_wg_cleanup_tool_leaf original_scope=true full_check_pair=true kernel_dump=true effect_refused=true")
+	// A byte mutation after the kernel result must still refuse the outer
+	// closing observation. No mutation is restored into an accepted result.
+	err = r.WithWGInactivityCleanupToolObservation(ctx, l.identity, l.digest, func(c context.Context) error {
+		rows, err := r.ReadWGKernelLinks(c, l.identity)
+		if err != nil || len(rows) == 0 {
+			return fmt.Errorf("kernel opening: %w", err)
+		}
+		return os.WriteFile(l.profile.ipAlias, []byte("changed held source bytes"), 0700)
+	})
+	if err == nil {
+		t.Fatal("outer closing accepted mutated held source")
 	}
 	if err := os.WriteFile(l.profile.ipAlias, []byte("changed held source bytes"), 0700); err != nil {
 		t.Fatal(err)

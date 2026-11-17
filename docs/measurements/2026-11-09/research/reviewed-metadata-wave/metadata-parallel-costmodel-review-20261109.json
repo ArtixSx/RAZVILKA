@@ -1,0 +1,22 @@
+{
+  "decision": "APPROVED test-only two-worker full metadata cost model",
+  "file": "internal/startuptools/metadata_parallel_measurement_native_linux_test.go",
+  "sha256": "7f35eccb494cd2345cb1d8eeb8e82cc2a4f7869fea7bedbbbd6fe8b37d8958dc",
+  "contract": [
+    "No production source changes or observation grants",
+    "Original refs acquired within SAME genuine Provider.WithCurrent pinned interval and identity comparison",
+    "Each worker pays full Provider opening/closing, fresh original mount/net/root FD identity comparison both ends; all workers joined even failures",
+    "Exact original node Lstat then Readlink checks reused in immutable expected shards; absent lookups remain after all nodes",
+    "Complete metadata body source clone differs only expected review binding and two path traversal substitutions",
+    "Actual original metadata before/after, canceled reuse and independent owned mutation negatives; wall/alloc/processCPU recorded separately"
+  ],
+  "resolved_findings": [
+    "Outer tool observation does not pin caller; constructor now acquires refs in own full originalProvider interval",
+    "Missing-node negative no longer masked by prior symlink mutation; independent per-case baseline"
+  ],
+  "limits": [
+    "Additional provider/FD worker overhead included, ref acquisition setup outside both timed modes",
+    "No production speed/namespace equivalence conclusion until actual normal/race measurements",
+    "Source/body parity and native fixtures require CI, no local Go execution"
+  ]
+}

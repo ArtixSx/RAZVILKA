@@ -1,0 +1,31 @@
+{
+  "decision": "Actual configured old193 nonempty history + frozen manual intent public offline pair scenario PASS",
+  "sha": "976fa47cb8475132065030ab187789bf742fbafa",
+  "run_id": 42681884058,
+  "attempt": 1,
+  "focus": "public-history",
+  "job_id": 129378308359,
+  "test_s": 165.09,
+  "bootstrap_s": 58.46,
+  "restore_s": 105.79,
+  "verified": [
+    "Original817 old binary/init source hashes recorded and checked",
+    "Actual old authenticated HTTP Add, native Validate, three real NFQ routed privateTLS204 probes with route/cleanup/result stages",
+    "Full original kernel baseline, empty queue and actual engine process absence each probe; exact peer requests3 and Shutdown/Serve join",
+    "Actual frozen selection created by old HTTP API, no direct JSON/evidence manufacture",
+    "Public candidate bootstrap produced compatible offline pair; genuine current durable Stop; actual public paired restore restored old binary offline",
+    "Exact original StrategyLab file hash, complete Candidate and Evidence preserved; manual frozen selection intent fields retained",
+    "Current reader marks legacy selection unhealthy/ineligible; no stale evidence promoted",
+    "Original Stop, exclusions, protected journals and init guards verified by unchanged public consumer test"
+  ],
+  "limitations": [
+    "Configured0.19.3 layout, tagged Ubuntu platform classification; not default legacy-layout or physical router acceptance",
+    "Private synthetic TLS peer under trusted catalog hostname, not public YouTube reachability",
+    "Restored source remains offline; no old live runtime compatibility claim",
+    "Five unrelated job definitions intentionally skipped; this focused run is not full lifecycle acceptance"
+  ],
+  "raw_sha256": {
+    "paired-history.log": "1468e44761835e324fa34ee6f5608f508186f62174d8b7cb1c9c42fac762c01d",
+    "history-run.json": "ead4ed18f3b118e8b4fa16d430c64e241179cf24a415b3bef0daba2a06be05ce"
+  }
+}

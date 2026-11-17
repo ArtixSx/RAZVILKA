@@ -53,118 +53,120 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 	}
 	var finalImage BackendInventorySnapshot
 	err = lanPolicyPreflightAt("inventory-boundary", c.boundary(ctx, func(held context.Context) error {
-		if identity != c.gate.identity.value {
-			return lanPolicyPreflightAt("inventory-identity", ErrNetworkPolicyIdentity)
-		}
-		stock, err := c.stockQueueExecution(held)
-		if err != nil {
-			return lanPolicyPreflightAt("inventory-nfq-stock-open", err)
-		}
-		xrayStock, err := c.xraySelectedTCPStockExecution(held)
-		if err != nil || stock != nil && xrayStock != nil {
-			return lanPolicyPreflightAt("inventory-xray-stock-open", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		opening, err := c.proxyConsumers(held, lan)
-		defer closeNetworkPolicyProxyObservations(opening)
-		if err != nil {
-			return lanPolicyPreflightAt("inventory-proxy-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		openingNFQ, err := c.nfqConsumers(held, lan)
-		defer func() {
-			for _, o := range openingNFQ {
-				o.close()
+		return c.observeNFQInventoryRead(held, lan, len(wg) != 0 || xrayScope != nil || prepared != nil, func(held context.Context) error {
+			if identity != c.gate.identity.value {
+				return lanPolicyPreflightAt("inventory-identity", ErrNetworkPolicyIdentity)
 			}
-		}()
-		if err != nil {
-			return lanPolicyPreflightAt("inventory-nfq-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		openingXray, err := c.xraySelectedTCPConsumers(held, lan)
-		defer closeNetworkPolicyXrayObservations(openingXray)
-		if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray)+len(wg) == 0 || xrayScope != nil && len(opening)+len(openingNFQ)+len(openingXray) != 0 {
-			return lanPolicyPreflightAt("inventory-xray-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		first, err := c.read(held, identity)
-		if err != nil {
-			return lanPolicyPreflightAt("inventory-read-open", err)
-		}
-		stockRows, err := stock.comparison(first, openingNFQ)
-		if err == nil && xrayStock != nil {
-			stockRows, err = xrayStock.comparison(first)
-		}
-		if err != nil {
-			return lanPolicyPreflightAt("inventory-row-unallowed", err)
-		}
-		if err := checkNetworkPolicyInventoryWithWG(first, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), opening, stockRows, openingNFQ, openingXray, wg); err != nil {
-			return err
-		}
-		closing, err := c.proxyConsumers(held, lan)
-		defer closeNetworkPolicyProxyObservations(closing)
-		if err != nil || !equalNetworkPolicyProxyObservations(opening, closing) {
-			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		closingNFQ, err := c.nfqConsumers(held, lan)
-		defer func() {
-			for _, o := range closingNFQ {
-				o.close()
-			}
-		}()
-		if err != nil || !equalNetworkPolicyNFQObservations(openingNFQ, closingNFQ) {
-			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		closingXray, err := c.xraySelectedTCPConsumers(held, lan)
-		defer closeNetworkPolicyXrayObservations(closingXray)
-		if err != nil || !equalNetworkPolicyXraySelectedTCPObservations(openingXray, closingXray) {
-			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		closingStock, err := c.stockQueueExecution(held)
-		if err != nil || !stock.equal(closingStock) {
-			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		closingXrayStock, err := c.xraySelectedTCPStockExecution(held)
-		if err != nil || !xrayStock.equal(closingXrayStock) || closingStock != nil && closingXrayStock != nil {
-			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
-		}
-		// No external owner callback runs after this final complete capture.
-		// Compare the entire image, including unrelated/custom-table rows. This
-		// does not claim an atomic snapshot or immunity to undetected ABA.
-		last, err := c.read(held, identity)
-		if err != nil || !reflect.DeepEqual(first, last) {
-			stage := "inventory-image-changed"
+			stock, err := c.stockQueueExecution(held)
 			if err != nil {
-				stage = "inventory-read-close"
+				return lanPolicyPreflightAt("inventory-nfq-stock-open", err)
 			}
-			return lanPolicyPreflightAt(stage, errors.Join(ErrBackendInventoryUnknown, err))
-		}
-		finalImage = last
-		for _, ob := range wg {
-			if err := ob.currentFiles(held); err != nil {
+			xrayStock, err := c.xraySelectedTCPStockExecution(held)
+			if err != nil || stock != nil && xrayStock != nil {
+				return lanPolicyPreflightAt("inventory-xray-stock-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			}
+			opening, err := c.proxyConsumers(held, lan)
+			defer closeNetworkPolicyProxyObservations(opening)
+			if err != nil {
+				return lanPolicyPreflightAt("inventory-proxy-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			}
+			openingNFQ, err := c.nfqConsumers(held, lan)
+			defer func() {
+				for _, o := range openingNFQ {
+					o.close()
+				}
+			}()
+			if err != nil {
+				return lanPolicyPreflightAt("inventory-nfq-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			}
+			openingXray, err := c.xraySelectedTCPConsumers(held, lan)
+			defer closeNetworkPolicyXrayObservations(openingXray)
+			if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray)+len(wg) == 0 || xrayScope != nil && len(opening)+len(openingNFQ)+len(openingXray) != 0 {
+				return lanPolicyPreflightAt("inventory-xray-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			}
+			first, err := c.read(held, identity)
+			if err != nil {
+				return lanPolicyPreflightAt("inventory-read-open", err)
+			}
+			stockRows, err := stock.comparison(first, openingNFQ)
+			if err == nil && xrayStock != nil {
+				stockRows, err = xrayStock.comparison(first)
+			}
+			if err != nil {
+				return lanPolicyPreflightAt("inventory-row-unallowed", err)
+			}
+			if err := checkNetworkPolicyInventoryWithWG(first, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), opening, stockRows, openingNFQ, openingXray, wg); err != nil {
 				return err
 			}
-		}
-		var nfqErr error
-		for _, observations := range [][]networkPolicyNFQObservation{openingNFQ, closingNFQ} {
-			for _, o := range observations {
-				nfqErr = errors.Join(nfqErr, o.current(held))
+			closing, err := c.proxyConsumers(held, lan)
+			defer closeNetworkPolicyProxyObservations(closing)
+			if err != nil || !equalNetworkPolicyProxyObservations(opening, closing) {
+				return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
 			}
-		}
-		lastStockRows, stockErr := closingStock.comparison(last, closingNFQ)
-		if stockErr == nil && closingXrayStock != nil {
-			lastStockRows, stockErr = closingXrayStock.comparison(last)
-		}
-		if stockErr == nil && !reflect.DeepEqual(stockRows, lastStockRows) {
-			stockErr = ErrNetworkPolicyConsumers
-		}
-		var xrayErr error
-		for _, observations := range [][]networkPolicyXraySelectedTCPObservation{openingXray, closingXray} {
-			for _, o := range observations {
-				xrayErr = errors.Join(xrayErr, o.current(held))
+			closingNFQ, err := c.nfqConsumers(held, lan)
+			defer func() {
+				for _, o := range closingNFQ {
+					o.close()
+				}
+			}()
+			if err != nil || !equalNetworkPolicyNFQObservations(openingNFQ, closingNFQ) {
+				return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
 			}
-		}
-		result := errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithWG(last, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray, wg), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr)
-		if result == nil && prepared != nil {
-			result = prepared.remember(closingXrayStock, closing, closingNFQ, closingXray)
-		}
-		return lanPolicyPreflightAt("inventory-owner-current", result)
+			closingXray, err := c.xraySelectedTCPConsumers(held, lan)
+			defer closeNetworkPolicyXrayObservations(closingXray)
+			if err != nil || !equalNetworkPolicyXraySelectedTCPObservations(openingXray, closingXray) {
+				return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
+			}
+			closingStock, err := c.stockQueueExecution(held)
+			if err != nil || !stock.equal(closingStock) {
+				return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
+			}
+			closingXrayStock, err := c.xraySelectedTCPStockExecution(held)
+			if err != nil || !xrayStock.equal(closingXrayStock) || closingStock != nil && closingXrayStock != nil {
+				return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
+			}
+			// No external owner callback runs after this final complete capture.
+			// Compare the entire image, including unrelated/custom-table rows. This
+			// does not claim an atomic snapshot or immunity to undetected ABA.
+			last, err := c.read(held, identity)
+			if err != nil || !reflect.DeepEqual(first, last) {
+				stage := "inventory-image-changed"
+				if err != nil {
+					stage = "inventory-read-close"
+				}
+				return lanPolicyPreflightAt(stage, errors.Join(ErrBackendInventoryUnknown, err))
+			}
+			finalImage = last
+			for _, ob := range wg {
+				if err := ob.currentFiles(held); err != nil {
+					return err
+				}
+			}
+			var nfqErr error
+			for _, observations := range [][]networkPolicyNFQObservation{openingNFQ, closingNFQ} {
+				for _, o := range observations {
+					nfqErr = errors.Join(nfqErr, o.current(held))
+				}
+			}
+			lastStockRows, stockErr := closingStock.comparison(last, closingNFQ)
+			if stockErr == nil && closingXrayStock != nil {
+				lastStockRows, stockErr = closingXrayStock.comparison(last)
+			}
+			if stockErr == nil && !reflect.DeepEqual(stockRows, lastStockRows) {
+				stockErr = ErrNetworkPolicyConsumers
+			}
+			var xrayErr error
+			for _, observations := range [][]networkPolicyXraySelectedTCPObservation{openingXray, closingXray} {
+				for _, o := range observations {
+					xrayErr = errors.Join(xrayErr, o.current(held))
+				}
+			}
+			result := errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithWG(last, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray, wg), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr)
+			if result == nil && prepared != nil {
+				result = prepared.remember(closingXrayStock, closing, closingNFQ, closingXray)
+			}
+			return lanPolicyPreflightAt("inventory-owner-current", result)
+		})
 	}))
 	if err != nil {
 		return err

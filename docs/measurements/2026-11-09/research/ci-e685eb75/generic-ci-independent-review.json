@@ -1,0 +1,48 @@
+{
+  "checks": [
+    "First non-root TestNFQWSUnpublished prewrite canceled permission and replaced inode PASS no SKIP; actual permission0.02s",
+    "Root focused suite PASS; permission subcase intentionally SKIP only here after non-root proof",
+    "Full Go normal and race tests PASS",
+    "UI checks PASS",
+    "Four linux amd64 arm64 mips mipsle crossbuilds and checksums PASS",
+    "Entware modeled installer/upgrade/rollback and retained protocol gates PASS"
+  ],
+  "sha": "e685eb757ae4faf55a98158ab4abfeecb4e4c2c1",
+  "limitations": [
+    "Separate native DNS/NFQ workflow still failed; generic PASS does not supersede those results",
+    "No physical router LAN acceptance",
+    "New dac23b29 changes not covered by this SHA",
+    "No performance comparison inferred from generic package durations"
+  ],
+  "package_seconds": {
+    "app": {
+      "normal": 136.19,
+      "race": 433.899
+    },
+    "dataplane": {
+      "normal": 203.527,
+      "race": 590.643
+    },
+    "netidentity": {
+      "normal": 2.283,
+      "race": 3.558
+    }
+  },
+  "pr": {
+    "job": 129164767563,
+    "started": "2026-11-09T12:38:05Z",
+    "completed": "2026-11-09T13:03:08Z",
+    "run": 42618642475
+  },
+  "conclusion": "both generic CI runs SUCCESS",
+  "push": {
+    "job": 129164735303,
+    "started": "2026-11-09T12:38:01Z",
+    "completed": "2026-11-09T13:03:10Z",
+    "run": 42618633125
+  },
+  "log": {
+    "sha256": "C5F010370D1A065D021F58521A42F31243433EBFA763299EC0A1B2ADAE69E338",
+    "file": "generic-pr-ci.log"
+  }
+}

@@ -1,0 +1,113 @@
+name: Native tool observation image
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/tool-observation-image-*']
+permissions:
+  contents: read
+jobs:
+  observation:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [production, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Disposable native fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0 time
+      - name: Install and verify the original reviewed tool bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=$(sudo mktemp -d /tmp/razvilka-tool-image-packages.XXXXXX)
+          case "$packages" in /tmp/razvilka-tool-image-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$packages/iptables.deb" "$packages/libip4tc2.deb" \
+            "$packages/libip6tc2.deb" "$packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+      - name: Unprivileged pure image and joined observation contracts
+        shell: bash
+        env:
+          BUILD_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          args=()
+          if [ "$BUILD_MODE" = race ]; then args=(-race); fi
+          status=0
+          go test "${args[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/startuptools \
+            -run '^(TestToolObservationImage(FixedSlotFallback|ReadsAfterMismatch)|TestReadObservation(CopiedForeignExpiredMarkersNeverFallback|RevocationCancelsQueuedReadAndJoinsHeldRead)|TestStartupImageMeasurementSourceParity)$' \
+            2>&1 | tee artifacts/pure.log || status=$?
+          if grep -F -- '--- SKIP:' artifacts/pure.log; then status=1; fi
+          for name in TestToolObservationImageFixedSlotFallback TestToolObservationImageReadsAfterMismatch \
+            TestReadObservationCopiedForeignExpiredMarkersNeverFallback \
+            TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead TestStartupImageMeasurementSourceParity; do
+            if ! grep -F -- "--- PASS: $name " artifacts/pure.log; then status=1; fi
+          done
+          exit "$status"
+      - name: Protected original tool graph and mutation checks in private namespaces
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          BUILD_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="$BUILD_MODE" \
+            RAZVILKA_MANAGED_PROBE_CASE_SET=tool-image \
+            sh scripts/test-managed-probe-native.sh 2>&1 | tee artifacts/native.log || status=$?
+          if grep -F -- '--- SKIP:' artifacts/native.log; then status=1; fi
+          for name in TestToolObservationImagePairRefusals TestToolObservationImageFixedSlotFallback \
+            TestToolObservationImageReadsAfterMismatch TestToolObservationImageActualLease \
+            TestToolObservationImageStageMeasurement \
+            TestClassicReadBatchNativeMutation TestReadObservationCopiedForeignExpiredMarkersNeverFallback \
+            TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead; do
+            if ! grep -F -- "--- PASS: $name " artifacts/native.log; then status=1; fi
+          done
+          # This known profile must actually use the approved capped image.
+          # Fallback stays valid production behavior but cannot prove this gate.
+          if ! grep -F -- 'actual original tool graph sample=' artifacts/native.log; then status=1; fi
+          grep -F -- 'actual original tool graph sample=' artifacts/native.log > artifacts/graph-measurements.txt || true
+          python3 - <<'PY' || status=1
+          import json,pathlib,re
+          text=pathlib.Path('artifacts/graph-measurements.txt').read_text()
+          pattern=r'sample=(\d+) images=(\d+) graph_bytes=(\d+) image_used=(true|false) fixed_slot_bytes=(\d+) full_SHA_pair=(\S+) scoped_pair=(\S+);'
+          rows=[dict(zip(['sample','images','graph_bytes','image_used','fixed_slot_bytes','full_SHA_pair','scoped_pair'],m.groups())) for m in re.finditer(pattern,text)]
+          pathlib.Path('artifacts/graph-measurements.json').write_text(json.dumps(rows,indent=2)+'\n')
+          assert len(rows)==3 and [int(r['sample']) for r in rows]==[0,1,2], 'missing actual graph samples'
+          assert all(r['image_used']=='true' and 0<int(r['graph_bytes'])<=10<<20 and int(r['fixed_slot_bytes'])==int(r['graph_bytes']) for r in rows), 'known profile did not use capped image'
+          marker='actual_tool_observation_image_stages '
+          stages=[json.loads(line.split(marker,1)[1]) for line in pathlib.Path('artifacts/native.log').read_text().splitlines() if marker in line]
+          pathlib.Path('artifacts/stage-measurements.json').write_text(json.dumps(stages,indent=2)+'\n')
+          assert len(stages)==3 and [r['sample'] for r in stages]==[0,1,2], 'missing actual stage samples'
+          assert [r['cold_allocation'] for r in stages]==[True,False,False], 'unexpected allocation sequence'
+          timings=['original_opening_ns','original_closing_ns','original_pair_ns','borrow_ns','opening_ns','closing_ns','release_ns','image_pair_ns']
+          for row in stages:
+              assert type(row['images']) is int and row['images']>0 and type(row['graph_bytes']) is int and 0<row['graph_bytes']<=10<<20
+              assert row['retained_bytes']==row['graph_bytes'], 'stage image storage does not match actual graph'
+              assert all(type(row[key]) is int and row[key]>0 for key in timings), 'invalid measured stage duration'
+              assert row['original_pair_ns']>=row['original_opening_ns']+row['original_closing_ns']
+              assert row['image_pair_ns']>=sum(row[key] for key in ['borrow_ns','opening_ns','closing_ns','release_ns'])
+          PY
+          printf 'mode=%s native_exit=%s readiness_claim=false\n' "$BUILD_MODE" "$status" > artifacts/outcome.txt
+          exit "$status"
+      - name: Preserve exact outcomes and actual graph size
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tool-observation-image-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

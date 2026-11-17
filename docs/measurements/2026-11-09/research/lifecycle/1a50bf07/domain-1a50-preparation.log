@@ -1,0 +1,741 @@
+﻿2026-11-09T13:46:57.8606025Z Current runner version: '2.338.2'
+2026-11-09T13:46:57.8630993Z ##[group]Runner Image Provisioner
+2026-11-09T13:46:57.8631865Z Hosted Compute Agent
+2026-11-09T13:46:57.8632672Z Version: 20261028.624
+2026-11-09T13:46:57.8633331Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T13:46:57.8634150Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T13:46:57.8634886Z Worker ID: {72cd4774-d0fa-47f3-99b5-9e5b7b689b5a}
+2026-11-09T13:46:57.8635617Z Region: westus
+2026-11-09T13:46:57.8636790Z Cloud: Azure
+2026-11-09T13:46:57.8637379Z ##[endgroup]
+2026-11-09T13:46:57.8639600Z ##[group]Operating System
+2026-11-09T13:46:57.8640381Z Ubuntu
+2026-11-09T13:46:57.8640921Z 24.04.5
+2026-11-09T13:46:57.8641588Z LTS
+2026-11-09T13:46:57.8642126Z ##[endgroup]
+2026-11-09T13:46:57.8642687Z ##[group]Runner Image
+2026-11-09T13:46:57.8643407Z Image: ubuntu-24.04
+2026-11-09T13:46:57.8644030Z Version: 20261101.360.1
+2026-11-09T13:46:57.8645364Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T13:46:57.8646940Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T13:46:57.8648117Z ##[endgroup]
+2026-11-09T13:46:57.8649241Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T13:46:57.8651854Z Contents: read
+2026-11-09T13:46:57.8652510Z Metadata: read
+2026-11-09T13:46:57.8653199Z ##[endgroup]
+2026-11-09T13:46:57.8655339Z Secret source: Actions
+2026-11-09T13:46:57.8656521Z Cache mode: write
+2026-11-09T13:46:57.8657240Z Prepare workflow directory
+2026-11-09T13:46:57.9072513Z Prepare all required actions
+2026-11-09T13:46:57.9121864Z Getting action download info
+2026-11-09T13:46:58.2800403Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T13:46:58.4089731Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T13:46:58.7835032Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-09T13:46:59.0026403Z Complete job name: DNS preparation recovery pair (diagnostic 30s)
+2026-11-09T13:46:59.0899043Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T13:46:59.0900373Z with:
+2026-11-09T13:46:59.0900835Z   persist-credentials: false
+2026-11-09T13:46:59.0901375Z   repository: ArtixSx/RAZVILKA
+2026-11-09T13:46:59.0904946Z   token: ***
+2026-11-09T13:46:59.0905398Z   ssh-strict: true
+2026-11-09T13:46:59.0905848Z   ssh-user: git
+2026-11-09T13:46:59.0906282Z   clean: true
+2026-11-09T13:46:59.0906741Z   sparse-checkout-cone-mode: true
+2026-11-09T13:46:59.0907272Z   fetch-depth: 1
+2026-11-09T13:46:59.0907711Z   fetch-tags: false
+2026-11-09T13:46:59.0908165Z   show-progress: true
+2026-11-09T13:46:59.0908628Z   lfs: false
+2026-11-09T13:46:59.0909041Z   submodules: false
+2026-11-09T13:46:59.0909661Z   set-safe-directory: true
+2026-11-09T13:46:59.0910206Z   allow-unsafe-pr-checkout: false
+2026-11-09T13:46:59.0910983Z env:
+2026-11-09T13:46:59.0911416Z   GOTOOLCHAIN: local
+2026-11-09T13:46:59.0911874Z ##[endgroup]
+2026-11-09T13:46:59.3575120Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T13:46:59.3578247Z ##[group]Getting Git version info
+2026-11-09T13:46:59.3580056Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T13:46:59.3582251Z [command]/usr/bin/git version
+2026-11-09T13:46:59.3656224Z git version 2.56.0
+2026-11-09T13:46:59.3681871Z ##[endgroup]
+2026-11-09T13:46:59.3692697Z Temporarily overriding HOME='/home/runner/work/_temp/a9eea359-34f9-4588-a6bd-da30b795753b' before making global git config changes
+2026-11-09T13:46:59.3695491Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:46:59.3700157Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:46:59.3753523Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T13:46:59.3757593Z ##[group]Determining repository object format
+2026-11-09T13:46:59.3760164Z ##[endgroup]
+2026-11-09T13:46:59.3761963Z ##[group]Initializing the repository
+2026-11-09T13:46:59.3790348Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:46:59.3905380Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T13:46:59.3907272Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T13:46:59.3909131Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T13:46:59.3910731Z hint: call:
+2026-11-09T13:46:59.3911459Z hint:
+2026-11-09T13:46:59.3912336Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T13:46:59.3913540Z hint:
+2026-11-09T13:46:59.3914678Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T13:46:59.3916440Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T13:46:59.3917815Z hint:
+2026-11-09T13:46:59.3918575Z hint: 	git branch -m <name>
+2026-11-09T13:46:59.3919707Z hint:
+2026-11-09T13:46:59.3921355Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T13:46:59.3923252Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T13:46:59.3930338Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:46:59.3981078Z ##[endgroup]
+2026-11-09T13:46:59.3982718Z ##[group]Disabling automatic garbage collection
+2026-11-09T13:46:59.3985285Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T13:46:59.4024738Z ##[endgroup]
+2026-11-09T13:46:59.4026960Z ##[group]Setting up auth
+2026-11-09T13:46:59.4028214Z Removing SSH command configuration
+2026-11-09T13:46:59.4031226Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:46:59.4075915Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:46:59.4485847Z Removing HTTP extra header
+2026-11-09T13:46:59.4493940Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:46:59.4549293Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:46:59.4796843Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:46:59.4802750Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:46:59.4849277Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:46:59.5097058Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T13:46:59.5147924Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:46:59.5191776Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:46:59.5235108Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:46:59.5278499Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:46:59.5320754Z ##[endgroup]
+2026-11-09T13:46:59.5321613Z ##[group]Fetching the repository
+2026-11-09T13:46:59.5327232Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b:refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:47:02.3905781Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:47:02.3907341Z  * [new ref]         1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b -> origin/work/research-build-20261109
+2026-11-09T13:47:02.3918260Z [command]/usr/bin/git branch --list --remote origin/work/research-build-20261109
+2026-11-09T13:47:02.3957083Z   origin/work/research-build-20261109
+2026-11-09T13:47:02.3967510Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:47:02.4009730Z 1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b
+2026-11-09T13:47:02.4014582Z ##[endgroup]
+2026-11-09T13:47:02.4015120Z ##[group]Determining the checkout info
+2026-11-09T13:47:02.4015821Z ##[endgroup]
+2026-11-09T13:47:02.4021278Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T13:47:02.4085551Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T13:47:02.4129195Z ##[group]Checking out the ref
+2026-11-09T13:47:02.4134362Z [command]/usr/bin/git checkout --progress --force -B work/research-build-20261109 refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:47:02.7493955Z Switched to a new branch 'work/research-build-20261109'
+2026-11-09T13:47:02.7501575Z branch 'work/research-build-20261109' set up to track 'origin/work/research-build-20261109'.
+2026-11-09T13:47:02.7527604Z ##[endgroup]
+2026-11-09T13:47:02.7594872Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T13:47:02.7636454Z 1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b
+2026-11-09T13:47:02.7651057Z ##[group]Removing auth
+2026-11-09T13:47:02.7651638Z Removing SSH command configuration
+2026-11-09T13:47:02.7656910Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:47:02.7713613Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:47:02.7995319Z Removing HTTP extra header
+2026-11-09T13:47:02.8000677Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:47:02.8046368Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:47:02.8316934Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:47:02.8321170Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:47:02.8368961Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T13:47:02.8369887Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T13:47:02.8370415Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T13:47:02.8370922Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T13:47:02.8379804Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T13:47:02.8419728Z /home/runner/work/_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:47:02.8428595Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-7d07d1d2\-f468\-4be5\-8f0c\-e89097d91cf3\.config
+2026-11-09T13:47:02.8476158Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T13:47:02.8515824Z /home/runner/work/_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:47:02.8526342Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-7d07d1d2\-f468\-4be5\-8f0c\-e89097d91cf3\.config
+2026-11-09T13:47:02.8577815Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T13:47:02.8614810Z /github/runner_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:47:02.8623724Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-7d07d1d2\-f468\-4be5\-8f0c\-e89097d91cf3\.config
+2026-11-09T13:47:02.8671516Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T13:47:02.8707822Z /github/runner_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config
+2026-11-09T13:47:02.8717758Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-7d07d1d2\-f468\-4be5\-8f0c\-e89097d91cf3\.config
+2026-11-09T13:47:02.8768304Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:47:02.9029585Z Removing credentials config '/home/runner/work/_temp/git-credentials-7d07d1d2-f468-4be5-8f0c-e89097d91cf3.config'
+2026-11-09T13:47:02.9040531Z ##[endgroup]
+2026-11-09T13:47:02.9315356Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T13:47:02.9315783Z with:
+2026-11-09T13:47:02.9316033Z   ref: c4399c948a5f65cf413c879b2b746f1bf80eefaa
+2026-11-09T13:47:02.9316332Z   path: baseline
+2026-11-09T13:47:02.9316560Z   persist-credentials: false
+2026-11-09T13:47:02.9316825Z   repository: ArtixSx/RAZVILKA
+2026-11-09T13:47:02.9319222Z   token: ***
+2026-11-09T13:47:02.9319796Z   ssh-strict: true
+2026-11-09T13:47:02.9320027Z   ssh-user: git
+2026-11-09T13:47:02.9320225Z   clean: true
+2026-11-09T13:47:02.9320452Z   sparse-checkout-cone-mode: true
+2026-11-09T13:47:02.9320719Z   fetch-depth: 1
+2026-11-09T13:47:02.9320934Z   fetch-tags: false
+2026-11-09T13:47:02.9321155Z   show-progress: true
+2026-11-09T13:47:02.9321403Z   lfs: false
+2026-11-09T13:47:02.9321602Z   submodules: false
+2026-11-09T13:47:02.9321826Z   set-safe-directory: true
+2026-11-09T13:47:02.9322084Z   allow-unsafe-pr-checkout: false
+2026-11-09T13:47:02.9322339Z env:
+2026-11-09T13:47:02.9322581Z   GOTOOLCHAIN: local
+2026-11-09T13:47:02.9322796Z ##[endgroup]
+2026-11-09T13:47:03.0188527Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T13:47:03.0194912Z ##[group]Getting Git version info
+2026-11-09T13:47:03.0196042Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA/baseline'
+2026-11-09T13:47:03.0245931Z [command]/usr/bin/git version
+2026-11-09T13:47:03.0295956Z git version 2.56.0
+2026-11-09T13:47:03.0319315Z ##[endgroup]
+2026-11-09T13:47:03.0331066Z Temporarily overriding HOME='/home/runner/work/_temp/79b20bcf-0d33-4277-b506-ca3b3fd55e81' before making global git config changes
+2026-11-09T13:47:03.0332530Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:47:03.0338213Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA/baseline
+2026-11-09T13:47:03.0378890Z ##[group]Determining repository object format
+2026-11-09T13:47:03.0380976Z ##[endgroup]
+2026-11-09T13:47:03.0382134Z ##[group]Initializing the repository
+2026-11-09T13:47:03.0386565Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA/baseline
+2026-11-09T13:47:03.0439146Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T13:47:03.0440405Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T13:47:03.0441253Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T13:47:03.0441677Z hint: call:
+2026-11-09T13:47:03.0441871Z hint:
+2026-11-09T13:47:03.0442127Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T13:47:03.0442431Z hint:
+2026-11-09T13:47:03.0442728Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T13:47:03.0443523Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T13:47:03.0443912Z hint:
+2026-11-09T13:47:03.0444115Z hint: 	git branch -m <name>
+2026-11-09T13:47:03.0444349Z hint:
+2026-11-09T13:47:03.0444685Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T13:47:03.0445242Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/baseline/.git/
+2026-11-09T13:47:03.0455647Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:47:03.0503989Z ##[endgroup]
+2026-11-09T13:47:03.0504714Z ##[group]Disabling automatic garbage collection
+2026-11-09T13:47:03.0508538Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T13:47:03.0545992Z ##[endgroup]
+2026-11-09T13:47:03.0546645Z ##[group]Setting up auth
+2026-11-09T13:47:03.0547237Z Removing SSH command configuration
+2026-11-09T13:47:03.0556543Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:47:03.0592108Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:47:03.0860256Z Removing HTTP extra header
+2026-11-09T13:47:03.0866441Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:47:03.0909222Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:47:03.1214820Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:47:03.1220595Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:47:03.1274347Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:47:03.1524182Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T13:47:03.1575385Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git.path /home/runner/work/_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:03.1621162Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:03.1666045Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/baseline/.git.path /github/runner_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:03.1710739Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/baseline/.git/worktrees/*.path /github/runner_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:03.1752932Z ##[endgroup]
+2026-11-09T13:47:03.1753889Z ##[group]Fetching the repository
+2026-11-09T13:47:03.1760475Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin c4399c948a5f65cf413c879b2b746f1bf80eefaa
+2026-11-09T13:47:04.5733651Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:47:04.5734606Z  * branch            c4399c948a5f65cf413c879b2b746f1bf80eefaa -> FETCH_HEAD
+2026-11-09T13:47:04.5745883Z [command]/usr/bin/git rev-parse --verify --quiet c4399c948a5f65cf413c879b2b746f1bf80eefaa^{object}
+2026-11-09T13:47:04.5785613Z c4399c948a5f65cf413c879b2b746f1bf80eefaa
+2026-11-09T13:47:04.5790450Z ##[endgroup]
+2026-11-09T13:47:04.5791063Z ##[group]Determining the checkout info
+2026-11-09T13:47:04.5791778Z ##[endgroup]
+2026-11-09T13:47:04.5795866Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T13:47:04.5861414Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T13:47:04.5906086Z ##[group]Checking out the ref
+2026-11-09T13:47:04.5911026Z [command]/usr/bin/git checkout --progress --force c4399c948a5f65cf413c879b2b746f1bf80eefaa
+2026-11-09T13:47:04.8535432Z Note: switching to 'c4399c948a5f65cf413c879b2b746f1bf80eefaa'.
+2026-11-09T13:47:04.8535866Z 
+2026-11-09T13:47:04.8536138Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-09T13:47:04.8536788Z changes and commit them, and you can discard any commits you make in this
+2026-11-09T13:47:04.8537417Z state without impacting any branches by switching back to a branch.
+2026-11-09T13:47:04.8537784Z 
+2026-11-09T13:47:04.8538035Z If you want to create a new branch to retain commits you create, you may
+2026-11-09T13:47:04.8538619Z do so (now or later) by using -c with the switch command. Example:
+2026-11-09T13:47:04.8538958Z 
+2026-11-09T13:47:04.8539097Z   git switch -c <new-branch-name>
+2026-11-09T13:47:04.8539632Z 
+2026-11-09T13:47:04.8539806Z Or undo this operation with:
+2026-11-09T13:47:04.8540040Z 
+2026-11-09T13:47:04.8540156Z   git switch -
+2026-11-09T13:47:04.8540314Z 
+2026-11-09T13:47:04.8540585Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-09T13:47:04.8540990Z 
+2026-11-09T13:47:04.8541545Z HEAD is now at c4399c9 Validate strict lifecycle paths and retain per-child tool checks
+2026-11-09T13:47:04.8548986Z ##[endgroup]
+2026-11-09T13:47:04.8607376Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T13:47:04.8647749Z c4399c948a5f65cf413c879b2b746f1bf80eefaa
+2026-11-09T13:47:04.8661598Z ##[group]Removing auth
+2026-11-09T13:47:04.8662037Z Removing SSH command configuration
+2026-11-09T13:47:04.8662858Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:47:04.8712000Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:47:04.8965478Z Removing HTTP extra header
+2026-11-09T13:47:04.8970212Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:47:04.9015678Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:47:04.9262717Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:47:04.9266716Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:47:04.9304151Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git.path
+2026-11-09T13:47:04.9305046Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git/worktrees/*.path
+2026-11-09T13:47:04.9305556Z includeif.gitdir:/github/workspace/baseline/.git.path
+2026-11-09T13:47:04.9305987Z includeif.gitdir:/github/workspace/baseline/.git/worktrees/*.path
+2026-11-09T13:47:04.9331353Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git.path
+2026-11-09T13:47:04.9363459Z /home/runner/work/_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:04.9378750Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-44de7060\-535e\-42fc\-9517\-58a8750e98ba\.config
+2026-11-09T13:47:04.9432550Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git/worktrees/*.path
+2026-11-09T13:47:04.9474914Z /home/runner/work/_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:04.9485309Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/baseline/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-44de7060\-535e\-42fc\-9517\-58a8750e98ba\.config
+2026-11-09T13:47:04.9534009Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/baseline/.git.path
+2026-11-09T13:47:04.9569893Z /github/runner_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:04.9579196Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/baseline/.git.path \/github\/runner_temp\/git\-credentials\-44de7060\-535e\-42fc\-9517\-58a8750e98ba\.config
+2026-11-09T13:47:04.9634853Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/baseline/.git/worktrees/*.path
+2026-11-09T13:47:04.9675058Z /github/runner_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config
+2026-11-09T13:47:04.9686902Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/baseline/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-44de7060\-535e\-42fc\-9517\-58a8750e98ba\.config
+2026-11-09T13:47:04.9736275Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:47:04.9983183Z Removing credentials config '/home/runner/work/_temp/git-credentials-44de7060-535e-42fc-9517-58a8750e98ba.config'
+2026-11-09T13:47:04.9993366Z ##[endgroup]
+2026-11-09T13:47:05.0174766Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T13:47:05.0175164Z with:
+2026-11-09T13:47:05.0175356Z   go-version: 1.26.5
+2026-11-09T13:47:05.0175562Z   cache: false
+2026-11-09T13:47:05.0175770Z   check-latest: false
+2026-11-09T13:47:05.0178088Z   token: ***
+2026-11-09T13:47:05.0178282Z env:
+2026-11-09T13:47:05.0178464Z   GOTOOLCHAIN: local
+2026-11-09T13:47:05.0178678Z ##[endgroup]
+2026-11-09T13:47:05.1417065Z Setup go version spec 1.26.5
+2026-11-09T13:47:05.1431646Z Attempting to download 1.26.5...
+2026-11-09T13:47:05.8971092Z matching 1.26.5...
+2026-11-09T13:47:05.8995074Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T13:47:06.4743683Z Extracting Go...
+2026-11-09T13:47:06.4886182Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/745f27cd-a764-4526-a1be-c2cdf81d2605 -f /home/runner/work/_temp/e58543d8-4215-474c-a45a-3448bdbd3dde
+2026-11-09T13:47:08.0901225Z Successfully extracted go to /home/runner/work/_temp/745f27cd-a764-4526-a1be-c2cdf81d2605
+2026-11-09T13:47:08.0902091Z Adding to the cache ...
+2026-11-09T13:47:13.0480024Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T13:47:13.0480784Z Added go to the path
+2026-11-09T13:47:13.0481245Z Successfully set up Go version 1.26.5
+2026-11-09T13:47:13.0796607Z go version go1.26.5 linux/amd64
+2026-11-09T13:47:13.0797217Z 
+2026-11-09T13:47:13.0798031Z ##[group]go env
+2026-11-09T13:47:13.2650641Z AR='ar'
+2026-11-09T13:47:13.2651309Z CC='gcc'
+2026-11-09T13:47:13.2652073Z CGO_CFLAGS='-O2 -g'
+2026-11-09T13:47:13.2652704Z CGO_CPPFLAGS=''
+2026-11-09T13:47:13.2653261Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T13:47:13.2653831Z CGO_ENABLED='1'
+2026-11-09T13:47:13.2654408Z CGO_FFLAGS='-O2 -g'
+2026-11-09T13:47:13.2655041Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T13:47:13.2655579Z CXX='g++'
+2026-11-09T13:47:13.2656112Z GCCGO='gccgo'
+2026-11-09T13:47:13.2656627Z GO111MODULE=''
+2026-11-09T13:47:13.2657147Z GOAMD64='v1'
+2026-11-09T13:47:13.2657653Z GOARCH='amd64'
+2026-11-09T13:47:13.2658173Z GOAUTH='netrc'
+2026-11-09T13:47:13.2658688Z GOBIN=''
+2026-11-09T13:47:13.2659233Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T13:47:13.2660232Z GOCACHEPROG=''
+2026-11-09T13:47:13.2660861Z GODEBUG=''
+2026-11-09T13:47:13.2661409Z GOENV='/home/runner/.config/go/env'
+2026-11-09T13:47:13.2662009Z GOEXE=''
+2026-11-09T13:47:13.2662519Z GOEXPERIMENT=''
+2026-11-09T13:47:13.2663048Z GOFIPS140='off'
+2026-11-09T13:47:13.2663538Z GOFLAGS=''
+2026-11-09T13:47:13.2664795Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build3593337493=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T13:47:13.2666089Z GOHOSTARCH='amd64'
+2026-11-09T13:47:13.2666608Z GOHOSTOS='linux'
+2026-11-09T13:47:13.2667410Z GOINSECURE=''
+2026-11-09T13:47:13.2667995Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T13:47:13.2668729Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T13:47:13.2669589Z GONOPROXY=''
+2026-11-09T13:47:13.2670114Z GONOSUMDB=''
+2026-11-09T13:47:13.2670604Z GOOS='linux'
+2026-11-09T13:47:13.2671117Z GOPATH='/home/runner/go'
+2026-11-09T13:47:13.2671674Z GOPRIVATE=''
+2026-11-09T13:47:13.2672269Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T13:47:13.2672976Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T13:47:13.2673646Z GOSUMDB='sum.golang.org'
+2026-11-09T13:47:13.2674206Z GOTELEMETRY='local'
+2026-11-09T13:47:13.2674826Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T13:47:13.2675537Z GOTMPDIR=''
+2026-11-09T13:47:13.2676068Z GOTOOLCHAIN='local'
+2026-11-09T13:47:13.2676914Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T13:47:13.2677787Z GOVCS=''
+2026-11-09T13:47:13.2678289Z GOVERSION='go1.26.5'
+2026-11-09T13:47:13.2678832Z GOWORK=''
+2026-11-09T13:47:13.2679677Z PKG_CONFIG='pkg-config'
+2026-11-09T13:47:13.2680124Z 
+2026-11-09T13:47:13.2680862Z ##[endgroup]
+2026-11-09T13:47:13.2957525Z ##[group]Run set -euo pipefail
+2026-11-09T13:47:13.2957905Z [36;1mset -euo pipefail[0m
+2026-11-09T13:47:13.2958167Z [36;1msudo apt-get update[0m
+2026-11-09T13:47:13.2958689Z [36;1msudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3[0m
+2026-11-09T13:47:13.2959679Z [36;1msh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip[0m
+2026-11-09T13:47:13.2960606Z [36;1mecho '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict[0m
+2026-11-09T13:47:13.2961401Z [36;1munzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture[0m
+2026-11-09T13:47:13.2961833Z [36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures[0m
+2026-11-09T13:47:13.2962344Z [36;1msudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray[0m
+2026-11-09T13:47:13.2991370Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:47:13.2991779Z env:
+2026-11-09T13:47:13.2991984Z   GOTOOLCHAIN: local
+2026-11-09T13:47:13.2992213Z ##[endgroup]
+2026-11-09T13:47:13.4200791Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T13:47:13.4533365Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T13:47:13.4940511Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T13:47:13.4970456Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T13:47:13.5043004Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T13:47:13.5083422Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T13:47:13.5711128Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [743 kB]
+2026-11-09T13:47:13.6520974Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [675 kB]
+2026-11-09T13:47:13.7390458Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T13:47:13.7480780Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T13:47:13.7487941Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T13:47:13.7586243Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T13:47:13.7620397Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T13:47:13.7707762Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T13:47:13.7740582Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T13:47:13.7770379Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T13:47:13.8630576Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T13:47:13.8674610Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T13:47:13.9120565Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T13:47:13.9170469Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T13:47:13.9177006Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T13:47:13.9258104Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T13:47:13.9281292Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T13:47:13.9320078Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T13:47:17.3299023Z Fetched 13.0 MB in 1s (8743 kB/s)
+2026-11-09T13:47:18.5032725Z Reading package lists...
+2026-11-09T13:47:18.5418975Z Reading package lists...
+2026-11-09T13:47:18.7806009Z Building dependency tree...
+2026-11-09T13:47:18.7814166Z Reading state information...
+2026-11-09T13:47:18.9628268Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+2026-11-09T13:47:18.9628816Z iptables is already the newest version (1.8.10-3ubuntu2).
+2026-11-09T13:47:18.9629247Z iptables set to manually installed.
+2026-11-09T13:47:18.9629953Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+2026-11-09T13:47:18.9630434Z unzip is already the newest version (6.0-28ubuntu4.1).
+2026-11-09T13:47:18.9630941Z busybox-static is already the newest version (1:1.36.1-6ubuntu3.1).
+2026-11-09T13:47:18.9631415Z busybox-static set to manually installed.
+2026-11-09T13:47:18.9631850Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+2026-11-09T13:47:18.9632362Z 0 upgraded, 0 newly installed, 0 to remove and 27 not upgraded.
+2026-11-09T13:47:19.4564177Z /tmp/xray-node.zip.download.A5Cnz6: OK
+2026-11-09T13:47:19.4758281Z /tmp/xray-node.zip: OK
+2026-11-09T13:47:19.4781958Z Archive:  /tmp/xray-node.zip
+2026-11-09T13:47:19.7432486Z   inflating: /tmp/xray-node-fixture/xray  
+2026-11-09T13:47:19.7757089Z ##[group]Run set -euo pipefail
+2026-11-09T13:47:19.7757431Z [36;1mset -euo pipefail[0m
+2026-11-09T13:47:19.7758149Z [36;1mecho 'faf3160cc9b0173c2e66074a6e9fd9cbd870dcfa12fc780fd642fb8d91bc143f  scripts/fixtures/domain-preparation-baseline.patch' | sha256sum --check --strict[0m
+2026-11-09T13:47:19.7759144Z [36;1mgit -C baseline apply --check "$GITHUB_WORKSPACE/scripts/fixtures/domain-preparation-baseline.patch"[0m
+2026-11-09T13:47:19.7760118Z [36;1mgit -C baseline apply "$GITHUB_WORKSPACE/scripts/fixtures/domain-preparation-baseline.patch"[0m
+2026-11-09T13:47:19.7782452Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:47:19.7782790Z env:
+2026-11-09T13:47:19.7783014Z   GOTOOLCHAIN: local
+2026-11-09T13:47:19.7783237Z ##[endgroup]
+2026-11-09T13:47:19.7840946Z scripts/fixtures/domain-preparation-baseline.patch: OK
+2026-11-09T13:47:19.7919603Z ##[group]Run set -euo pipefail
+2026-11-09T13:47:19.7919971Z [36;1mset -euo pipefail[0m
+2026-11-09T13:47:19.7920214Z [36;1mresult=0[0m
+2026-11-09T13:47:19.7920448Z [36;1mmkdir -p artifacts/preparation[0m
+2026-11-09T13:47:19.7920833Z [36;1mtrap 'sudo chown -R "$(id -u):$(id -g)" artifacts/preparation' EXIT[0m
+2026-11-09T13:47:19.7921497Z [36;1mfor sample in baseline:clean candidate:clean candidate:capture-transaction candidate:standby-transaction; do[0m
+2026-11-09T13:47:19.7922050Z [36;1m  revision="${sample%%:*}"[0m
+2026-11-09T13:47:19.7922316Z [36;1m  cut="${sample#*:}"[0m
+2026-11-09T13:47:19.7922565Z [36;1m  repo="$GITHUB_WORKSPACE"[0m
+2026-11-09T13:47:19.7922941Z [36;1m  if [ "$revision" = baseline ]; then repo="$GITHUB_WORKSPACE/baseline"; fi[0m
+2026-11-09T13:47:19.7923329Z [36;1m  ack="$cut"[0m
+2026-11-09T13:47:19.7923751Z [36;1m  if [ "$cut" = clean ]; then ack=''; fi[0m
+2026-11-09T13:47:19.7924176Z [36;1m  output="$GITHUB_WORKSPACE/artifacts/preparation/$revision-$cut"[0m
+2026-11-09T13:47:19.7924558Z [36;1m  mkdir -p "$output"[0m
+2026-11-09T13:47:19.7924790Z [36;1m  status=0[0m
+2026-11-09T13:47:19.7924991Z [36;1m  ([0m
+2026-11-09T13:47:19.7925185Z [36;1m    cd "$repo"[0m
+2026-11-09T13:47:19.7925448Z [36;1m    sudo env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T13:47:19.7925856Z [36;1m      GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:47:19.7926327Z [36;1m      RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \[0m
+2026-11-09T13:47:19.7926806Z [36;1m      RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DNS_DETACH=1 \[0m
+2026-11-09T13:47:19.7927305Z [36;1m      RAZVILKA_DOMAIN_DNS_COEXISTENCE=1 RAZVILKA_DOMAIN_PREPARATION_CUT=1 \[0m
+2026-11-09T13:47:19.7927857Z [36;1m      RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION=30 RAZVILKA_DOMAIN_FAILURE_ACK="$ack" \[0m
+2026-11-09T13:47:19.7928341Z [36;1m      RAZVILKA_DOMAIN_PROFILE_OUTPUT="$output" \[0m
+2026-11-09T13:47:19.7928709Z [36;1m      sh scripts/test-domain-original-native.sh[0m
+2026-11-09T13:47:19.7929060Z [36;1m  ) 2>&1 | tee "$output/native.log" || status=$?[0m
+2026-11-09T13:47:19.7929859Z [36;1m  printf 'revision=%s cut=%s exit=%s diagnostic_budget=30\n' "$revision" "$cut" "$status" > "$output/outcome.txt"[0m
+2026-11-09T13:47:19.7930497Z [36;1m  if ! grep -F 'ACTUAL_PREPARATION_CUT' "$output/native.log"; then result=1; fi[0m
+2026-11-09T13:47:19.7930987Z [36;1m  if grep -F -- '--- SKIP:' "$output/native.log"; then result=1; fi[0m
+2026-11-09T13:47:19.7931359Z [36;1m  if [ "$revision" = baseline ]; then[0m
+2026-11-09T13:47:19.7932099Z [36;1m    if [ "$status" = 0 ] || ! grep -F 'ACTUAL_PREPARATION_CLEANUP_REFUSED' "$output/native.log" || grep -F 'ACTUAL_PREPARATION_CLEANUP_COMPLETE' "$output/native.log"; then result=1; fi[0m
+2026-11-09T13:47:19.7932826Z [36;1m  else[0m
+2026-11-09T13:47:19.7933866Z [36;1m    if [ "$status" != 0 ] || ! grep -F 'ACTUAL_PREPARATION_CLEANUP_COMPLETE' "$output/native.log" || grep -F 'ACTUAL_PREPARATION_CLEANUP_REFUSED' "$output/native.log" || ! grep -F -- '--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement ' "$output/native.log"; then result=1; fi[0m
+2026-11-09T13:47:19.7934963Z [36;1m  fi[0m
+2026-11-09T13:47:19.7935158Z [36;1mdone[0m
+2026-11-09T13:47:19.7935350Z [36;1mexit "$result"[0m
+2026-11-09T13:47:19.7954065Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:47:19.7954407Z env:
+2026-11-09T13:47:19.7954601Z   GOTOOLCHAIN: local
+2026-11-09T13:47:19.7954815Z ##[endgroup]
+2026-11-09T13:47:19.8844729Z CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:47:19.9687507Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T13:47:20.0740462Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T13:47:20.2320831Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T13:47:20.2652413Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T13:47:20.2660180Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T13:47:20.4397049Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T13:47:20.8194789Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T13:48:25.6006738Z === RUN   TestDomainTCPOriginalNativeFailedPreparationRetirement
+2026-11-09T13:48:25.6009932Z     domain_tcp_original_native_linux_test.go:185: DIAGNOSTIC FUNCTIONAL WINDOW30s; NOT12s performance acceptance
+2026-11-09T13:48:26.2740153Z     domain_tcp_original_native_linux_test.go:456: COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication30s/join15s; diagnostic=true
+2026-11-09T13:49:10.1336289Z     domain_tcp_original_native_linux_test.go:651: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:49:10.4564001Z     domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:8.824209418s} capture-prepare:{Calls:1 Bytes:0 Elapsed:13.684629043s} dns-send:{Calls:1 Bytes:0 Elapsed:1.515736107s} dns-send-success:{Calls:1 Bytes:0 Elapsed:471ns} kernel-observe:{Calls:7 Bytes:0 Elapsed:8.644456616s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:3.275µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:10.451588138s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:4.097µs} process-current:{Calls:482 Bytes:0 Elapsed:11.54414233s} publication-gate:{Calls:26 Bytes:0 Elapsed:5.218661823s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:251ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:2.346093293s} standby-prepare:{Calls:1 Bytes:0 Elapsed:4.776823312s} whole-executable-hash:{Calls:219 Bytes:8010451914 Elapsed:5.799994189s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-batch:1720]; overlapping cumulative durations, not wall speed
+2026-11-09T13:49:14.6799567Z     domain_tcp_original_native_linux_test.go:840: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:49:14.6966680Z     domain_tcp_original_native_linux_test.go:847: reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority
+2026-11-09T13:49:58.8429632Z     domain_tcp_coexistence_native_linux_test.go:101: successor original Run/join observations map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:15.172712716s} capture-prepare:{Calls:1 Bytes:0 Elapsed:26.095268499s} process-current:{Calls:298 Bytes:0 Elapsed:7.801387753s} standby-add-guard:{Calls:13 Bytes:0 Elapsed:2.372748802s} standby-prepare:{Calls:1 Bytes:0 Elapsed:8.186224244s} whole-executable-hash:{Calls:603 Bytes:22056175818 Elapsed:15.886880839s}]; overlapping durations, not default12 performance
+2026-11-09T13:49:59.1978805Z     domain_tcp_original_native_linux_test.go:960: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:50:00.8392329Z     domain_tcp_original_native_linux_test.go:995: original publication blocked; bounded goroutine stacks:
+2026-11-09T13:50:00.8393462Z         goroutine 21 [running]:
+2026-11-09T13:50:00.8394897Z         github.com/ArtixSx/razvilka/internal/app.domainOriginalPublicationDiagnostics(0x167dd10ee908, {0x1ddb18e, 0x1d})
+2026-11-09T13:50:00.8396983Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_linux_test.go:1116 +0x6a
+2026-11-09T13:50:00.8398672Z         github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative(0x167dd10ee908, 0x0)
+2026-11-09T13:50:00.8400941Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_linux_test.go:995 +0x90d4
+2026-11-09T13:50:00.8403156Z         github.com/ArtixSx/razvilka/internal/app.TestDomainTCPOriginalNativeFailedPreparationRetirement(0x167dd10ee908)
+2026-11-09T13:50:00.8404983Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_linux_test.go:98 +0xa6
+2026-11-09T13:50:00.8406141Z         testing.tRunner(0x167dd10ee908, 0x1f06dc8)
+2026-11-09T13:50:00.8407131Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+2026-11-09T13:50:00.8408055Z         created by testing.(*T).Run in goroutine 1
+2026-11-09T13:50:00.8409118Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0x4c5
+2026-11-09T13:50:00.8410032Z         
+2026-11-09T13:50:00.8410544Z         goroutine 1 [chan receive, 1 minutes]:
+2026-11-09T13:50:00.8411431Z         testing.(*T).Run(0x167dd10ee6c8, {0x1e24c7a?, 0x0?}, 0x1f06dc8)
+2026-11-09T13:50:00.8412557Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2109 +0x4e5
+2026-11-09T13:50:00.8413691Z         testing.runTests.func1(0x167dd10ee6c8)
+2026-11-09T13:50:00.8414713Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2585 +0x3e
+2026-11-09T13:50:00.8415611Z         testing.tRunner(0x167dd10ee6c8, 0x167dd147fb70)
+2026-11-09T13:50:00.8416660Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+2026-11-09T13:50:00.8418369Z         testing.runTests({0x1dd40b9, 0x1b}, {0x1dfdc0c, 0x28}, 0x167dd10ae3d8, {0x2cd91a0, 0x49c, 0x49c}, {0xc2b491e663c88284, 0x37e16b411d, ...})
+2026-11-09T13:50:00.8432963Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2583 +0x505
+2026-11-09T13:50:00.8433550Z         testing.(*M).Run(0x167dd11aa140)
+2026-11-09T13:50:00.8434166Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2443 +0x6ac
+2026-11-09T13:50:00.8434794Z         github.com/ArtixSx/razvilka/internal/app.TestMain(0x167dd11aa140)
+2026-11-09T13:50:00.8435709Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/strategy_managed_probe_native_linux_test.go:69 +0x379
+2026-11-09T13:50:00.8436349Z         main.main()
+2026-11-09T13:50:00.8436666Z         	_testmain.go:2406 +0xa5
+2026-11-09T13:50:00.8436923Z         
+2026-11-09T13:50:00.8437207Z         goroutine 71 [IO wait, 1 minutes]:
+2026-11-09T13:50:00.8437644Z         internal/poll.runtime_pollWait(0x7fa4e9e38800, 0x72)
+2026-11-09T13:50:00.8438251Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+2026-11-09T13:50:00.8438864Z         internal/poll.(*pollDesc).wait(0x167dd10fe380?, 0x167dd11b9000?, 0x0)
+2026-11-09T13:50:00.8440058Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+2026-11-09T13:50:00.8440722Z         internal/poll.(*pollDesc).waitRead(...)
+2026-11-09T13:50:00.8441421Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+2026-11-09T13:50:00.8442757Z         internal/poll.(*FD).ReadFromInet4(0x167dd10fe380, {0x167dd11b9000, 0x1000, 0x1000}, 0x167dd1505cc0)
+2026-11-09T13:50:00.8443604Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+2026-11-09T13:50:00.8444354Z         net.(*netFD).readFromInet4(0x167dd10fe380, {0x167dd11b9000?, 0x167dd125d200?, 0x0?}, 0x0?)
+2026-11-09T13:50:00.8445272Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+2026-11-09T13:50:00.8446158Z         net.(*UDPConn).readFrom(0x30?, {0x167dd11b9000?, 0x0?, 0x0?}, 0x167dd14ebec0)
+2026-11-09T13:50:00.8446845Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:52 +0x19b
+2026-11-09T13:50:00.8447596Z         net.(*UDPConn).readFromUDP(0x167dd10883c0, {0x167dd11b9000?, 0x0?, 0x1f2dd90?}, 0x167dd11ec7b0?)
+2026-11-09T13:50:00.8448317Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:146 +0x30
+2026-11-09T13:50:00.8448920Z         net.(*UDPConn).ReadFrom(0x167dd10883c0, {0x167dd11b9000, 0x1000, 0x1000})
+2026-11-09T13:50:00.8449773Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:155 +0x4a
+2026-11-09T13:50:00.8450484Z         github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func4()
+2026-11-09T13:50:00.8451700Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:260 +0x7c
+2026-11-09T13:50:00.8452708Z         created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+2026-11-09T13:50:00.8453764Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:257 +0x1ff
+2026-11-09T13:50:00.8454310Z         
+2026-11-09T13:50:00.8454560Z         goroutine 72 [IO wait]:
+2026-11-09T13:50:00.8454981Z         internal/poll.runtime_pollWait(0x7fa4e9e38c00, 0x72)
+2026-11-09T13:50:00.8455591Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+2026-11-09T13:50:00.8456186Z         internal/poll.(*pollDesc).wait(0x167dd10fe400?, 0x900000036?, 0x0)
+2026-11-09T13:50:00.8456890Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+2026-11-09T13:50:00.8457553Z         internal/poll.(*pollDesc).waitRead(...)
+2026-11-09T13:50:00.8458173Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+2026-11-09T13:50:00.8458691Z         internal/poll.(*FD).Accept(0x167dd10fe400)
+2026-11-09T13:50:00.8459933Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+2026-11-09T13:50:00.8460794Z         net.(*netFD).accept(0x167dd10fe400)
+2026-11-09T13:50:00.8461707Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+2026-11-09T13:50:00.8462512Z         net.(*TCPListener).accept(0x167dd10b0980)
+2026-11-09T13:50:00.8463503Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+2026-11-09T13:50:00.8464293Z         net.(*TCPListener).Accept(0x167dd10b0980)
+2026-11-09T13:50:00.8465229Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:387 +0x30
+2026-11-09T13:50:00.8466132Z         crypto/tls.(*listener).Accept(0x167dd0faa558)
+2026-11-09T13:50:00.8467092Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/crypto/tls/tls.go:78 +0x24
+2026-11-09T13:50:00.8468139Z         net/http.(*Server).Serve(0x167dd1138000, {0x1f2de80, 0x167dd0faa558})
+2026-11-09T13:50:00.8469540Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3434 +0x30c
+2026-11-09T13:50:00.8470972Z         net/http.(*Server).ServeTLS(0x167dd1138000, {0x1f2ee80, 0x167dd10b0980}, {0x167dd0fde3f0, 0x6f}, {0x167dd0fde460, 0x70})
+2026-11-09T13:50:00.8472351Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3503 +0x406
+2026-11-09T13:50:00.8473554Z         github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func7()
+2026-11-09T13:50:00.8475280Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:295 +0x109
+2026-11-09T13:50:00.8476862Z         created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+2026-11-09T13:50:00.8478844Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:294 +0x35e
+2026-11-09T13:50:00.8479917Z         
+2026-11-09T13:50:00.8480425Z         goroutine 73 [syscall, 1 minutes]:
+2026-11-09T13:50:00.8481013Z         syscall.Syscall6(0xf7, 0x3, 0xc, 0x167dd11dae48, 0x4, 0x167dd10fa900, 0x0)
+2026-11-09T13:50:00.8481805Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+2026-11-09T13:50:00.8483088Z         internal/syscall/unix.Waitid(0x167dd11db088?, 0x5822d2?, 0x167dd11dfc78?, 0x167dd139d6c0?, 0xc?)
+2026-11-09T13:50:00.8484361Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+2026-11-09T13:50:00.8485303Z         os.(*Process).pidfdWait.func1(...)
+2026-11-09T13:50:00.8486348Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+2026-11-09T13:50:00.8487080Z         os.ignoringEINTR(...)
+2026-11-09T13:50:00.8487993Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+2026-11-09T13:50:00.8489052Z         os.(*Process).pidfdWait(0x167dd10b09c0)
+2026-11-09T13:50:00.8490411Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+2026-11-09T13:50:00.8491217Z         os.(*Process).wait(0x0?)
+2026-11-09T13:50:00.8492124Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+2026-11-09T13:50:00.8492857Z         os.(*Process).Wait(...)
+2026-11-09T13:50:00.8493636Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+2026-11-09T13:50:00.8494350Z         os/exec.(*Cmd).Wait(0x167dd148d380)
+2026-11-09T13:50:00.8495306Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+2026-11-09T13:50:00.8496368Z         github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers.func4()
+2026-11-09T13:50:00.8498304Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x25
+2026-11-09T13:50:00.8500594Z         created by github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers in goroutine 21
+2026-11-09T13:50:00.8501686Z         	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x1f73
+2026-11-09T13:50:00.8502813Z     domain_tcp_original_native_linux_test.go:995: actual COMMON progress kind=xray-domain-tcp state=removed phase=removed
+2026-11-09T13:50:00.8503951Z     domain_tcp_original_native_linux_test.go:995: actual COMMON progress kind=synthetic-baseline state=prepared phase=capture-ready
+2026-11-09T13:50:00.8505754Z     domain_tcp_original_native_linux_test.go:995: actual COMMON progress kind=domain-tcp-capture state=prepared phase=capture-prepared
+2026-11-09T13:50:00.8507600Z     domain_tcp_original_native_linux_test.go:1140: actual generated runtime transactions/dp-check-264abd7634a392ac87f1bb4f60de494c/execution-resources/xd-5b717ed9d95607290fb4d55b2949a72d/xray-domain.log: Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+2026-11-09T13:50:00.8509265Z         A unified platform for anti-censorship.
+2026-11-09T13:50:00.8510397Z         2026/11/09 13:49:16.863554 [Info] infra/conf/serial: Reading config: &{Name:stdin: Format:json}
+2026-11-09T13:50:00.8511028Z         2026/11/09 13:49:16.867682 [Warning] core: Xray 26.3.27 started
+2026-11-09T13:50:00.8512480Z     domain_tcp_original_native_linux_test.go:1140: actual generated runtime transactions/dp-check-ebb981431360116134da90f202b7603a/execution-resources/xd-37f991b2ec663605ad23987c519e9670/xray-domain.log: Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+2026-11-09T13:50:00.8513671Z         A unified platform for anti-censorship.
+2026-11-09T13:50:00.8514299Z         2026/11/09 13:48:27.751615 [Info] infra/conf/serial: Reading config: &{Name:stdin: Format:json}
+2026-11-09T13:50:00.8515148Z         2026/11/09 13:48:27.755371 [Warning] core: Xray 26.3.27 started
+2026-11-09T13:50:00.8515977Z     domain_tcp_original_native_linux_test.go:997: ACTUAL_PREPARATION_CLEANUP_REFUSED: original nil-kernel successor retirement did not complete
+2026-11-09T13:50:00.8517669Z     domain_tcp_original_native_linux_test.go:999: original failed ready generation retirement domain restore original source/capture: original synthetic TCP capture/transition consumer is unavailable
+2026-11-09T13:50:00.8519064Z     domain_tcp_original_native_linux_test.go:206: isolated fixture peer.log: === RUN   TestDomainTCPOriginalNativePeer
+2026-11-09T13:50:00.8520227Z         Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+2026-11-09T13:50:00.8520726Z         A unified platform for anti-censorship.
+2026-11-09T13:50:00.8522172Z         2026/11/09 13:48:25.694315 [Info] infra/conf/serial: Reading config: &{Name:/tmp/razvilka-domain-original.dZ6pif/TestDomainTCPOriginalNativeFailedPreparationRetirement274207439/001/server.json Format:json}
+2026-11-09T13:50:00.8523285Z         2026/11/09 13:48:25.695963 [Debug] app/log: Logger started
+2026-11-09T13:50:00.8523924Z         2026/11/09 13:48:25.697362 [Info] app/dns: DNS: created localhost client
+2026-11-09T13:50:00.8525050Z         2026/11/09 13:48:25.697386 [Debug] app/proxyman/inbound: creating stream worker on 1.1.1.2:10443
+2026-11-09T13:50:00.8526000Z         2026/11/09 13:48:25.697491 [Info] transport/internet/tcp: listening TCP on 1.1.1.2:10443
+2026-11-09T13:50:00.8526673Z         2026/11/09 13:48:25.697898 [Warning] core: Xray 26.3.27 started
+2026-11-09T13:50:00.8527401Z         2026/11/09 13:48:25.707051 [Info] [1819344877] app/proxyman/inbound: connection ends > EOF
+2026-11-09T13:50:00.8528192Z         2026/11/09 13:48:26.128238 [Info] [2997685214] app/proxyman/inbound: connection ends > EOF
+2026-11-09T13:50:00.8528945Z         2026/11/09 13:48:26.156318 [Info] [1474707803] proxy/vless/inbound: firstLen = 1186
+2026-11-09T13:50:00.8530369Z         2026/11/09 13:48:26.156354 [Info] [1474707803] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+2026-11-09T13:50:00.8531378Z         2026/11/09 13:48:26.156363 [Info] [1474707803] app/dispatcher: default route for tcp:1.1.1.2:443
+2026-11-09T13:50:00.8532560Z         2026/11/09 13:48:26.156369 [Info] [1474707803] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+2026-11-09T13:50:00.8533527Z         2026/11/09 13:48:26.156374 [Debug] [1474707803] transport/internet: dialing to tcp:1.1.1.2:443
+2026-11-09T13:50:00.8535319Z         2026/11/09 13:48:26.156388 [Info] [1474707803] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:48009, remote endpoint 1.1.1.2:443
+2026-11-09T13:50:00.8536483Z         2026/11/09 13:48:26.156395 [Debug] [1474707803] proxy: CopyRawConn (maybe) readv
+2026-11-09T13:50:00.8538176Z         2026/11/09 13:48:26.157954 [Info] [1474707803] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:52000: use of closed network connection
+2026-11-09T13:50:00.8539848Z         2026/11/09 13:48:26.159849 [Info] [3053114270] proxy/vless/inbound: firstLen = 1186
+2026-11-09T13:50:00.8540735Z         2026/11/09 13:48:26.159865 [Info] [3053114270] proxy/vless/inbound: received request for tcp:service.example.com:443
+2026-11-09T13:50:00.8541660Z         2026/11/09 13:48:26.159872 [Info] [3053114270] app/dispatcher: default route for tcp:service.example.com:443
+2026-11-09T13:50:00.8542543Z         2026/11/09 13:48:26.159912 [Info] app/dns: returning 1 IP(s) for domain service.example.com -> [1.1.1.2]
+2026-11-09T13:50:00.8543303Z         2026/11/09 13:48:26.159920 [Info] [3053114270] proxy/freedom: dialing to tcp:1.1.1.2:443
+2026-11-09T13:50:00.8544069Z         2026/11/09 13:48:26.159926 [Info] [3053114270] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+2026-11-09T13:50:00.8544840Z         2026/11/09 13:48:26.159964 [Debug] [3053114270] transport/internet: dialing to tcp:1.1.1.2:443
+2026-11-09T13:50:00.8545991Z         2026/11/09 13:48:26.159980 [Info] [3053114270] proxy/freedom: connection opened to tcp:service.example.com:443, local endpoint 1.1.1.2:41721, remote endpoint 1.1.1.2:443
+2026-11-09T13:50:00.8546928Z         2026/11/09 13:48:26.159986 [Debug] [3053114270] proxy: CopyRawConn (maybe) readv
+2026-11-09T13:50:00.8548606Z         2026/11/09 13:48:26.162043 [Info] [3053114270] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:52014: use of closed network connection
+2026-11-09T13:50:00.8550311Z         2026/11/09 13:48:26.163903 [Info] [1256170631] proxy/vless/inbound: firstLen = 1186
+2026-11-09T13:50:00.8551360Z         2026/11/09 13:48:26.163914 [Info] [1256170631] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+2026-11-09T13:50:00.8552161Z         2026/11/09 13:48:26.163917 [Info] [1256170631] app/dispatcher: default route for tcp:1.1.1.2:443
+2026-11-09T13:50:00.8552998Z         2026/11/09 13:48:26.163920 [Info] [1256170631] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+2026-11-09T13:50:00.8553946Z         2026/11/09 13:48:26.163923 [Debug] [1256170631] transport/internet: dialing to tcp:1.1.1.2:443
+2026-11-09T13:50:00.8555112Z         2026/11/09 13:48:26.164023 [Info] [1256170631] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:56269, remote endpoint 1.1.1.2:443
+2026-11-09T13:50:00.8555992Z         2026/11/09 13:48:26.164031 [Debug] [1256170631] proxy: CopyRawConn (maybe) readv
+2026-11-09T13:50:00.8557658Z         2026/11/09 13:48:26.165888 [Info] [1256170631] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:52020: use of closed network connection
+2026-11-09T13:50:00.8558858Z --- FAIL: TestDomainTCPOriginalNativeFailedPreparationRetirement (95.25s)
+2026-11-09T13:50:00.8559485Z FAIL
+2026-11-09T13:50:01.0526382Z     domain_tcp_original_native_linux_test.go:960: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:50:01.0552738Z     domain_tcp_original_native_linux_test.go:997: ACTUAL_PREPARATION_CLEANUP_REFUSED: original nil-kernel successor retirement did not complete
+2026-11-09T13:50:01.1116778Z CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:50:41.2098355Z === RUN   TestDomainTCPOriginalNativeFailedPreparationRetirement
+2026-11-09T13:50:41.2100090Z     domain_tcp_original_native_linux_test.go:185: DIAGNOSTIC FUNCTIONAL WINDOW30s; NOT12s performance acceptance
+2026-11-09T13:50:41.5138477Z     domain_tcp_original_native_linux_test.go:456: COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication30s/join15s; diagnostic=true
+2026-11-09T13:50:58.6119876Z     domain_tcp_original_native_linux_test.go:599: actual first DNS answer completed-counter snapshot (post-send closing may still be in flight; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.022697258s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:5.199µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.876976327s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.202567885s} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.655981ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.912219ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.813127ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.487069ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.344192ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:79.322643ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.355582ms} hash-stack/after-opening-scope/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:78.982277ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:210.352102ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.155295ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.423767ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:27.156043ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.350902ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.281706ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:28.043528ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.317293ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.37053ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.059984ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.30436ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.394346ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.275585ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.272298ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:289.815322ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.534495ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.459314ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.259781ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.766019ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.309476ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:79.999587ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.281645ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.133376ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.170335ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.282335ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.371263ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.367075ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.241842ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.598507ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.041211ms} kernel-observe:{Calls:4 Bytes:0 Elapsed:2.46879874s} kernel-observe-success:{Calls:4 Bytes:0 Elapsed:1.132µs} mapping-compare:{Calls:3 Bytes:0 Elapsed:2.585529768s} mapping-compare-success:{Calls:3 Bytes:0 Elapsed:843ns} mapping-original-tool-closing:{Calls:3 Bytes:0 Elapsed:871ns} mapping-original-tool-read:{Calls:3 Bytes:0 Elapsed:2.328411815s} native-hash-attribution:{Calls:134 Bytes:0 Elapsed:5.310203ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.212µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.520002266s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:3.636µs} process-current:{Calls:379 Bytes:0 Elapsed:6.542747027s} publication-gate:{Calls:14 Bytes:0 Elapsed:10.188µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:935.219752ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.449132857s} whole-executable-hash:{Calls:134 Bytes:4901372404 Elapsed:3.536262412s}]
+2026-11-09T13:51:01.8801624Z     domain_tcp_original_native_linux_test.go:627: actual before stopRun completed-counter snapshot (in-flight checks excluded; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.022697258s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:5.199µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.876976327s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.202567885s} dns-send:{Calls:1 Bytes:0 Elapsed:870.700579ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:370ns} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.655981ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.912219ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.813127ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.487069ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.344192ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:79.322643ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.355582ms} hash-stack/after-opening-scope/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.841445ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:210.352102ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.155295ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.423767ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:27.156043ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.350902ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.281706ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:28.043528ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.317293ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.37053ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.059984ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.30436ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.394346ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.275585ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.272298ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:289.815322ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.534495ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.459314ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.259781ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.766019ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.309476ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.315834ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.281645ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.133376ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.170335ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.282335ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.371263ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.367075ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.241842ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.598507ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.041211ms} kernel-observe:{Calls:7 Bytes:0 Elapsed:5.119175374s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:2.074µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:6.199889775s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:1.915µs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:2.064µs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:5.656453865s} native-hash-attribution:{Calls:140 Bytes:0 Elapsed:5.541904ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.212µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.520002266s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:3.636µs} process-current:{Calls:460 Bytes:0 Elapsed:7.927160202s} publication-gate:{Calls:15 Bytes:0 Elapsed:3.102156524s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:100ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:935.219752ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.449132857s} whole-executable-hash:{Calls:140 Bytes:5120836840 Elapsed:3.696437827s}]
+2026-11-09T13:51:09.9830682Z     domain_tcp_original_native_linux_test.go:654: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:51:10.2847917Z     domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.022697258s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:5.199µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.876976327s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.202567885s} dns-send:{Calls:1 Bytes:0 Elapsed:870.700579ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:370ns} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.655981ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.912219ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.813127ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.487069ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.344192ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:79.322643ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.355582ms} hash-stack/after-opening-scope/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.841445ms} hash-stack/after-opening-scope/other:{Calls:9 Bytes:329196654 Elapsed:237.030628ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.155295ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.423767ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:27.156043ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.350902ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.281706ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:28.043528ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.317293ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.37053ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.059984ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.30436ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.394346ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.275585ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.272298ms} hash-stack/direct/other:{Calls:14 Bytes:512083684 Elapsed:368.972144ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.534495ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.459314ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.259781ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.766019ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.309476ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.315834ms} hash-stack/file-opening-wrapper/other:{Calls:2 Bytes:73154812 Elapsed:52.68565ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.133376ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.170335ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.282335ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.371263ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.367075ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.241842ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.598507ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.041211ms} kernel-observe:{Calls:7 Bytes:0 Elapsed:5.119175374s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:2.074µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:6.199889775s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:1.915µs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:2.064µs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:5.656453865s} native-hash-attribution:{Calls:145 Bytes:0 Elapsed:5.703114ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.212µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.520002266s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:3.636µs} process-current:{Calls:460 Bytes:0 Elapsed:7.927160202s} publication-gate:{Calls:15 Bytes:0 Elapsed:3.102156524s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:100ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:935.219752ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.449132857s} whole-executable-hash:{Calls:145 Bytes:5303723870 Elapsed:3.82867718s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-save:688]; overlapping cumulative durations, not wall speed
+2026-11-09T13:51:14.0075500Z     domain_tcp_original_native_linux_test.go:843: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:51:14.0234963Z     domain_tcp_original_native_linux_test.go:850: reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority
+2026-11-09T13:51:45.1040543Z     domain_tcp_coexistence_native_linux_test.go:101: successor original Run/join observations map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:9.294170763s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:6.056µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:9.148910934s} capture-prepare:{Calls:1 Bytes:0 Elapsed:17.634749457s} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.78714ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.750739ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:96 Bytes:3511430976 Elapsed:2.5294753s} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.293942ms} hash-stack/after-opening-scope/capture-mapping/capture-closing:{Calls:8 Bytes:292619248 Elapsed:210.338117ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.402925ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:22 Bytes:804702932 Elapsed:579.96481ms} hash-stack/after-opening-scope/capture-prepare/pre-add:{Calls:56 Bytes:2048334736 Elapsed:1.474470574s} hash-stack/after-opening-scope/other:{Calls:13 Bytes:475506278 Elapsed:341.877824ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.72363ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.438606ms} hash-stack/after-opening-scope/standby-capture:{Calls:12 Bytes:438928872 Elapsed:315.508483ms} hash-stack/after-opening-scope/standby-issue:{Calls:8 Bytes:292619248 Elapsed:210.613639ms} hash-stack/after-opening-scope/standby-prepare/pre-add:{Calls:32 Bytes:1170476992 Elapsed:845.290751ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:10 Bytes:365774060 Elapsed:263.667159ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:5 Bytes:182887030 Elapsed:131.708378ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:5 Bytes:182887030 Elapsed:132.126626ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.091258ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.687161ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.466228ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.674056ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.305965ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.037272ms} hash-stack/direct/other:{Calls:23 Bytes:841280338 Elapsed:605.323503ms} hash-stack/direct/standby-capture:{Calls:3 Bytes:109732218 Elapsed:78.815832ms} hash-stack/direct/standby-issue:{Calls:8 Bytes:292619248 Elapsed:210.592474ms} hash-stack/direct/standby-prepare/standby-capture:{Calls:5 Bytes:182887030 Elapsed:132.162453ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.405359ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:52 Bytes:1902025112 Elapsed:1.366876254s} hash-stack/file-opening-wrapper/capture-issue/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:78.907174ms} hash-stack/file-opening-wrapper/capture-mapping/capture-closing:{Calls:4 Bytes:146309624 Elapsed:104.965344ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:13 Bytes:475506278 Elapsed:344.103635ms} hash-stack/file-opening-wrapper/capture-prepare/pre-add:{Calls:28 Bytes:1024167368 Elapsed:736.083203ms} hash-stack/file-opening-wrapper/other:{Calls:6 Bytes:219464436 Elapsed:157.778101ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.781126ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.396066ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:8 Bytes:292619248 Elapsed:209.82785ms} hash-stack/file-opening-wrapper/standby-issue:{Calls:3 Bytes:109732218 Elapsed:78.991819ms} hash-stack/file-opening-wrapper/standby-prepare/pre-add:{Calls:16 Bytes:585238496 Elapsed:421.169902ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:8 Bytes:292619248 Elapsed:210.818863ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:3 Bytes:109732218 Elapsed:79.008213ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:3 Bytes:109732218 Elapsed:79.264797ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.027882ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:183.947823ms} native-hash-attribution:{Calls:529 Bytes:0 Elapsed:31.652335ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.164µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:13.158984506s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.821µs} process-current:{Calls:276 Bytes:0 Elapsed:5.16401798s} standby-add-guard:{Calls:13 Bytes:0 Elapsed:977.382738ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:5.44273136s} whole-executable-hash:{Calls:529 Bytes:19349447774 Elapsed:13.930948256s}]; overlapping durations, not default12 performance
+2026-11-09T13:51:45.4566407Z     domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:52:24.0122396Z     domain_tcp_original_native_linux_test.go:1025: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:52:24.0270234Z     domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved
+2026-11-09T13:52:24.0343287Z --- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (102.82s)
+2026-11-09T13:52:24.0344173Z PASS
+2026-11-09T13:52:24.3711742Z     domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:52:24.3739848Z     domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved
+2026-11-09T13:52:24.3764752Z --- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (102.82s)
+2026-11-09T13:52:24.4296183Z CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:52:26.1050784Z === RUN   TestDomainTCPOriginalNativeFailedPreparationRetirement
+2026-11-09T13:52:26.1053490Z     domain_tcp_original_native_linux_test.go:185: DIAGNOSTIC FUNCTIONAL WINDOW30s; NOT12s performance acceptance
+2026-11-09T13:52:26.4112298Z     domain_tcp_original_native_linux_test.go:456: COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication30s/join15s; diagnostic=true
+2026-11-09T13:52:43.5092897Z     domain_tcp_original_native_linux_test.go:599: actual first DNS answer completed-counter snapshot (post-send closing may still be in flight; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.063317374s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:6.049µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.915101335s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.28634743s} dns-send:{Calls:1 Bytes:0 Elapsed:871.196044ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:450ns} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.85391ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.322725ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.720737ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.384111ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.507441ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:79.422211ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.317191ms} hash-stack/after-opening-scope/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:79.104195ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:211.768182ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.096307ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.736006ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.454586ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:132.088357ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.574636ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.581367ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.401592ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.881628ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.781398ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.40549ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.407955ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.396554ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.51255ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:291.597088ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.900358ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.706645ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:212.770151ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.643066ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.477409ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:79.060346ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.725728ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.697901ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:106.049579ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.374592ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.400622ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.604141ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.842515ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:107.775046ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.960891ms} kernel-observe:{Calls:4 Bytes:0 Elapsed:2.468331647s} kernel-observe-success:{Calls:4 Bytes:0 Elapsed:851ns} mapping-compare:{Calls:3 Bytes:0 Elapsed:2.591377102s} mapping-compare-success:{Calls:3 Bytes:0 Elapsed:781ns} mapping-original-tool-closing:{Calls:3 Bytes:0 Elapsed:1.001µs} mapping-original-tool-read:{Calls:3 Bytes:0 Elapsed:2.33748441s} native-hash-attribution:{Calls:134 Bytes:0 Elapsed:5.36791ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.264µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.533606251s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.877µs} process-current:{Calls:379 Bytes:0 Elapsed:6.582620403s} publication-gate:{Calls:14 Bytes:0 Elapsed:9.957µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:943.978159ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.499611306s} whole-executable-hash:{Calls:134 Bytes:4901372404 Elapsed:3.550305207s}]
+2026-11-09T13:52:46.7753515Z     domain_tcp_original_native_linux_test.go:627: actual before stopRun completed-counter snapshot (in-flight checks excluded; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.063317374s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:6.049µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.915101335s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.28634743s} dns-send:{Calls:1 Bytes:0 Elapsed:871.196044ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:450ns} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.85391ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.322725ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.720737ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.384111ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.507441ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:79.422211ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.317191ms} hash-stack/after-opening-scope/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.460445ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:211.768182ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.096307ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.736006ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.454586ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:132.088357ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.574636ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.581367ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.401592ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.881628ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.781398ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.40549ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.407955ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.396554ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.51255ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:291.597088ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.900358ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.706645ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:212.770151ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.643066ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.477409ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:160.419588ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.725728ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.697901ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:106.049579ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.374592ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.400622ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.604141ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.842515ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:107.775046ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.960891ms} kernel-observe:{Calls:7 Bytes:0 Elapsed:5.132695991s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:1.631µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:6.209279145s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:1.652µs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:2.154µs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:5.670479543s} native-hash-attribution:{Calls:140 Bytes:0 Elapsed:5.605113ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.264µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.533606251s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.877µs} process-current:{Calls:460 Bytes:0 Elapsed:7.985675408s} publication-gate:{Calls:15 Bytes:0 Elapsed:3.109028774s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:141ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:943.978159ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.499611306s} whole-executable-hash:{Calls:140 Bytes:5120836840 Elapsed:3.712020699s}]
+2026-11-09T13:52:54.8023777Z     domain_tcp_original_native_linux_test.go:654: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:52:55.0976755Z     domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.063317374s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:6.049µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.915101335s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.28634743s} dns-send:{Calls:1 Bytes:0 Elapsed:871.196044ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:450ns} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.85391ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.322725ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.720737ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.384111ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.507441ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:79.422211ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.317191ms} hash-stack/after-opening-scope/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.460445ms} hash-stack/after-opening-scope/other:{Calls:9 Bytes:329196654 Elapsed:237.914731ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.096307ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.736006ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.454586ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:132.088357ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.574636ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.581367ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.401592ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.881628ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.781398ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.40549ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.407955ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.396554ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.51255ms} hash-stack/direct/other:{Calls:14 Bytes:512083684 Elapsed:370.486914ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.900358ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.706645ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:212.770151ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.643066ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.477409ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:160.419588ms} hash-stack/file-opening-wrapper/other:{Calls:2 Bytes:73154812 Elapsed:52.911681ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.697901ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:106.049579ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.374592ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.400622ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.604141ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.842515ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:107.775046ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.960891ms} kernel-observe:{Calls:7 Bytes:0 Elapsed:5.132695991s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:1.631µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:6.209279145s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:1.652µs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:2.154µs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:5.670479543s} native-hash-attribution:{Calls:145 Bytes:0 Elapsed:5.745313ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.264µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.533606251s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.877µs} process-current:{Calls:460 Bytes:0 Elapsed:7.985675408s} publication-gate:{Calls:15 Bytes:0 Elapsed:3.109028774s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:141ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:943.978159ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.499611306s} whole-executable-hash:{Calls:145 Bytes:5303723870 Elapsed:3.843243027s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-save:688]; overlapping cumulative durations, not wall speed
+2026-11-09T13:52:58.8266311Z     domain_tcp_original_native_linux_test.go:843: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:52:58.8428321Z     domain_tcp_original_native_linux_test.go:850: reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority
+2026-11-09T13:53:29.5514199Z     domain_tcp_coexistence_native_linux_test.go:101: successor original Run/join observations map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:9.218743635s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:5.045µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:9.075629467s} capture-prepare:{Calls:1 Bytes:0 Elapsed:17.461050971s} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.799835ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.402351ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:96 Bytes:3511430976 Elapsed:2.526320845s} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.136763ms} hash-stack/after-opening-scope/capture-mapping/capture-closing:{Calls:8 Bytes:292619248 Elapsed:210.341609ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.699042ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:22 Bytes:804702932 Elapsed:578.108587ms} hash-stack/after-opening-scope/capture-prepare/pre-add:{Calls:56 Bytes:2048334736 Elapsed:1.47224752s} hash-stack/after-opening-scope/other:{Calls:13 Bytes:475506278 Elapsed:342.054753ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.172381ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.472466ms} hash-stack/after-opening-scope/standby-capture:{Calls:12 Bytes:438928872 Elapsed:315.910961ms} hash-stack/after-opening-scope/standby-issue:{Calls:8 Bytes:292619248 Elapsed:210.438451ms} hash-stack/after-opening-scope/standby-prepare/pre-add:{Calls:32 Bytes:1170476992 Elapsed:842.030591ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:10 Bytes:365774060 Elapsed:262.73894ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:5 Bytes:182887030 Elapsed:131.091499ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:5 Bytes:182887030 Elapsed:132.134926ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:104.886526ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.053155ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.07002ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.192543ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.147334ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.097975ms} hash-stack/direct/other:{Calls:23 Bytes:841280338 Elapsed:604.606992ms} hash-stack/direct/standby-capture:{Calls:3 Bytes:109732218 Elapsed:78.875037ms} hash-stack/direct/standby-issue:{Calls:8 Bytes:292619248 Elapsed:209.804971ms} hash-stack/direct/standby-prepare/standby-capture:{Calls:5 Bytes:182887030 Elapsed:131.44791ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.708795ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:52 Bytes:1902025112 Elapsed:1.365589572s} hash-stack/file-opening-wrapper/capture-issue/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:78.477445ms} hash-stack/file-opening-wrapper/capture-mapping/capture-closing:{Calls:4 Bytes:146309624 Elapsed:104.754633ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:13 Bytes:475506278 Elapsed:341.640075ms} hash-stack/file-opening-wrapper/capture-prepare/pre-add:{Calls:28 Bytes:1024167368 Elapsed:734.381264ms} hash-stack/file-opening-wrapper/other:{Calls:6 Bytes:219464436 Elapsed:157.269931ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.821517ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:104.838087ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:8 Bytes:292619248 Elapsed:209.915768ms} hash-stack/file-opening-wrapper/standby-issue:{Calls:3 Bytes:109732218 Elapsed:78.425327ms} hash-stack/file-opening-wrapper/standby-prepare/pre-add:{Calls:16 Bytes:585238496 Elapsed:419.522683ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:8 Bytes:292619248 Elapsed:209.867707ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:3 Bytes:109732218 Elapsed:78.717484ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:3 Bytes:109732218 Elapsed:78.732091ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.002686ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:183.864635ms} native-hash-attribution:{Calls:529 Bytes:0 Elapsed:28.464129ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:932ns} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:13.035833294s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:3.265µs} process-current:{Calls:276 Bytes:0 Elapsed:5.117429202s} standby-add-guard:{Calls:13 Bytes:0 Elapsed:940.744561ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:5.33170011s} whole-executable-hash:{Calls:529 Bytes:19349447774 Elapsed:13.904813683s}]; overlapping durations, not default12 performance
+2026-11-09T13:53:29.9032545Z     domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:54:15.8247807Z     domain_tcp_original_native_linux_test.go:1025: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:54:15.8391116Z     domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved
+2026-11-09T13:54:15.8467743Z --- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (109.74s)
+2026-11-09T13:54:15.8468882Z PASS
+2026-11-09T13:54:16.1880859Z     domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:54:16.1910262Z     domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved
+2026-11-09T13:54:16.1936779Z --- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (109.74s)
+2026-11-09T13:54:16.2474800Z CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:54:17.9703011Z === RUN   TestDomainTCPOriginalNativeFailedPreparationRetirement
+2026-11-09T13:54:17.9704373Z     domain_tcp_original_native_linux_test.go:185: DIAGNOSTIC FUNCTIONAL WINDOW30s; NOT12s performance acceptance
+2026-11-09T13:54:18.2697556Z     domain_tcp_original_native_linux_test.go:456: COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication30s/join15s; diagnostic=true
+2026-11-09T13:54:35.3964809Z     domain_tcp_original_native_linux_test.go:599: actual first DNS answer completed-counter snapshot (post-send closing may still be in flight; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:3.971701683s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:4.931µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.82877047s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.135628387s} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.909845ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.776774ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.71259ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.226903ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.366713ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:78.998001ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.280589ms} hash-stack/after-opening-scope/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:78.924116ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:211.09645ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.652115ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.658891ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.889552ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.954994ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.582887ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.567564ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.498702ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.184879ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.602831ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.460726ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.268931ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.524508ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.325239ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:291.24029ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.689529ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.543967ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.667474ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.72515ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.371959ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:78.737694ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.342418ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.312341ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.224022ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.229945ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.28449ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.209472ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.369469ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.793437ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.154008ms} kernel-observe:{Calls:4 Bytes:0 Elapsed:2.504633067s} kernel-observe-success:{Calls:4 Bytes:0 Elapsed:1.073µs} mapping-compare:{Calls:3 Bytes:0 Elapsed:2.629838424s} mapping-compare-success:{Calls:3 Bytes:0 Elapsed:1.021µs} mapping-original-tool-closing:{Calls:3 Bytes:0 Elapsed:1.253µs} mapping-original-tool-read:{Calls:3 Bytes:0 Elapsed:2.37544816s} native-hash-attribution:{Calls:134 Bytes:0 Elapsed:5.179784ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.446934363s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.398µs} process-current:{Calls:379 Bytes:0 Elapsed:6.564115792s} publication-gate:{Calls:14 Bytes:0 Elapsed:9.277µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:940.260033ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.48282105s} whole-executable-hash:{Calls:134 Bytes:4901372404 Elapsed:3.538359465s}]
+2026-11-09T13:54:38.6830477Z     domain_tcp_original_native_linux_test.go:627: actual before stopRun completed-counter snapshot (in-flight checks excluded; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:3.971701683s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:4.931µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.82877047s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.135628387s} dns-send:{Calls:1 Bytes:0 Elapsed:888.58639ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:661ns} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.909845ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.776774ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.71259ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.226903ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.366713ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:78.998001ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.280589ms} hash-stack/after-opening-scope/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:158.957015ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:211.09645ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.652115ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.658891ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.889552ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.954994ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.582887ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.567564ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.498702ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.184879ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.602831ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.460726ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.268931ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.524508ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.325239ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:291.24029ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.689529ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.543967ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.667474ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.72515ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.371959ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.713938ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.342418ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.312341ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.224022ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.229945ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.28449ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.209472ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.369469ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.793437ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.154008ms} kernel-observe:{Calls:7 Bytes:0 Elapsed:5.172576966s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:2.014µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:6.262031677s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:2.444µs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:2.585µs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:5.728869016s} native-hash-attribution:{Calls:140 Bytes:0 Elapsed:5.417167ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.446934363s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.398µs} process-current:{Calls:460 Bytes:0 Elapsed:7.948747178s} publication-gate:{Calls:15 Bytes:0 Elapsed:3.130924928s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:90ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:940.260033ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.48282105s} whole-executable-hash:{Calls:140 Bytes:5120836840 Elapsed:3.699368608s}]
+2026-11-09T13:54:46.8359276Z     domain_tcp_original_native_linux_test.go:654: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:54:47.1326739Z     domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:3.971701683s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:4.931µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.82877047s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.135628387s} dns-send:{Calls:1 Bytes:0 Elapsed:888.58639ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:661ns} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.909845ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.776774ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.71259ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.226903ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.366713ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:78.998001ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.280589ms} hash-stack/after-opening-scope/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:158.957015ms} hash-stack/after-opening-scope/other:{Calls:9 Bytes:329196654 Elapsed:237.605211ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.652115ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.658891ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.889552ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.954994ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.582887ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.567564ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.498702ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.184879ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.602831ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.460726ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.268931ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.524508ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.325239ms} hash-stack/direct/other:{Calls:14 Bytes:512083684 Elapsed:370.063713ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.689529ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.543967ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:211.667474ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.72515ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:26.371959ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:6 Bytes:219464436 Elapsed:159.713938ms} hash-stack/file-opening-wrapper/other:{Calls:2 Bytes:73154812 Elapsed:52.625989ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:184.312341ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.224022ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.229945ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.28449ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.209472ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.369469ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.793437ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.154008ms} kernel-observe:{Calls:7 Bytes:0 Elapsed:5.172576966s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:2.014µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:6.262031677s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:2.444µs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:2.585µs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:5.728869016s} native-hash-attribution:{Calls:145 Bytes:0 Elapsed:5.557227ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.446934363s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.398µs} process-current:{Calls:460 Bytes:0 Elapsed:7.948747178s} publication-gate:{Calls:15 Bytes:0 Elapsed:3.130924928s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:90ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:940.260033ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.48282105s} whole-executable-hash:{Calls:145 Bytes:5303723870 Elapsed:3.830984363s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-save:688]; overlapping cumulative durations, not wall speed
+2026-11-09T13:54:50.9051961Z     domain_tcp_original_native_linux_test.go:843: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:54:50.9208709Z     domain_tcp_original_native_linux_test.go:850: reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority
+2026-11-09T13:55:22.1676174Z     domain_tcp_coexistence_native_linux_test.go:101: successor original Run/join observations map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:9.37882729s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:6.522µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:9.233923913s} capture-prepare:{Calls:1 Bytes:0 Elapsed:17.723928961s} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.52928ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:185.090341ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:96 Bytes:3511430976 Elapsed:2.540589198s} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.330947ms} hash-stack/after-opening-scope/capture-mapping/capture-closing:{Calls:8 Bytes:292619248 Elapsed:210.706231ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.359604ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:22 Bytes:804702932 Elapsed:581.576002ms} hash-stack/after-opening-scope/capture-prepare/pre-add:{Calls:56 Bytes:2048334736 Elapsed:1.475838281s} hash-stack/after-opening-scope/other:{Calls:13 Bytes:475506278 Elapsed:343.455386ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.920461ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.944543ms} hash-stack/after-opening-scope/standby-capture:{Calls:12 Bytes:438928872 Elapsed:316.204534ms} hash-stack/after-opening-scope/standby-issue:{Calls:8 Bytes:292619248 Elapsed:211.978449ms} hash-stack/after-opening-scope/standby-prepare/pre-add:{Calls:32 Bytes:1170476992 Elapsed:845.286359ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:10 Bytes:365774060 Elapsed:263.764794ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:5 Bytes:182887030 Elapsed:131.678129ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:5 Bytes:182887030 Elapsed:131.505488ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.095178ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.169296ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.369063ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.136936ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.267913ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:4 Bytes:146309624 Elapsed:105.269698ms} hash-stack/direct/other:{Calls:23 Bytes:841280338 Elapsed:605.372775ms} hash-stack/direct/standby-capture:{Calls:3 Bytes:109732218 Elapsed:79.155001ms} hash-stack/direct/standby-issue:{Calls:8 Bytes:292619248 Elapsed:210.649199ms} hash-stack/direct/standby-prepare/standby-capture:{Calls:5 Bytes:182887030 Elapsed:131.860282ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:52.676604ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:52 Bytes:1902025112 Elapsed:1.379233118s} hash-stack/file-opening-wrapper/capture-issue/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:79.072352ms} hash-stack/file-opening-wrapper/capture-mapping/capture-closing:{Calls:4 Bytes:146309624 Elapsed:104.840263ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:13 Bytes:475506278 Elapsed:341.897414ms} hash-stack/file-opening-wrapper/capture-prepare/pre-add:{Calls:28 Bytes:1024167368 Elapsed:735.609381ms} hash-stack/file-opening-wrapper/other:{Calls:6 Bytes:219464436 Elapsed:157.831081ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:183.973746ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.196675ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:8 Bytes:292619248 Elapsed:210.844886ms} hash-stack/file-opening-wrapper/standby-issue:{Calls:3 Bytes:109732218 Elapsed:78.907515ms} hash-stack/file-opening-wrapper/standby-prepare/pre-add:{Calls:16 Bytes:585238496 Elapsed:421.178858ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:8 Bytes:292619248 Elapsed:211.203515ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:3 Bytes:109732218 Elapsed:78.999396ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:3 Bytes:109732218 Elapsed:78.947127ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.066557ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:184.441235ms} native-hash-attribution:{Calls:529 Bytes:0 Elapsed:32.433199ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.082µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:13.234879213s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:6.662µs} process-current:{Calls:276 Bytes:0 Elapsed:5.190589422s} standby-add-guard:{Calls:13 Bytes:0 Elapsed:982.299416ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:5.469939857s} whole-executable-hash:{Calls:529 Bytes:19349447774 Elapsed:13.959023091s}]; overlapping durations, not default12 performance
+2026-11-09T13:55:22.5216858Z     domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:56:01.5881036Z     domain_tcp_original_native_linux_test.go:1025: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+2026-11-09T13:56:01.6014700Z     domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved
+2026-11-09T13:56:01.6092606Z --- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (103.64s)
+2026-11-09T13:56:01.6093408Z PASS
+2026-11-09T13:56:01.9510649Z     domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+2026-11-09T13:56:01.9540869Z     domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved
+2026-11-09T13:56:01.9567370Z --- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (103.64s)
+2026-11-09T13:56:01.9791118Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-09T13:56:01.9791552Z with:
+2026-11-09T13:56:01.9791897Z   name: research-preparation-1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b
+2026-11-09T13:56:01.9792312Z   path: artifacts/preparation
+2026-11-09T13:56:01.9792566Z   if-no-files-found: error
+2026-11-09T13:56:01.9792800Z   compression-level: 6
+2026-11-09T13:56:01.9793013Z   overwrite: false
+2026-11-09T13:56:01.9793229Z   include-hidden-files: false
+2026-11-09T13:56:01.9793459Z env:
+2026-11-09T13:56:01.9793644Z   GOTOOLCHAIN: local
+2026-11-09T13:56:01.9793849Z ##[endgroup]
+2026-11-09T13:56:02.1603962Z (node:38504) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T13:56:02.1605828Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T13:56:02.1792844Z With the provided path, there will be 23 files uploaded
+2026-11-09T13:56:02.1794412Z Artifact name is valid!
+2026-11-09T13:56:02.1795148Z Root directory input is valid!
+2026-11-09T13:56:02.5845341Z Beginning upload of artifact content to blob storage
+2026-11-09T13:56:02.6573913Z (node:38504) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T13:56:03.2187070Z Uploaded bytes 480223
+2026-11-09T13:56:03.2925174Z Finished uploading artifact content to blob storage!
+2026-11-09T13:56:03.2926338Z SHA256 digest of uploaded artifact zip is ecba6034034d4796fc7fefe0c00f8a72889c7cb82504cb226aedcc7a70bfef3d
+2026-11-09T13:56:03.2928031Z Finalizing artifact upload
+2026-11-09T13:56:03.7690325Z Artifact research-preparation-1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b.zip successfully finalized. Artifact ID 13679883082
+2026-11-09T13:56:03.7692585Z Artifact research-preparation-1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b has been successfully uploaded! Final size is 480223 bytes. Artifact ID is 13679883082
+2026-11-09T13:56:03.7698994Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42628478111/artifacts/13679883082
+2026-11-09T13:56:03.7905530Z Post job cleanup.
+2026-11-09T13:56:03.9288603Z Post job cleanup.
+2026-11-09T13:56:04.0248247Z [command]/usr/bin/git version
+2026-11-09T13:56:04.0298433Z git version 2.56.0
+2026-11-09T13:56:04.0337703Z Temporarily overriding HOME='/home/runner/work/_temp/80642edd-7f73-4836-819f-c6f998e49c73' before making global git config changes
+2026-11-09T13:56:04.0339456Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:56:04.0343671Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA/baseline
+2026-11-09T13:56:04.0383250Z Removing SSH command configuration
+2026-11-09T13:56:04.0391149Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:56:04.0441197Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:56:04.0709261Z Removing HTTP extra header
+2026-11-09T13:56:04.0716972Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:56:04.0760709Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:56:04.1165660Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:56:04.1166770Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:56:04.1177713Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:56:04.1635515Z Post job cleanup.
+2026-11-09T13:56:04.2614367Z [command]/usr/bin/git version
+2026-11-09T13:56:04.2663122Z git version 2.56.0
+2026-11-09T13:56:04.2703849Z Temporarily overriding HOME='/home/runner/work/_temp/10953e14-71b5-4499-a325-8cffe2a33f6a' before making global git config changes
+2026-11-09T13:56:04.2705188Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:56:04.2709013Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:56:04.2749700Z Removing SSH command configuration
+2026-11-09T13:56:04.2757633Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:56:04.2803783Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:56:04.3088606Z Removing HTTP extra header
+2026-11-09T13:56:04.3096254Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:56:04.3146474Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:56:04.3428991Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:56:04.3440153Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:56:04.3493456Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:56:04.4015670Z Cleaning up orphan processes
+2026-11-09T13:56:04.4486138Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

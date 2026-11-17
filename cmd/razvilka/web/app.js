@@ -653,6 +653,7 @@ function setView(name) {
   render('navigation-status', () => { if (state.status && Object.keys(state.status).length) renderStatus(); });
   render('navigation-tabs', () => { if (typeof renderInterfaceNavigation === 'function') renderInterfaceNavigation(name); });
   render('navigation-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  if (name === 'updates' && state.authenticated === true) render('navigation-updates', () => { if (typeof refreshAppUpdate === 'function') void refreshAppUpdate(); });
   if (typeof syncConnectionObservation === 'function') render('navigation-connections', syncConnectionObservation);
   if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (state.currentView === name) refreshPanelView(name); });
   if (name === 'engineconfig') render('navigation-engine', () => {
@@ -3379,6 +3380,10 @@ function dnsProviderConfigMarkup(provider, dns) {
 
 function renderDNS() {
   const dns = state.dns || {};
+  const bypassStatus = $('#dnsExperimentalBypassStatus');
+  if (bypassStatus && dns.experimental_bypass?.available === false && dns.experimental_bypass.reason) {
+    bypassStatus.textContent = dns.experimental_bypass.reason;
+  }
   const selectedID = dns.draft?.profile_id || 'automatic';
   const appliedID = dns.applied?.profile_id || 'automatic';
   $('#dnsProfiles').innerHTML = (dns.profiles || []).map((profile) => {

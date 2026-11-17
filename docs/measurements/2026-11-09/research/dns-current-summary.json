@@ -1,0 +1,479 @@
+{
+  "status": "Software strict DNS is NOT accepted; stopping further experiments at user limit request.",
+  "production_deadlines_seconds": {
+    "dns_ready": 12,
+    "selected_service": 4
+  },
+  "changes": {
+    "successor_original_view": "7428f8d1; actual diagnostic30 path36 scopes/72 derived/72 completions, not strict readiness",
+    "gate_timing": "2200487c plus fixture cleanup42c2640b; native-only diagnostic, runtime checks unchanged",
+    "ledger_private_bytes": "ac744ba1; independently reviewed bytes.NewReader substitution, no parse/read/source checks removed"
+  },
+  "strict_runs": {
+    "0470b68b": {
+      "sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+      "run_id": 42687051039,
+      "cases": {
+        "selected": {
+          "job_id": 129396561240,
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42687051039/job/129396561240",
+          "cpu": "AMD EPYC 9V45 96-Core Processor",
+          "result": "FAIL",
+          "failed_stage": "GEN1 selected actual HTTPS4s",
+          "test_wall_seconds": 25.86,
+          "completed_gate_wait_seconds": 0.252711184,
+          "completed_gate_held_seconds": 11.712226808999999,
+          "stage_metrics": {
+            "capture-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "4.935625973s"
+            },
+            "standby-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "1.609923305s"
+            },
+            "accepted-flow-lookup": {
+              "calls": 2,
+              "bytes": 0,
+              "elapsed": "2.802564182s"
+            },
+            "accepted-flow-guard": {
+              "calls": 2,
+              "bytes": 0,
+              "elapsed": "1.100551172s"
+            },
+            "dns-publication-opening": {
+              "calls": 11,
+              "bytes": 0,
+              "elapsed": "609.135146ms"
+            },
+            "dns-publication-closing": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "918.726934ms"
+            }
+          },
+          "evidence": [
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-0470b68b/selected-artifact/native.log",
+              "sha256": "1bc91e9612a2aece257cc122d32fe55f0b7bbc18e55f57b63494ef40377069fc",
+              "bytes": 12448
+            },
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-0470b68b/selected-artifact/gate-timing-results.json",
+              "sha256": "d33bcb665abfb6bed04e9b69040e0b0bdcdec430960db7c0c74c0a28491260c2",
+              "bytes": 2805
+            }
+          ]
+        },
+        "canceled": {
+          "job_id": 129396561154,
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42687051039/job/129396561154",
+          "cpu": "AMD EPYC 7763 64-Core Processor",
+          "result": "FAIL",
+          "failed_stage": "GEN1 DNS readiness12s",
+          "test_wall_seconds": 21.8,
+          "completed_gate_wait_seconds": 0.0013570449999999999,
+          "completed_gate_held_seconds": 11.027328195,
+          "stage_metrics": {
+            "capture-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "6.570198237s"
+            },
+            "standby-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "2.0853147s"
+            },
+            "dns-publication-opening": {
+              "calls": 12,
+              "bytes": 0,
+              "elapsed": "4.445Вµs"
+            }
+          },
+          "evidence": [
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-0470b68b/canceled-artifact/native.log",
+              "sha256": "928c8fd289691fe612d8ed0614f255eeb33c1686544086c26c10fd55fe721d66",
+              "bytes": 39898
+            },
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-0470b68b/canceled-artifact/gate-timing-results.json",
+              "sha256": "ac3c83ac28295df6dd4641e4dddc073ce3c7f11933f7fd1c46394bf099b24728",
+              "bytes": 1730
+            }
+          ]
+        }
+      },
+      "summary_evidence": {
+        "path": "C:/RAZVILKA-research-20261109/lifecycle-0470b68b/domain-results.json",
+        "sha256": "0787b1e3c8ca31e61c9aeb2c97804967658bb70992adc03b4d34e1540c6ecf91",
+        "bytes": 16462
+      }
+    },
+    "d7cb22d7": {
+      "sha": "d7cb22d729367c85311a77804ab71b9613eba952",
+      "run_id": 42689671622,
+      "cases": {
+        "selected": {
+          "job_id": 129405764228,
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42689671622/job/129405764228",
+          "cpu": "AMD EPYC 7763 64-Core Processor",
+          "result": "FAIL",
+          "failed_stage": "GEN1 DNS readiness12s",
+          "test_wall_seconds": 22.15,
+          "completed_gate_wait_seconds": 0.001795057,
+          "completed_gate_held_seconds": 11.274525572,
+          "stage_metrics": {
+            "capture-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "6.698455676s"
+            },
+            "standby-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "2.144849688s"
+            },
+            "dns-publication-opening": {
+              "calls": 12,
+              "bytes": 0,
+              "elapsed": "6.121Вµs"
+            }
+          },
+          "evidence": [
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/selected-artifact/native.log",
+              "sha256": "34a90ef1d59a74d71a135e33949e7eec55c1f67acf9ac5537d045e63fccc9107",
+              "bytes": 43095
+            },
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/selected-artifact/gate-timing-results.json",
+              "sha256": "ebfe3b6c3deb7b659c6aeed4cf5f721f1d24533de2899c8f264a50e67a33ce7d",
+              "bytes": 1729
+            }
+          ]
+        },
+        "canceled": {
+          "job_id": 129405765187,
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42689671622/job/129405765187",
+          "cpu": "AMD EPYC 9V74 80-Core Processor",
+          "result": "FAIL",
+          "failed_stage": "GEN1 DNS readiness12s",
+          "test_wall_seconds": 14.13,
+          "completed_gate_wait_seconds": 0.0008195949999999999,
+          "completed_gate_held_seconds": 3.715854624,
+          "stage_metrics": {
+            "capture-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "7.503407802s"
+            },
+            "standby-prepare": {
+              "calls": 1,
+              "bytes": 0,
+              "elapsed": "2.388807274s"
+            },
+            "dns-publication-opening": {
+              "calls": 12,
+              "bytes": 0,
+              "elapsed": "7.392Вµs"
+            }
+          },
+          "evidence": [
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/canceled-artifact/native.log",
+              "sha256": "18c0d0f37dd440befee0908ca2e6e9604a03ca375dd374136878f84c34700b81",
+              "bytes": 41938
+            },
+            {
+              "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/canceled-artifact/gate-timing-results.json",
+              "sha256": "db15b67df585370ffdf478de0858780ccb3c58664cbee9fecd8b6419a9f37389",
+              "bytes": 1751
+            }
+          ]
+        }
+      },
+      "summary_evidence": {
+        "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/domain-results.json",
+        "sha256": "3808d7a7f796f57cc22223e71b8e9070eac4ed909a9b8bdb3cc344ceabfbb998",
+        "bytes": 13069
+      }
+    }
+  },
+  "ledger": {
+    "sha": "d7cb22d729367c85311a77804ab71b9613eba952",
+    "run_id": 42689671622,
+    "job_id": 129405764228,
+    "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42689671622/job/129405764228",
+    "claim": "One allocation removed per decode; modeled decoder only. Near-neutral time; no route speed claim.",
+    "modes": {
+      "normal": {
+        "cpu": "AMD EPYC 7763 64-Core Processor",
+        "tests_pass": {
+          "TestSyntheticDNSLedgerDecoderParity": 3,
+          "TestSyntheticDNSLedgerDecoderOwnedReadIndependence": 3
+        },
+        "summary": {
+          "1": {
+            "before_median": {
+              "ns_op": 13396,
+              "bytes_op": 4448,
+              "allocs_op": 37
+            },
+            "after_median": {
+              "ns_op": 12846,
+              "bytes_op": 3696,
+              "allocs_op": 36
+            },
+            "ns_change_percent": -4.105703194983579
+          },
+          "16": {
+            "before_median": {
+              "ns_op": 171822,
+              "bytes_op": 61432,
+              "allocs_op": 304
+            },
+            "after_median": {
+              "ns_op": 169002,
+              "bytes_op": 50568,
+              "allocs_op": 303
+            },
+            "ns_change_percent": -1.6412333694171832
+          },
+          "256": {
+            "before_median": {
+              "ns_op": 2671427,
+              "bytes_op": 1037307,
+              "allocs_op": 4400
+            },
+            "after_median": {
+              "ns_op": 2680268,
+              "bytes_op": 857102,
+              "allocs_op": 4399
+            },
+            "ns_change_percent": 0.3309467187387005
+          }
+        }
+      },
+      "race": {
+        "cpu": "AMD EPYC 7763 64-Core Processor",
+        "tests_pass": {
+          "TestSyntheticDNSLedgerDecoderParity": 3,
+          "TestSyntheticDNSLedgerDecoderOwnedReadIndependence": 3
+        },
+        "summary": {
+          "1": {
+            "before_median": {
+              "ns_op": 122213,
+              "bytes_op": 4496,
+              "allocs_op": 37
+            },
+            "after_median": {
+              "ns_op": 123449,
+              "bytes_op": 3744,
+              "allocs_op": 36
+            },
+            "ns_change_percent": 1.0113490381546963
+          },
+          "16": {
+            "before_median": {
+              "ns_op": 1665465,
+              "bytes_op": 62088,
+              "allocs_op": 304
+            },
+            "after_median": {
+              "ns_op": 1672891,
+              "bytes_op": 51224,
+              "allocs_op": 303
+            },
+            "ns_change_percent": 0.445881480547472
+          },
+          "256": {
+            "before_median": {
+              "ns_op": 27767008,
+              "bytes_op": 1047560,
+              "allocs_op": 4400
+            },
+            "after_median": {
+              "ns_op": 26976030,
+              "bytes_op": 867352,
+              "allocs_op": 4399
+            },
+            "ns_change_percent": -2.8486252461914496
+          }
+        }
+      }
+    },
+    "evidence": [
+      {
+        "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/selected-artifact/ledger-decode-results.json",
+        "sha256": "d805302198c084f15203665a7899bb99729741d3d885d5aee4cb7e01b2eef58b",
+        "bytes": 8537
+      },
+      {
+        "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/selected-artifact/ledger-decode-normal.log",
+        "sha256": "af687639db18a9ee917dfb1eeab1b8972ecc24084ac3e6c04b986da4c4807b53",
+        "bytes": 4411
+      },
+      {
+        "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/selected-artifact/ledger-decode-race.log",
+        "sha256": "0ae4afc8c3eb7aca00d5778efb57055bd6080eed50b52a3bb09390239a39730d",
+        "bytes": 4411
+      }
+    ]
+  },
+  "preparation_d7": {
+    "sha": "d7cb22d729367c85311a77804ab71b9613eba952",
+    "run_id": 42689671622,
+    "job_id": 129405765134,
+    "job_status": "completed",
+    "job_conclusion": "success",
+    "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42689671622/job/129405765134",
+    "limits": "Diagnostic30 failure-custody cuts; not strict12 readiness. Baseline failure retained separately.",
+    "cases": {
+      "baseline-clean": {
+        "test_results": [
+          [
+            "FAIL",
+            "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+            "82.54"
+          ]
+        ],
+        "successor_metrics": [
+          {}
+        ],
+        "evidence": [
+          {
+            "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/preparation-artifact/baseline-clean/native.log",
+            "sha256": "21f7a176d156b1cdc818c08574118cc000f31feccfaff3894f1cecf0e38ec50d",
+            "bytes": 16929
+          }
+        ]
+      },
+      "candidate-capture-transaction": {
+        "test_results": [
+          [
+            "PASS",
+            "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+            "93.94"
+          ]
+        ],
+        "successor_metrics": [
+          {
+            "successor-listener-derived-complete": {
+              "calls": 72,
+              "elapsed": "32.898Вµs"
+            },
+            "successor-listener-derived-read": {
+              "calls": 72,
+              "elapsed": "29.972Вµs"
+            },
+            "successor-listener-read-scope": {
+              "calls": 36,
+              "elapsed": "4.162190159s"
+            }
+          }
+        ],
+        "evidence": [
+          {
+            "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/preparation-artifact/candidate-capture-transaction/native.log",
+            "sha256": "8dd440a8292fa0ffb4fb62b1e9cc9e61a59b3075669f9cfbdd371a701bfebbbf",
+            "bytes": 17029
+          }
+        ]
+      },
+      "candidate-clean": {
+        "test_results": [
+          [
+            "PASS",
+            "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+            "86.10"
+          ]
+        ],
+        "successor_metrics": [
+          {
+            "successor-listener-derived-complete": {
+              "calls": 72,
+              "elapsed": "36.673Вµs"
+            },
+            "successor-listener-derived-read": {
+              "calls": 72,
+              "elapsed": "32.182Вµs"
+            },
+            "successor-listener-read-scope": {
+              "calls": 36,
+              "elapsed": "4.191215234s"
+            }
+          }
+        ],
+        "evidence": [
+          {
+            "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/preparation-artifact/candidate-clean/native.log",
+            "sha256": "774845a571e836138b715e0e7cd7384c46f0a883fa6ff20dc9a1f6d4a75e2d68",
+            "bytes": 17033
+          }
+        ]
+      },
+      "candidate-standby-transaction": {
+        "test_results": [
+          [
+            "PASS",
+            "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+            "88.33"
+          ]
+        ],
+        "successor_metrics": [
+          {
+            "successor-listener-derived-complete": {
+              "calls": 72,
+              "elapsed": "41.871Вµs"
+            },
+            "successor-listener-derived-read": {
+              "calls": 72,
+              "elapsed": "33.474Вµs"
+            },
+            "successor-listener-read-scope": {
+              "calls": 36,
+              "elapsed": "4.216920191s"
+            }
+          }
+        ],
+        "evidence": [
+          {
+            "path": "C:/RAZVILKA-research-20261109/lifecycle-d7cb22d7/preparation-artifact/candidate-standby-transaction/native.log",
+            "sha256": "bd0caea8edc9081e381bc2086a557e8c60b6a08f49511f756db7880ab6d431b5",
+            "bytes": 17038
+          }
+        ]
+      }
+    }
+  },
+  "decisions": {
+    "gate_contention": "Not dominant in observed failures; 0470 selected wait252.711ms vs11.712s cumulative held, d7 waits below2ms.",
+    "four_query_provider_batch": "Rejected: OS-thread pinning alone does not establish mount/root/proc continuity; per-command captures retained.",
+    "lookup_cross_package_api": "Not implemented: small full-byte saving does not justify changed resolver/owner choreography.",
+    "baseline_pointer_getter": "Unchanged: removing its Current changes temporal transient/sticky-failure observation. Independent reviewer did not approve equivalence."
+  },
+  "next_experiment_not_started": {
+    "name": "Same-SHA same-runner GEN1 CPU-profiler on/off A-B-B-A control",
+    "purpose": "Quantify instrumentation influence before changing temporal guard contracts.",
+    "requirements": [
+      "Independent review of test-only harness option",
+      "Same pinned assets and all source/process/kernel/cleanup checks",
+      "Fresh joined namespace per sample; retain every failure",
+      "Unchanged production12s/4s budgets; no release/router readiness inference"
+    ],
+    "status": "Deferred at explicit user limit request; no source or workflow changes made."
+  },
+  "hardware_status": "No new physical-router validation; these are Linux amd64 CI/native fixture results.",
+  "limitations": [
+    "CPU models differ across jobs; no uncontrolled cross-run speed claim.",
+    "Cumulative timing overlaps and excludes in-flight observations; not additive wall time.",
+    "Positive parser/ownership/custody tests do not establish actual service, strict route or hardware readiness.",
+    "No merge, release, production deployment or router mutation performed by this agent."
+  ]
+}

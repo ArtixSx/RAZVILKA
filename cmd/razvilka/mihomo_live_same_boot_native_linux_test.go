@@ -52,16 +52,20 @@ func TestMihomoSameBootUpdaterGuardChild(t *testing.T) {
 }
 
 type sameBootNativeOutput struct {
-	bytes.Buffer
+	buffer   bytes.Buffer
 	overflow bool
 }
+
+// Keep the buffer private: promoted ReadFrom would bypass the shared pipe cap.
+func (b *sameBootNativeOutput) Len() int       { return b.buffer.Len() }
+func (b *sameBootNativeOutput) String() string { return b.buffer.String() }
 
 func (b *sameBootNativeOutput) Write(p []byte) (int, error) {
 	if len(p) > 32768-b.Len() {
 		b.overflow = true
 		return 0, errors.New("bounded native helper output exceeded")
 	}
-	return b.Buffer.Write(p)
+	return b.buffer.Write(p)
 }
 
 func TestMihomoSameBootCLINativeOriginalParent(t *testing.T) {
@@ -203,7 +207,9 @@ func TestMihomoSameBootCLINativeOriginalParent(t *testing.T) {
 	}
 
 	if err != nil {
-		t.Fatalf("actual sameboot CLI %v prepare_stage=%s", err, dataplane.MihomoSameBootRetirementStage(err))
+		t.Fatalf("actual sameboot CLI %v prepare_stage=%s absence_stage=%s canceled=%t deadline=%t", err,
+			dataplane.MihomoSameBootRetirementStage(err), dataplane.BootRetirementStage(err),
+			errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded))
 	}
 	if result.State != "rolled-back" || result.RollbackVerified || len(stages) != len(expected) {
 		t.Fatal("unverified or incomplete terminal acknowledgment")

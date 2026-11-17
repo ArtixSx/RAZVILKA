@@ -1,0 +1,109 @@
+{
+  "sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "modes": {
+    "production": {
+      "samples": {
+        "before_append": [
+          {
+            "ns_op": 1011710,
+            "bytes_op": 42197,
+            "allocs_op": 548
+          },
+          {
+            "ns_op": 1014121,
+            "bytes_op": 42178,
+            "allocs_op": 548
+          },
+          {
+            "ns_op": 998000,
+            "bytes_op": 42245,
+            "allocs_op": 548
+          }
+        ],
+        "reserved_candidate": [
+          {
+            "ns_op": 1020131,
+            "bytes_op": 37781,
+            "allocs_op": 542
+          },
+          {
+            "ns_op": 1002045,
+            "bytes_op": 37783,
+            "allocs_op": 542
+          },
+          {
+            "ns_op": 1004111,
+            "bytes_op": 37778,
+            "allocs_op": 542
+          }
+        ]
+      },
+      "medians": {
+        "before_append": {
+          "ns_op": 1011710,
+          "bytes_op": 42197,
+          "allocs_op": 548
+        },
+        "reserved_candidate": {
+          "ns_op": 1004111,
+          "bytes_op": 37781,
+          "allocs_op": 542
+        }
+      },
+      "source_parity_passes": 3,
+      "actual_parity_passes": 3
+    },
+    "race": {
+      "samples": {
+        "before_append": [
+          {
+            "ns_op": 1715601,
+            "bytes_op": 50829,
+            "allocs_op": 617
+          },
+          {
+            "ns_op": 1690984,
+            "bytes_op": 50728,
+            "allocs_op": 616
+          },
+          {
+            "ns_op": 1694389,
+            "bytes_op": 50413,
+            "allocs_op": 617
+          }
+        ],
+        "reserved_candidate": [
+          {
+            "ns_op": 1683784,
+            "bytes_op": 46484,
+            "allocs_op": 608
+          },
+          {
+            "ns_op": 1660010,
+            "bytes_op": 46395,
+            "allocs_op": 609
+          },
+          {
+            "ns_op": 1668284,
+            "bytes_op": 46083,
+            "allocs_op": 607
+          }
+        ]
+      },
+      "medians": {
+        "before_append": {
+          "ns_op": 1694389,
+          "bytes_op": 50728,
+          "allocs_op": 617
+        },
+        "reserved_candidate": {
+          "ns_op": 1668284,
+          "bytes_op": 46395,
+          "allocs_op": 608
+        }
+      },
+      "source_parity_passes": 3,
+      "actual_parity_passes": 3
+    }
+  }
+}

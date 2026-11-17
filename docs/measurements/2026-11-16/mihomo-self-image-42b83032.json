@@ -1,0 +1,128 @@
+{
+  "run_id": 43916682582,
+  "sha": "42b8303219ca5201f331163de97097f225dc8e05",
+  "workflow_conclusion": "failure",
+  "reason": "two original image race samples timed out; all eight samples retained",
+  "same_host": true,
+  "source_provenance": {
+    "revision": "42b8303219ca5201f331163de97097f225dc8e05",
+    "archive_sha256": "a0da8c64853f71c5043cbe6de1314983707f1ab306d6da96689284e22b91cee9",
+    "only_changed_file": "internal/dataplane/mihomo_live_cold_process_linux.go",
+    "original_file_sha256": "9e9b1e3ef3cecaa9fa9421354c222b687ad8b3ea7521896e40b18d14a38e6fa2",
+    "comparison_file_sha256": "f62940823180451cb5775b3d9e6cfc45e2be504bd0f2bf2030db25da17f89d77",
+    "replacement_before": "borrowMihomoColdSelfImage(held, \"/proc/self/exe\", &domainTCPImageScratch)",
+    "replacement_after": "borrowMihomoColdSelfImage(held, \"/proc/self/exe\", nil)",
+    "tree_sha256": {
+      "image": "a79a505ed966fe86def852e3b125e82eea65ed72826874cdc6716eb407eedf70",
+      "two-sha": "029aa467dba0fc13bdc8b2d84cb9fb3848a920f28406869e063d7865119a1113"
+    },
+    "sequence": [
+      "image",
+      "two-sha",
+      "two-sha",
+      "image"
+    ],
+    "consumer_deadline_seconds": 120,
+    "profile_enabled": false,
+    "scope": "cold process self image only; other shared scratch consumers unchanged"
+  },
+  "samples": [
+    {
+      "build": "normal",
+      "sample": 0,
+      "variant": "image",
+      "exit_code": 0,
+      "consumer_outcome": "PASS",
+      "consumer_seconds": 47.83,
+      "driver_wall_including_build_ms": 123807.755305,
+      "log_sha256": "21d0bd24726cc16024d5a0db3468ede31d6628d9491e24469e3200e65e741639"
+    },
+    {
+      "build": "normal",
+      "sample": 1,
+      "variant": "two-sha",
+      "exit_code": 0,
+      "consumer_outcome": "PASS",
+      "consumer_seconds": 52.8,
+      "driver_wall_including_build_ms": 125312.274407,
+      "log_sha256": "68594e9dfe3a4f4038546ecf196aa2efb134106f258c305a4d9a6b1a6f3e9cc5"
+    },
+    {
+      "build": "normal",
+      "sample": 2,
+      "variant": "two-sha",
+      "exit_code": 0,
+      "consumer_outcome": "PASS",
+      "consumer_seconds": 52.93,
+      "driver_wall_including_build_ms": 76278.646462,
+      "log_sha256": "f94e3104a0c88dde25935d0018daf5d70956caa41ed18e51fa3e202922e9e5d1"
+    },
+    {
+      "build": "normal",
+      "sample": 3,
+      "variant": "image",
+      "exit_code": 0,
+      "consumer_outcome": "PASS",
+      "consumer_seconds": 47.13,
+      "driver_wall_including_build_ms": 70534.32461,
+      "log_sha256": "8673bfa755c55ea0edefcf71c3e5050363d8d4371a8c42e562c2413de427e478"
+    },
+    {
+      "build": "race",
+      "sample": 0,
+      "variant": "image",
+      "exit_code": 1,
+      "consumer_outcome": "FAIL",
+      "consumer_seconds": 120.0,
+      "driver_wall_including_build_ms": 264673.422219,
+      "log_sha256": "e492808e778a8c99daabcf87f44150b816f1e774f1c4f5bb51307a0106a8787f"
+    },
+    {
+      "build": "race",
+      "sample": 1,
+      "variant": "two-sha",
+      "exit_code": 0,
+      "consumer_outcome": "PASS",
+      "consumer_seconds": 103.53,
+      "driver_wall_including_build_ms": 224071.955983,
+      "log_sha256": "a92aa51dea641eaf2898556549541b8082d48c146c40b2e7348497128706a8f9"
+    },
+    {
+      "build": "race",
+      "sample": 2,
+      "variant": "two-sha",
+      "exit_code": 0,
+      "consumer_outcome": "PASS",
+      "consumer_seconds": 103.74,
+      "driver_wall_including_build_ms": 153086.243515,
+      "log_sha256": "e1709eb9ca89c42de19fc6086b00d31ec2cecd88916262376befb84d9d382bce"
+    },
+    {
+      "build": "race",
+      "sample": 3,
+      "variant": "image",
+      "exit_code": 1,
+      "consumer_outcome": "FAIL",
+      "consumer_seconds": 120.0,
+      "driver_wall_including_build_ms": 168537.761663,
+      "log_sha256": "a25cf57dbf252d9a204907e1c4f1971a925922e1f534777a52a327bd404a3d58"
+    }
+  ],
+  "normal_mean_seconds": {
+    "image": 47.480000000000004,
+    "two-sha": 52.864999999999995
+  },
+  "normal_increase_percent": 11.341617523167624,
+  "decision": {
+    "integrated_sha_prefix": "dc5829fd",
+    "change": "single cold self-image scratch argument set to nil in all builds; existing full opening/closing SHA fallback",
+    "normal_tradeoff": "slower normal accepted to finish both original race parent samples",
+    "remaining": "exact integrated full parent and ACK matrix, full CI, default HEV delivery, router/LAN acceptance"
+  },
+  "limits": [
+    "N=2 per variant and build; fixed ABBA",
+    "120-second failures are censored, not completed timings",
+    "No CPU/RSS measurement in this run; driver wall includes builds separately",
+    "Private Linux route fixture, not physical router; no race-only bypass"
+  ]
+}

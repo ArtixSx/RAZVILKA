@@ -594,6 +594,8 @@ func (b *NFQWSScopedBinding) CheckKnownReferences(ctx context.Context, p *NFQWSS
 // live owned queue/process and LAN gate, absent capture, and a fresh childroot
 // with neither receipt nor receipt lock. It does not create files or require a
 // Complete receipt before the first effect.
+// The private original prepared-Apply composition instead proves its SAME held
+// writer lock and absent receipt on both passes, before any COMMON publication.
 func (b *NFQWSScopedBinding) VerifyPrepared(ctx context.Context, p *NFQWSScopedPlan, path string) error {
 	r, _, err := b.prepare(p, false)
 	if err != nil {
@@ -608,6 +610,12 @@ func (b *NFQWSScopedBinding) VerifyPrepared(ctx context.Context, p *NFQWSScopedP
 	}
 	defer root.Close()
 	absent := func() error {
+		if present, err := nfqwsPreparedHeldAbsence(ctx, b, p, path); present {
+			if err != nil {
+				return err
+			}
+			return nfqwsPreparedAbsenceFault(ctx)
+		}
 		for _, name := range []string{policyAdditionFile, policyAdditionLock} {
 			if _, err := root.Stat(name); !errors.Is(err, os.ErrNotExist) {
 				return errors.Join(ErrNFQWSScopedOwner, err)
@@ -650,6 +658,9 @@ func nfqwsScopedInspectReceipt(ctx context.Context, plan PolicyEffectPlan, path 
 	if ctx == nil || ctx.Err() != nil {
 		return zero, ErrNFQWSScopedOwner
 	}
+	if status, present, err := inspectNFQWSRecoveryReceipt(ctx, plan, path); present {
+		return status, err
+	}
 	plan, hash, err := copyPolicyEffectPlan(plan)
 	if err != nil {
 		return zero, err
@@ -688,9 +699,25 @@ func nfqwsScopedInspectReceipt(ctx context.Context, plan PolicyEffectPlan, path 
 }
 
 func (b *NFQWSScopedBinding) inspect(ctx context.Context, p *NFQWSScopedPlan, index int) (int, error) {
-	if index < 0 || index >= len(p.mixed.Effects) {
+	if p == nil || index < 0 || index >= len(p.mixed.Effects) {
 		return 0, ErrNFQWSScopedOwner
 	}
+	var count int
+	// COMMON calls this pure ExactPresence predicate independently before and
+	// after effects. Keep every whole capture and owner callback fresh, while
+	// sharing only the original tool bytes inside this one finite read scope.
+	err := b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		var err error
+		count, err = b.inspectObserved(observed, p, index)
+		return err
+	})
+	if err != nil {
+		return 0, err // A closing refusal cannot publish a positive count.
+	}
+	return count, nil
+}
+
+func (b *NFQWSScopedBinding) inspectObserved(ctx context.Context, p *NFQWSScopedPlan, index int) (int, error) {
 	rules, err := b.readRules(ctx, p)
 	if err != nil {
 		return 0, err

@@ -1,0 +1,54 @@
+File: razvilka
+Build ID: cc54be217bdb51766197a81572c80c3e62d0389f
+Type: cpu
+Time: 2026-11-09 14:32:14 UTC
+Duration: 40.72s, Total samples = 26.96s (66.21%)
+Showing nodes accounting for 22.80s, 84.57% of 26.96s total
+Dropped 802 nodes (cum <= 0.13s)
+Showing top 45 nodes out of 154
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%     23.39s 86.76%  github.com/ArtixSx/razvilka/internal/app.eachNodeInParallel.func1
+         0     0%     0%     21.13s 78.38%  github.com/ArtixSx/razvilka/internal/app.(*App).runAndRecordNode
+         0     0%     0%     20.26s 75.15%  github.com/ArtixSx/razvilka/internal/updatecheck.(*NodeHistoryAdmission).CheckWrite
+         0     0%     0%     20.17s 74.81%  github.com/ArtixSx/razvilka/internal/app.(*App).nodeHistoryAdmission
+         0     0%     0%     19.17s 71.11%  github.com/ArtixSx/razvilka/internal/updatecheck.hashRegularFile
+         0     0%     0%     19.17s 71.11%  io.Copy (inline)
+     0.02s 0.074% 0.074%     19.17s 71.11%  io.copyBuffer
+         0     0% 0.074%     15.96s 59.20%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0% 0.074%     15.96s 59.20%  crypto/internal/fips140/sha256.block
+    15.96s 59.20% 59.27%     15.96s 59.20%  crypto/internal/fips140/sha256.blockSHANI
+         0     0% 59.27%     13.55s 50.26%  github.com/ArtixSx/razvilka/internal/app.(*App).runDurableNodeCheck.func5
+         0     0% 59.27%     13.55s 50.26%  github.com/ArtixSx/razvilka/internal/app.(*App).runNodeCheckItem
+         0     0% 59.27%     12.61s 46.77%  github.com/ArtixSx/razvilka/internal/app.(*App).checkAndRecordNodeForEngine
+         0     0% 59.27%      9.84s 36.50%  github.com/ArtixSx/razvilka/internal/app.(*App).runDurableNodeCheck.func4
+         0     0% 59.27%      8.52s 31.60%  github.com/ArtixSx/razvilka/internal/app.(*App).screenAndRecordNodeForEngine
+     6.62s 24.55% 83.83%      6.62s 24.55%  internal/runtime/syscall/linux.Syscall6
+     0.04s  0.15% 83.98%      6.46s 23.96%  syscall.RawSyscall6
+     0.07s  0.26% 84.24%      5.41s 20.07%  syscall.Syscall
+         0     0% 84.24%      4.18s 15.50%  internal/poll.ignoringEINTRIO (inline)
+         0     0% 84.24%      3.94s 14.61%  internal/poll.(*FD).Read
+     0.01s 0.037% 84.27%      3.94s 14.61%  os.(*File).Read
+     0.01s 0.037% 84.31%      3.93s 14.58%  os.(*File).read (inline)
+     0.01s 0.037% 84.35%      3.91s 14.50%  syscall.Read (inline)
+         0     0% 84.35%      3.90s 14.47%  syscall.read
+     0.02s 0.074% 84.42%      3.25s 12.05%  io.(*LimitedReader).Read
+     0.01s 0.037% 84.46%      3.24s 12.02%  os.ReadFile
+         0     0% 84.46%      2.29s  8.49%  github.com/ArtixSx/razvilka/internal/app.(*App).compatibleNodeEngine
+         0     0% 84.46%      2.26s  8.38%  github.com/ArtixSx/razvilka/internal/app.(*App).checkOnlyNodeEngine (inline)
+         0     0% 84.46%      2.23s  8.27%  github.com/ArtixSx/razvilka/internal/app.(*App).nodeRouteOptions
+         0     0% 84.46%      2.23s  8.27%  github.com/ArtixSx/razvilka/internal/app.(*App).routeOptionsSnapshot (inline)
+         0     0% 84.46%      2.23s  8.27%  github.com/ArtixSx/razvilka/internal/app.(*App).routeOptionsSnapshotContext
+         0     0% 84.46%      2.23s  8.27%  github.com/ArtixSx/razvilka/internal/engine.Detector.Inventory
+         0     0% 84.46%      2.23s  8.27%  github.com/ArtixSx/razvilka/internal/routes.Options
+         0     0% 84.46%      2.10s  7.79%  github.com/ArtixSx/razvilka/internal/engine.specProcessRunning
+         0     0% 84.46%      1.76s  6.53%  os.Open (inline)
+         0     0% 84.46%      1.76s  6.53%  os.OpenFile
+     0.01s 0.037% 84.50%      1.76s  6.53%  os.openFileNolog
+         0     0% 84.50%      1.39s  5.16%  github.com/ArtixSx/razvilka/internal/nativecheckfixture.(*ResourceSample).sample
+         0     0% 84.50%      1.39s  5.16%  github.com/ArtixSx/razvilka/internal/nativecheckfixture.StartResourceSample.func1
+         0     0% 84.50%      1.27s  4.71%  github.com/ArtixSx/razvilka/internal/engine.processRunningProc (inline)
+         0     0% 84.50%      1.27s  4.71%  github.com/ArtixSx/razvilka/internal/engine.processRunningProcAt
+     0.01s 0.037% 84.53%      1.26s  4.67%  syscall.Syscall6
+     0.01s 0.037% 84.57%      1.25s  4.64%  runtime.systemstack
+         0     0% 84.57%      1.24s  4.60%  os.ignoringEINTR (inline)
+         0     0% 84.57%      1.07s  3.97%  github.com/ArtixSx/razvilka/internal/updatecheck.RequiredRetainedNodeHistoryReadVersion

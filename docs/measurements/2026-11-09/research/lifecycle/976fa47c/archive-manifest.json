@@ -1,0 +1,21 @@
+{
+  "source": "C:\\RAZVILKA-research-20261109\\lifecycle-976fa47c",
+  "files": {
+    "history-run.json": {
+      "bytes": 4984,
+      "sha256": "ead4ed18f3b118e8b4fa16d430c64e241179cf24a415b3bef0daba2a06be05ce"
+    },
+    "paired-history-results.json": {
+      "bytes": 885,
+      "sha256": "5a0478c0c17b2c4900b3d6b4c46ade7696d65cef42ee4ccb1e971c8151764de0"
+    },
+    "paired-history.log": {
+      "bytes": 66900,
+      "sha256": "1468e44761835e324fa34ee6f5608f508186f62174d8b7cb1c9c42fac762c01d"
+    },
+    "public-history-independent-review.json": {
+      "bytes": 1967,
+      "sha256": "5e120f0e3e64f6b47e4f31fc10ba6daeb24f8cead095a794a32c7d36df54dcc6"
+    }
+  }
+}

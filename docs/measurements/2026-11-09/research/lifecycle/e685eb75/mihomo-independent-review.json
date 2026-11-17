@@ -1,0 +1,71 @@
+{
+  "logs": [
+    {
+      "file": "mihomo-lifecycle.log",
+      "sha256": "428CBA2A1A42EECA9F6421BCFAA16D6AA44989F542B86D772972173F44ADB845"
+    },
+    {
+      "file": "mihomo-postcas.log",
+      "sha256": "B9210E38097E01C7F79B915EA8C41D0A336483020C5CD332A3A0397B450D7B40"
+    },
+    {
+      "file": "mihomo-settlement.log",
+      "sha256": "619DF55BB0802B68297C1DBDAB20CF5E779ABDFF7E92A8FABAB739B75C7C3E80"
+    }
+  ],
+  "budget": {
+    "round_seconds": 300,
+    "aggregate_lifecycle_seconds": 600,
+    "production_apply_seconds": 480,
+    "operation_seconds": 110
+  },
+  "limitations": [
+    "Native Linux isolated fixture not physical router LAN acceptance",
+    "Native fixture manually builds runtime plan; new real dedicated HTTP preview/apply path not present in this SHA",
+    "Cross-run time variation is not paired acceleration evidence",
+    "Generic CI independent and still running at this report creation"
+  ],
+  "run": 42618633097,
+  "jobs": [
+    {
+      "both_baselines_restored": true,
+      "test_seconds": 203.03,
+      "scenario": "lifecycle",
+      "id": 129164735532,
+      "rounds": [
+        {
+          "closing_retry": false,
+          "apply_seconds": 69.058925777,
+          "stop_seconds": 4.387903737,
+          "cycle_seconds": 100.336392354
+        },
+        {
+          "closing_retry": true,
+          "apply_seconds": 69.761239354,
+          "stop_seconds": 4.322353345,
+          "cycle_seconds": 100.80602425
+        }
+      ]
+    },
+    {
+      "test_seconds": 73.16,
+      "scenario": "postcas-failure",
+      "original_pending": false,
+      "id": 129164735637,
+      "http_status": 503,
+      "rollback_verified": true,
+      "desired_exact_restored": true
+    },
+    {
+      "test_seconds": 138.48,
+      "scenario": "check-settlement",
+      "apply_seconds": 105.121522216,
+      "id": 129164735252,
+      "cycle_seconds": 136.105945084,
+      "baseline_restored": true,
+      "stop_seconds": 9.849625754
+    }
+  ],
+  "conclusion": "success",
+  "sha": "e685eb757ae4faf55a98158ab4abfeecb4e4c2c1"
+}

@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -435,11 +436,21 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 			t.Fatal("physical CA invalid")
 		}
 		name := "service.example.com"
-		if mode == "mismatch" {
+		if mode == "mismatch" || mode == "mismatch-deny" {
 			name = "unknown.example.com"
 		}
+		localPort := ""
+		deniedDial := make(chan string, 1)
 		transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: name, MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}}, DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "tcp4", net.JoinHostPort(target, "443"))
+			conn, err := (&net.Dialer{}).DialContext(ctx, "tcp4", net.JoinHostPort(target, "443"))
+			if err == nil && mode == "mismatch-deny" {
+				_, port, _ := net.SplitHostPort(conn.LocalAddr().String())
+				select {
+				case deniedDial <- port:
+				default:
+				}
+			}
+			return conn, err
 		}}
 		defer transport.CloseIdleConnections()
 		client := http.Client{Transport: transport, Timeout: clientBudget}
@@ -447,10 +458,28 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		localPort := ""
 		trace := &httptrace.ClientTrace{GotConn: func(info httptrace.GotConnInfo) { _, localPort, _ = net.SplitHostPort(info.Conn.LocalAddr().String()) }}
 		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 		response, err := client.Do(request)
+		if mode == "mismatch-deny" {
+			select {
+			case localPort = <-deniedDial:
+			default:
+			}
+			if response != nil {
+				response.Body.Close()
+				t.Fatal("denied client received a service response")
+			}
+			if err == nil || localPort == "" || localPort == "0" || !(errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET)) {
+				t.Fatal("expected explicit accepted connection close, not timeout or pre-connect failure", err)
+			}
+			result.ClientPort, result.Marker = localPort, "explicit-accepted-connection-close"
+			data, _ := json.Marshal(result)
+			if err := os.WriteFile(os.Getenv("RAZVILKA_DOMAIN_NATIVE_RESULT"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

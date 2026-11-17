@@ -1,0 +1,148 @@
+{
+  "run_id": 44031025392,
+  "workflow_revision": "133b89c3cd65dd69971152b7ac316cb18b885c22",
+  "result": "FAIL3/3 full manual Apply; no memory finding reproduced",
+  "populations": [
+    {
+      "population": "old-checkptr",
+      "go_version": "go version go1.26.5 linux/amd64",
+      "source_revision": "63d5c98891d0dc11044976a79e805137fe6a25fb",
+      "exit": 1,
+      "fatal_memory": false,
+      "race_report": false,
+      "checkptr_report": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedProbeFailedCleanupTerminalVector",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestNativeFixturePhysicalSourceCopiesRefuse",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.02"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "42.49"
+        ]
+      ],
+      "cleanup_verified": true,
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "elf_sha256": "1ee9375f9773249b1d841f1be2e287181b0f3f1cb139c943dfe243294dc0875f",
+      "elf_matches_pre_actor": true,
+      "raw_count_verified": 8,
+      "diagnostic_report_sha256": "4016e748df2705711e51ff988543446ba59ef6424243ddfe558cb846130115cd"
+    },
+    {
+      "population": "old-race-checkptr",
+      "go_version": "go version go1.26.5 linux/amd64",
+      "source_revision": "63d5c98891d0dc11044976a79e805137fe6a25fb",
+      "exit": 1,
+      "fatal_memory": false,
+      "race_report": false,
+      "checkptr_report": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedProbeFailedCleanupTerminalVector",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestNativeFixturePhysicalSourceCopiesRefuse",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.84"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "65.26"
+        ]
+      ],
+      "cleanup_verified": true,
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "elf_sha256": "c060e0c43a547a37cbae5c7fb6aa77a7175bc11aca32b0bb21fbc1bceb763edb",
+      "elf_matches_pre_actor": true,
+      "raw_count_verified": 8,
+      "diagnostic_report_sha256": "6793860f3b896cb9dc44a89c67c8e1f2a2fc6d1fb06156ff55a66f59dafab67a"
+    },
+    {
+      "population": "patch-production",
+      "go_version": "go version go1.26.11 linux/amd64",
+      "source_revision": "63d5c98891d0dc11044976a79e805137fe6a25fb",
+      "exit": 1,
+      "fatal_memory": false,
+      "race_report": false,
+      "checkptr_report": false,
+      "tests": [
+        [
+          "PASS",
+          "TestManagedProbeFailedCleanupTerminalVector",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestNativeFixturePhysicalSourceCopiesRefuse",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.96"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "39.30"
+        ]
+      ],
+      "cleanup_verified": true,
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "elf_sha256": "25700f541a72d53c0cc218afac64c8dd4cd2967776419278ef38ee6cdeaa3ab5",
+      "elf_matches_pre_actor": true,
+      "raw_count_verified": 8,
+      "diagnostic_report_sha256": "073929bdb588f650f8b34c599fa22c6616cb1103647531a4e15a3b4ddc3da8b8"
+    }
+  ],
+  "limits": [
+    "No checkptr/race report is not proof of no memory defect. Original9c GC fatal remains unexplained.",
+    "Original240s actor/internal deadlines, profiling and cleanup checks unchanged.",
+    "Different instrumentation/toolchains/hosts: not before-after speed evidence.",
+    "One repeat of original9c ABBA was scheduled after independent review to execute previously skipped candidate arms."
+  ]
+}

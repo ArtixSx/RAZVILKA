@@ -323,7 +323,7 @@ func (r *domainTCPBaselineKernelOwner) observeReadWithFiles(ctx context.Context,
 }
 
 func (r *domainTCPBaselineKernelOwner) Current(ctx context.Context) error {
-	return r.currentWithFiles(ctx, nil)
+	return r.currentInOriginalFileObservation(ctx)
 }
 func (r *domainTCPBaselineKernelOwner) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	path, err := r.observeWithFiles(ctx, files)

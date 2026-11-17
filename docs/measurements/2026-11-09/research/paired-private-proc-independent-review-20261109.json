@@ -1,0 +1,15 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved isolated fixture proc replacement",
+  "file": "scripts/fixtures/paired-public-session.sh",
+  "sha256": "D2865E588DEF100A2A49A19ADD404EAB4F4BE97A0EBE1A8839829D42953BAFEC",
+  "findings": [
+    "Remove inner --mount-proc stacking; retain actual original namespaceFD3/4/5 type and distinct identity checks before any mount.",
+    "Inside proven private mount/PID namespace only: make/verify rprivate, detach inherited proc, mount fresh proc, verify SAME original/current namespace identities and exactlyone root proc mount before private/opt.",
+    "Outer actual NFQ queue initialization and all original runtime identity/provider guards unchanged. No receipt or identity fabrication."
+  ],
+  "limitations": [
+    "Next actual public bootstrap/paired restore native acceptance required.",
+    "No physical router or default legacy layout claim."
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "decision": "APPROVED narrow source; actual normal/race native acceptance and speed measurements pending",
+  "files": {
+    "internal/startuptools/nfq_lan_rpdb_read.go": "ce8d55bbf24d8827fb90401e17ee340f9463c9ce11167292e9278bdf4f651e57",
+    "internal/startuptools/nfq_lan_rpdb_read_linux.go": "4d20cbf210a9a6a6608c68335abcb98b5310892b723105e0506ef5d55350e008",
+    "internal/startuptools/policy.go": "6e7163d81d5854b241a7792d9989cbbb4e31a422cbc91dca8d582fef06bd4c1c",
+    "internal/startuptools/policy_linux.go": "cccb887e12ab377f63a0ebb3fe6bfe60933102d4f9a622d295afb96d87288610",
+    "internal/dataplane/nfqws2_active_rpdb.go": "26faede8eb7b4b63444d60f4d247daa1e8efd9befc661f6906edb653a843767e",
+    "internal/dataplane/nfqws2_active_execution.go": "8cd88e94bb854354c7e428af4deea060fe48c92c8578b013c60192cdb62b51ee",
+    "internal/startuptools/nfq_lan_rpdb_read_test.go": "653dea36b993679ec4e4d83925f7b668d6b293239e10e1dab88870ea1f6dfdda",
+    "internal/startuptools/nfq_lan_rpdb_read_native_linux_test.go": "a5c86822763adb2d0aa4913c95e691e4ea7e68624a0de5bce140b070efff7371",
+    "internal/dataplane/nfqws2_active_rpdb_test.go": "e1e9f90f6ea59204df8db1ca8f7225e6c5fff3cc8d8583e4249b444438799b9b"
+  },
+  "resolved_finding": "optional custom issuer could skip/double Verify or swallow its error; now counted once, original tuple checked before/after callback, callbackErr independently merged, callbacks revoked/joined",
+  "contract": [
+    "only NFQ original frozen directLAN Verify under existing exact original fullSHA read observation",
+    "original policyRunner pointer-bound private nested scope, samelease/review source, no escaped context grant",
+    "literal -4 then -6 numeric RPDB reads only; generic execute and otherreads unchanged; stock fallback oldpath unchanged",
+    "all actual child Start/soleWait/output/namespace and complete metadata boundaries retained; no IPversion child suppression",
+    "outer original scope fullSHAclosing before Verify result accepted, localreaders cancel/join onrevocation",
+    "e/material/resource/binding/runner tuple retained; genericcustomunsupported observer oldpath"
+  ],
+  "tests": [
+    "scope copy/foreign/cancel/missing/ordering/effects/revocation",
+    "custom issuer zero/double/swallow/precallbackmutation",
+    "actual original twochild bytes parity and metadata4/versioncounts unchanged; expiredscope refusal",
+    "actual paired twochild benchmark includes outer fullSHA bothbefore/after"
+  ],
+  "validation": "source review, gofmt/diffcheck; no local Go builds/tests",
+  "limitations": [
+    "No full managedLAN deadline or speedclaim beforeCI",
+    "Synthetic model tests do not mint native custody"
+  ],
+  "final_commit": "a8ff1515 plus reviewed three-file captured-runtime followup",
+  "final_delta": "Full runtime value captured before optional issuer; actual Verify uses original callback/aliases. Exact current alias strings checked before/after; no false closure identity comparison. Fresh plan clone checks both plan references. Regression uses compiled direct plan and proves original ScopeCheck refusal remains and replacement never runs."
+}

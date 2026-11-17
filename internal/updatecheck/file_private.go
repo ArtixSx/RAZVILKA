@@ -334,6 +334,13 @@ func (a *SelfUpdateFileAdapter) verifyPrivateSnapshot(ctx context.Context, id st
 }
 
 func (a *SelfUpdateFileAdapter) restorePrivateSnapshot(ctx context.Context, id string) error {
+	_, initialReview, err := a.loadHeader(ctx, id)
+	if err != nil {
+		return err
+	}
+	if hasBootstrapOfflineStrategy(initialReview) {
+		return ErrStrategyStateAdmission
+	}
 	snapshot, err := a.privateSnapshot(ctx, id)
 	if err != nil {
 		return err

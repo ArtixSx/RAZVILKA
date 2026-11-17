@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "timestamp_utc": "2026-11-17T06:57:09Z",
+  "status": "INCOMPLETE_EXACT_METADATA_NOT_RESTORED",
+  "environment": {
+    "kernel": "6.18.60-0-virt",
+    "alpine": "3.24.4",
+    "python": "3.14.10",
+    "vm_uuid": "22acc61e-3c02-423b-8575-90eaa4003f95",
+    "diskless": true,
+    "nic_count": 0,
+    "shared_folders": 0,
+    "router_commands": 0,
+    "public_uploads": 0,
+    "final_vm_state": "poweroff",
+    "ram_workspace_retained": false
+  },
+  "synthetic_tests": {
+    "passed": 10,
+    "failed": 0,
+    "seconds": 0.061
+  },
+  "archive_sha256": "2dafa2c116693ea7646e3861e19a2a778bd570bb4afd922ef69f85ebecb65897",
+  "archive_members": 925,
+  "strict_restore": {
+    "status": "INCOMPLETE",
+    "workspace": "/work/razvilka-offline-restore-9ii423ts",
+    "members": null,
+    "failure": "symlink_mode_not_supported"
+  },
+  "partial_content": {
+    "status": "PARTIAL_CONTENT_ONLY_NOT_RESTORE_ACCEPTANCE",
+    "members": 925,
+    "types": {
+      "file": 578,
+      "symlink": 263,
+      "directory": 84
+    },
+    "exact_namespace_types_payload_and_link_targets": true,
+    "metadata_mismatch_counts": {
+      "mode": 490,
+      "uid_gid": 9,
+      "mtime": 492
+    },
+    "regular_nlink_one": true
+  },
+  "verifier_sha256": "7afde5994aa3acf0e7d2ec4ae016ca4abcd3ebc133239bd312389abc948c7a05",
+  "signed_apks_verified": 18,
+  "limits": [
+    "No filesystem restore acceptance: symlink0755 cannot be represented by this VFS chmod API",
+    "No metadata normalization permitted",
+    "No ACL/xattrs/capabilities captured by basic tar",
+    "Not NDMS/config/firmware import or router startup/LAN acceptance",
+    "RAM workspace discarded at owned VM poweroff after reports captured; immutable private source archives/ISO and logs retained for reproduction"
+  ],
+  "evidence": [
+    {
+      "path": "owned-vm.json",
+      "bytes": 269,
+      "sha256": "e0ad85051b8d31cdda81ff531fcbf85a695555ec0fb5a0dd3d73614d2c6b47f9"
+    },
+    {
+      "path": "vm-before-empty-boot.txt",
+      "bytes": 3313,
+      "sha256": "49b31251806c1e4ddb7badf0e640278d64b91862f640e953604b116f1fe22085"
+    },
+    {
+      "path": "vm-after-empty-boot.txt",
+      "bytes": 3674,
+      "sha256": "4128478eea146616415a57bd130684dc38a306fdf0667804d8b14f952a1f27e7"
+    },
+    {
+      "path": "empty-boot-serial.private.txt",
+      "bytes": 8474,
+      "sha256": "6049196d41a95f472d3a2cb80fd7496f6cde04b7f5015b0869e656355465d04f"
+    },
+    {
+      "path": "iso-signature-verification.txt",
+      "bytes": 946,
+      "sha256": "6610ece2388a8e9a5809d84991ae6ca915453124d51a3466346e6f0882f04009"
+    },
+    {
+      "path": "sources-manifest.json",
+      "bytes": 806,
+      "sha256": "33216cee6ccc795bd4a2dccfa073f5aec8aa9ad752807d187da9ef45edad3552"
+    },
+    {
+      "path": "apk-download-manifest.json",
+      "bytes": 6788,
+      "sha256": "c66db40cb98a0e8f108c49521943721a3e4402ce0f17bbab1f08f15069170f02"
+    },
+    {
+      "path": "iso-v2-readback.json",
+      "bytes": 182,
+      "sha256": "f8b3a712de8158466e7906ef6f63c9ba37fbf628e3759b3faf16ee33f6b14631"
+    },
+    {
+      "path": "vm-before-data-v2-boot.txt",
+      "bytes": 3577,
+      "sha256": "248fae4f1c9000d37adaab7b00f84d5233d66253b809a9efc5f1b5a1d1c015b8"
+    },
+    {
+      "path": "vm-after-data-v2-boot.txt",
+      "bytes": 3938,
+      "sha256": "cd99bc3b878ef309e639fd75a0ca074534dbd6b837bccfbc280b6344e95cc6c9"
+    },
+    {
+      "path": "data-v2-boot-serial.private.txt",
+      "bytes": 8663,
+      "sha256": "4f4202e3321adc79ce864c3bd693f93aff3778df8fff45713de7630cd2d7a458"
+    },
+    {
+      "path": "prepare-guest-v2.private.txt",
+      "bytes": 14649,
+      "sha256": "0c67933031bcef17eb6788381cf4f9bd7cd23b104a1e1148ab61acd73ca29a76"
+    },
+    {
+      "path": "synthetic-linux-v2.private.txt",
+      "bytes": 1186,
+      "sha256": "f8cb2413cc1a0766fcbe2f17915b9b541925333b6d56fca55a47628a6d3638ed"
+    },
+    {
+      "path": "actual-restore.private.txt",
+      "bytes": 428,
+      "sha256": "48ca02c958a0ee5def4ac4a028744665e3c32b8026f0a40ea836a5f147fedc53"
+    },
+    {
+      "path": "partial-content-bounded.private.txt",
+      "bytes": 1746,
+      "sha256": "2b451023348d72aac62d295096647332d3c61b3dce6fab417dccce34f97308e2"
+    },
+    {
+      "path": "partial-content-summary.json",
+      "bytes": 345,
+      "sha256": "e3c54f80af7baeebf86a96c161238bd3713e6b9343e86c6f2a22a49c7a0c6beb"
+    },
+    {
+      "path": "guest-results.private.txt",
+      "bytes": 1407,
+      "sha256": "03b4c1e8959f5f4423305221d945bab93ebc5d46ce081ce9ad2b560ca93f1de8"
+    },
+    {
+      "path": "vm-after-drill-poweroff.txt",
+      "bytes": 3577,
+      "sha256": "8041363c48bb135cfe0c18c7c61cad6df32ce19b09fa511c971dfc4c9e04c209"
+    }
+  ],
+  "root_evidence_files_verified": 18
+}

@@ -1,0 +1,13 @@
+=== RUN   TestNativeVLESSCheckPerformance
+    nodecheck_native_perf_linux_test.go:154: native full Check algorithm=current-reuse scenario=live repeated N=12 p50=213.293ms p95=217.397ms; stages overlap; fixture service delay40ms
+    nodecheck_native_perf_linux_test.go:154: native full Check algorithm=current-reuse scenario=dead-service repeated N=12 p50=212.535ms p95=230.649ms; stages overlap; fixture service delay40ms
+    nodecheck_native_perf_linux_test.go:154: native full Check algorithm=current-reuse scenario=cancel repeated N=12 p50=170.971ms p95=224.247ms; stages overlap; fixture service delay40ms
+    nodecheck_native_perf_linux_test.go:154: native full Check algorithm=current-reuse scenario=dead-node repeated N=12 p50=5.433ms p95=5.777ms; stages overlap; fixture service delay40ms
+--- PASS: TestNativeVLESSCheckPerformance (7.96s)
+PASS
+=== RUN   TestNativeVLESSQueueHTTPPerformance
+    node_native_perf_linux_test.go:243: current original App queue+native Check+HTTP delivery scenario=single repeated N=12 p50=474.630ms p95=486.796ms controlled queue25ms; not browser paint
+    node_native_perf_linux_test.go:243: current original App queue+native Check+HTTP delivery scenario=selected-batch repeated N=12 p50=1032.420ms p95=1407.485ms controlled queue25ms; not browser paint
+    node_native_perf_linux_test.go:243: current original App queue+native Check+HTTP delivery scenario=all-vless repeated N=12 p50=1041.802ms p95=1248.897ms controlled queue25ms; not browser paint
+--- PASS: TestNativeVLESSQueueHTTPPerformance (33.98s)
+PASS

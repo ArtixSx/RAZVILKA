@@ -1,0 +1,38 @@
+{
+  "commit": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "attempt": 2,
+  "jobs": [
+    {
+      "mode": "empty",
+      "job_id": 129353748090,
+      "conclusion": "success",
+      "lifecycle_seconds": 145.32,
+      "bootstrap_seconds": 44.95,
+      "restore_seconds": 100.36,
+      "complete_marker": true,
+      "retained_draft_marker": false,
+      "log": "paired-empty.log",
+      "sha256": "61f0c40ad685e3ee05416d8b067162c0b1f5f2dddca2e2041c3442ca64ae92e2"
+    },
+    {
+      "mode": "draft",
+      "job_id": 129353747994,
+      "conclusion": "success",
+      "lifecycle_seconds": 151.83,
+      "bootstrap_seconds": 57.79,
+      "restore_seconds": 94.02,
+      "complete_marker": true,
+      "retained_draft_marker": true,
+      "log": "paired-draft.log",
+      "sha256": "d17603c1aa9afdde55025815ea6edf1f6d8ab78966225e5b27c9e4a7f117036b"
+    }
+  ],
+  "scope": "Configured genuine v0.19.3 old source; Ubuntu tagged platform classification; actual public bootstrap -> durable Stop -> public offline restore",
+  "not_proved": [
+    "Default legacy /opt/var layout",
+    "Completed history or manual selection (separate pending fixture)",
+    "Old live-reader compatibility",
+    "Router readiness"
+  ]
+}

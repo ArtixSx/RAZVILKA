@@ -1,0 +1,65 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "attempt": 2,
+  "workflow_conclusion": "failure",
+  "declared_jobs": 10,
+  "actual_jobs": 10,
+  "missing_not_executed": [],
+  "jobs": [
+    {
+      "name": "strategy-pair",
+      "id": 129353747520,
+      "conclusion": "success"
+    },
+    {
+      "name": "Domain native strict / selected",
+      "id": 129353747790,
+      "conclusion": "failure"
+    },
+    {
+      "name": "managed-probe-native (production)",
+      "id": 129353747803,
+      "conclusion": "failure"
+    },
+    {
+      "name": "Domain native strict / canceled-ready",
+      "id": 129353747874,
+      "conclusion": "failure"
+    },
+    {
+      "name": "Exact iptables 1.8.11 / production",
+      "id": 129353747934,
+      "conclusion": "success"
+    },
+    {
+      "name": "Configured old193 public paired restore / draft",
+      "id": 129353747994,
+      "conclusion": "success"
+    },
+    {
+      "name": "DNS preparation recovery pair (diagnostic 30s)",
+      "id": 129353748069,
+      "conclusion": "success"
+    },
+    {
+      "name": "Configured old193 public paired restore / empty",
+      "id": 129353748090,
+      "conclusion": "success"
+    },
+    {
+      "name": "Exact iptables 1.8.11 / race",
+      "id": 129353748113,
+      "conclusion": "success"
+    },
+    {
+      "name": "managed-probe-native (race)",
+      "id": 129353748165,
+      "conclusion": "failure"
+    }
+  ],
+  "limitations": [
+    "All10 jobs executed after scheduler recovered; native strictDNS2 and managed2 actualfailures remain",
+    "Detailed publicpair/native measurements separate raw reports; no physical router acceptance"
+  ]
+}

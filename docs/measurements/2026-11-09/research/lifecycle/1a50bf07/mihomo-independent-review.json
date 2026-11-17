@@ -1,0 +1,77 @@
+{
+  "sha": "1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b",
+  "run": 42628478057,
+  "conclusion": "failure",
+  "verified_at_utc": "2026-11-09T13:57:23.9956261Z",
+  "cases": {
+    "manual_http": {
+      "stop_http_status": 202,
+      "job": 129198303149,
+      "preview_apply_replay_lan": "pass",
+      "reason": "Fixture SelfUpdateFiles.Directory empty causes Current error and PendingSelfUpdateRecovery=true, so real Stop takes self-update revocation route; not a Mihomo terminal Stop",
+      "conclusion": "failure",
+      "test_seconds": 139.17,
+      "fresh_second_cycle": "not reached",
+      "apply_seconds": 99.850802065
+    },
+    "lifecycle": {
+      "job": 129198303094,
+      "stop_seconds": [
+        6.314471424,
+        6.439944031
+      ],
+      "both_physical_baselines_restored": true,
+      "conclusion": "success",
+      "test_seconds": 287.04,
+      "official_child_normal_and_race": "pass",
+      "cycle_seconds": [
+        141.704952629,
+        142.935038527
+      ],
+      "apply_seconds": [
+        97.981048807,
+        98.615101245
+      ]
+    },
+    "postcas": {
+      "test_seconds": 13.5,
+      "conclusion": "failure",
+      "job": 129198302664,
+      "reason": "errMihomoLiveMaterial during activate before desired post-CAS cut; exact guard not identified",
+      "activate_seconds": 2.528002,
+      "rollback_and_verify": "pass"
+    },
+    "settlement": {
+      "test_seconds": 15.42,
+      "conclusion": "failure",
+      "job": 129198303144,
+      "reason": "errMihomoLiveMaterial during activate before desired settlement cut; exact guard not identified",
+      "activate_seconds": 2.974502,
+      "rollback_and_verify": "pass"
+    }
+  },
+  "limitations": [
+    "New activation fixed-stage diagnostics are required to identify early failure; do not blame save/stat without evidence",
+    "Manual fixture fix must retain production recovery guard and supply a real absolute clean journal directory",
+    "Generic full CI still running when this report was written",
+    "No router readiness or acceleration claim; unpaired run times"
+  ],
+  "logs": [
+    {
+      "sha256": "1A7AF05D97B8D25617746C86AB060C7ABC7F53D3BEAF767619E210821B86D8FD",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-1a50bf07\\mihomo-lifecycle.log"
+    },
+    {
+      "sha256": "08EFE5C7278F6D106F96CECF456AAD3C4789C0F92068B71F4AB6CA424D3F1EED",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-1a50bf07\\mihomo-postcas.log"
+    },
+    {
+      "sha256": "6BD2A86AE65E0BDF239A223A255AD854FE4808DA40C6925D2B18E03403DDE15B",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-1a50bf07\\mihomo-settlement.log"
+    },
+    {
+      "sha256": "3486441F2D6B0762D118A89943E2EED96F51DD8423414755713101B7A1636332",
+      "path": "C:\\RAZVILKA-research-20261109\\lifecycle-1a50bf07\\mihomo-manual-http.log"
+    }
+  ]
+}

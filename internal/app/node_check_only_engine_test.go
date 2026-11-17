@@ -116,6 +116,8 @@ func (c *quotaNodeChecker) ScreenTransport(_ context.Context, r dataplane.NodeCh
 	result := c.result(r)
 	result.Available, result.Stage, result.TestLevel = false, "transport", "transport"
 	if !dead {
+		result.StartedAt = time.Now().UTC()
+		result.FinishedAt, result.ExpiresAt = time.Time{}, time.Time{}
 		result.Stages = []dataplane.NodeCheckStage{{ID: "transport", Status: "passed", Duration: 12}}
 		return result, false, nil
 	}

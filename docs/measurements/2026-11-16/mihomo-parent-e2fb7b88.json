@@ -1,0 +1,51 @@
+{
+  "sha": "e2fb7b881548864219ec17b8fbb403791a29914f",
+  "run_id": 43924080656,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43924080656",
+  "conclusion": "success",
+  "mode": "normal",
+  "jobs": [
+    {
+      "name": "original-parent-native (normal)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "original-private-set (normal)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "raw_log_sha256": "ba44fea034d9f955040c4387b3d5ae8d3ff1a2d9eb924deb04bbad48f904f3d2",
+  "limits": [
+    "Five normal ACK cuts and original parent pass on this revision",
+    "Earlier dc5829fd intermittent final absence failure remains unexplained",
+    "Race matrix separate run43926086704 on60bd5153 pending",
+    "Private Linux fixture, not physical router/LAN"
+  ]
+}

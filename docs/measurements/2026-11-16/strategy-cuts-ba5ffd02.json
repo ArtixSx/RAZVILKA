@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "kind": "native_strategy_pair_acceptance",
+  "revision": "ba5ffd02c55d4cf0398ad661d724b806439975f1",
+  "run_id": 43934930569,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43934930569",
+  "result": "PASS",
+  "job_id": 133536925501,
+  "selected_steps": [
+    {
+      "name": "Actual reader binary compatibility",
+      "result": "success"
+    },
+    {
+      "name": "Focused native and race checks",
+      "result": "success"
+    },
+    {
+      "name": "Original stopped completion cuts in separate test processes",
+      "result": "success"
+    },
+    {
+      "name": "Restored panel boot in isolated network namespace",
+      "result": "success"
+    }
+  ],
+  "cuts": [
+    {
+      "case": "after",
+      "test": "TestNativeCandidateStoppedCompletionTwoCuts/after",
+      "elapsed_seconds": 37.49,
+      "result": "PASS"
+    },
+    {
+      "case": "before",
+      "test": "TestNativeCandidateStoppedCompletionTwoCuts/before",
+      "elapsed_seconds": 38.12,
+      "result": "PASS"
+    },
+    {
+      "case": "strategy-crash",
+      "test": "TestNativeCandidateStoppedCompletionTwoCuts/strategy-crash",
+      "elapsed_seconds": 53.23,
+      "result": "PASS"
+    },
+    {
+      "case": "strategy-drift",
+      "test": "TestNativeCandidateStoppedCompletionTwoCuts/strategy-drift",
+      "elapsed_seconds": 49.2,
+      "result": "PASS"
+    },
+    {
+      "case": "strategy-rollback-files",
+      "test": "TestNativeCandidateStoppedCompletionTwoCuts/strategy-rollback-files",
+      "elapsed_seconds": 184.77,
+      "result": "PASS"
+    },
+    {
+      "case": "strategy-rollback-private",
+      "test": "TestNativeCandidateStoppedCompletionTwoCuts/strategy-rollback-private",
+      "elapsed_seconds": 191.81,
+      "result": "PASS"
+    },
+    {
+      "case": "strategy",
+      "test": "TestNativeCandidateStoppedCompletionTwoCuts/strategy",
+      "elapsed_seconds": 205.43,
+      "result": "PASS"
+    }
+  ],
+  "selected_skips": 0,
+  "limits": [
+    "Seven independent Go invocations; original per-case 5m, helper 4m and job 20m limits unchanged.",
+    "Previous 8ab package timeout at aggregate 10m is retained as FAIL, not overwritten.",
+    "Scheduling correction is not an execution speedup.",
+    "Private Linux namespaces; not physical router power-loss or LAN acceptance.",
+    "Unselected workflow directions were skipped and receive no acceptance from this run."
+  ],
+  "raw_artifact_root": "C:\\RAZVILKA-research-20261116\\strategy-cuts-ba5",
+  "raw_sha256_manifest": [
+    {
+      "path": "run.json",
+      "bytes": 4358,
+      "sha256": "6963086703e2c80c683b2bdff1dbb2a8fdf48e64175cd02cd0f88e81bee66aae"
+    },
+    {
+      "path": "run.log",
+      "bytes": 96630,
+      "sha256": "a6a72f2a4dcacb7d1c61699e9bd9fb81c7540c3069de5d17d70801e02b14b1db"
+    },
+    {
+      "path": "artifacts/strategy-cuts-ba5ffd02c55d4cf0398ad661d724b806439975f1/after.log",
+      "bytes": 317,
+      "sha256": "d25a283d22e3421873fedcfc1d41761b0106572c4fb1c15ffc1dd074025a54f4"
+    },
+    {
+      "path": "artifacts/strategy-cuts-ba5ffd02c55d4cf0398ad661d724b806439975f1/before.log",
+      "bytes": 319,
+      "sha256": "160b9b90bbd43283236292cb6c377bf760bfe5e72660d810007f38466a33f205"
+    },
+    {
+      "path": "artifacts/strategy-cuts-ba5ffd02c55d4cf0398ad661d724b806439975f1/strategy-crash.log",
+      "bytes": 335,
+      "sha256": "3f6d48016f80555bb9cf0dd0d1b9533836078770849a0fe6bfd6f1e215cf5cdc"
+    },
+    {
+      "path": "artifacts/strategy-cuts-ba5ffd02c55d4cf0398ad661d724b806439975f1/strategy-drift.log",
+      "bytes": 335,
+      "sha256": "bd7cee35d7de54d8e9460621beec0889cacbb62e8fb99f47d53fae118b1fd404"
+    },
+    {
+      "path": "artifacts/strategy-cuts-ba5ffd02c55d4cf0398ad661d724b806439975f1/strategy-rollback-files.log",
+      "bytes": 356,
+      "sha256": "71e79c6f5c9aa780b326879994cc848bf5608de46d24f0913622194b4464b859"
+    },
+    {
+      "path": "artifacts/strategy-cuts-ba5ffd02c55d4cf0398ad661d724b806439975f1/strategy-rollback-private.log",
+      "bytes": 360,
+      "sha256": "1e5b2895b88b347018c3d749cfbd5aee10786cf7c963eec317fcddd80eac3d54"
+    },
+    {
+      "path": "artifacts/strategy-cuts-ba5ffd02c55d4cf0398ad661d724b806439975f1/strategy.log",
+      "bytes": 326,
+      "sha256": "2e7d8be446aabce41e80b770e6516a8629ab85fe0031d126e06c83d2e0c4daba"
+    }
+  ]
+}

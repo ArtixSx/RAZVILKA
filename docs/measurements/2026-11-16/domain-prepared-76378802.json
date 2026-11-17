@@ -1,0 +1,965 @@
+{
+  "schema": 1,
+  "workflow_revision": "d1e44b1d0c49f7708247a2fffd1fe717787926cb",
+  "candidate_revision": "76378802184eae6c802f813c624ef176257deea9",
+  "run_id": 44053144237,
+  "job_id": 133935669520,
+  "artifact_id": 14315001799,
+  "artifact_zip_sha256": "4277c4f5b77ea9503fd90ddd9b0f83caecc357495f3890891ad0070a39fb79c9",
+  "result": "FAIL: all four full mixed actors failed mismatch timeout; no native readiness or end-to-end speed claim",
+  "verified_raw_files": 83,
+  "source_variant_proof": {
+    "revision": "76378802184eae6c802f813c624ef176257deea9",
+    "changed_file": "internal/dataplane/domain_tcp_capture_execution_effects.go",
+    "candidate_sha256": "b80c574a6221a07d6b4bc91a53acbe648bebc50a56b7abe11985566d279a83f1",
+    "baseline_sha256": "84b8ba836baff625db0732ffa09ca98b97993a9d31e62873bc4fbb2ae4c5a5be",
+    "baseline_revision": "9971aa1bdb4f4daf3afd65b85ebe7e1cdae4156c",
+    "baseline": "exact original checkPreparedWithFiles function; new unused helpers and tests common in both trees",
+    "original_check_function_sha256": "2fad517ddf86f7fc0f180f764db8fdec40316f17de863af049817afd1fd1f803",
+    "generic_read_function_sha256": "2912ce506cb77909adc1cd2aa09514ca20c322ab8ccb35ab016431ad60d15ea7",
+    "build_mode": "production-strip",
+    "original_deadlines_seconds": [
+      12,
+      4
+    ]
+  },
+  "binary_pair_valid": true,
+  "same_host_order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline"
+  ],
+  "medians": {
+    "baseline": {
+      "failed_test_seconds": 23.395,
+      "selected_process_current_calls": 270.0,
+      "selected_process_current_cumulative_seconds": 1.5719996810000003,
+      "joined_process_current_calls": 1025.0
+    },
+    "candidate": {
+      "failed_test_seconds": 23.0,
+      "selected_process_current_calls": 238.0,
+      "selected_process_current_cumulative_seconds": 1.3905211859999997,
+      "joined_process_current_calls": 959.5
+    }
+  },
+  "samples": [
+    {
+      "sample": 1,
+      "variant": "baseline",
+      "test": "FAIL",
+      "failed_test_seconds": 23.36,
+      "selected_https_returned": true,
+      "mismatch_returned": false,
+      "failure": "unknown.example.com client timeout 4s; opaque not reached",
+      "selected_delta": {
+        "process-current": {
+          "calls": 270,
+          "bytes": 0,
+          "seconds": 1.5594401220000003
+        },
+        "whole-executable-hash": {
+          "calls": 0,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.7130755999999998
+        }
+      },
+      "joined_counters": {
+        "process-current": {
+          "calls": 1027,
+          "bytes": 0,
+          "seconds": 6.221872893
+        },
+        "whole-executable-hash": {
+          "calls": 8,
+          "bytes": 292619248,
+          "seconds": 0.18605929699999998
+        },
+        "accepted-flow-lookup": {
+          "calls": 3,
+          "bytes": 0,
+          "seconds": 2.382637741
+        }
+      },
+      "cumulative_stage_counters_at_mismatch": {
+        "accepted-stage/admit/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.632087803
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.66368948
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-connect-wait/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 2.7749999999999997e-06
+        },
+        "accepted-stage/direct-connect-wait/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-connect-wait/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-post/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-pre/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.290301298
+        },
+        "accepted-stage/direct-current-pre/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.02628099
+        },
+        "accepted-stage/direct-local-route/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.114069599
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.419544693
+        },
+        "accepted-stage/post-dial-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.043160088
+        },
+        "accepted-stage/post-socks-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 3.7600000000000003e-07
+        },
+        "accepted-stage/relay-enter/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.000164853
+        },
+        "accepted-stage/socks-dial/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.000387913
+        },
+        "accepted-stage/socks-handshake/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        }
+      },
+      "allocation_totals": {
+        "space": "Showing nodes accounting for 2.29GB, 83.18% of 2.75GB total",
+        "objects": "Showing nodes accounting for 18377366, 81.93% of 22429204 total"
+      },
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44187913,
+        "sha256": "8e1c6970940a52b72259fb9f1d40bcee22b3735f387dfe9c5e88f42fc553d3fe",
+        "go_build_info": "/tmp/razvilka-domain-original.IIRNOt/app.test: go1.26.5\n\tpath\tgithub.com/ArtixSx/razvilka/internal/app.test\n\tmod\tgithub.com/ArtixSx/razvilka\t(devel)\t\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-ldflags=\"-s -w\"\n\tbuild\t-tags=razvilka_native_fixture\n\tbuild\tCGO_ENABLED=1\n\tbuild\tCGO_CFLAGS=\n\tbuild\tCGO_CPPFLAGS=\n\tbuild\tCGO_CXXFLAGS=\n\tbuild\tCGO_LDFLAGS=\n\tbuild\tGOARCH=amd64\n\tbuild\tGOOS=linux\n\tbuild\tGOAMD64=v1\n",
+        "only_selected_linker_change": "-s -w for production-strip; original tags/optimizations/deadlines unchanged"
+      },
+      "joined_without_forced_cleanup": true
+    },
+    {
+      "sample": 2,
+      "variant": "candidate",
+      "test": "FAIL",
+      "failed_test_seconds": 23.03,
+      "selected_https_returned": true,
+      "mismatch_returned": false,
+      "failure": "unknown.example.com client timeout 4s; opaque not reached",
+      "selected_delta": {
+        "process-current": {
+          "calls": 238,
+          "bytes": 0,
+          "seconds": 1.3950363629999996
+        },
+        "whole-executable-hash": {
+          "calls": 0,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.6914211259999999
+        },
+        "capture-prepared-read": {
+          "calls": 32,
+          "bytes": 0,
+          "seconds": 0.874054201
+        }
+      },
+      "joined_counters": {
+        "process-current": {
+          "calls": 957,
+          "bytes": 0,
+          "seconds": 5.937632498
+        },
+        "whole-executable-hash": {
+          "calls": 8,
+          "bytes": 292619248,
+          "seconds": 0.19270674399999999
+        },
+        "accepted-flow-lookup": {
+          "calls": 3,
+          "bytes": 0,
+          "seconds": 2.279114488
+        },
+        "capture-prepared-read": {
+          "calls": 86,
+          "bytes": 0,
+          "seconds": 2.479839574
+        }
+      },
+      "cumulative_stage_counters_at_mismatch": {
+        "accepted-stage/admit/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.5941890919999999
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.589964614
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-connect-wait/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 5.272999999999999e-06
+        },
+        "accepted-stage/direct-connect-wait/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-connect-wait/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-post/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-pre/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.28457709999999997
+        },
+        "accepted-stage/direct-current-pre/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.027807591
+        },
+        "accepted-stage/direct-local-route/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.100724178
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.39150222100000004
+        },
+        "accepted-stage/post-dial-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.042547234
+        },
+        "accepted-stage/post-socks-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 4.0300000000000005e-07
+        },
+        "accepted-stage/relay-enter/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.000181319
+        },
+        "accepted-stage/socks-dial/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.000438259
+        },
+        "accepted-stage/socks-handshake/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        }
+      },
+      "allocation_totals": {
+        "space": "Showing nodes accounting for 2.18GB, 83.90% of 2.60GB total",
+        "objects": "Showing nodes accounting for 15651666, 80.56% of 19428949 total"
+      },
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44200201,
+        "sha256": "e6fe95bb3bbd6876c29d57afa2d41d94055a51138f731e19ff854926a88cef3b",
+        "go_build_info": "/tmp/razvilka-domain-original.lZ1HC0/app.test: go1.26.5\n\tpath\tgithub.com/ArtixSx/razvilka/internal/app.test\n\tmod\tgithub.com/ArtixSx/razvilka\t(devel)\t\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-ldflags=\"-s -w\"\n\tbuild\t-tags=razvilka_native_fixture\n\tbuild\tCGO_ENABLED=1\n\tbuild\tCGO_CFLAGS=\n\tbuild\tCGO_CPPFLAGS=\n\tbuild\tCGO_CXXFLAGS=\n\tbuild\tCGO_LDFLAGS=\n\tbuild\tGOARCH=amd64\n\tbuild\tGOOS=linux\n\tbuild\tGOAMD64=v1\n",
+        "only_selected_linker_change": "-s -w for production-strip; original tags/optimizations/deadlines unchanged"
+      },
+      "joined_without_forced_cleanup": true
+    },
+    {
+      "sample": 3,
+      "variant": "candidate",
+      "test": "FAIL",
+      "failed_test_seconds": 22.97,
+      "selected_https_returned": true,
+      "mismatch_returned": false,
+      "failure": "unknown.example.com client timeout 4s; opaque not reached",
+      "selected_delta": {
+        "process-current": {
+          "calls": 238,
+          "bytes": 0,
+          "seconds": 1.386006009
+        },
+        "whole-executable-hash": {
+          "calls": 0,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.6709562690000002
+        },
+        "capture-prepared-read": {
+          "calls": 32,
+          "bytes": 0,
+          "seconds": 0.8712472529999999
+        }
+      },
+      "joined_counters": {
+        "process-current": {
+          "calls": 962,
+          "bytes": 0,
+          "seconds": 5.959409353
+        },
+        "whole-executable-hash": {
+          "calls": 8,
+          "bytes": 292619248,
+          "seconds": 0.187443369
+        },
+        "accepted-flow-lookup": {
+          "calls": 3,
+          "bytes": 0,
+          "seconds": 2.305475895
+        },
+        "capture-prepared-read": {
+          "calls": 86,
+          "bytes": 0,
+          "seconds": 2.479164505
+        }
+      },
+      "cumulative_stage_counters_at_mismatch": {
+        "accepted-stage/admit/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.583283125
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.588918905
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-connect-wait/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 3.345e-06
+        },
+        "accepted-stage/direct-connect-wait/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-connect-wait/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-post/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.280392973
+        },
+        "accepted-stage/direct-current-post/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-post/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-pre/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.27842424
+        },
+        "accepted-stage/direct-current-pre/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.026342552
+        },
+        "accepted-stage/direct-local-route/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.097371635
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.390405109
+        },
+        "accepted-stage/post-dial-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.042222859
+        },
+        "accepted-stage/post-socks-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 4.11e-07
+        },
+        "accepted-stage/relay-enter/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.000194955
+        },
+        "accepted-stage/socks-dial/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.00045479099999999996
+        },
+        "accepted-stage/socks-handshake/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        }
+      },
+      "allocation_totals": {
+        "space": "Showing nodes accounting for 2.17GB, 83.62% of 2.59GB total",
+        "objects": "Showing nodes accounting for 16287319, 81.53% of 19977183 total"
+      },
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44200201,
+        "sha256": "e6fe95bb3bbd6876c29d57afa2d41d94055a51138f731e19ff854926a88cef3b",
+        "go_build_info": "/tmp/razvilka-domain-original.RrLwZp/app.test: go1.26.5\n\tpath\tgithub.com/ArtixSx/razvilka/internal/app.test\n\tmod\tgithub.com/ArtixSx/razvilka\t(devel)\t\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-ldflags=\"-s -w\"\n\tbuild\t-tags=razvilka_native_fixture\n\tbuild\tCGO_ENABLED=1\n\tbuild\tCGO_CFLAGS=\n\tbuild\tCGO_CPPFLAGS=\n\tbuild\tCGO_CXXFLAGS=\n\tbuild\tCGO_LDFLAGS=\n\tbuild\tGOARCH=amd64\n\tbuild\tGOOS=linux\n\tbuild\tGOAMD64=v1\n",
+        "only_selected_linker_change": "-s -w for production-strip; original tags/optimizations/deadlines unchanged"
+      },
+      "joined_without_forced_cleanup": true
+    },
+    {
+      "sample": 4,
+      "variant": "baseline",
+      "test": "FAIL",
+      "failed_test_seconds": 23.43,
+      "selected_https_returned": true,
+      "mismatch_returned": false,
+      "failure": "unknown.example.com client timeout 4s; opaque not reached",
+      "selected_delta": {
+        "process-current": {
+          "calls": 270,
+          "bytes": 0,
+          "seconds": 1.5845592400000004
+        },
+        "whole-executable-hash": {
+          "calls": 0,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.73889045
+        }
+      },
+      "joined_counters": {
+        "process-current": {
+          "calls": 1023,
+          "bytes": 0,
+          "seconds": 6.321278148
+        },
+        "whole-executable-hash": {
+          "calls": 8,
+          "bytes": 292619248,
+          "seconds": 0.188390707
+        },
+        "accepted-flow-lookup": {
+          "calls": 3,
+          "bytes": 0,
+          "seconds": 2.42782709
+        }
+      },
+      "cumulative_stage_counters_at_mismatch": {
+        "accepted-stage/admit/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.6471145760000001
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.651535816
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.013837969
+        },
+        "accepted-stage/direct-local-route/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/direct-local-route/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.117323785
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 2,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.429650331
+        },
+        "accepted-stage/post-dial-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-dial-check/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.044523085000000004
+        },
+        "accepted-stage/post-socks-check/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/post-socks-check/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 5.070000000000001e-07
+        },
+        "accepted-stage/relay-enter/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/relay-enter/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.000431367
+        },
+        "accepted-stage/socks-dial/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-dial/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.000621682
+        },
+        "accepted-stage/socks-handshake/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        },
+        "accepted-stage/socks-handshake/started": {
+          "calls": 1,
+          "bytes": 0,
+          "seconds": 0.0
+        }
+      },
+      "allocation_totals": {
+        "space": "Showing nodes accounting for 2.28GB, 84.44% of 2.70GB total",
+        "objects": "Showing nodes accounting for 16046457, 80.32% of 19977075 total"
+      },
+      "binary": {
+        "build_mode": "production-strip",
+        "bytes": 44187913,
+        "sha256": "8e1c6970940a52b72259fb9f1d40bcee22b3735f387dfe9c5e88f42fc553d3fe",
+        "go_build_info": "/tmp/razvilka-domain-original.y7tbYR/app.test: go1.26.5\n\tpath\tgithub.com/ArtixSx/razvilka/internal/app.test\n\tmod\tgithub.com/ArtixSx/razvilka\t(devel)\t\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-ldflags=\"-s -w\"\n\tbuild\t-tags=razvilka_native_fixture\n\tbuild\tCGO_ENABLED=1\n\tbuild\tCGO_CFLAGS=\n\tbuild\tCGO_CPPFLAGS=\n\tbuild\tCGO_CXXFLAGS=\n\tbuild\tCGO_LDFLAGS=\n\tbuild\tGOARCH=amd64\n\tbuild\tGOOS=linux\n\tbuild\tGOAMD64=v1\n",
+        "only_selected_linker_change": "-s -w for production-strip; original tags/optimizations/deadlines unchanged"
+      },
+      "joined_without_forced_cleanup": true
+    }
+  ],
+  "limits": [
+    "Two samples per variant; same source/path/host and original12s/4s.",
+    "Successful selected HTTPS alone is not full scope/service/LAN proof.",
+    "Elapsed process counters overlap/nest; do not sum or call their delta end-to-end latency.",
+    "Failed-test duration is reported as failure latency, never successful route latency.",
+    "Counter capture-prepared-read proves branch completed, including errors; not readiness.",
+    "No pre-kernel preparation or router evidence."
+  ]
+}

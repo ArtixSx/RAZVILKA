@@ -1,0 +1,463 @@
+/tmp/razvilka-managed-probe.wBq6oz/release.tar.gz.download.r56YEk: OK
+/tmp/razvilka-managed-probe.wBq6oz/release.tar.gz: OK
+CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+Actual native build mode: race
+Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+go version go1.26.5 linux/amd64
+Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+Actual compiled reader/consumer bytes: 62460169
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeClassicBatchBookends
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=0 children=2 metadata=4 elapsed_ms=12.018
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=1 children=2 metadata=4 elapsed_ms=11.370
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=2 children=2 metadata=4 elapsed_ms=11.691
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=3 children=2 metadata=4 elapsed_ms=11.625
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=4 children=2 metadata=4 elapsed_ms=12.440
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=5 children=2 metadata=4 elapsed_ms=11.290
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=6 children=2 metadata=4 elapsed_ms=11.457
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=7 children=2 metadata=4 elapsed_ms=11.525
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=8 children=2 metadata=4 elapsed_ms=11.429
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=9 children=2 metadata=4 elapsed_ms=12.107
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=10 children=2 metadata=4 elapsed_ms=11.155
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=11 children=2 metadata=4 elapsed_ms=12.590
+--- PASS: TestStaticVersionFactNativeClassicBatchBookends (0.61s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativePolicyReadObservation
+    policy_read_observation_native_fixture_linux_test.go:59: actual original IPv4/IPv6 rule read output unchanged; foreign/expired original loan and mutation refused
+--- PASS: TestStaticVersionFactNativePolicyReadObservation (0.45s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeScope
+    version_fact_native_fixture_linux_test.go:68: actual version batch 0 0 metadata traversals 6
+    version_fact_native_fixture_linux_test.go:68: actual version batch 0 1 metadata traversals 2
+    version_fact_native_fixture_linux_test.go:68: actual version batch 1 0 metadata traversals 6
+    version_fact_native_fixture_linux_test.go:68: actual version batch 1 1 metadata traversals 2
+    version_fact_native_fixture_linux_test.go:101: actual first/fresh scope aliases=2 IP=1; repeated/nested aliases=0 IP=1; copied/expired refused
+--- PASS: TestStaticVersionFactNativeScope (0.43s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeFailedIPClearsFact
+    version_fact_native_fixture_linux_test.go:242: actual IP Start EAGAIN cleared retained fact; unfiltered original scope reran both aliases and IP; original exception preserved
+--- PASS: TestStaticVersionFactNativeFailedIPClearsFact (0.23s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativePartialBatchNeverRetained
+--- PASS: TestStaticVersionFactNativePartialBatchNeverRetained (0.22s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeOriginalFingerprint
+--- PASS: TestStaticVersionFactNativeOriginalFingerprint (0.41s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestClassicReadBatchNativeMutation
+=== RUN   TestClassicReadBatchNativeMutation/held-file
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; held-file change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/extension-membership
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; extension-membership change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/observation-held-file
+    classic_batch_native_fixture_linux_test.go:322: native completed scoped three-version Check original metadata traversal attempts 6
+    classic_batch_native_fixture_linux_test.go:332: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+    classic_batch_native_fixture_linux_test.go:151: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; observation-held-file change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/observation-extension-membership
+    classic_batch_native_fixture_linux_test.go:322: native completed scoped three-version Check original metadata traversal attempts 6
+    classic_batch_native_fixture_linux_test.go:332: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+    classic_batch_native_fixture_linux_test.go:151: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; observation-extension-membership change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/observation-close
+    classic_batch_native_fixture_linux_test.go:151: actual external original Lease.Close cancelled and joined readonly observation before closing held descriptors
+=== RUN   TestClassicReadBatchNativeMutation/inventory-held-file
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-held-file change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/inventory-extension-membership
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-membership change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/inventory-extension-symlink
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-symlink change refused whole image; no hooks or packets, host tools unchanged
+--- PASS: TestClassicReadBatchNativeMutation (2.29s)
+    --- PASS: TestClassicReadBatchNativeMutation/held-file (0.19s)
+    --- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.19s)
+    --- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.54s)
+    --- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.55s)
+    --- PASS: TestClassicReadBatchNativeMutation/observation-close (0.19s)
+    --- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.20s)
+    --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.22s)
+    --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-symlink (0.20s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeConsumer
+    strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-422556218/dataplane/runtime/nfqws2: no such file or directory
+    strategy_managed_probe_native_linux_test.go:667: native parent goroutine stacks before bounded probe deadline:
+        goroutine 1449 [running]:
+        github.com/ArtixSx/razvilka/internal/app.managedProbeNativeStackDeadline.func1()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:666 +0xab
+        created by time.goFunc
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/time/sleep.go:215 +0x45
+        
+        goroutine 1 [chan receive]:
+        testing.(*T).Run(0xc00016c6c8, {0x2d0084b, 0x26}, 0x2e10498)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2109 +0xb3e
+        testing.runTests.func1(0xc00016c6c8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2585 +0x85
+        testing.tRunner(0xc00016c6c8, 0xc00021f9a0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0x21d
+        testing.runTests({0x2cdcdf6, 0x1b}, {0x2d069a5, 0x28}, 0xc0001320f0, {0x3f89500, 0x49c, 0x49c}, {0xc2b47510a1315213, 0x1749c99f2c, ...})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2583 +0x9ea
+        testing.(*M).Run(0xc00026c0a0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2443 +0xf4c
+        github.com/ArtixSx/razvilka/internal/app.TestMain(0xc00026c0a0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:69 +0x529
+        main.main()
+        	_testmain.go:2406 +0x172
+        
+        goroutine 4 [runnable]:
+        bytes.(*Buffer).Write(0xc0003d96c0, {0xc0002179e1, 0x7d, 0x61f?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/bytes/buffer.go:193 +0x158
+        encoding/json.stringEncoder(0xc0003d96c0, {0x2ac3aa0?, 0xc000005b68?, 0x2?}, {0x98?, 0x1?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:632 +0x668
+        encoding/json.structEncoder.encode({{{0xc000318788, 0x4, 0x4}, 0xc00054c8a0, 0xc00054c8d0}}, 0xc0003d96c0, {0x2bda6e0?, 0xc000005b48?, 0x2bda6e0?}, {0x0, ...})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:747 +0x4de
+        encoding/json.arrayEncoder.encode({0x0?}, 0xc0003d96c0, {0x2ab5100?, 0xc000b11b00?, 0xc000b11b07?}, {0x40?, 0x1a?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:890 +0x103
+        encoding/json.sliceEncoder.encode({0x4d0fa9?}, 0xc0003d96c0, {0x2ab5100?, 0xc000b11b00?, 0x5bfa65?}, {0x36?, 0xf6?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:863 +0x503
+        encoding/json.structEncoder.encode({{{0xc000346a88, 0xf, 0x11}, 0xc00054c9f0, 0xc00054ca20}}, 0xc0003d96c0, {0x2c77020?, 0xc000b11a40?, 0x4d0f71?}, {0x0, ...})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:747 +0x4de
+        encoding/json.(*encodeState).reflectValue(0xc0003d96c0, {0x2c77020?, 0xc000b11a40?, 0x45c925?}, {0x38?, 0x0?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:367 +0x84
+        encoding/json.(*encodeState).marshal(0xc0003d96c0, {0x2c77020, 0xc000b11a40}, {0xd4?, 0xbe?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:343 +0xdc
+        encoding/json.Marshal({0x2c77020, 0xc000b11a40})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/encode.go:209 +0x11f
+        github.com/ArtixSx/razvilka/internal/components.ManagedNFQWSManifest.bytes({0x1, {0xc00079ab28, 0x15}, {0xc0007b1ef0, 0x2e}, {0xc0007b1f20, 0x22}, {0xc00083040a, 0x6}, {0xc0007b1f50, ...}, ...})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/components/nfqws_bundle_manifest.go:137 +0xc0e
+        github.com/ArtixSx/razvilka/internal/components.ManagedNFQWSManifest.Digest({0x1, {0xc00079ab28, 0x15}, {0xc0007b1ef0, 0x2e}, {0xc0007b1f20, 0x22}, {0xc00083040a, 0x6}, {0xc0007b1f50, ...}, ...})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/components/nfqws_bundle_manifest.go:141 +0x8d
+        github.com/ArtixSx/razvilka/internal/components.validateManagedNFQWSJournal({{0x3, {0xc0000a61c0, 0x20}, {0xc0008303ea, 0x6}, {0xc00079ab10, 0x17}, {0xc0008303fa, 0x6}, {0xc0007b1e90, ...}, ...}, ...})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/components/nfqws_bundle.go:64 +0x48e
+        github.com/ArtixSx/razvilka/internal/components.(*Manager).managedNFQWSTerminalPath(0xc00046a160, {0x1, {0xc0005036e0, 0x15}, {0xc0000450e0, 0x20}, {0xc0001e1700, 0x40}, {0xc00010ddc0, 0x62}, ...})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/components/nfqws_bundle.go:682 +0x3a5
+        github.com/ArtixSx/razvilka/internal/components.(*Manager).verifyManagedNFQWSRuntimeTerminal(_, {_, _}, {0x1, {0xc0005036e0, 0x15}, {0xc0000450e0, 0x20}, {0xc0001e1700, 0x40}, ...})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/components/nfqws_bundle_runtime_image.go:8 +0xd7
+        github.com/ArtixSx/razvilka/internal/components.(*managedNFQWSRuntimeOwner).check(0xc0000ba000, {0x2e3ab48, 0xc000250480})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/components/nfqws_bundle_runtime.go:147 +0x4a5
+        github.com/ArtixSx/razvilka/internal/components.(*ManagedNFQWSRuntimeLease).Check(0xc0004a20d8, {0x2e3ab48, 0xc000250480})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/components/nfqws_bundle_runtime.go:161 +0x299
+        github.com/ArtixSx/razvilka/internal/app.(*managedStrategyProbeEnvironment).Current(0xc0002d6408, {0x2e3ab48, 0xc000250480})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_environment.go:131 +0x79f
+        github.com/ArtixSx/razvilka/internal/strategylab.(*ManagedProbeEpoch).WithProbeReferenceCurrent(0xc0001df700, {0x2e3ab48, 0xc000250480}, 0xc00016b710, 0xc0004a20d8, 0xc0005348a0, 0xc000771340)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/strategylab/managed_probe_reference.go:39 +0x598
+        github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current(0xc0003bd508, {0x2e3ab48, 0xc000250480})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:226 +0x2c5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard(0xc0003bd508, {0x2e3ab48, 0xc000250480})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:462 +0xa9
+        github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary.func1({0x2e3ab48, 0xc000250480}, 0x0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_execution.go:62 +0x8b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved(0xc0007afc20, {0x2e3ab48, 0xc000250480}, 0xc00016cd88, 0x2, 0xffffffffffffffff, 0xffffffffffffffff)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:512 +0x635
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply.(*NFQWSScopedBinding).readback.(*NFQWSScopedBinding).readbackPrefix.func1({0x2e3ab48, 0xc000250480})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:460 +0x87
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0xc00022c000, {0x2e3abb8, 0xc0003fb030}, {0x1, {0x2cb8daa, 0xe}, {0xc00049de60, 0x24}, 0xf00001e6, {0x0, ...}}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/read_observation_linux.go:61 +0xcd5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools(0xc0003bd508, {0x2e3abb8, 0xc0003fb030}, 0xc000250cf0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_read_observation.go:20 +0x362
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools(0xc0007afc20, {0x2e3abb8, 0xc0003fb030}, 0xc00016cd88, 0xc000250cf0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_read_observation.go:42 +0x1d1
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix(...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:459
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback(...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:455
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply(0xc0007afc20, {0x2e3abb8, 0xc0003fb030}, 0xc00016cd88, {0xc000226630, 0xa1})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_owner.go:575 +0x63e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1({0x2e3abb8, 0xc0003fb030}, {{0xc0004c72c0, 0x29}, {0xc000502168, 0x13}, {0xc0000b2bc0, 0x40}, {0xc0000b2014, 0x23}, ...})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_nfqws_assembly.go:200 +0x62e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal(_, {_, _}, {{0xc0000a7520, 0x20}, {0xc000047720, 0x41}, {0xc0002bd758, 0x18}, {0xc0004c7770, ...}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:379 +0x3465
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission(_, {_, _}, {{0xc0000a7520, 0x20}, {0xc000047720, 0x41}, {0xc0002bd758, 0x18}, {0xc0004c7770, ...}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:167 +0x2de
+        github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run(0xc0002d1400, 0xc000404fe0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_nfqws_assembly.go:212 +0x8a5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary(0xc0003ba9f0, {0x2e3ab48, 0xc0003b49c0}, {0x0, {0x2cbe28f, 0x10}, 0x1, {0xc000502168, 0x13}, {0xc0000b2bc0, ...}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_execution.go:84 +0xafc
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2({0x2e3ab48, 0xc0003b49c0})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/manager.go:648 +0x231
+        github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody(0xc000508008, 0xc000489478)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_action_failure.go:9 +0x1d6
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:787 +0x207
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:769 +0x1766
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked(...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:697
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked(...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:693
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:689 +0xf9
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3({0x2e3ab48, 0xc000527b60})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/manager.go:652 +0x16b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/manager.go:654 +0x137f
+        github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute(_, {_, _}, _, _, _, {{0x2cace0c, 0x6}, {0x2cc6d5f, 0x13}, ...}, ...)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:357 +0x31d0
+        github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer(0xc00016c908, 0x0, 0x0, {0x0, 0x0, 0x0})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:509 +0x63eb
+        github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer(0xc00016c908)
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:91 +0x32
+        testing.tRunner(0xc00016c908, 0x2e10498)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0x21d
+        created by testing.(*T).Run in goroutine 1
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0xb13
+        
+        goroutine 276 [syscall]:
+        runtime/pprof.readProfile()
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/cpuprof.go:251 +0x4a
+        runtime/pprof.profileWriter({0x2e30060, 0xc000006448})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:930 +0x57
+        created by runtime/pprof.StartCPUProfile in goroutine 4
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:911 +0x26d
+        
+        goroutine 12 [IO wait]:
+        internal/poll.runtime_pollWait(0x7f7863580c00, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0xc00017c0a0, 0x72, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0xb1
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).Accept(0xc00017c080)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x4ea
+        net.(*netFD).accept(0xc00017c080)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x45
+        net.(*TCPListener).accept(0xc000106640)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x4e
+        net.(*TCPListener).Accept(0xc000106640)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:387 +0x65
+        crypto/tls.(*listener).Accept(0xc0004a2000)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/crypto/tls/tls.go:78 +0x43
+        net/http.(*Server).Serve(0xc0001ba400, {0x2e38a50, 0xc0004a2000})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3434 +0x610
+        github.com/ArtixSx/razvilka/internal/app.serveManagedProbeNativeTLS.func2()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:757 +0x235
+        created by github.com/ArtixSx/razvilka/internal/app.serveManagedProbeNativeTLS in goroutine 4
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:756 +0xcde
+        
+        goroutine 253 [select]:
+        github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute.func1({0x2e3ab80, 0xc00058a8c0}, {0xfff9e88000003d2c?, 0xc00056f4e8?}, {0x4f6d15?, 0xfffa0dc000003dbc?}, {0x2e39260, 0xc0000067f8})
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:332 +0x1f0
+        net.(*netFD).dial(0xc0003b9600, {0x2e3ab80, 0xc00058a8c0}, {0x2e40608, 0x0}, {0x2e40608, 0xc000253b30}, 0xc000253aa0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/sock_posix.go:102 +0x332
+        net.socket({0x2e3ab80, 0xc00058a8c0}, {0x2cab926, 0x4}, 0x2, 0x1, 0x0, 0x0, {0x2e40608, 0x0}, ...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/sock_posix.go:70 +0x3ee
+        net.internetSocket({0x2e3ab80, 0xc00058a8c0}, {0x2cab926, 0x4}, {0x2e40608, 0x0}, {0x2e40608, 0xc000253b30}, 0x1, 0x0, ...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/ipsock_posix.go:167 +0x127
+        net.(*sysDialer).doDialTCPProto(0xc000406840, {0x2e3ab80, 0xc00058a8c0}, 0x0, 0xc000253b30, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:85 +0x189
+        net.(*sysDialer).doDialTCP(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:75
+        net.(*sysDialer).dialTCP(0xc000406840, {0x2e3ab80, 0xc00058a8c0}, 0x0, 0xc000253b30)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:71 +0x14a
+        net.(*sysDialer).dialSingle(0xc000406840, {0x2e3ab80, 0xc00058a8c0}, {0x2e35218, 0xc000253b30})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:791 +0x4e5
+        net.(*sysDialer).dialSerial(0xc000406840, {0x2e3ab80, 0xc00058a8c0}, {0xc000405e30, 0x1, 0x0?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:756 +0x289
+        net.(*sysDialer).dialParallel(0xc000406840, {0x2e3ab80, 0xc00058a8c0}, {0xc000405e30, 0x1, 0x1}, {0x0, 0x0, 0x0})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:657 +0x50a
+        net.(*Dialer).DialContext(0xc0004283f0, {0x2e3ab80, 0xc00058a8c0}, {0x2cab926, 0x4}, {0xc0000193d5, 0xb})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:557 +0x8bc
+        github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute.func2()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:340 +0xb0
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute in goroutine 4
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:339 +0x2ccb
+        
+        goroutine 508 [syscall]:
+        syscall.Syscall6(0xf7, 0x3, 0xa3, 0xc0006ddd60, 0x4, 0xc00004e5a0, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x45
+        internal/syscall/unix.Waitid(0x3, 0xa3, 0xc0006ddd60, 0x4, 0xc00004e5a0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x70
+        os.(*Process).pidfdWait.func1(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+        os.ignoringEINTR(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+        os.(*Process).pidfdWait(0xc000809dc0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x365
+        os.(*Process).wait(0xc000809dc0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x47
+        os.(*Process).Wait(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+        os/exec.(*Cmd).Wait(0xc0007eed00)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0xb0
+        github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal.func3.3()
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:327 +0x45
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal.func3 in goroutine 4
+        	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:326 +0xcb3
+        
+    strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 1234946688 3752099
+    strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 9961 814429200
+    strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{2 2 1.330900094s} cleanup-current:{0 0 0s} counter:{1 1 1.389044899s} current:{116 116 10.919686517s} environment:{115 115 988.114452ms} epoch-source-runtime:{115 115 6.534045298s} owners:{116 116 3.370267358s} policy-apply:{1 1 7.104474059s} policy-readback:{12 12 5.904651927s} policy-remove:{1 1 3.318039ms}]
+    strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [85 85 178]
+    strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 928
+    strategy_managed_probe_native_linux_test.go:524: native measured Execute 15.016139843s actual inventory ToolCheck calls 176 ToolCheck wall 3.74059191s
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeConsumer.pprof
+    strategy_managed_probe_native_linux_test.go:558: native retained diagnostic latest-execution.json decode <nil> state resource-failed resources [{nfqws-scoped prepared capture-ready}] receipt  started false WaitECHILD false ACK false PID 0 exit 0
+    strategy_managed_probe_native_linux_test.go:558: native retained diagnostic ownership.json decode <nil> state  resources [] receipt reaped started true WaitECHILD true ACK false PID 16996 exit 125
+    strategy_managed_probe_native_linux_test.go:559: actual managed kernel/flow consumer {   local-error http st-5776d569142930dd native tcp ipv4 false false 0 0 0 0  0 [{firewall fail owned exact counter unavailable 1389}] 2026-11-09T05:38:55.301811808Z} managed NFQWS process settlement is unknown; invocation must not be replayed
+        execute original NFQWS probe: nfqws2 isolated canary: managed NFQWS process settlement is unknown; invocation must not be replayed
+        managed NFQWS process settlement is unknown; invocation must not be replayed
+        NFQWS action: probe counter closing capture: probe capture full readback: saved StrategyLab selection or its reviewed material is not current
+        trusted startup tools: READ_OBSERVATION_SCOPE
+        context deadline exceeded
+        trusted startup tools: READ_DEADLINE
+        context deadline exceeded
+        context deadline exceeded
+        NFQWS capture remove: scoped NFQWS owner unavailable or mismatched
+        managed NFQWS process settlement is unknown; invocation must not be replayed
+        context deadline exceeded
+        scoped NFQWS owner unavailable or mismatched
+        original NFQWS probe scope retained for final completion
+--- FAIL: TestManagedStrategyProbeNativeConsumer (19.25s)
+FAIL
+File: app.test
+Build ID: 6df296edebe5e727fbf335bda38c221dd32eccec
+Type: cpu
+Time: 2026-11-09 05:38:42 UTC
+Duration: 15.02s, Total samples = 14.37s (95.68%)
+Showing nodes accounting for 11.49s, 79.96% of 14.37s total
+Dropped 463 nodes (cum <= 0.07s)
+Showing top 20 nodes out of 292
+      flat  flat%   sum%        cum   cum%
+     2.74s 19.07% 19.07%      2.74s 19.07%  internal/runtime/syscall/linux.Syscall6
+     2.65s 18.44% 37.51%      2.65s 18.44%  __tsan::MemoryAccessRangeT
+     1.63s 11.34% 48.85%      1.63s 11.34%  racecall
+     1.31s  9.12% 57.97%      1.31s  9.12%  __tsan_read
+     1.24s  8.63% 66.60%      1.24s  8.63%  crypto/internal/fips140/sha256.blockSHANI
+     0.27s  1.88% 68.48%      0.27s  1.88%  runtime.findObject
+     0.24s  1.67% 70.15%      0.24s  1.67%  __tsan_write
+     0.19s  1.32% 71.47%      0.19s  1.32%  runtime.raceread
+     0.18s  1.25% 72.72%      0.22s  1.53%  runtime.(*sweepLocked).sweep
+     0.13s   0.9% 73.63%      0.13s   0.9%  __tsan::ShadowSet
+     0.11s  0.77% 74.39%      0.11s  0.77%  __tsan::MetaMap::FreeRange
+     0.11s  0.77% 75.16%      0.21s  1.46%  encoding/json.appendString[go.shape.string]
+     0.10s   0.7% 75.85%      0.10s   0.7%  __tsan_func_exit
+     0.10s   0.7% 76.55%      0.11s  0.77%  runtime.tryDeferToSpanScan
+     0.09s  0.63% 77.17%      0.09s  0.63%  __tsan::MetaMap::GetSync
+     0.08s  0.56% 77.73%      0.08s  0.56%  __tsan_func_enter
+     0.08s  0.56% 78.29%      0.08s  0.56%  runtime.memclrNoHeapPointers
+     0.08s  0.56% 78.84%      0.08s  0.56%  runtime.racefuncenter
+     0.08s  0.56% 79.40%      0.23s  1.60%  runtime.scanObject
+     0.08s  0.56% 79.96%      0.08s  0.56%  runtime.typePointers.next
+File: app.test
+Build ID: 6df296edebe5e727fbf335bda38c221dd32eccec
+Type: cpu
+Time: 2026-11-09 05:38:42 UTC
+Duration: 15.02s, Total samples = 14.37s (95.68%)
+Showing nodes accounting for 0, 0% of 14.37s total
+Dropped 463 nodes (cum <= 0.07s)
+Showing top 20 nodes out of 292
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.66s 46.35%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.66s 46.35%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.66s 46.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.64s 46.21%  testing.tRunner
+         0     0%     0%      6.47s 45.02%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.10s 42.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.10s 42.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.10s 42.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      5.72s 39.81%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      5.72s 39.81%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      5.72s 39.81%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      5.14s 35.77%  runtime._System
+         0     0%     0%      5.04s 35.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+         0     0%     0%      4.96s 34.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%     0%      4.38s 30.48%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%     0%      3.69s 25.68%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+File: app.test
+Build ID: 6df296edebe5e727fbf335bda38c221dd32eccec
+Type: cpu
+Time: 2026-11-09 05:38:42 UTC
+Duration: 15.02s, Total samples = 14.37s (95.68%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 0.54s, 3.76% of 14.37s total
+Dropped 65 nodes (cum <= 0.07s)
+Showing top 40 nodes out of 199
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.66s 46.35%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.66s 46.35%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.66s 46.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.47s 45.02%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.10s 42.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.10s 42.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.10s 42.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.06s 42.17%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+     0.01s  0.07%  0.07%      5.72s 39.81%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%  0.07%      5.72s 39.81%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%  0.07%      5.72s 39.81%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%  0.07%      5.04s 35.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+     0.01s  0.07%  0.14%      4.96s 34.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%  0.14%      4.38s 30.48%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%  0.14%      3.45s 24.01%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0%  0.14%      3.12s 21.71%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0%  0.14%      3.03s 21.09%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+         0     0%  0.14%      2.80s 19.49%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+         0     0%  0.14%      2.79s 19.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+         0     0%  0.14%      2.67s 18.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%  0.14%      2.57s 17.88%  github.com/ArtixSx/razvilka/internal/strategylab.(*ManagedProbeEpoch).WithProbeReferenceCurrent
+         0     0%  0.14%      2.22s 15.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+         0     0%  0.14%      2.19s 15.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+     0.31s  2.16%  2.30%      2.19s 15.24%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  2.30%      2.16s 15.03%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  2.30%      2.16s 15.03%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+         0     0%  2.30%      2.16s 15.03%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+     0.20s  1.39%  3.69%      2.01s 13.99%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0%  3.69%      1.95s 13.57%  github.com/ArtixSx/razvilka/internal/dataplane.(*executionResourceScope).check
+         0     0%  3.69%      1.92s 13.36%  github.com/ArtixSx/razvilka/internal/components.(*ManagedNFQWSRuntimeLease).Check
+         0     0%  3.69%      1.92s 13.36%  github.com/ArtixSx/razvilka/internal/components.(*managedNFQWSRuntimeOwner).check
+         0     0%  3.69%      1.89s 13.15%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSExecutionResource).check
+     0.01s  0.07%  3.76%      1.88s 13.08%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0%  3.76%      1.87s 13.01%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0%  3.76%      1.79s 12.46%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+         0     0%  3.76%      1.70s 11.83%  github.com/ArtixSx/razvilka/internal/strategylab.(*CandidateProbeReview).managedProbeReferencePhase
+         0     0%  3.76%      1.68s 11.69%  github.com/ArtixSx/razvilka/internal/strategylab.(*SelectedCandidateReview).materialCurrentLocked
+File: app.test
+Build ID: 6df296edebe5e727fbf335bda38c221dd32eccec
+Type: alloc_space
+Time: 2026-11-09 05:38:57 UTC
+Showing nodes accounting for 1251.07MB, 93.56% of 1337.18MB total
+Dropped 365 nodes (cum <= 6.69MB)
+Showing top 30 nodes out of 302
+      flat  flat%   sum%        cum   cum%
+  239.41MB 17.90% 17.90%   239.41MB 17.90%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+  185.17MB 13.85% 31.75%   185.17MB 13.85%  github.com/ArtixSx/razvilka/internal/startuptools.init.func1
+  155.27MB 11.61% 43.36%   155.27MB 11.61%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+  149.80MB 11.20% 54.57%   149.80MB 11.20%  io.ReadAll
+   94.94MB  7.10% 61.67%    94.94MB  7.10%  bytes.growSlice
+   55.01MB  4.11% 65.78%    55.01MB  4.11%  os.(*File).Stat
+   48.51MB  3.63% 69.41%    58.01MB  4.34%  os.lstatNolog
+   47.22MB  3.53% 72.94%   141.64MB 10.59%  encoding/json.Marshal
+   44.36MB  3.32% 76.26%    44.36MB  3.32%  io.copyBuffer
+      39MB  2.92% 79.17%       39MB  2.92%  syscall.ByteSliceFromString
+   25.01MB  1.87% 81.04%    25.01MB  1.87%  strings.Fields
+   18.64MB  1.39% 82.44%    18.64MB  1.39%  os.init.func1
+   16.63MB  1.24% 83.68%    16.63MB  1.24%  github.com/ArtixSx/razvilka/internal/components.acquireManagedRuntimePayloadScratch
+   16.55MB  1.24% 84.92%    16.55MB  1.24%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+      14MB  1.05% 85.97%       15MB  1.12%  os.lstatatWithName
+   13.41MB  1.00% 86.97%    13.41MB  1.00%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityFileCopy
+   11.53MB  0.86% 87.83%    11.53MB  0.86%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   11.50MB  0.86% 88.69%    11.50MB  0.86%  encoding/json.(*decodeState).literalStore
+   10.56MB  0.79% 89.48%    10.56MB  0.79%  encoding/json.(*Decoder).refill
+   10.01MB  0.75% 90.23%    10.01MB  0.75%  reflect.growslice
+    8.50MB  0.64% 90.87%       12MB   0.9%  os.readlink
+    7.51MB  0.56% 91.43%    40.15MB  3.00%  os.(*File).readdir
+    7.50MB  0.56% 91.99%       14MB  1.05%  os.newUnixDirent
+    5.52MB  0.41% 92.40%    29.02MB  2.17%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+    4.01MB   0.3% 92.70%   105.05MB  7.86%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+       3MB  0.22% 92.92%    56.68MB  4.24%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+       3MB  0.22% 93.15%   191.20MB 14.30%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+       2MB  0.15% 93.30%   222.64MB 16.65%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+       2MB  0.15% 93.45%    12.50MB  0.93%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityProtectedPath
+    1.50MB  0.11% 93.56%    10.50MB  0.79%  github.com/ArtixSx/razvilka/internal/components.(*Manager).verifyManagedNFQWSRuntimeImage.func2

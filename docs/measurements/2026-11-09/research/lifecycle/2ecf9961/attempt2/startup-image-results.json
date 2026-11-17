@@ -1,0 +1,103 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "attempt": 2,
+  "job_id": 129353747803,
+  "mode": "production",
+  "raw_sha256": "e365530bdf8cad9e6d3eeaddefa946e68a1e71e65a33b93d610ac881231215f0",
+  "actual_images": 132,
+  "retained_bytes": 7819392,
+  "capture_plus_repeat_bytes": 15638784,
+  "logical_readat_capture_plus_repeat": 880,
+  "pass_counts": {
+    "TestStartupImageMeasurementSourceParity": 3,
+    "TestStartupImageMeasurementActualParity": 3,
+    "TestStartupImageMeasurementRefusals": 3,
+    "TestStartupImageMeasurementReadBoundaries": 3
+  },
+  "benchmark": {
+    "original_sha": {
+      "samples": [
+        {
+          "ns_per_op": 7169817,
+          "bytes_per_op": 173846,
+          "allocs_per_op": 1484
+        },
+        {
+          "ns_per_op": 7204502,
+          "bytes_per_op": 174393,
+          "allocs_per_op": 1484
+        },
+        {
+          "ns_per_op": 7236600,
+          "bytes_per_op": 174395,
+          "allocs_per_op": 1484
+        }
+      ],
+      "median": {
+        "ns_per_op": 7204502,
+        "bytes_per_op": 174393,
+        "allocs_per_op": 1484
+      }
+    },
+    "capture_sha_clear": {
+      "samples": [
+        {
+          "ns_per_op": 10072274,
+          "bytes_per_op": 8279091,
+          "allocs_per_op": 1781
+        },
+        {
+          "ns_per_op": 10392697,
+          "bytes_per_op": 8279102,
+          "allocs_per_op": 1782
+        },
+        {
+          "ns_per_op": 10445752,
+          "bytes_per_op": 8282364,
+          "allocs_per_op": 1781
+        }
+      ],
+      "median": {
+        "ns_per_op": 10392697,
+        "bytes_per_op": 8279102,
+        "allocs_per_op": 1781
+      }
+    },
+    "repeat_full_bytes": {
+      "samples": [
+        {
+          "ns_per_op": 2578104,
+          "bytes_per_op": 167606,
+          "allocs_per_op": 1352
+        },
+        {
+          "ns_per_op": 2483682,
+          "bytes_per_op": 167413,
+          "allocs_per_op": 1352
+        },
+        {
+          "ns_per_op": 2576808,
+          "bytes_per_op": 168326,
+          "allocs_per_op": 1352
+        }
+      ],
+      "median": {
+        "ns_per_op": 2576808,
+        "bytes_per_op": 167606,
+        "allocs_per_op": 1352
+      }
+    }
+  },
+  "repeat_vs_original_pct": -64.23336408262502,
+  "arithmetic_pair_estimate_ns": {
+    "old": 14409004,
+    "capture_plus_repeat": 12969505,
+    "warning": "Arithmetic only, not paired sequence measurement; fixed-slot whole pair remains pending."
+  },
+  "decision": "No production promotion; normal repeat faster, but freshcapture allocation costly and race repeat negative. Require complete fixed-slot pair measurement and lifetime review.",
+  "limits": [
+    "Warm complete review bytes+metadata+membership; source opening/closing outside measured callback.",
+    "Not full route speed, process RSS or router proof."
+  ]
+}

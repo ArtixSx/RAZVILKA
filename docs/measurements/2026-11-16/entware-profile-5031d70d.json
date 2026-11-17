@@ -1,0 +1,104 @@
+{
+  "run": 44047516421,
+  "source": "5031d70d6ecb6482ef3497ea63e25b26190462ca",
+  "conclusion": "success",
+  "verified": [
+    {
+      "mode": "normal",
+      "cpuid_required_pass": 4,
+      "closure_required_pass": 4,
+      "helper_required_pass": 4,
+      "skip_or_fail": false
+    },
+    {
+      "mode": "race",
+      "cpuid_required_pass": 4,
+      "closure_required_pass": 4,
+      "helper_required_pass": 4,
+      "skip_or_fail": false
+    }
+  ],
+  "scope": "Linux AMD64 normal/race parent; synthetic ARM64/AMD64 ELF parse and complete capture/closing, never ARM64 execution or router admission; helper ordinary stripped metadata process",
+  "archive_api_digests_match": true,
+  "raw_manifest": [
+    {
+      "file": "job-133916797901.log",
+      "bytes": 42868,
+      "sha256": "8c650b76a2256f107a2d7d98fab8cf5e1d2d71de818bcb615cd5e2190049f578"
+    },
+    {
+      "file": "job-133916798249.log",
+      "bytes": 42879,
+      "sha256": "a84df674d90620a2b068eb2bd109efd307d9079a701f510a8d6804f09ac37b0e"
+    },
+    {
+      "file": "normal\\loader-status.txt",
+      "bytes": 14,
+      "sha256": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+    },
+    {
+      "file": "normal\\loader.log",
+      "bytes": 6305,
+      "sha256": "d522ca509a682ff26bdc2dc385e125cfd3e16d387a02d4c11a85cca4c568a9f7"
+    },
+    {
+      "file": "normal\\native.log",
+      "bytes": 4848,
+      "sha256": "67d591b96182c226d7d266493c3bf5b8791f62eedc984114361514d7b3fd49a1"
+    },
+    {
+      "file": "normal\\provenance.txt",
+      "bytes": 1047,
+      "sha256": "a4b63ff59be68fd93e111dfd65ed8a8d44e37f5633c3f86929789e8e0f503011"
+    },
+    {
+      "file": "normal\\status.txt",
+      "bytes": 14,
+      "sha256": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+    },
+    {
+      "file": "normal.zip",
+      "bytes": 2496,
+      "sha256": "7a38605078b0d6c3c7e14fb42bbff47f9668f3d1214686ebef36abfbae42b907"
+    },
+    {
+      "file": "race\\loader-status.txt",
+      "bytes": 14,
+      "sha256": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+    },
+    {
+      "file": "race\\loader.log",
+      "bytes": 6305,
+      "sha256": "ef5fb47ab8068fb02fab24a9ec5011d9c8be368c97ca6490405daab9188a9759"
+    },
+    {
+      "file": "race\\native.log",
+      "bytes": 4848,
+      "sha256": "d6d2f59360f66d2c2eb294336dbd500f50ee01b52341c82ba1891176630f92e8"
+    },
+    {
+      "file": "race\\provenance.txt",
+      "bytes": 1045,
+      "sha256": "6c57e157e2680f9877b25b5b55d04959e08ccb8f97a0e34258d4cb38c58bfd87"
+    },
+    {
+      "file": "race\\status.txt",
+      "bytes": 14,
+      "sha256": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+    },
+    {
+      "file": "race.zip",
+      "bytes": 2510,
+      "sha256": "623b14ea291cf0f3f959f6f6ccab33ce3e9f5458e9b2c794461d037ff8305ea6"
+    },
+    {
+      "file": "run.json",
+      "bytes": 4512,
+      "sha256": "e2298d70cd396ae8421c06729219061cdc39a461ddbc0f6dc9811bef3f4ab236"
+    }
+  ],
+  "independent_root_verified_raw_files": 15,
+  "package_closure_manifest_sha256": "ae27db9ded0182560151bbe45cffd34afd65cd02158088973c6a984a0fdf7a75",
+  "package_exact_image_pins_root_verified": 40,
+  "public_selection_in_this_revision": false
+}

@@ -1,0 +1,285 @@
+{
+  "commit": "4cc9f869974713c9cebd833fccca383c03c102b7",
+  "run": 42642213655,
+  "readiness": false,
+  "benchmarks": [
+    {
+      "mode": "production",
+      "samples": [
+        {
+          "benchmark": "OutputReader",
+          "variant": "before",
+          "iterations": 73988,
+          "ns_per_op": 5324.0,
+          "bytes_per_op": 32840,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "before",
+          "iterations": 58962,
+          "ns_per_op": 5671.0,
+          "bytes_per_op": 32840,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "before",
+          "iterations": 61342,
+          "ns_per_op": 6174.0,
+          "bytes_per_op": 32840,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "after",
+          "iterations": 802206,
+          "ns_per_op": 434.7,
+          "bytes_per_op": 88,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "after",
+          "iterations": 800308,
+          "ns_per_op": 431.7,
+          "bytes_per_op": 88,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "after",
+          "iterations": 796128,
+          "ns_per_op": 432.6,
+          "bytes_per_op": 88,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "before",
+          "iterations": 3,
+          "ns_per_op": 6555283.0,
+          "bytes_per_op": 82976,
+          "allocs_per_op": 73
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "before",
+          "iterations": 3,
+          "ns_per_op": 6362144.0,
+          "bytes_per_op": 83610,
+          "allocs_per_op": 73
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "before",
+          "iterations": 3,
+          "ns_per_op": 6424224.0,
+          "bytes_per_op": 82821,
+          "allocs_per_op": 72
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "after",
+          "iterations": 3,
+          "ns_per_op": 6588991.0,
+          "bytes_per_op": 18264,
+          "allocs_per_op": 75
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "after",
+          "iterations": 3,
+          "ns_per_op": 6638574.0,
+          "bytes_per_op": 28610,
+          "allocs_per_op": 74
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "after",
+          "iterations": 3,
+          "ns_per_op": 6585240.0,
+          "bytes_per_op": 27896,
+          "allocs_per_op": 72
+        }
+      ]
+    },
+    {
+      "mode": "race",
+      "samples": [
+        {
+          "benchmark": "OutputReader",
+          "variant": "before",
+          "iterations": 34695,
+          "ns_per_op": 10072.0,
+          "bytes_per_op": 32848,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "before",
+          "iterations": 34180,
+          "ns_per_op": 10554.0,
+          "bytes_per_op": 32848,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "before",
+          "iterations": 36153,
+          "ns_per_op": 10317.0,
+          "bytes_per_op": 32848,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "after",
+          "iterations": 61426,
+          "ns_per_op": 5309.0,
+          "bytes_per_op": 8236,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "after",
+          "iterations": 79182,
+          "ns_per_op": 4429.0,
+          "bytes_per_op": 8288,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReader",
+          "variant": "after",
+          "iterations": 78055,
+          "ns_per_op": 4496.0,
+          "bytes_per_op": 8338,
+          "allocs_per_op": 3
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "before",
+          "iterations": 3,
+          "ns_per_op": 1033165303.0,
+          "bytes_per_op": 82821,
+          "allocs_per_op": 73
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "before",
+          "iterations": 3,
+          "ns_per_op": 1033175969.0,
+          "bytes_per_op": 82656,
+          "allocs_per_op": 71
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "before",
+          "iterations": 3,
+          "ns_per_op": 1033122586.0,
+          "bytes_per_op": 82570,
+          "allocs_per_op": 72
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "after",
+          "iterations": 3,
+          "ns_per_op": 1033401806.0,
+          "bytes_per_op": 39464,
+          "allocs_per_op": 74
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "after",
+          "iterations": 3,
+          "ns_per_op": 1032599192.0,
+          "bytes_per_op": 38882,
+          "allocs_per_op": 73
+        },
+        {
+          "benchmark": "OutputReaderChild",
+          "variant": "after",
+          "iterations": 3,
+          "ns_per_op": 1032267725.0,
+          "bytes_per_op": 28381,
+          "allocs_per_op": 73
+        }
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "mode": "production",
+      "job": 129245976335,
+      "conclusion": "failure",
+      "log_sha256": "d4f3016fd95ffc8e7985d7ddb9e51107cf190a4f6f0b6da38661c9418d8436f8",
+      "output_reader_tests": "PASS including actual child overflow/cancel and joined Wait",
+      "core": "PASS",
+      "full_lan_manual": "FAIL",
+      "intent_recovery": "PASS recovery marker; fresh Apply FAIL",
+      "settlement_sync_recovery": "PASS continuous original quarantine and recovery marker; fresh Apply FAIL",
+      "quarantine_close_retry": "PASS cleanup-only, original lease released, permanent fence retained",
+      "timing_lines": [
+        "2026-11-09T15:16:27.7247709Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 2630164800 17477073",
+        "2026-11-09T15:16:27.7254547Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 9.903201172s",
+        "2026-11-09T15:16:27.7257057Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [402 402 1164]",
+        "2026-11-09T15:18:03.0789121Z 2026/11/09 15:18:03 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=18455",
+        "2026-11-09T15:18:03.0794488Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 15.917202939s} active-inventory-capture:{22 22 480.805674ms} active-lan:{11 11 10.794119453s} active-read-pair:{11 11 692.299788ms} capture-current:{0 0 0s} cleanup-current:{3 3 75.399435ms} counter:{0 0 0s} current:{15 15 778.598616ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{545 545 3.419904953s} policy-apply:{1 1 9.541704931s} policy-readback:{8 8 18.95954002s} policy-remove:{1 1 270.749587ms} prepared-active:{1 1 3.531312058s}]",
+        "2026-11-09T15:18:03.1558954Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 4552371568 28444008",
+        "2026-11-09T15:18:03.1565491Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 2718 wall 16.884197753s",
+        "2026-11-09T15:18:03.1567243Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [500 500 2710]",
+        "2026-11-09T15:18:30.4130245Z 2026/11/09 15:18:30 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=LAN_CONSUMER_REFUSED total_ms=18482",
+        "2026-11-09T15:18:30.4135988Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 15.937179254s} active-inventory-capture:{22 22 488.427349ms} active-lan:{11 11 10.739010647s} active-read-pair:{11 11 699.014562ms} capture-current:{0 0 0s} cleanup-current:{3 3 73.463797ms} counter:{0 0 0s} current:{15 15 794.535203ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{537 537 3.405029402s} policy-apply:{1 1 9.420351543s} policy-readback:{8 8 18.770642805s} policy-remove:{1 1 266.962602ms} prepared-active:{1 1 3.559483251s}]",
+        "2026-11-09T15:18:30.4905129Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 1713183416 10413103",
+        "2026-11-09T15:18:30.4909085Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 1539 wall 6.971111561s",
+        "2026-11-09T15:18:30.4911630Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [98 98 1519]",
+        "2026-11-09T15:19:15.8749463Z 2026/11/09 15:19:15 Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=36525",
+        "2026-11-09T15:19:34.6571852Z 2026/11/09 15:19:34 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=LAN_CONSUMER_REFUSED total_ms=18416",
+        "2026-11-09T15:19:34.6577958Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 15.916877668s} active-inventory-capture:{22 22 480.464703ms} active-lan:{11 11 10.778573439s} active-read-pair:{11 11 685.620306ms} capture-current:{0 0 0s} cleanup-current:{3 3 73.627197ms} counter:{0 0 0s} current:{15 15 778.276383ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{539 539 3.38209374s} policy-apply:{1 1 9.479868786s} policy-readback:{8 8 18.866262146s} policy-remove:{1 1 264.876807ms} prepared-active:{1 1 3.586355214s}]",
+        "2026-11-09T15:19:34.7340457Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 4050530472 26545528",
+        "2026-11-09T15:19:34.7343081Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 3250 wall 15.495648665s",
+        "2026-11-09T15:19:34.7344851Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [756 756 3686]",
+        "2026-11-09T15:20:01.2703615Z 2026/11/09 15:20:01 Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=17373",
+        "2026-11-09T15:20:40.7601403Z 2026/11/09 15:20:40 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=18377",
+        "2026-11-09T15:20:40.7608725Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 15.909313288s} active-inventory-capture:{22 22 460.920947ms} active-lan:{11 11 10.922176995s} active-read-pair:{11 11 657.256892ms} capture-current:{0 0 0s} cleanup-current:{3 3 70.2274ms} counter:{0 0 0s} current:{15 15 774.895424ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{557 557 3.370930429s} policy-apply:{1 1 9.636348965s} policy-readback:{8 8 19.200984754s} policy-remove:{1 1 252.956205ms} prepared-active:{1 1 3.481543383s}]",
+        "2026-11-09T15:20:40.8433604Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 4207597904 27581779",
+        "2026-11-09T15:20:40.8437273Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 3382 wall 16.329014866s",
+        "2026-11-09T15:20:40.8439971Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [811 811 3818]",
+        "2026-11-09T15:21:06.1026795Z 2026/11/09 15:21:06 Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=17296",
+        "2026-11-09T15:21:26.4343156Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 2470136688 16889725",
+        "2026-11-09T15:21:26.4346561Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 1804 wall 9.475779122s",
+        "2026-11-09T15:21:26.4349259Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [713 713 2240]"
+      ]
+    },
+    {
+      "mode": "race",
+      "job": 129245976103,
+      "conclusion": "failure",
+      "log_sha256": "441640a927947e17b19310a88067bec02291ffa5a22fea69867b2b8706ac83e8",
+      "output_reader_tests": "PASS including actual child overflow/cancel and joined Wait",
+      "core": "FAIL deadline",
+      "full_lan_manual": "FAIL",
+      "intent_recovery": "cut not reached",
+      "settlement_sync_recovery": "cut not reached",
+      "quarantine_close_retry": "not requested in race",
+      "timing_lines": [
+        "2026-11-09T15:18:31.6918995Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 1027033224 3088082",
+        "2026-11-09T15:18:31.6931156Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 209 wall 3.582330971s",
+        "2026-11-09T15:18:31.6935904Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [74 74 191]",
+        "2026-11-09T15:19:12.5970542Z 2026/11/09 15:19:12 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=SOURCE_MISSING total_ms=24536",
+        "2026-11-09T15:19:12.5980669Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 18.010040854s} active-inventory-capture:{6 6 249.139626ms} active-lan:{6 6 9.343140741s} active-read-pair:{3 3 354.389008ms} capture-current:{0 0 0s} cleanup-current:{3 3 129.331792ms} counter:{0 0 0s} current:{15 15 2.815211933s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{260 260 3.932247612s} policy-apply:{1 1 2.468593943s} policy-readback:{4 4 11.062262851s} policy-remove:{1 1 517.338573ms} prepared-active:{1 1 7.337075773s}]",
+        "2026-11-09T15:19:12.7495613Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 2024567088 6526725",
+        "2026-11-09T15:19:12.7499617Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 739 wall 7.337433908s",
+        "2026-11-09T15:19:12.7502330Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [92 92 719]",
+        "2026-11-09T15:19:53.7645568Z 2026/11/09 15:19:53 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=24567",
+        "2026-11-09T15:19:53.9143382Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 2025917224 6509224",
+        "2026-11-09T15:19:53.9157904Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 737 wall 7.327331902s",
+        "2026-11-09T15:19:53.9159959Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [92 92 717]",
+        "2026-11-09T15:20:34.7610108Z 2026/11/09 15:20:34 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=24746",
+        "2026-11-09T15:20:34.9117087Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 2022014016 6552252",
+        "2026-11-09T15:20:34.9122355Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 744 wall 7.401117655s",
+        "2026-11-09T15:20:34.9124927Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [92 92 724]"
+      ]
+    }
+  ],
+  "interpretation": "Paired output-copy allocation reduction confirmed; real-child production timing median increased ~2.6% in three 3-iteration samples. No real-child or route speed claim. Race samples include ~1s runtime exit delay. Full NFQ forward workflow remains unaccepted; phase walls inclusive."
+}

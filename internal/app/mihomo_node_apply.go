@@ -33,8 +33,8 @@ func (a *App) mihomoNodeSelection(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	registered := a.Dataplane != nil && a.Dataplane.MihomoLiveRuntimeRegistered()
-	available := registered && a.Dataplane.Capable("mihomo") && a.Dataplane.CanaryCapable("mihomo")
-	writeJSON(w, http.StatusOK, map[string]any{"version": 1, "revision": cfg.Revision, "services": services, "runtime_registered": registered, "live_apply_available": available, "service_verified": false, "live_applied": false})
+	available := false // No selected scope or live proof exists in this inventory.
+	writeJSON(w, http.StatusOK, map[string]any{"version": 1, "revision": cfg.Revision, "services": services, "runtime_registered": registered, "manual_node_apply_supported": registered, "live_apply_available": available, "service_verified": false, "live_applied": false})
 }
 
 func mihomoNodeIntent(cfg config.Config, cat catalog.Catalog) string {
@@ -119,7 +119,7 @@ func (a *App) mihomoNodePreview(w http.ResponseWriter, r *http.Request, id strin
 		writeNodeApplyError(w, "MIHOMO_NODE_UNSUPPORTED", "Нужен конкретный узел VLESS/TCP/TLS с проверкой сертификата.")
 		return
 	}
-	plan, err := a.buildDataplanePlanForScopeContext(r.Context(), preview, a.nodeRouteOptions(), changeScopeNode, "")
+	plan, err := a.buildReviewedMihomoNodePlan(r.Context(), cfg, cat, node, service, sources)
 	if err != nil {
 		writeNodePlanFailure(w, err)
 		return
@@ -129,7 +129,7 @@ func (a *App) mihomoNodePreview(w http.ResponseWriter, r *http.Request, id strin
 		writeNodeApplyError(w, "MIHOMO_REVIEW_CHANGED", "Настройки, каталог или узел изменились. Откройте новый план.")
 		return
 	}
-	ready := plan.Ready && a.Dataplane.Capable("mihomo") && a.Dataplane.CanaryCapable("mihomo")
+	ready := plan.Ready && a.Dataplane.MihomoLiveNodePlanSupported(plan)
 	if ready {
 		review, err = a.nodeReviews.put(review, time.Now())
 		if err != nil {
@@ -154,7 +154,7 @@ func (a *App) mihomoNodeApply(w http.ResponseWriter, r *http.Request, id string)
 		writeNodeApplyError(w, "MIHOMO_REVIEW_CHANGED", "Подтверждение устарело или относится к другому выбору.")
 		return
 	}
-	if !a.Dataplane.Capable("mihomo") || !a.Dataplane.CanaryCapable("mihomo") {
+	if !a.Dataplane.MihomoLiveRuntimeRegistered() {
 		writeNodeApplyError(w, "MIHOMO_RUNTIME_UNAVAILABLE", "Полный цикл применения Mihomo пока не разрешён для этого runtime.")
 		return
 	}
@@ -168,8 +168,15 @@ func (a *App) mihomoNodeApply(w http.ResponseWriter, r *http.Request, id string)
 		writeNodeApplyError(w, "MIHOMO_REVIEW_CHANGED", "Источник узла изменился. Откройте новый план.")
 		return
 	}
-	plan, err := a.buildDataplanePlanForScopeContext(r.Context(), nodeRouteConfigForEngineScope(cfg, "mihomo", review.ServiceID, id, review.scopeSources), a.nodeRouteOptions(), changeScopeNode, "")
-	if err != nil || !plan.Ready || plan.Digest != review.Digest || plan.NetworkProfileID != review.NetworkProfile || len(plan.Routes) != 1 {
+	var selected catalog.Service
+	for _, candidate := range cat.Services {
+		if candidate.ID == review.ServiceID {
+			selected = defaultRouteCloneCatalogService(candidate)
+			break
+		}
+	}
+	plan, err := a.buildReviewedMihomoNodePlan(r.Context(), cfg, cat, node, selected, review.scopeSources)
+	if err != nil || !plan.Ready || !a.Dataplane.MihomoLiveNodePlanSupported(plan) || plan.Digest != review.Digest || plan.NetworkProfileID != review.NetworkProfile || len(plan.Routes) != 1 {
 		writeNodeApplyError(w, "MIHOMO_REVIEW_CHANGED", "Состав или условия маршрута изменились. Откройте новый план.")
 		return
 	}

@@ -78,7 +78,7 @@ func TestMihomoLiveRetryKeepsOriginalCleanupOnStaleStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	released := 0
-	a.mihomoProbe.liveStop = &mihomoLiveStop{manager: a.Dataplane, store: store, before: &before, context: context.WithoutCancel(held), cleanup: cleanup, release: func() { released++; release() }}
+	a.mihomoProbe.liveStop = &mihomoLiveStop{manager: a.Dataplane, store: store, before: &before, context: context.WithoutCancel(held), cleanup: cleanup, release: func() { released++; release() }, stage: "native-stop", lastFailure: errors.New("previous attempt cut")}
 	a.Operations.FenceJournal()
 	if err = store.UpdateService("changed", config.ServiceState{Enabled: true, Route: "direct"}); err != nil {
 		t.Fatal(err)
@@ -86,6 +86,9 @@ func TestMihomoLiveRetryKeepsOriginalCleanupOnStaleStore(t *testing.T) {
 	handled, outcome := a.executeMihomoServiceRuntime(ctx, "stop", store.Get().Revision)
 	if !handled || outcome.Code != "SERVICE_CONTROL_CHANGED" || released != 0 {
 		t.Fatal("stale retry released original cleanup custody", handled, outcome, released)
+	}
+	if a.mihomoProbe.liveStop.stage != "admission" || a.mihomoProbe.liveStop.lastFailure != nil {
+		t.Fatal("early retry refusal reused prior attempt cause")
 	}
 	if err = cleanup.WithCurrent(ctx, func() error { return nil }); err != nil {
 		t.Fatal("actual original cleanup lease lost", err)

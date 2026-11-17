@@ -1,0 +1,95 @@
+{
+  "sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "scope": "Warm full-image file measurement only; production custody/lifetime/memory architecture not approved",
+  "retained_bytes_per_image": 36577406,
+  "samples": {
+    "original32": [
+      {
+        "ns_op": 18086960,
+        "bytes_op": 1088,
+        "allocs_op": 9
+      },
+      {
+        "ns_op": 18078633,
+        "bytes_op": 1089,
+        "allocs_op": 9
+      },
+      {
+        "ns_op": 18020448,
+        "bytes_op": 1088,
+        "allocs_op": 9
+      }
+    ],
+    "private_capture_sha_clear": [
+      {
+        "ns_op": 20194352,
+        "bytes_op": 36586622,
+        "allocs_op": 11
+      },
+      {
+        "ns_op": 20819680,
+        "bytes_op": 36586608,
+        "allocs_op": 11
+      },
+      {
+        "ns_op": 20536871,
+        "bytes_op": 36586608,
+        "allocs_op": 11
+      }
+    ],
+    "private_repeat_compare": [
+      {
+        "ns_op": 2905567,
+        "bytes_op": 928,
+        "allocs_op": 6
+      },
+      {
+        "ns_op": 2889968,
+        "bytes_op": 928,
+        "allocs_op": 6
+      },
+      {
+        "ns_op": 2885684,
+        "bytes_op": 928,
+        "allocs_op": 6
+      }
+    ]
+  },
+  "medians": {
+    "original32": {
+      "ns_op": 18078633,
+      "bytes_op": 1088,
+      "allocs_op": 9
+    },
+    "private_capture_sha_clear": {
+      "ns_op": 20536871,
+      "bytes_op": 36586608,
+      "allocs_op": 11
+    },
+    "private_repeat_compare": {
+      "ns_op": 2889968,
+      "bytes_op": 928,
+      "allocs_op": 6
+    }
+  },
+  "modes": {
+    "normal": {
+      "actual_parity_pass": true,
+      "refusals_pass": true,
+      "post_cancel_ns": [
+        3855,
+        2654,
+        3144
+      ]
+    },
+    "race": {
+      "actual_parity_pass": true,
+      "refusals_pass": true,
+      "post_cancel_ns": [
+        37552,
+        15431,
+        5656
+      ]
+    }
+  }
+}

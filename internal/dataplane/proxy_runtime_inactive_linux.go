@@ -9,7 +9,7 @@ import (
 )
 
 func proxyInactivePlatformProof() (proxyInactiveProof, error) {
-	return proxyInactiveProof{procRoot: "/proc", selfPID: os.Getpid(), interfaces: net.Interfaces, readlink: os.Readlink}, nil
+	return proxyInactiveProof{procPass: openLinuxInactiveProc, procRoot: "/proc", selfPID: os.Getpid(), interfaces: net.Interfaces, readlink: os.Readlink}, nil
 }
 
 func proxyInactivePrivateDirectory(info os.FileInfo) bool {

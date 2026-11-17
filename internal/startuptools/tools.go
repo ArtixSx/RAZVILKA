@@ -77,23 +77,28 @@ func (l *Lease) lock(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	finishGateWait := domainNativeGateWait(l)
 	select {
 	case <-ctx.Done():
+		finishGateWait("context")
 		if release != nil {
 			release()
 		}
 		return at("CONTEXT", ctx.Err())
 	case <-l.lifetime.Done():
+		finishGateWait("lifetime")
 		if release != nil {
 			release()
 		}
 		return at("LIFETIME", l.lifetime.Err())
 	case <-observationDone:
+		finishGateWait("observation-closed")
 		if release != nil {
 			release()
 		}
 		return at("READ_OBSERVATION_CLOSED", nil)
 	case <-l.gate:
+		finishGateWait("acquired")
 	}
 	l.readRelease = release
 	if l.closed.Load() || l.lifetime.Err() != nil || ctx.Err() != nil {
@@ -114,6 +119,7 @@ func (l *Lease) unlock() {
 		l.readRelease = nil
 		release()
 	}
+	domainNativeGateReleased(l)
 	l.gate <- struct{}{}
 }
 

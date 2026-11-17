@@ -1,0 +1,528 @@
+﻿2026-11-09T19:54:43.9710545Z Current runner version: '2.338.2'
+2026-11-09T19:54:43.9735993Z ##[group]Runner Image Provisioner
+2026-11-09T19:54:43.9736842Z Hosted Compute Agent
+2026-11-09T19:54:43.9737513Z Version: 20261028.624
+2026-11-09T19:54:43.9738475Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T19:54:43.9739255Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T19:54:43.9740020Z Worker ID: {2f97f52e-8fd2-481c-814e-ee0945bdd0c5}
+2026-11-09T19:54:43.9740743Z Region: eastus
+2026-11-09T19:54:43.9741345Z Cloud: Azure
+2026-11-09T19:54:43.9741894Z ##[endgroup]
+2026-11-09T19:54:43.9743328Z ##[group]Operating System
+2026-11-09T19:54:43.9744117Z Ubuntu
+2026-11-09T19:54:43.9744652Z 24.04.5
+2026-11-09T19:54:43.9745203Z LTS
+2026-11-09T19:54:43.9745782Z ##[endgroup]
+2026-11-09T19:54:43.9746332Z ##[group]Runner Image
+2026-11-09T19:54:43.9747039Z Image: ubuntu-24.04
+2026-11-09T19:54:43.9747623Z Version: 20261101.360.1
+2026-11-09T19:54:43.9749292Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T19:54:43.9750967Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T19:54:43.9752029Z ##[endgroup]
+2026-11-09T19:54:43.9753540Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T19:54:43.9755720Z Contents: read
+2026-11-09T19:54:43.9756367Z Metadata: read
+2026-11-09T19:54:43.9757075Z ##[endgroup]
+2026-11-09T19:54:43.9759583Z Secret source: Actions
+2026-11-09T19:54:43.9760641Z Cache mode: write
+2026-11-09T19:54:43.9761613Z Prepare workflow directory
+2026-11-09T19:54:44.0092651Z Prepare all required actions
+2026-11-09T19:54:44.0141934Z Getting action download info
+2026-11-09T19:54:44.2246103Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T19:54:44.3575831Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T19:54:44.6328492Z Complete job name: original-parent-native-ack-cuts (race, terminal-transaction)
+2026-11-09T19:54:44.7222423Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T19:54:44.7223501Z with:
+2026-11-09T19:54:44.7223963Z   persist-credentials: false
+2026-11-09T19:54:44.7224513Z   repository: ArtixSx/RAZVILKA
+2026-11-09T19:54:44.7228552Z   token: ***
+2026-11-09T19:54:44.7229005Z   ssh-strict: true
+2026-11-09T19:54:44.7229458Z   ssh-user: git
+2026-11-09T19:54:44.7229896Z   clean: true
+2026-11-09T19:54:44.7230363Z   sparse-checkout-cone-mode: true
+2026-11-09T19:54:44.7230903Z   fetch-depth: 1
+2026-11-09T19:54:44.7231353Z   fetch-tags: false
+2026-11-09T19:54:44.7231804Z   show-progress: true
+2026-11-09T19:54:44.7232261Z   lfs: false
+2026-11-09T19:54:44.7232680Z   submodules: false
+2026-11-09T19:54:44.7233140Z   set-safe-directory: true
+2026-11-09T19:54:44.7233651Z   allow-unsafe-pr-checkout: false
+2026-11-09T19:54:44.7234428Z ##[endgroup]
+2026-11-09T19:54:45.0505616Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T19:54:45.0508636Z ##[group]Getting Git version info
+2026-11-09T19:54:45.0509554Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T19:54:45.0510703Z [command]/usr/bin/git version
+2026-11-09T19:54:45.0670050Z git version 2.56.0
+2026-11-09T19:54:45.0686402Z ##[endgroup]
+2026-11-09T19:54:45.0698859Z Temporarily overriding HOME='/home/runner/work/_temp/84114837-2650-479f-86fe-5be3def94ac2' before making global git config changes
+2026-11-09T19:54:45.0701105Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T19:54:45.0704484Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T19:54:45.0761262Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T19:54:45.0764226Z ##[group]Determining repository object format
+2026-11-09T19:54:45.0766129Z ##[endgroup]
+2026-11-09T19:54:45.0767616Z ##[group]Initializing the repository
+2026-11-09T19:54:45.0772135Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T19:54:45.0885972Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T19:54:45.0887646Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T19:54:45.0889816Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T19:54:45.0891522Z hint: call:
+2026-11-09T19:54:45.0892317Z hint:
+2026-11-09T19:54:45.0893258Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T19:54:45.0894298Z hint:
+2026-11-09T19:54:45.0894989Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T19:54:45.0896334Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T19:54:45.0897304Z hint:
+2026-11-09T19:54:45.0898258Z hint: 	git branch -m <name>
+2026-11-09T19:54:45.0899120Z hint:
+2026-11-09T19:54:45.0899860Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T19:54:45.0904030Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T19:54:45.0915469Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T19:54:45.0969338Z ##[endgroup]
+2026-11-09T19:54:45.0970807Z ##[group]Disabling automatic garbage collection
+2026-11-09T19:54:45.0973419Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T19:54:45.1011657Z ##[endgroup]
+2026-11-09T19:54:45.1013362Z ##[group]Setting up auth
+2026-11-09T19:54:45.1014358Z Removing SSH command configuration
+2026-11-09T19:54:45.1019833Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T19:54:45.1068862Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T19:54:45.1479332Z Removing HTTP extra header
+2026-11-09T19:54:45.1484548Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T19:54:45.1539067Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T19:54:45.1784772Z Removing includeIf entries pointing to credentials config files
+2026-11-09T19:54:45.1794368Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T19:54:45.1846750Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T19:54:45.2090253Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T19:54:45.2139323Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:45.2183000Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:45.2227646Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:45.2271488Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:45.2312962Z ##[endgroup]
+2026-11-09T19:54:45.2313792Z ##[group]Fetching the repository
+2026-11-09T19:54:45.2320379Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0470b68b07e5f18b984ab1ef79bd9bcf112bc680:refs/remotes/origin/work/research-history-verify-20261109
+2026-11-09T19:54:46.0172093Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T19:54:46.0174282Z  * [new ref]         0470b68b07e5f18b984ab1ef79bd9bcf112bc680 -> origin/work/research-history-verify-20261109
+2026-11-09T19:54:46.0181447Z [command]/usr/bin/git branch --list --remote origin/work/research-history-verify-20261109
+2026-11-09T19:54:46.0220519Z   origin/work/research-history-verify-20261109
+2026-11-09T19:54:46.0229721Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-history-verify-20261109
+2026-11-09T19:54:46.0266516Z 0470b68b07e5f18b984ab1ef79bd9bcf112bc680
+2026-11-09T19:54:46.0272342Z ##[endgroup]
+2026-11-09T19:54:46.0273443Z ##[group]Determining the checkout info
+2026-11-09T19:54:46.0274588Z ##[endgroup]
+2026-11-09T19:54:46.0279573Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T19:54:46.0349093Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T19:54:46.0393762Z ##[group]Checking out the ref
+2026-11-09T19:54:46.0398863Z [command]/usr/bin/git checkout --progress --force -B work/research-history-verify-20261109 refs/remotes/origin/work/research-history-verify-20261109
+2026-11-09T19:54:46.5318069Z Switched to a new branch 'work/research-history-verify-20261109'
+2026-11-09T19:54:46.5322513Z branch 'work/research-history-verify-20261109' set up to track 'origin/work/research-history-verify-20261109'.
+2026-11-09T19:54:46.5356444Z ##[endgroup]
+2026-11-09T19:54:46.5417185Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T19:54:46.5458059Z 0470b68b07e5f18b984ab1ef79bd9bcf112bc680
+2026-11-09T19:54:46.5468648Z ##[group]Removing auth
+2026-11-09T19:54:46.5469187Z Removing SSH command configuration
+2026-11-09T19:54:46.5473179Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T19:54:46.5517557Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T19:54:46.5765080Z Removing HTTP extra header
+2026-11-09T19:54:46.5769325Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T19:54:46.5812780Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T19:54:46.6060943Z Removing includeIf entries pointing to credentials config files
+2026-11-09T19:54:46.6065798Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T19:54:46.6110448Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T19:54:46.6111304Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T19:54:46.6112190Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T19:54:46.6112957Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T19:54:46.6120513Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T19:54:46.6156633Z /home/runner/work/_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:46.6172371Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-c93f8ece\-0e42\-4b8b\-94e0\-7045a6fc0403\.config
+2026-11-09T19:54:46.6221333Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T19:54:46.6256941Z /home/runner/work/_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:46.6268050Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-c93f8ece\-0e42\-4b8b\-94e0\-7045a6fc0403\.config
+2026-11-09T19:54:46.6314175Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T19:54:46.6351085Z /github/runner_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:46.6359194Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-c93f8ece\-0e42\-4b8b\-94e0\-7045a6fc0403\.config
+2026-11-09T19:54:46.6404605Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T19:54:46.6439926Z /github/runner_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config
+2026-11-09T19:54:46.6448555Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-c93f8ece\-0e42\-4b8b\-94e0\-7045a6fc0403\.config
+2026-11-09T19:54:46.6493898Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T19:54:46.6739268Z Removing credentials config '/home/runner/work/_temp/git-credentials-c93f8ece-0e42-4b8b-94e0-7045a6fc0403.config'
+2026-11-09T19:54:46.6749199Z ##[endgroup]
+2026-11-09T19:54:46.7000718Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T19:54:46.7001149Z with:
+2026-11-09T19:54:46.7001349Z   go-version: 1.26.5
+2026-11-09T19:54:46.7001559Z   cache: false
+2026-11-09T19:54:46.7001772Z   check-latest: false
+2026-11-09T19:54:46.7004457Z   token: ***
+2026-11-09T19:54:46.7004662Z ##[endgroup]
+2026-11-09T19:54:46.8182132Z Setup go version spec 1.26.5
+2026-11-09T19:54:46.8211051Z Attempting to download 1.26.5...
+2026-11-09T19:54:47.3072173Z matching 1.26.5...
+2026-11-09T19:54:47.3110389Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T19:54:47.8393612Z Extracting Go...
+2026-11-09T19:54:47.8539455Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/7e67aa57-b883-40cc-b9b4-1c951e44f7ed -f /home/runner/work/_temp/5c319166-0d34-47f3-9f6c-ef3ad84d8c0e
+2026-11-09T19:54:49.4686999Z Successfully extracted go to /home/runner/work/_temp/7e67aa57-b883-40cc-b9b4-1c951e44f7ed
+2026-11-09T19:54:49.4687667Z Adding to the cache ...
+2026-11-09T19:54:54.2969466Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T19:54:54.2973124Z Added go to the path
+2026-11-09T19:54:54.2973857Z Successfully set up Go version 1.26.5
+2026-11-09T19:54:54.3565686Z go version go1.26.5 linux/amd64
+2026-11-09T19:54:54.3565910Z 
+2026-11-09T19:54:54.3566193Z ##[group]go env
+2026-11-09T19:54:54.8100372Z AR='ar'
+2026-11-09T19:54:54.8100905Z CC='gcc'
+2026-11-09T19:54:54.8101368Z CGO_CFLAGS='-O2 -g'
+2026-11-09T19:54:54.8101804Z CGO_CPPFLAGS=''
+2026-11-09T19:54:54.8102216Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T19:54:54.8102649Z CGO_ENABLED='1'
+2026-11-09T19:54:54.8103046Z CGO_FFLAGS='-O2 -g'
+2026-11-09T19:54:54.8103475Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T19:54:54.8103860Z CXX='g++'
+2026-11-09T19:54:54.8104228Z GCCGO='gccgo'
+2026-11-09T19:54:54.8104639Z GO111MODULE=''
+2026-11-09T19:54:54.8105032Z GOAMD64='v1'
+2026-11-09T19:54:54.8105405Z GOARCH='amd64'
+2026-11-09T19:54:54.8105803Z GOAUTH='netrc'
+2026-11-09T19:54:54.8106351Z GOBIN=''
+2026-11-09T19:54:54.8106801Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T19:54:54.8107336Z GOCACHEPROG=''
+2026-11-09T19:54:54.8108087Z GODEBUG=''
+2026-11-09T19:54:54.8108535Z GOENV='/home/runner/.config/go/env'
+2026-11-09T19:54:54.8109033Z GOEXE=''
+2026-11-09T19:54:54.8109482Z GOEXPERIMENT=''
+2026-11-09T19:54:54.8109892Z GOFIPS140='off'
+2026-11-09T19:54:54.8110284Z GOFLAGS=''
+2026-11-09T19:54:54.8111521Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build49449890=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T19:54:54.8112735Z GOHOSTARCH='amd64'
+2026-11-09T19:54:54.8113072Z GOHOSTOS='linux'
+2026-11-09T19:54:54.8113398Z GOINSECURE=''
+2026-11-09T19:54:54.8113844Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T19:54:54.8114436Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T19:54:54.8115252Z GONOPROXY=''
+2026-11-09T19:54:54.8115619Z GONOSUMDB=''
+2026-11-09T19:54:54.8115946Z GOOS='linux'
+2026-11-09T19:54:54.8116276Z GOPATH='/home/runner/go'
+2026-11-09T19:54:54.8116644Z GOPRIVATE=''
+2026-11-09T19:54:54.8117067Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T19:54:54.8117604Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T19:54:54.8118305Z GOSUMDB='sum.golang.org'
+2026-11-09T19:54:54.8118683Z GOTELEMETRY='local'
+2026-11-09T19:54:54.8119122Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T19:54:54.8119695Z GOTMPDIR=''
+2026-11-09T19:54:54.8120004Z GOTOOLCHAIN='local'
+2026-11-09T19:54:54.8120528Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T19:54:54.8121111Z GOVCS=''
+2026-11-09T19:54:54.8121402Z GOVERSION='go1.26.5'
+2026-11-09T19:54:54.8121739Z GOWORK=''
+2026-11-09T19:54:54.8122059Z PKG_CONFIG='pkg-config'
+2026-11-09T19:54:54.8122284Z 
+2026-11-09T19:54:54.8122745Z ##[endgroup]
+2026-11-09T19:54:54.8338685Z ##[group]Run set -euo pipefail
+2026-11-09T19:54:54.8339261Z [36;1mset -euo pipefail[0m
+2026-11-09T19:54:54.8339685Z [36;1msudo apt-get update[0m
+2026-11-09T19:54:54.8341350Z [36;1msudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0[0m
+2026-11-09T19:54:54.8343667Z [36;1mcurl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip[0m
+2026-11-09T19:54:54.8345316Z [36;1mecho 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict[0m
+2026-11-09T19:54:54.8346473Z [36;1munzip /tmp/xray.zip xray -d /tmp/xray-extracted[0m
+2026-11-09T19:54:54.8347172Z [36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures[0m
+2026-11-09T19:54:54.8348365Z [36;1msudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray[0m
+2026-11-09T19:54:54.8349256Z [36;1m/usr/local/lib/razvilka-fixtures/xray version[0m
+2026-11-09T19:54:54.8349968Z [36;1m# The real local CA fixture uses the compiler's reviewed 26.3.27.[0m
+2026-11-09T19:54:54.8350778Z [36;1m# 26.10.31 defaults to a bundled CA pool instead of system roots.[0m
+2026-11-09T19:54:54.8352044Z [36;1mcurl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip[0m
+2026-11-09T19:54:54.8353778Z [36;1mecho '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict[0m
+2026-11-09T19:54:54.8355032Z [36;1munzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture[0m
+2026-11-09T19:54:54.8355863Z [36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27[0m
+2026-11-09T19:54:54.8357079Z [36;1msudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray[0m
+2026-11-09T19:54:54.8359015Z [36;1mcurl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64[0m
+2026-11-09T19:54:54.8360966Z [36;1mecho 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict[0m
+2026-11-09T19:54:54.8362486Z [36;1msudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel[0m
+2026-11-09T19:54:54.8364056Z [36;1mcurl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz[0m
+2026-11-09T19:54:54.8365843Z [36;1mecho '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict[0m
+2026-11-09T19:54:54.8367175Z [36;1msudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz[0m
+2026-11-09T19:54:54.8401873Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T19:54:54.8402683Z env:
+2026-11-09T19:54:54.8402993Z   GOTOOLCHAIN: local
+2026-11-09T19:54:54.8403354Z ##[endgroup]
+2026-11-09T19:54:54.9291016Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T19:54:54.9646409Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T19:54:55.0470591Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [678 kB]
+2026-11-09T19:54:55.0495909Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T19:54:55.0508954Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T19:54:55.0568561Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T19:54:55.0720850Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T19:54:55.0889262Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [747 kB]
+2026-11-09T19:54:55.1929633Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T19:54:55.2006585Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T19:54:55.2048751Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T19:54:55.2127567Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T19:54:55.2154260Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T19:54:55.2253966Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T19:54:55.2305459Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T19:54:55.2341610Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T19:54:55.3728820Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T19:54:55.3770155Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T19:54:55.4223650Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T19:54:55.4339760Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T19:54:55.4372271Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T19:54:55.4688890Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T19:54:55.4718783Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T19:54:55.4742830Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T19:54:58.7691646Z Fetched 13.0 MB in 1s (9224 kB/s)
+2026-11-09T19:54:59.9307131Z Reading package lists...
+2026-11-09T19:54:59.9688376Z Reading package lists...
+2026-11-09T19:55:00.1952755Z Building dependency tree...
+2026-11-09T19:55:00.1960302Z Reading state information...
+2026-11-09T19:55:00.3378916Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+2026-11-09T19:55:00.3379549Z iptables is already the newest version (1.8.10-3ubuntu2).
+2026-11-09T19:55:00.3380048Z iptables set to manually installed.
+2026-11-09T19:55:00.3380523Z nftables is already the newest version (1.0.9-1ubuntu0.1).
+2026-11-09T19:55:00.3381082Z kmod is already the newest version (31+20240202-2ubuntu7.2).
+2026-11-09T19:55:00.3381846Z kmod set to manually installed.
+2026-11-09T19:55:00.3382288Z curl is already the newest version (8.5.0-2ubuntu10.16).
+2026-11-09T19:55:00.3382840Z openssl is already the newest version (3.0.13-0ubuntu3.16).
+2026-11-09T19:55:00.3383420Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+2026-11-09T19:55:00.3383970Z unzip is already the newest version (6.0-28ubuntu4.1).
+2026-11-09T19:55:00.3385180Z busybox-static is already the newest version (1:1.36.1-6ubuntu3.1).
+2026-11-09T19:55:00.3385732Z busybox-static set to manually installed.
+2026-11-09T19:55:00.3386232Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+2026-11-09T19:55:00.3386808Z libnfnetlink0 is already the newest version (1.0.2-2build1).
+2026-11-09T19:55:00.3387321Z libnfnetlink0 set to manually installed.
+2026-11-09T19:55:00.3388211Z zlib1g is already the newest version (1:1.3.dfsg-3.1ubuntu2.3).
+2026-11-09T19:55:00.3388840Z libmnl0 is already the newest version (1.0.5-2build1).
+2026-11-09T19:55:00.3389285Z libmnl0 set to manually installed.
+2026-11-09T19:55:00.3389642Z The following additional packages will be installed:
+2026-11-09T19:55:00.3390043Z   libipset13 libluajit-5.1-common
+2026-11-09T19:55:00.3594941Z The following NEW packages will be installed:
+2026-11-09T19:55:00.3609354Z   conntrack ipset libipset13 libluajit-5.1-2 libluajit-5.1-common
+2026-11-09T19:55:00.3609801Z   libnetfilter-queue1
+2026-11-09T19:55:00.3816360Z 0 upgraded, 6 newly installed, 0 to remove and 28 not upgraded.
+2026-11-09T19:55:00.3817090Z Need to get 472 kB of archives.
+2026-11-09T19:55:00.3818426Z After this operation, 1391 kB of additional disk space will be used.
+2026-11-09T19:55:00.3818923Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T19:55:00.4132752Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 conntrack amd64 1:1.4.8-1ubuntu1 [37.9 kB]
+2026-11-09T19:55:00.4305940Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libipset13 amd64 7.19-1ubuntu2 [61.5 kB]
+2026-11-09T19:55:00.4454627Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-common all 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [49.5 kB]
+2026-11-09T19:55:00.4602638Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-2 amd64 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [276 kB]
+2026-11-09T19:55:00.4766615Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnetfilter-queue1 amd64 1.0.5-4build1 [15.1 kB]
+2026-11-09T19:55:00.4910799Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 ipset amd64 7.19-1ubuntu2 [32.6 kB]
+2026-11-09T19:55:00.7616232Z Fetched 472 kB in 0s (3863 kB/s)
+2026-11-09T19:55:00.7867665Z Selecting previously unselected package conntrack.
+2026-11-09T19:55:00.8178665Z (Reading database ... 
+2026-11-09T19:55:00.8179563Z (Reading database ... 5%
+2026-11-09T19:55:00.8180062Z (Reading database ... 10%
+2026-11-09T19:55:00.8180574Z (Reading database ... 15%
+2026-11-09T19:55:00.8181270Z (Reading database ... 20%
+2026-11-09T19:55:00.8181862Z (Reading database ... 25%
+2026-11-09T19:55:00.8182306Z (Reading database ... 30%
+2026-11-09T19:55:00.8182744Z (Reading database ... 35%
+2026-11-09T19:55:00.8183187Z (Reading database ... 40%
+2026-11-09T19:55:00.8183900Z (Reading database ... 45%
+2026-11-09T19:55:00.8184350Z (Reading database ... 50%
+2026-11-09T19:55:00.8237324Z (Reading database ... 55%
+2026-11-09T19:55:00.9796473Z (Reading database ... 60%
+2026-11-09T19:55:01.1426898Z (Reading database ... 65%
+2026-11-09T19:55:01.3738064Z (Reading database ... 70%
+2026-11-09T19:55:01.5459695Z (Reading database ... 75%
+2026-11-09T19:55:01.7217630Z (Reading database ... 80%
+2026-11-09T19:55:01.9289630Z (Reading database ... 85%
+2026-11-09T19:55:02.1409766Z (Reading database ... 90%
+2026-11-09T19:55:02.2922776Z (Reading database ... 95%
+2026-11-09T19:55:02.2923228Z (Reading database ... 100%
+2026-11-09T19:55:02.2923776Z (Reading database ... 215960 files and directories currently installed.)
+2026-11-09T19:55:02.2966833Z Preparing to unpack .../0-conntrack_1%3a1.4.8-1ubuntu1_amd64.deb ...
+2026-11-09T19:55:02.2993728Z Unpacking conntrack (1:1.4.8-1ubuntu1) ...
+2026-11-09T19:55:02.3274901Z Selecting previously unselected package libipset13:amd64.
+2026-11-09T19:55:02.3415473Z Preparing to unpack .../1-libipset13_7.19-1ubuntu2_amd64.deb ...
+2026-11-09T19:55:02.3435643Z Unpacking libipset13:amd64 (7.19-1ubuntu2) ...
+2026-11-09T19:55:02.3679255Z Selecting previously unselected package libluajit-5.1-common.
+2026-11-09T19:55:02.3819375Z Preparing to unpack .../2-libluajit-5.1-common_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_all.deb ...
+2026-11-09T19:55:02.3828033Z Unpacking libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T19:55:02.4091914Z Selecting previously unselected package libluajit-5.1-2:amd64.
+2026-11-09T19:55:02.4232091Z Preparing to unpack .../3-libluajit-5.1-2_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_amd64.deb ...
+2026-11-09T19:55:02.4239412Z Unpacking libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T19:55:02.4500145Z Selecting previously unselected package libnetfilter-queue1:amd64.
+2026-11-09T19:55:02.4640234Z Preparing to unpack .../4-libnetfilter-queue1_1.0.5-4build1_amd64.deb ...
+2026-11-09T19:55:02.4647596Z Unpacking libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T19:55:02.4871805Z Selecting previously unselected package ipset.
+2026-11-09T19:55:02.5011680Z Preparing to unpack .../5-ipset_7.19-1ubuntu2_amd64.deb ...
+2026-11-09T19:55:02.5019458Z Unpacking ipset (7.19-1ubuntu2) ...
+2026-11-09T19:55:02.5513434Z Setting up conntrack (1:1.4.8-1ubuntu1) ...
+2026-11-09T19:55:02.5536903Z Setting up libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T19:55:02.5557338Z Setting up libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T19:55:02.5581545Z Setting up libipset13:amd64 (7.19-1ubuntu2) ...
+2026-11-09T19:55:02.5603032Z Setting up ipset (7.19-1ubuntu2) ...
+2026-11-09T19:55:02.5625395Z Setting up libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T19:55:02.5650536Z Processing triggers for man-db (2.12.0-4build2) ...
+2026-11-09T19:55:02.5675628Z Not building database; man-db/auto-update is not 'true'.
+2026-11-09T19:55:02.5688808Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+2026-11-09T19:55:03.3058561Z 
+2026-11-09T19:55:03.3059369Z Running kernel seems to be up-to-date.
+2026-11-09T19:55:03.3059690Z 
+2026-11-09T19:55:03.3059897Z No services need to be restarted.
+2026-11-09T19:55:03.3060138Z 
+2026-11-09T19:55:03.3060290Z No containers need to be restarted.
+2026-11-09T19:55:03.3060535Z 
+2026-11-09T19:55:03.3060714Z No user sessions are running outdated binaries.
+2026-11-09T19:55:03.3061005Z 
+2026-11-09T19:55:03.3061298Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-11-09T19:55:04.3217636Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-09T19:55:04.3219042Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-09T19:55:04.3219410Z 
+2026-11-09T19:55:04.4502715Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:04.4503729Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:04.5576111Z 
+2026-11-09T19:55:04.5576969Z 100 15.9M  100 15.9M    0     0  67.4M      0 --:--:-- --:--:-- --:--:-- 67.4M
+2026-11-09T19:55:04.5762180Z /tmp/xray.zip: OK
+2026-11-09T19:55:04.5787566Z Archive:  /tmp/xray.zip
+2026-11-09T19:55:04.8376508Z   inflating: /tmp/xray-extracted/xray  
+2026-11-09T19:55:04.8773573Z Xray 26.10.31 (Xray, Penetrates Everything.) a4a3dff (go1.27.3 linux/amd64)
+2026-11-09T19:55:04.8779320Z A unified platform for anti-censorship.
+2026-11-09T19:55:04.8834201Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-09T19:55:04.8836010Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-09T19:55:04.8836632Z 
+2026-11-09T19:55:04.9840292Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:04.9841295Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:05.1148073Z 
+2026-11-09T19:55:05.1148852Z 100 20.1M  100 20.1M    0     0  87.0M      0 --:--:-- --:--:-- --:--:-- 87.0M
+2026-11-09T19:55:05.1369474Z /tmp/xray-node.zip: OK
+2026-11-09T19:55:05.1385170Z Archive:  /tmp/xray-node.zip
+2026-11-09T19:55:05.4024075Z   inflating: /tmp/xray-node-fixture/xray  
+2026-11-09T19:55:05.4354097Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-09T19:55:05.4355400Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-09T19:55:05.4355985Z 
+2026-11-09T19:55:05.5201469Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:05.5202355Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:05.5546883Z 
+2026-11-09T19:55:05.5547441Z 100  401k  100  401k    0     0  3363k      0 --:--:-- --:--:-- --:--:-- 3363k
+2026-11-09T19:55:05.5596498Z /tmp/hev-socks5-tunnel: OK
+2026-11-09T19:55:05.5734805Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-09T19:55:05.5736391Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-09T19:55:05.5736736Z 
+2026-11-09T19:55:05.6921536Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:05.6922568Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T19:55:05.7965846Z 
+2026-11-09T19:55:05.8411216Z  46 21.8M   46 10.2M    0     0  45.8M      0 --:--:-- --:--:-- --:--:-- 45.8M
+2026-11-09T19:55:05.8412163Z 100 21.8M  100 21.8M    0     0  81.4M      0 --:--:-- --:--:-- --:--:--  262M
+2026-11-09T19:55:05.8628027Z /tmp/mihomo.gz: OK
+2026-11-09T19:55:05.8846106Z ##[group]Run set -euo pipefail
+2026-11-09T19:55:05.8846467Z [36;1mset -euo pipefail[0m
+2026-11-09T19:55:05.8846721Z [36;1msudo modprobe tun[0m
+2026-11-09T19:55:05.8846952Z [36;1mrace_mode=0[0m
+2026-11-09T19:55:05.8847208Z [36;1mif test "race" = race; then race_mode=1; fi[0m
+2026-11-09T19:55:05.8847557Z [36;1msudo env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T19:55:05.8848337Z [36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T19:55:05.8848751Z [36;1m  RAZVILKA_NATIVE_RACE="$race_mode" \[0m
+2026-11-09T19:55:05.8849164Z [36;1m  RAZVILKA_MIHOMO_SAME_BOOT_ACK_CUT="terminal-transaction" \[0m
+2026-11-09T19:55:05.8849688Z [36;1m  RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \[0m
+2026-11-09T19:55:05.8850244Z [36;1m  RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \[0m
+2026-11-09T19:55:05.8850812Z [36;1m  RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \[0m
+2026-11-09T19:55:05.8851277Z [36;1m  sh scripts/test-mihomo-same-boot-native.sh[0m
+2026-11-09T19:55:05.8872296Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T19:55:05.8872653Z env:
+2026-11-09T19:55:05.8872848Z   GOTOOLCHAIN: local
+2026-11-09T19:55:05.8873058Z ##[endgroup]
+2026-11-09T19:55:05.9850104Z CI-only Ubuntu classification; actual protected tools: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T19:55:06.1086303Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T19:55:06.2028539Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T19:55:06.3531808Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T19:55:06.4099923Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T19:55:06.5023271Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T19:55:06.5489095Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T19:55:06.9315419Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T19:56:46.9910051Z === RUN   TestMihomoSameBootNativeOutputCopy
+2026-11-09T19:56:46.9913023Z --- PASS: TestMihomoSameBootNativeOutputCopy (0.00s)
+2026-11-09T19:56:46.9913649Z === RUN   TestMihomoSameBootNativeOutputChild
+2026-11-09T19:56:46.9914358Z --- PASS: TestMihomoSameBootNativeOutputChild (0.00s)
+2026-11-09T19:56:46.9914868Z === RUN   TestMihomoSameBootNativeOutputActualPipes
+2026-11-09T19:56:46.9915495Z === RUN   TestMihomoSameBootNativeOutputActualPipes/stdout
+2026-11-09T19:56:48.0279226Z === RUN   TestMihomoSameBootNativeOutputActualPipes/stderr
+2026-11-09T19:56:49.0646817Z === RUN   TestMihomoSameBootNativeOutputActualPipes/combined
+2026-11-09T19:56:50.1027059Z --- PASS: TestMihomoSameBootNativeOutputActualPipes (3.11s)
+2026-11-09T19:56:50.1028819Z     --- PASS: TestMihomoSameBootNativeOutputActualPipes/stdout (1.04s)
+2026-11-09T19:56:50.1030388Z     --- PASS: TestMihomoSameBootNativeOutputActualPipes/stderr (1.04s)
+2026-11-09T19:56:50.1031894Z     --- PASS: TestMihomoSameBootNativeOutputActualPipes/combined (1.04s)
+2026-11-09T19:56:50.1032697Z PASS
+2026-11-09T19:56:51.2400428Z === RUN   TestStaticVersionFactNativePolicyReadObservation
+2026-11-09T19:56:51.9469181Z     policy_read_observation_native_fixture_linux_test.go:60: actual original IPv4/IPv6 rule read output unchanged; foreign/expired original loan and mutation refused
+2026-11-09T19:56:51.9475931Z --- PASS: TestStaticVersionFactNativePolicyReadObservation (0.71s)
+2026-11-09T19:56:51.9476986Z === RUN   TestStaticVersionFactNativeMihomoNumericReadObservation
+2026-11-09T19:56:52.4103437Z     policy_read_observation_native_fixture_linux_test.go:183: actual original Mihomo CORE read bytes/status unchanged; effect/late read/metadata drift refused and outer full SHA closing retained
+2026-11-09T19:56:52.4105757Z --- PASS: TestStaticVersionFactNativeMihomoNumericReadObservation (0.46s)
+2026-11-09T19:56:52.4108380Z PASS
+2026-11-09T19:57:30.9886062Z actual original parent SIGKILL and sole Wait confirmed
+2026-11-09T19:57:31.0268892Z === RUN   TestMihomoSameBootCLINativeOriginalParent
+2026-11-09T19:57:33.7364560Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=intent duration_ms=1044.683
+2026-11-09T19:57:33.7377630Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase intent guard=fenced
+2026-11-09T19:57:35.3483167Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=sidecar duration_ms=1043.322
+2026-11-09T19:57:35.3497400Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase sidecar guard=fenced
+2026-11-09T19:57:41.5590630Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=policy duration_ms=1043.483
+2026-11-09T19:57:41.5610452Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase policy guard=fenced
+2026-11-09T19:58:01.8604206Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=forwarding duration_ms=1043.642
+2026-11-09T19:58:01.8617877Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase forwarding guard=fenced
+2026-11-09T19:58:34.4743911Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=archive duration_ms=1043.344
+2026-11-09T19:58:34.4761466Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase archive guard=fenced
+2026-11-09T19:58:47.3621470Z 2026/11/09 19:58:47 Mihomo same-boot: retrying retained cleanup acknowledgment
+2026-11-09T19:58:48.9036001Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=intent duration_ms=1042.244
+2026-11-09T19:58:48.9048510Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase intent guard=fenced
+2026-11-09T19:58:50.4846152Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=sidecar duration_ms=1042.577
+2026-11-09T19:58:50.4860090Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase sidecar guard=fenced
+2026-11-09T19:58:52.0107963Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=policy duration_ms=1042.727
+2026-11-09T19:58:52.0121887Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase policy guard=fenced
+2026-11-09T19:58:54.1349150Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=forwarding duration_ms=1044.066
+2026-11-09T19:58:54.1362146Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase forwarding guard=fenced
+2026-11-09T19:59:14.7102388Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=archive duration_ms=1044.064
+2026-11-09T19:59:14.7117927Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase archive guard=fenced
+2026-11-09T19:59:26.1842390Z     mihomo_live_same_boot_native_linux_test.go:165: actual_native_updater_child phase=terminal-transaction duration_ms=1044.348
+2026-11-09T19:59:26.1856985Z     mihomo_live_same_boot_native_linux_test.go:188: actual updater guard phase terminal-transaction guard=fenced
+2026-11-09T19:59:31.0306275Z     mihomo_live_same_boot_native_linux_test.go:204: actual_sameboot_actor inclusive_ms=119993.888
+2026-11-09T19:59:31.0308215Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=absence calls=95 wall_ms=78830.502
+2026-11-09T19:59:31.0309856Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=absence-tool-read calls=95 wall_ms=78828.922
+2026-11-09T19:59:31.0311386Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=home-current calls=29 wall_ms=48037.140
+2026-11-09T19:59:31.0312719Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=native-stage calls=11 wall_ms=32224.260
+2026-11-09T19:59:31.0314869Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=native-witness-callback calls=11 wall_ms=11497.351
+2026-11-09T19:59:31.0316443Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=phase-archive calls=2 wall_ms=56556.558
+2026-11-09T19:59:31.0318035Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=phase-forwarding calls=2 wall_ms=23605.914
+2026-11-09T19:59:31.0319381Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=phase-intent calls=2 wall_ms=2599.742
+2026-11-09T19:59:31.0320688Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=phase-opening calls=2 wall_ms=619.773
+2026-11-09T19:59:31.0321853Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=phase-policy calls=2 wall_ms=7750.877
+2026-11-09T19:59:31.0322821Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=phase-sidecar calls=2 wall_ms=3575.247
+2026-11-09T19:59:31.0323797Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=phase-terminal calls=2 wall_ms=24154.929
+2026-11-09T19:59:31.0324731Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=prepare calls=1 wall_ms=580.093
+2026-11-09T19:59:31.0325631Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=run calls=2 wall_ms=118863.089
+2026-11-09T19:59:31.0326634Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=source-before-sidecar calls=45 wall_ms=2186.790
+2026-11-09T19:59:31.0327658Z     mihomo_live_same_boot_native_linux_test.go:206: actual_sameboot_inclusive phase=source-current calls=279 wall_ms=56085.627
+2026-11-09T19:59:31.0340212Z     mihomo_live_same_boot_native_linux_test.go:210: actual sameboot CLI Mihomo live offline retirement refused at retirement prepare_stage=absence-process-kernel
+2026-11-09T19:59:31.0341582Z --- FAIL: TestMihomoSameBootCLINativeOriginalParent (120.00s)
+2026-11-09T19:59:31.0342143Z FAIL
+2026-11-09T19:59:31.0656798Z original physical peer pidfd terminal observation confirmed
+2026-11-09T19:59:31.0659071Z === RUN   TestMihomoLiveOriginalApplyStopAndFreshApply
+2026-11-09T19:59:31.0661145Z     mihomo_live_native_linux_test.go:66: native_fixture_budgets rounds=2 aggregate=10m0s round=5m0s operation=1m50s production_apply=8m0s
+2026-11-09T19:59:31.0663243Z actual_mihomo_activate stage=phase-owner failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0664747Z actual_mihomo_activate stage=source-current failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0666132Z actual_mihomo_activate stage=native-current failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0667236Z actual_mihomo_activate stage=compiled-current failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0668616Z actual_mihomo_activate stage=forwarding failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0669714Z actual_mihomo_activate stage=candidate-policy failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0670802Z actual_mihomo_activate stage=engine-image failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0671839Z actual_mihomo_activate stage=sidecar-image failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0672571Z actual_mihomo_activate stage=publish-engine failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0673336Z actual_mihomo_activate stage=publish-sidecar failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0674083Z actual_mihomo_activate stage=sidecar-start failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0674817Z actual_mihomo_activate stage=policy-intent failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0675899Z actual_mihomo_activate stage=policy-apply failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.0676699Z actual_mihomo_activate stage=source-closing failed=false material=false canceled=false deadline=false
+2026-11-09T19:59:31.1142321Z ##[error]Process completed with exit code 1.
+2026-11-09T19:59:31.1312048Z Post job cleanup.
+2026-11-09T19:59:31.2200688Z [command]/usr/bin/git version
+2026-11-09T19:59:31.2282626Z git version 2.56.0
+2026-11-09T19:59:31.2323902Z Temporarily overriding HOME='/home/runner/work/_temp/c16d9727-e9bb-455d-bc37-f3cf860480e8' before making global git config changes
+2026-11-09T19:59:31.2325429Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T19:59:31.2331265Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T19:59:31.2370536Z Removing SSH command configuration
+2026-11-09T19:59:31.2378992Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T19:59:31.2423028Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T19:59:31.2707382Z Removing HTTP extra header
+2026-11-09T19:59:31.2713074Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T19:59:31.2771035Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T19:59:31.3071967Z Removing includeIf entries pointing to credentials config files
+2026-11-09T19:59:31.3078881Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T19:59:31.3136007Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T19:59:31.3583418Z Cleaning up orphan processes

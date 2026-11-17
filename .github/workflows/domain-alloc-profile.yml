@@ -1,0 +1,100 @@
+name: DNS full mixed flow allocation profile
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/domain-alloc-profile-20261117']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Actual Linux allocation writer and custody checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -tags razvilka_native_fixture -count=1 -timeout=90s -v ./internal/app -run '^TestDomainOriginalAllocsProfile' | tee "$RUNNER_TEMP/domain-alloc-writer.log"
+          for case_name in Writer Custody RuntimeSnapshot; do
+            grep -F -- "--- PASS: TestDomainOriginalAllocsProfile$case_name " "$RUNNER_TEMP/domain-alloc-writer.log"
+          done
+          if grep -F -- '--- SKIP:' "$RUNNER_TEMP/domain-alloc-writer.log"; then exit 1; fi
+      - name: Original mixed flow with unchanged publication and service budgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/domain-alloc-profile"
+          mkdir -m 700 "$RUNNER_TEMP/domain-alloc-profile/actor" "$RUNNER_TEMP/domain-alloc-profile/profiles"
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_BUILD_MODE=production-strip \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$RUNNER_TEMP/domain-alloc-profile/profiles" \
+            python3 scripts/wg-tools-comparison/supervise.py \
+              "$GITHUB_WORKSPACE/scripts/test-domain-original-native.sh" "$RUNNER_TEMP/domain-alloc-profile/actor"
+          grep -F -- '--- PASS: TestDomainTCPOriginalNativeAcceptedFlows ' "$RUNNER_TEMP/domain-alloc-profile/actor/native.log"
+          if grep -F -- '--- SKIP:' "$RUNNER_TEMP/domain-alloc-profile/actor/native.log"; then exit 1; fi
+          grep -Fx 'child_exit_status=0' "$RUNNER_TEMP/domain-alloc-profile/profiles/status.txt"
+          grep -Fx 'publication_budget_seconds=12' "$RUNNER_TEMP/domain-alloc-profile/profiles/status.txt"
+          grep -Fx 'diagnostic_only=false' "$RUNNER_TEMP/domain-alloc-profile/profiles/status.txt"
+          grep -F 'complete=true joined=true' "$RUNNER_TEMP/domain-alloc-profile/actor/native.log"
+          grep -Fx 'space_exit_status=0' "$RUNNER_TEMP/domain-alloc-profile/profiles/allocs-analysis-status.txt"
+          grep -Fx 'objects_exit_status=0' "$RUNNER_TEMP/domain-alloc-profile/profiles/allocs-analysis-status.txt"
+          grep -Fx 'processes_exit_status=0' "$RUNNER_TEMP/domain-alloc-profile/profiles/allocs-analysis-status.txt"
+      - name: Hand bounded public evidence back to the runner even after failure
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo python3 - "$RUNNER_TEMP" "$(id -u)" "$(id -g)" <<'PY'
+          import json,os,pathlib,stat,sys
+          parent=pathlib.Path(sys.argv[1]); out=parent/'domain-alloc-profile'
+          if not parent.is_absolute() or parent!=parent.resolve():raise SystemExit('canonical runner temp required')
+          if not out.exists():raise SystemExit(0)
+          if out.is_symlink() or out!=out.resolve() or not out.is_dir():raise SystemExit('foreign evidence root')
+          actor=out/'actor'
+          if actor.exists():
+              state=actor/'supervisor.json'
+              if actor.is_symlink() or state.is_symlink() or not state.is_file() or state.stat().st_size>8192:raise SystemExit('missing joined actor proof')
+              if json.loads(state.read_text()).get('descendants_absent') is not True:raise SystemExit('actor descendants not joined; retain root-owned evidence')
+          entries=[out,*out.rglob('*')]
+          if len(entries)>128:raise SystemExit('evidence entry bound')
+          total=0
+          for p in entries:
+              s=p.lstat()
+              if not (stat.S_ISDIR(s.st_mode) or stat.S_ISREG(s.st_mode)):raise SystemExit('foreign evidence entry')
+              if stat.S_ISREG(s.st_mode):
+                  if s.st_nlink!=1:raise SystemExit('linked evidence file')
+                  total+=s.st_size
+          if total>128<<20:raise SystemExit('evidence byte bound')
+          uid,gid=int(sys.argv[2]),int(sys.argv[3])
+          if uid<=0 or gid<=0:raise SystemExit('nonroot runner identity required')
+          for p in entries:os.chown(p,uid,gid,follow_symlinks=False)
+          PY
+      - name: Preserve original result including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-alloc-profile-${{ github.sha }}
+          path: ${{ runner.temp }}/domain-alloc-profile/
+          if-no-files-found: error
+          retention-days: 14

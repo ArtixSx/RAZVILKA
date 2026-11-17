@@ -1,0 +1,68 @@
+{
+  "reviewer": "verification",
+  "head_sha": "60e0d4ba5daca6c3c9276af15475768680da7c28",
+  "run_id": 42646788079,
+  "conclusion": "failure",
+  "cases": [
+    {
+      "name": "lifecycle",
+      "job_id": 129262070890,
+      "conclusion": "failure",
+      "elapsed_seconds": 119.94,
+      "detail": "Client110s request deadline; snapshot/stage/validate/canary/activate/health43.986s/commit-adapter passed. Original rollback and verify-rollback passed; canceled=true. No successful Apply/Stop cycle."
+    },
+    {
+      "name": "manual",
+      "job_id": 129262070207,
+      "conclusion": "failure",
+      "elapsed_seconds": 123.69,
+      "detail": "Actual preview negative cases passed, all activation diagnostic stages through policy ACK passed. HTTP Apply client context deadline; final elapsed includes httptest.Server.Close joining active handler. No successful Apply/Stop cycle."
+    },
+    {
+      "name": "settlement",
+      "job_id": 129262070687,
+      "conclusion": "success",
+      "elapsed_seconds": 100.55,
+      "apply_seconds": 76.079198786,
+      "stop_seconds": 7.386474417,
+      "cycle_seconds": 98.567242944,
+      "restored_physical_baseline": true
+    },
+    {
+      "name": "postcas",
+      "job_id": 129262070764,
+      "conclusion": "success",
+      "elapsed_seconds": 81.96,
+      "status": 503,
+      "desired_exact_restored": true,
+      "rollback_verified": true,
+      "original_pending": false
+    }
+  ],
+  "logs": [
+    {
+      "path": "mihomo-lifecycle.log",
+      "sha256": "52CDBF6A9B7A0E6ACD9A3E0D21B139F271DBE432054A38A60F4E57332472DB7D"
+    },
+    {
+      "path": "mihomo-manual.log",
+      "sha256": "4F58C5A267189E373C023F5AF85C44D010C7BA58F9298B699AA5833238B818F0"
+    },
+    {
+      "path": "mihomo-settlement.log",
+      "sha256": "43CD7646471A56D9480CE3CE7B520D0CABB486372D5885412E77D7BC1C3CACD8"
+    },
+    {
+      "path": "mihomo-postcas.log",
+      "sha256": "3A9B64638D410BAB6F3949E847D90FF835DD3A1D6B68D7D61F03F54BB4B53E44"
+    }
+  ],
+  "independent_bookends": "Original fingerprint mutation normal3.50s/race9.64s and actual kernel-owner normal5.42s/race12.66s PASS after failed lifecycle step.",
+  "limits": [
+    "Testelapsed includes HTTP handler cleanup and is not exact request latency;110s request and production deadlines unchanged.",
+    "No second cycles/baseline successes claimed for failed lifecycle/manual cases.",
+    "Scope/allocation changes not proven causal for runner duration variance.",
+    "IsolatedUbuntu native evidence, not physical router or AUTO/broader capability acceptance.",
+    "Generic60e failed focused new fixture mode test separately; last full generic green4cc."
+  ]
+}

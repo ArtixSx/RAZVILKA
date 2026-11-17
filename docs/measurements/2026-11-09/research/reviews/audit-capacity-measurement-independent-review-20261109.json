@@ -1,0 +1,20 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved measurement only",
+  "files": [
+    {
+      "path": "internal/netidentity/audit_capacity_measurement_native_linux_test.go",
+      "sha256": "FB44756686ADA83922473EB312AB70146429F0807B31A99F71061F4C5BCD8B95"
+    }
+  ],
+  "findings": [
+    "Independently extracted and CRLF-normalized copied captureProc; exact body equality confirmed except function name and local [16]heldFD initializer. Production unchanged.",
+    "All original reads, held FD adoption, cancellation checks and cleanup remain; append fallback beyond16 preserves20 actual descriptors and verifies all closed.",
+    "Tests compare complete original/candidate observations, canceled entry and late cancellation, and before/after actual descriptor counts.",
+    "Benchmark performs complete fresh captures, including all original kernel/process/mount/source guards; equality covers scalar fields, namespace lists and Checks. No reflection in timed loop."
+  ],
+  "limitations": [
+    "No local Go tests/builds; remote native normal/race and paired allocation/time pending.",
+    "Local array escape behavior is measured, not assumed; no speed claim or production promotion."
+  ]
+}

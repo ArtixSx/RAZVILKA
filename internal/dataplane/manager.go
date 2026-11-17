@@ -1401,7 +1401,35 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			return execution, attachErr
 		}
 	}
-	writeExecution := func() error {
+	var nfqQuarantine *NFQWSPendingQuarantine
+	nfqPublicationUncertain, nfqQuarantineAttempted := false, false
+	recordPlan := func(next Plan) error {
+		var err error
+		if nfqQuarantine == nil {
+			err = m.recordLocked(next)
+		} else {
+			m.revokeRetainedSingReview()
+			m.journalMu.Lock()
+			err = nfqQuarantine.publishPlan(next)
+			m.journalMu.Unlock()
+		}
+		if err != nil {
+			nfqPublicationUncertain = true
+			if nfqQuarantine != nil {
+				nfqQuarantine.Revoke()
+			}
+		}
+		return err
+	}
+	writeExecution := func() (err error) {
+		defer func() {
+			if err != nil {
+				nfqPublicationUncertain = true
+				if nfqQuarantine != nil {
+					nfqQuarantine.Revoke()
+				}
+			}
+		}()
 		count := 0
 		for _, candidate := range []*executionResourceScope{activeNFQScope, activeXrayScope, activeWGScope, activeMihomoScope} {
 			if candidate != nil {
@@ -1435,6 +1463,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 
 	prepared := make([]Adapter, 0, len(plan.Adapters)+len(plan.RetiringAdapters))
 	var undoCommit func() error
+	commitEntered := false
 	commitPublicationAttempted := false
 	liveMutation := false
 	var retryNFQRollback func(context.Context) error
@@ -1705,6 +1734,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	var noEffectLANPreparation *nfqwsDirectPreparationWitness
 	var rejectedDirectPreparation *nfqws2ActiveExecution
 	rollback := func(cause error) error {
+		gateSkippedForConsumer, nfqRollbackFailed := false, false
 		noEffectNFQCompletion = nil
 		noEffectWGCompletion = nil
 		noEffectLANPreparation = nil
@@ -1746,6 +1776,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				restore = nfq.rollbackOriginalFirstStart
 			}
 			if err := run(rollbackCtx, adapter, "rollback", restore); err != nil {
+				if adapter.ID() == "nfqws2" {
+					nfqRollbackFailed = true
+				}
 				rollbackErr = errors.Join(rollbackErr, err)
 			}
 		}
@@ -1806,6 +1839,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		gateVerified := false
 		if gate != nil {
 			if (liveMutation || rejectedDirectPreparation != nil) && !consumersVerified {
+				gateSkippedForConsumer = true
 				// A successful rollback call alone cannot authorize removing the
 				// physical negative boundary beneath an unknown consumer.
 				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", func(context.Context, Plan, string) error { return ErrNetworkPolicyConsumers }))
@@ -1888,7 +1922,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		plan.Note = execution.Error
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		finalErr := errors.Join(executionJournalError(m.recordLocked(plan)), writeExecution())
+		// A reversible original pending owner is a whole-transaction fact, not
+		// an inference from one COMMON receipt or empty kernel inventory.
+		if !nfqQuarantineAttempted && rollbackErr != nil && activeNFQScope != nil {
+			nfqQuarantineAttempted = true
+			if !nfqPublicationUncertain && !commitEntered && undoCommit == nil && !commitPublicationAttempted && activeXrayScope == nil && activeWGScope == nil && activeMihomoScope == nil && rejectedDirectPreparation == nil && directCycle.rollback == nil && directCycle.verify == nil && gateSkippedForConsumer && nfqRollbackFailed && len(plan.RetiringAdapters) == 0 && originalNFQQuarantineParticipants(rollbackCtx, prepared, gate, activeNFQScope) {
+				if candidate, err := newNFQWSPendingQuarantine(rollbackCtx, m, activeNFQScope, plan); err == nil {
+					nfqQuarantine, activeNFQScope.nfqQuarantine = candidate, candidate
+				}
+			}
+		}
+		finalErr := errors.Join(executionJournalError(recordPlan(plan)), writeExecution())
 		if finalErr != nil {
 			noEffectNFQCompletion = nil
 			noEffectWGCompletion = nil
@@ -1905,7 +1949,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			plan.Note = execution.Error
 			// Best effort to correct whichever record remains writable. The
 			// first failure still prevents a success result or another Apply.
-			rollbackErr = errors.Join(rollbackErr, executionJournalError(m.recordLocked(plan)), writeExecution())
+			rollbackErr = errors.Join(rollbackErr, executionJournalError(recordPlan(plan)), writeExecution())
 		}
 		if rollbackErr != nil {
 			return errors.Join(cause, fmt.Errorf("rollback failed: %w", rollbackErr))
@@ -1916,7 +1960,15 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		rollbackParent = parent
 		retryErr := rollback(ErrNFQWSScopedOwner)
 		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil && noEffectLANPreparation == nil {
+			if nfqQuarantine != nil {
+				nfqQuarantine.Revoke()
+			}
 			return errors.Join(executionJournalError(ErrNFQWSScopedOwner), retryErr)
+		}
+		if nfqQuarantine != nil && nfqQuarantine.claimedByApp() {
+			if err := nfqQuarantine.sealJoined(parent, execution, plan); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -1956,7 +2008,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.Error = cause.Error()
 		execution.State = "canary-failed"
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		return errors.Join(cause, executionJournalError(m.recordLocked(plan)), writeExecution())
+		return errors.Join(cause, executionJournalError(recordPlan(plan)), writeExecution())
 	}
 	rejectNetwork := func(cause error) error {
 		plan.Ready, plan.State = false, "network-stale"
@@ -1967,7 +2019,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		plan.Note = cause.Error()
 		execution.State, execution.Error = "network-stale", cause.Error()
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		return errors.Join(cause, executionJournalError(m.recordLocked(plan)), writeExecution())
+		return errors.Join(cause, executionJournalError(recordPlan(plan)), writeExecution())
 	}
 	settleRejectedDirectPreparation := func(cause error) (bool, error) {
 		if liveMutation || undoCommit != nil || commitPublicationAttempted || activeNFQScope != nil || activeXrayScope != nil || activeWGScope != nil || activeMihomoScope != nil || validateExecutionResources(execution, true) != nil {
@@ -2038,7 +2090,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			return rollback(err)
 		}
 		commitPublicationAttempted = true
-		if err := m.recordLocked(plan); err != nil {
+		if err := recordPlan(plan); err != nil {
 			return rollback(executionJournalError(err))
 		}
 		execution.State = "committed"
@@ -2074,6 +2126,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if commit != nil {
 			var err error
 			liveMutation = true
+			commitEntered = true
 			undoCommit, err = commit()
 			if err != nil {
 				failure := rollback(err)
@@ -2270,6 +2323,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if commit != nil {
 		var err error
 		liveMutation = true
+		commitEntered = true
 		undoCommit, err = commit()
 		if err != nil {
 			failure := rollback(fmt.Errorf("commit desired state: %w", err))

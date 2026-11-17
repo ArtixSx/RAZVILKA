@@ -1,0 +1,28 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; remote normal/race and measured results pending",
+  "base_sha": "af305d37873faf4279fd57b31fbc5644c8507aa5",
+  "files": [
+    {
+      "path": "internal/dataplane/nfqws2_managed_process_linux.go",
+      "sha256": "F0D4F06FA3DC037716CC285A426A3653B9814AAFDD9C4469251028468B68EF43"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_managed_copy_linux_test.go",
+      "sha256": "F610BDC0241FFF14034BD03450BD256A5C2F866E346730B946CC3D31269B04BF"
+    }
+  ],
+  "findings": [
+    "Only io.Copy scratch allocation changes; original protected path, Lstat, Open, Fstat, same limit+1 full hash, Fstat, Close, Lstat and digest comparisons remain in original order.",
+    "Exclusive 32KiB sync.Pool scratch contains no retained file, hash, identity or result; all bytes cleared on success, error and panic.",
+    "Exact Go1.26 io.Copy buffer sizing and WriterTo/ReaderFrom precedence preserved; checked local tools/go/src/io/io.go407.",
+    "Tests compare chunks/count/hash/errors, fast paths and write error precedence; actual file content mutation with same size/restored mtime still refuses; symlink and overlimit refuse; concurrent hash contamination checked.",
+    "Benchmark performs same fresh actual file Seek/read/SHA for before and after; no observation reused."
+  ],
+  "limitations": [
+    "No local Go tests/builds under disk constraint.",
+    "Pool race drops may reduce allocation benefit; next normal/race measurements required.",
+    "Allocation attribution motivates change but does not prove full NFQ readiness or throughput gain."
+  ],
+  "source_commit": "a6feb69d6430a103e62838e62bc411649db56dc1"
+}

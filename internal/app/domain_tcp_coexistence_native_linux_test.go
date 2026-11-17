@@ -52,6 +52,21 @@ func domainOriginalOnlyJoinedFailure(err error) bool {
 // Native clocks are per-operation, matching the unchanged finite producer.
 func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domainOriginalNativePeers, manager *dataplane.Manager, dnsAdapter *dataplane.ScopedDNSAdapter, backend *dataplane.BackendInventory, xray *dataplane.ProxyTunnelAdapter, nodeSource *dataplane.NodeDefaultSourceReview, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, history *updatecheck.ExecutionHistoryAdmission, plan dataplane.Plan, service catalog.Service, nodeID string, prior *dataplane.DomainTCPDetachedStandby, oldAlias string, unpublished bool, captured **dataplane.DomainTCPOriginalScope) (resultErr error) {
 	t.Helper()
+	// GEN1's profile ended with its original callback. This separate bounded
+	// GEN2 diagnostic includes preparation before Run/publication clock and stops after the
+	// existing joined-cleanup defer; no deadline or observer is substituted.
+	var successorProfile *domainSuccessorCPUProfile
+	// The GEN2 call supplies its owner destination; the separate later GEN3
+	// call deliberately does not. Never overwrite/adopt the GEN2 profile.
+	if captured != nil {
+		var profileErr error
+		successorProfile, profileErr = startDomainSuccessorCPUProfile()
+		if profileErr != nil {
+			return fmt.Errorf("successor CPU diagnostic start: %w", profileErr)
+		}
+	}
+	joined := false
+	defer func() { resultErr = errors.Join(resultErr, successorProfile.finish(t, joined)) }()
 	binding, err := manager.BindSyntheticDNSExecution(ctx, dnsAdapter, plan)
 	if err != nil {
 		return fmt.Errorf("successor original DNS binding: %w", err)
@@ -86,19 +101,33 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 	if err != nil {
 		return fmt.Errorf("successor original COMMON issuer: %w", err)
 	}
+	preparationCut := os.Getenv("RAZVILKA_DOMAIN_PREPARATION_CUT") == "1"
+	if preparationCut {
+		if captured == nil {
+			return errors.New("failed preparation requires original owner custody")
+		}
+		*captured = owner
+		if err := dataplane.ConfigureNativeDomainPreparationCut(ctx, owner); err != nil {
+			return err
+		}
+	}
 	stopMetrics := dataplane.StartDomainTCPNativeMeasurement()
 	defer func() {
 		t.Logf("successor original Run/join observations %+v; overlapping durations, not default12 performance", stopMetrics())
 	}()
 	runCtx, stopRun := context.WithCancel(ctx)
+	stopPreparation := dataplane.StartDomainTCPNativePreparationMeasurement(runCtx)
+	defer func() {
+		t.Logf("successor preparation after original join attempt joined=%t (parent context budget; incomplete is not success): %+v", joined, stopPreparation())
+	}()
 	done := make(chan error, 1)
 	go func() { done <- owner.Run(runCtx, resource) }()
-	joined := false
 	defer func() {
 		stopRun()
 		if !joined {
 			select {
 			case runErr := <-done:
+				joined = true // Diagnostic fact: the original Run result was received.
 				if !domainOriginalExpectedStopError(runErr) {
 					resultErr = errors.Join(resultErr, runErr)
 				}
@@ -107,7 +136,18 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			}
 		}
 	}()
-	deadline := time.Now().Add(30 * time.Second)
+	if preparationCut {
+		// Real successor construction only: no DNS send, Ready assertion or
+		// widening of the original operation's finite deadline.
+		select {
+		case err := <-done:
+			joined = true
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	deadline := time.Now().Add(domainOriginalPublicationBudget(t))
 	if cancelOriginal, ok := ctx.Value(domainOriginalCancelAfterStartKey{}).(context.CancelFunc); ok {
 		if captured != nil {
 			*captured = owner
@@ -149,6 +189,7 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			case <-time.After(100 * time.Millisecond):
 			}
 			if time.Now().After(deadline) {
+				t.Logf("successor preparation before witness-timeout return and stopRun (context deadline is not publication budget): %+v", dataplane.DomainTCPNativePreparationMeasurementSnapshot())
 				return errors.New("actual child/listener cancellation witness unavailable")
 			}
 		}
@@ -201,8 +242,8 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			if mode == "opaque" {
 				marker = "opaque-native-baseline"
 			}
-			if flow.Source != domainOriginalClient || flow.SourcePort == "" || flow.SourcePort != flow.ClientPort || flow.Marker != marker {
-				return fmt.Errorf("successor %s changed original baseline tuple: %+v", mode, flow)
+			if flow.Source != domainOriginalWAN || flow.SourcePort == "" || flow.SourcePort == "0" || flow.ClientPort == "" || flow.ClientPort == "0" || flow.Marker != marker {
+				return fmt.Errorf("successor %s failed router-originated DIRECT source/payload: %+v", mode, flow)
 			}
 		}
 	}

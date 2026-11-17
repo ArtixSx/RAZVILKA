@@ -24,6 +24,11 @@ func dataplaneExecutionMutated(execution dataplane.Execution) bool {
 // an unconfirmed rollback cannot be followed by another admitted mutation.
 // A fence never releases the current lease or interrupts rollback cleanup.
 func (a *App) applyDataplane(ctx context.Context, plan dataplane.Plan, commit func() (func() error, error)) (dataplane.Execution, error) {
+	return a.applyDataplaneOriginal(ctx, plan, commit, nil)
+}
+
+// Only the original managed NFQ issuer supplies this private pending frame.
+func (a *App) applyDataplaneOriginal(ctx context.Context, plan dataplane.Plan, commit func() (func() error, error), pending *managedNFQPendingFrame) (dataplane.Execution, error) {
 	if a.Operations.Snapshot().Fenced {
 		return dataplane.Execution{}, operationgate.ErrRecovery
 	}
@@ -38,7 +43,9 @@ func (a *App) applyDataplane(ctx context.Context, plan dataplane.Plan, commit fu
 		execution, err = a.Dataplane.Apply(ctx, plan, commit)
 	}
 	if execution.State == "rollback-failed" || errors.Is(err, dataplane.ErrExecutionJournal) {
-		a.Operations.FenceJournal()
+		if pending == nil || !pending.retain(ctx, a, plan) {
+			a.Operations.FenceJournal()
+		}
 	}
 	return execution, err
 }

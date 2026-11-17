@@ -1,0 +1,72 @@
+{
+  "selected": {
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "6.343573153s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.203349014s"
+      },
+      "process-current": {
+        "calls": 325,
+        "bytes": 0,
+        "elapsed": "4.632763444s"
+      },
+      "whole-executable-hash": {
+        "calls": 126,
+        "bytes": 4608753156,
+        "elapsed": "2.931443182s"
+      },
+      "kernel-observe": {
+        "calls": 2,
+        "bytes": 0,
+        "elapsed": "1.120961613s"
+      },
+      "mapping-compare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "778.332091ms"
+      }
+    },
+    "outcome": "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (21.83s)"
+  },
+  "canceled": {
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "6.545538853s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.314050608s"
+      },
+      "process-current": {
+        "calls": 319,
+        "bytes": 0,
+        "elapsed": "4.603709829s"
+      },
+      "whole-executable-hash": {
+        "calls": 125,
+        "bytes": 4572175750,
+        "elapsed": "4.085097485s"
+      },
+      "kernel-observe": {
+        "calls": 2,
+        "bytes": 0,
+        "elapsed": "802.510957ms"
+      },
+      "mapping-compare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "489.992602ms"
+      }
+    },
+    "outcome": "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (21.57s)"
+  }
+}

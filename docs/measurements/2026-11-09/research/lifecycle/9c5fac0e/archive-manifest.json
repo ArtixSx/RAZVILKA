@@ -1,0 +1,13 @@
+{
+  "scope": "Exact-SHA results and bounded evidence; pending snapshots are not PASS",
+  "files": {
+    "generic-progress.json": {
+      "bytes": 2767,
+      "sha256": "359fa4435da5921e3fa8d42bfedd2e36b6e37a2f3426ae4811d971a2e725c34d"
+    },
+    "physical-gate-results.json": {
+      "bytes": 301,
+      "sha256": "73b4ccc7dfa35a48ba36b50fb7b7d955779816ba5a8b4cbe472d93927d148c92"
+    }
+  }
+}

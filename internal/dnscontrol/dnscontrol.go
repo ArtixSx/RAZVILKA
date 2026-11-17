@@ -198,7 +198,20 @@ func New(path string) (*Manager, error) {
 	return m, nil
 }
 
+// providerCatalog contains only code-defined discovery templates, never runtime
+// configuration, DNS responses, or availability evidence. Keep its nested slices
+// private: every caller receives a deep copy before document-specific changes.
+var providerCatalog = buildProviderCatalog()
+
 func Providers() []Provider {
+	providers := make([]Provider, len(providerCatalog))
+	for index := range providerCatalog {
+		providers[index] = cloneProvider(providerCatalog[index])
+	}
+	return providers
+}
+
+func buildProviderCatalog() []Provider {
 	providers := []Provider{
 		{ID: "system", Name: "Системный DNS", Description: "DNS из Keenetic или от провайдера.", Filters: []string{"без изменений"}, Configured: true},
 		{ID: "cloudflare", Name: "Cloudflare", Description: "Публичный резолвер без фильтрации.", Servers: []string{"1.1.1.1:53", "1.0.0.1:53"}, DoH: "https://cloudflare-dns.com/dns-query", DoT: "cloudflare-dns.com:853", Filters: []string{"DNSSEC", "без фильтрации"}, Configured: true},
@@ -1209,7 +1222,13 @@ func profileByID(id string) (Profile, bool) {
 }
 
 func providerByIDFor(id string, doc document) (Provider, bool) {
-	for _, provider := range providersFor(doc) {
+	for _, provider := range providerCatalog {
+		// A custom document can carry a different ID. Preserve the original
+		// post-transformation first-match order, including malformed documents.
+		if provider.ID != id && provider.ID != "custom" {
+			continue
+		}
+		provider = providerForDocument(cloneProvider(provider), doc)
 		if provider.ID == id {
 			return provider, true
 		}
@@ -1220,21 +1239,27 @@ func providerByIDFor(id string, doc document) (Provider, bool) {
 func providersFor(doc document) []Provider {
 	providers := Providers()
 	for index := range providers {
-		switch providers[index].ID {
-		case "nextdns":
-			if validNextDNSProfileID(doc.NextDNSProfileID) {
-				providers[index].Configured = true
-				providers[index].DoH = "https://dns.nextdns.io/" + doc.NextDNSProfileID
-				providers[index].DoT = doc.NextDNSProfileID + ".dns.nextdns.io:853"
-			}
-		case "custom":
-			if doc.CustomProvider != nil {
-				providers[index] = withProviderMetadata(cloneProvider(*doc.CustomProvider))
-			}
-		}
-		providers[index] = withTypedEndpoints(providers[index])
+		providers[index] = providerForDocument(providers[index], doc)
 	}
 	return providers
+}
+
+// The provider must be caller-owned. This applies the current document on every
+// invocation; only the code-defined template construction is shared.
+func providerForDocument(provider Provider, doc document) Provider {
+	switch provider.ID {
+	case "nextdns":
+		if validNextDNSProfileID(doc.NextDNSProfileID) {
+			provider.Configured = true
+			provider.DoH = "https://dns.nextdns.io/" + doc.NextDNSProfileID
+			provider.DoT = doc.NextDNSProfileID + ".dns.nextdns.io:853"
+		}
+	case "custom":
+		if doc.CustomProvider != nil {
+			provider = withProviderMetadata(cloneProvider(*doc.CustomProvider))
+		}
+	}
+	return withTypedEndpoints(provider)
 }
 
 func normalizeCustomProvider(input CustomProviderInput) (Provider, error) {

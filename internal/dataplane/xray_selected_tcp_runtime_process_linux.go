@@ -297,7 +297,9 @@ func (r *xraySelectedTCPProc) procFile(fd int, mode uint32) bool {
 	var fs unix.Statfs_t
 	return fd >= 0 && unix.Fstat(fd, &st) == nil && unix.Fstatfs(fd, &fs) == nil && st.Mode&unix.S_IFMT == mode && st.Dev == r.rootStat.Dev && fs.Type == r.fs.Type && fs.Fsid == r.fs.Fsid
 }
-func (r *xraySelectedTCPProc) mountID(ctx context.Context, fd int) (uint64, error) {
+
+// The compatibility reader is unchanged for older kernels or denied statx.
+func (r *xraySelectedTCPProc) mountIDFromFDInfo(ctx context.Context, fd int) (uint64, error) {
 	f, err := unix.Openat(r.fdinfo, strconv.Itoa(fd), unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return 0, errXraySelectedTCPRuntime

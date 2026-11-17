@@ -1,0 +1,13 @@
+{
+  "decision": "APPROVED by integrating root independently of implementing reviewer",
+  "file": "internal/physicalscope/primary_ipv4_test.go",
+  "sha256": "2ae9baded3bac98d439270558a407b91c41189e287b99eef2686fb74c42822f9",
+  "cause": "Original 1ms timeout may expire before operationContext; unopened witness intentionally remains healthy. The old test then incorrectly expected sticky revocation.",
+  "verified": [
+    "Production unchanged; no deadline extension in product",
+    "Actual injected reader synchronously initiates cancellation after issuance and explicitly records entry",
+    "Original sticky-refusal assertion and exact no-additional-read count preserved",
+    "Separate already-canceled caller preserves context.Canceled, performs no read, and permits a subsequent original fresh two-pass check"
+  ],
+  "validation": "Source review and gofmt/diffcheck only; new normal/race count30 CI pending"
+}

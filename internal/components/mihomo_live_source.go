@@ -133,7 +133,23 @@ func (s *MihomoLiveSource) currentLocked(ctx context.Context) error {
 	if err := s.currentPrefixLocked(ctx); err != nil {
 		return err
 	}
-	actual, err := s.session.files["a_binary"].Read(ctx)
+	var actual restorejournal.Image
+	var err error
+	if target, ok := s.session.files["a_binary"].(*restorejournal.ArtifactFileTarget); ok && target != nil {
+		// This original source already owns the expected image. Read BOTH full
+		// files with the existing parallel two-SHA reader; no comparison handle
+		// or derived context escapes. Its join/revocation/Close completes before
+		// the original receipt read below. Other target implementations keep Read.
+		err = target.WithExpectedReadComparison(ctx, s.image, func(_ context.Context, image restorejournal.Image, _ *restorejournal.ArtifactSourceComparison) error {
+			if !sameMihomoImage(image, s.image) {
+				return ErrMihomoLiveOwner
+			}
+			actual = image
+			return nil
+		})
+	} else {
+		actual, err = s.session.files["a_binary"].Read(ctx)
+	}
 	if err != nil || !sameMihomoImage(actual, s.image) {
 		return errors.Join(ErrMihomoLiveOwner, err)
 	}

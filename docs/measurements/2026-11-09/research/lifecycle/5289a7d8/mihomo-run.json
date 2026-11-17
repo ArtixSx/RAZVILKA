@@ -1,0 +1,612 @@
+{
+  "attempt": 1,
+  "conclusion": "failure",
+  "headSha": "5289a7d8cace5c63641d14218ca1f48b4d17fa2e",
+  "jobs": [
+    {
+      "completedAt": "2026-11-09T19:13:46Z",
+      "conclusion": "failure",
+      "databaseId": 129372632290,
+      "name": "live-native (manual-http)",
+      "startedAt": "2026-11-09T19:07:21Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:07:23Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:07:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:30Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:07:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:38Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:07:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:51Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:07:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:51Z",
+          "conclusion": "skipped",
+          "name": "Actual registered Apply, native LAN TLS, Stop and retry",
+          "number": 5,
+          "startedAt": "2026-11-09T19:07:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:57Z",
+          "conclusion": "failure",
+          "name": "Explicit manual preview, token Apply, LAN and HTTP Stop",
+          "number": 6,
+          "startedAt": "2026-11-09T19:07:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:58Z",
+          "conclusion": "success",
+          "name": "Retain actual manual HTTP result",
+          "number": 7,
+          "startedAt": "2026-11-09T19:10:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:58Z",
+          "conclusion": "skipped",
+          "name": "Retain bounded native CPU evidence",
+          "number": 8,
+          "startedAt": "2026-11-09T19:10:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:58Z",
+          "conclusion": "skipped",
+          "name": "Actual post-CAS required TLS rejection and exact desired undo",
+          "number": 9,
+          "startedAt": "2026-11-09T19:10:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:58Z",
+          "conclusion": "skipped",
+          "name": "Original failed Check settlement, retained prerequisites and Stop retry",
+          "number": 10,
+          "startedAt": "2026-11-09T19:10:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:03Z",
+          "conclusion": "success",
+          "name": "Preserved4cc matching baseline on the same runner",
+          "number": 11,
+          "startedAt": "2026-11-09T19:10:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:41Z",
+          "conclusion": "failure",
+          "name": "Compare original warm scenario without changing its deadline",
+          "number": 12,
+          "startedAt": "2026-11-09T19:11:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:42Z",
+          "conclusion": "success",
+          "name": "Retain same-runner preserved matching baseline",
+          "number": 13,
+          "startedAt": "2026-11-09T19:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:42Z",
+          "conclusion": "skipped",
+          "name": "Original read observation bookends with official child, normal and race",
+          "number": 14,
+          "startedAt": "2026-11-09T19:13:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:43Z",
+          "conclusion": "success",
+          "name": "Post Preserved4cc matching baseline on the same runner",
+          "number": 26,
+          "startedAt": "2026-11-09T19:13:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:43Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 27,
+          "startedAt": "2026-11-09T19:13:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:43Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 28,
+          "startedAt": "2026-11-09T19:13:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:43Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 29,
+          "startedAt": "2026-11-09T19:13:43Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680281173/job/129372632290"
+    },
+    {
+      "completedAt": "2026-11-09T19:11:12Z",
+      "conclusion": "success",
+      "databaseId": 129372632550,
+      "name": "live-native (check-settlement)",
+      "startedAt": "2026-11-09T19:07:21Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:07:23Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:07:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:30Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:07:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:39Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:07:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:55Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:07:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:55Z",
+          "conclusion": "skipped",
+          "name": "Actual registered Apply, native LAN TLS, Stop and retry",
+          "number": 5,
+          "startedAt": "2026-11-09T19:07:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:55Z",
+          "conclusion": "skipped",
+          "name": "Explicit manual preview, token Apply, LAN and HTTP Stop",
+          "number": 6,
+          "startedAt": "2026-11-09T19:07:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:55Z",
+          "conclusion": "skipped",
+          "name": "Retain actual manual HTTP result",
+          "number": 7,
+          "startedAt": "2026-11-09T19:07:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:55Z",
+          "conclusion": "skipped",
+          "name": "Retain bounded native CPU evidence",
+          "number": 8,
+          "startedAt": "2026-11-09T19:07:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:55Z",
+          "conclusion": "skipped",
+          "name": "Actual post-CAS required TLS rejection and exact desired undo",
+          "number": 9,
+          "startedAt": "2026-11-09T19:07:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "success",
+          "name": "Original failed Check settlement, retained prerequisites and Stop retry",
+          "number": 10,
+          "startedAt": "2026-11-09T19:07:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "skipped",
+          "name": "Preserved4cc matching baseline on the same runner",
+          "number": 11,
+          "startedAt": "2026-11-09T19:11:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "skipped",
+          "name": "Compare original warm scenario without changing its deadline",
+          "number": 12,
+          "startedAt": "2026-11-09T19:11:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "skipped",
+          "name": "Retain same-runner preserved matching baseline",
+          "number": 13,
+          "startedAt": "2026-11-09T19:11:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "skipped",
+          "name": "Original read observation bookends with official child, normal and race",
+          "number": 14,
+          "startedAt": "2026-11-09T19:11:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 27,
+          "startedAt": "2026-11-09T19:11:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 28,
+          "startedAt": "2026-11-09T19:11:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:10Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 29,
+          "startedAt": "2026-11-09T19:11:10Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680281173/job/129372632550"
+    },
+    {
+      "completedAt": "2026-11-09T19:09:30Z",
+      "conclusion": "success",
+      "databaseId": 129372632606,
+      "name": "live-native (postcas-failure)",
+      "startedAt": "2026-11-09T19:07:20Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:07:22Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:07:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:28Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:07:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:34Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:07:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:43Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:07:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:43Z",
+          "conclusion": "skipped",
+          "name": "Actual registered Apply, native LAN TLS, Stop and retry",
+          "number": 5,
+          "startedAt": "2026-11-09T19:07:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:43Z",
+          "conclusion": "skipped",
+          "name": "Explicit manual preview, token Apply, LAN and HTTP Stop",
+          "number": 6,
+          "startedAt": "2026-11-09T19:07:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:43Z",
+          "conclusion": "skipped",
+          "name": "Retain actual manual HTTP result",
+          "number": 7,
+          "startedAt": "2026-11-09T19:07:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:43Z",
+          "conclusion": "skipped",
+          "name": "Retain bounded native CPU evidence",
+          "number": 8,
+          "startedAt": "2026-11-09T19:07:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "success",
+          "name": "Actual post-CAS required TLS rejection and exact desired undo",
+          "number": 9,
+          "startedAt": "2026-11-09T19:07:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "skipped",
+          "name": "Original failed Check settlement, retained prerequisites and Stop retry",
+          "number": 10,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "skipped",
+          "name": "Preserved4cc matching baseline on the same runner",
+          "number": 11,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "skipped",
+          "name": "Compare original warm scenario without changing its deadline",
+          "number": 12,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "skipped",
+          "name": "Retain same-runner preserved matching baseline",
+          "number": 13,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "skipped",
+          "name": "Original read observation bookends with official child, normal and race",
+          "number": 14,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 27,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 28,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:27Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 29,
+          "startedAt": "2026-11-09T19:09:27Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680281173/job/129372632606"
+    },
+    {
+      "completedAt": "2026-11-09T19:22:21Z",
+      "conclusion": "success",
+      "databaseId": 129372632651,
+      "name": "live-native (lifecycle)",
+      "startedAt": "2026-11-09T19:07:21Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:07:23Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:07:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:30Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:07:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:38Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:07:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:07:51Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:07:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:39Z",
+          "conclusion": "success",
+          "name": "Actual registered Apply, native LAN TLS, Stop and retry",
+          "number": 5,
+          "startedAt": "2026-11-09T19:07:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:39Z",
+          "conclusion": "skipped",
+          "name": "Explicit manual preview, token Apply, LAN and HTTP Stop",
+          "number": 6,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:39Z",
+          "conclusion": "skipped",
+          "name": "Retain actual manual HTTP result",
+          "number": 7,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:41Z",
+          "conclusion": "success",
+          "name": "Retain bounded native CPU evidence",
+          "number": 8,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:41Z",
+          "conclusion": "skipped",
+          "name": "Actual post-CAS required TLS rejection and exact desired undo",
+          "number": 9,
+          "startedAt": "2026-11-09T19:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:41Z",
+          "conclusion": "skipped",
+          "name": "Original failed Check settlement, retained prerequisites and Stop retry",
+          "number": 10,
+          "startedAt": "2026-11-09T19:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:45Z",
+          "conclusion": "success",
+          "name": "Preserved4cc matching baseline on the same runner",
+          "number": 11,
+          "startedAt": "2026-11-09T19:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:19:03Z",
+          "conclusion": "success",
+          "name": "Compare original warm scenario without changing its deadline",
+          "number": 12,
+          "startedAt": "2026-11-09T19:13:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:19:05Z",
+          "conclusion": "success",
+          "name": "Retain same-runner preserved matching baseline",
+          "number": 13,
+          "startedAt": "2026-11-09T19:19:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:22:17Z",
+          "conclusion": "success",
+          "name": "Original read observation bookends with official child, normal and race",
+          "number": 14,
+          "startedAt": "2026-11-09T19:19:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:22:17Z",
+          "conclusion": "success",
+          "name": "Post Preserved4cc matching baseline on the same runner",
+          "number": 26,
+          "startedAt": "2026-11-09T19:22:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:22:17Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 27,
+          "startedAt": "2026-11-09T19:22:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:22:18Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 28,
+          "startedAt": "2026-11-09T19:22:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:22:18Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 29,
+          "startedAt": "2026-11-09T19:22:18Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680281173/job/129372632651"
+    }
+  ],
+  "status": "completed"
+}

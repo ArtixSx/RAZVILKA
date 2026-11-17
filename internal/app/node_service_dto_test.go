@@ -42,7 +42,7 @@ func TestServiceJobDTOKeepsXrayFailureAndIndependentCleanup(t *testing.T) {
 	}
 	// The screening/durable projection uses the same binding and does not create
 	// connectivity readiness from a service observation.
-	durable := nodeCheckItemFromResult(id, original.NetworkProfile, original, nil, "xray")
+	durable := nodeCheckItemFromResult(id, original.NetworkProfile, original, nil, "xray", nodeCheckObservation{ServiceID: original.ServiceID, StartedAt: original.StartedAt, FinishedAt: original.FinishedAt})
 	if durable.Engine != item.Engine || durable.Stage != item.Stage || durable.CleanupStatus != item.CleanupStatus || durable.ConnectivityReady {
 		t.Fatal("mapping diverged", durable)
 	}
@@ -57,9 +57,10 @@ func TestServiceJobDTOKeepsXrayFailureAndIndependentCleanup(t *testing.T) {
 func TestServiceDTODoesNotInferCleanupOrLeakUnknownMetadata(t *testing.T) {
 	id := "node-" + strings.Repeat("1", 64)
 	q := dataplane.NodeCheckRequest{NodeID: id, NetworkProfile: "wan-0123456789ab"}
+	q.Service.ID = "service-unit"
 	result := serviceDiagnosticResult(q)
 	result.CleanupStatus = ""
-	legacy := nodeCheckItemFromResult(id, q.NetworkProfile, result, nil, "xray")
+	legacy := nodeCheckItemFromResult(id, q.NetworkProfile, result, nil, "xray", nodeCheckObservation{ServiceID: q.Service.ID, StartedAt: result.StartedAt, FinishedAt: result.FinishedAt})
 	if legacy.CleanupVerified || legacy.CleanupStatus != dataplane.NodeCleanupNotObserved {
 		t.Fatal("legacy zero inferred cleanup", legacy)
 	}
@@ -68,7 +69,7 @@ func TestServiceDTODoesNotInferCleanupOrLeakUnknownMetadata(t *testing.T) {
 	result.DirectControl = private
 	result.ProbeID = private
 	result.CleanupStatus = dataplane.NodeCleanupStatus(private)
-	item := nodeCheckItemFromResult(id, q.NetworkProfile, result, fmt.Errorf("%s: %w", private, context.Canceled), "xray")
+	item := nodeCheckItemFromResult(id, q.NetworkProfile, result, fmt.Errorf("%s: %w", private, context.Canceled), "xray", nodeCheckObservation{ServiceID: q.Service.ID, StartedAt: result.StartedAt, FinishedAt: result.FinishedAt})
 	encoded, _ := json.Marshal(item)
 	if strings.Contains(string(encoded), private) || item.Stage != "" || item.DirectControl != "" || item.ProbeID != "" || item.CleanupVerified {
 		t.Fatal("private metadata escaped", string(encoded))
@@ -76,7 +77,7 @@ func TestServiceDTODoesNotInferCleanupOrLeakUnknownMetadata(t *testing.T) {
 	result = serviceDiagnosticResult(q)
 	result.ErrorCode = "node-cleanup-failed"
 	result.CleanupStatus = dataplane.NodeCleanupFailed
-	failed := nodeCheckItemFromResult(id, q.NetworkProfile, result, errors.New(private), "xray")
+	failed := nodeCheckItemFromResult(id, q.NetworkProfile, result, errors.New(private), "xray", nodeCheckObservation{ServiceID: q.Service.ID, StartedAt: result.StartedAt, FinishedAt: result.FinishedAt})
 	if failed.ErrorCode != "node-cleanup-failed" || failed.CleanupStatus != dataplane.NodeCleanupFailed || failed.CleanupVerified || failed.Available {
 		t.Fatal("history error hid cleanup failure", failed)
 	}
@@ -127,12 +128,13 @@ func TestServiceDTOHistoryRefusalRetainsProducerCleanup(t *testing.T) {
 func TestServiceDTOClosedServiceErrorCategory(t *testing.T) {
 	id := "node-" + strings.Repeat("1", 64)
 	q := dataplane.NodeCheckRequest{NodeID: id, NetworkProfile: "wan-0123456789ab"}
+	q.Service.ID = "service-unit"
 	for _, stage := range []string{"service", "service_ip"} {
 		for _, category := range []string{"service_timeout", "service_transport", "service_status_mismatch", "private endpoint secret", ""} {
 			r := serviceDiagnosticResult(q)
 			r.Stage = stage
 			r.ServiceErrorCategory = category
-			row := nodeCheckItemFromResult(id, q.NetworkProfile, r, nil, "xray")
+			row := nodeCheckItemFromResult(id, q.NetworkProfile, r, nil, "xray", nodeCheckObservation{ServiceID: q.Service.ID, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt})
 			want := category
 			if category == "private endpoint secret" {
 				want = ""
@@ -160,7 +162,7 @@ func TestServiceDTOClosedServiceErrorCategory(t *testing.T) {
 		case "stage":
 			r.Stage = "egress"
 		}
-		if row := nodeCheckItemFromResult(id, q.NetworkProfile, r, nil, "xray"); row.ServiceErrorCategory != "" {
+		if row := nodeCheckItemFromResult(id, q.NetworkProfile, r, nil, "xray", nodeCheckObservation{ServiceID: q.Service.ID, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}); row.ServiceErrorCategory != "" {
 			t.Fatal("unbound service category admitted", row)
 		}
 	}

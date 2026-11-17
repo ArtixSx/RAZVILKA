@@ -1,0 +1,63 @@
+name: HEV default delivery same-version replacement and recovery
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/hev-replacement-*']
+permissions:
+  contents: read
+jobs:
+  replacement:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Build the unchanged predecessor and reviewed patched candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/platform.txt
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y util-linux iproute2 curl ca-certificates make patch python3
+          sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/build.txt
+          echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  artifacts/hev-lab/bin/hev-original' | sha256sum --check --strict
+          echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
+      - name: Default production selector, original HTTP owner, real process refusal and recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          race_mode=0
+          if test '${{ matrix.mode }}' = race; then race_mode=1; fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_NATIVE_RACE="$race_mode" \
+            RAZVILKA_HEV_OFFICIAL_NATIVE="$GITHUB_WORKSPACE/artifacts/hev-lab/bin/hev-original" \
+            RAZVILKA_HEV_NATIVE="$GITHUB_WORKSPACE/artifacts/hev-lab/bin/hev-patched" \
+            sh scripts/test-hev-replacement-native.sh 2>&1 | tee artifacts/replacement.txt
+          if grep -F -- '--- SKIP:' artifacts/replacement.txt; then exit 1; fi
+          grep -F -- '--- PASS: TestHEVOriginalNativeHTTPSameVersionReplacement ' artifacts/replacement.txt
+          grep -F -- 'HEV_NATIVE_SAME_VERSION_REPLACEMENT_PASS' artifacts/replacement.txt
+          grep -Fx -- 'HEV_DEFAULT_DELIVERY_BUILD=razvilka_native_fixture; local fixed-URL transport; public reachability pending' artifacts/replacement.txt
+          grep -F -- '--- PASS: TestHEVDefaultReleasePins ' artifacts/replacement.txt
+          grep -F -- '--- PASS: TestHEVReleasePinnedNativeInstall ' artifacts/replacement.txt
+          grep -F -- '--- PASS: TestHEVReleasePinnedDownloadRejectsBeforeExecution ' artifacts/replacement.txt
+      - name: Preserve exact component evidence, separately from route readiness
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-replacement-${{ matrix.mode }}-${{ github.sha }}
+          path: |
+            artifacts/*.txt
+            artifacts/hev-lab/build-manifest.json
+            artifacts/hev-lab/fault-tests.txt
+          if-no-files-found: error

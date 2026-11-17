@@ -1,0 +1,23 @@
+{
+  "decision": "approved",
+  "reviewed_at_utc": "2026-11-09T19:48:36.0191516Z",
+  "files_sha256": {
+    "internal/dataplane/mihomo_live_same_boot_measurements_other.go": "e015812bf301cba7e0268818b55132da18bddbbeb907a4a679a02d366a46f6da",
+    "internal/dataplane/mihomo_live_same_boot_failure_native_linux_test.go": "7cfdd52332d50bcdf5763aec78c3d9ed80f690b698af6a6ab5035eeff6b5bb42",
+    "internal/dataplane/mihomo_live_cold_process_linux.go": "f85d09408baa7540ace784f853fe2efc6a65c7721163479ab1917e4731ac04d3",
+    ".github/workflows/mihomo-same-boot-validation.yml": "900b873d0e5b9581d090fe42e2cb7f5d6c98842ee653f44b8c9c0c100dcd7119",
+    "internal/dataplane/mihomo_live_same_boot_measurements_native_linux.go": "8aac27a0215384b8dec0230896ca31fe39674e9a324ee07e0885674d065a7a6e",
+    ".github/workflows/research-lifecycle.yml": "37e65ceccd52e9e8466533566008f7a87ac6ee211b8a563e442a95f64ffaff5c"
+  },
+  "contract": [
+    "Original failed process return identity/order preserved; direct exact private wrapper only",
+    "Fixed stage allowlist and64char bound; no Error/Unwrap/Is/new observations",
+    "Native malformed-stage privacy and original error identity regressions",
+    "Normal/race require all three exact native diagnostic PASS markers and no SKIP",
+    "Both original gate timing tests require actual PASS/noSKIP normal/race before domain scenarios"
+  ],
+  "limitations": [
+    "Overlapping provider/specific failure counters not separate independent failures",
+    "No local Go execution; next native actual failure localization pending"
+  ]
+}

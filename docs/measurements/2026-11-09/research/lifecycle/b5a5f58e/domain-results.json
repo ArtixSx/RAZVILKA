@@ -1,0 +1,143 @@
+{
+  "head_sha": "b5a5f58ee0bdddf62dd7f53bef020a42dc1ed5c9",
+  "run_id": 42575195644,
+  "scope": "strict DNS isolated Linux amd64 native; not physical router",
+  "production_publication_budget_seconds": 12,
+  "diagnostic_deadline_override": false,
+  "gen2_exercised": false,
+  "end_to_end_speedup_proven": false,
+  "jobs": [
+    {
+      "name": "selected",
+      "job_id": 129021225097,
+      "status": "completed",
+      "conclusion": "failure",
+      "test": "TestDomainTCPOriginalNativeAcceptedFlows",
+      "test_wall_seconds": 14.35,
+      "failure": "actual DNS publication did not become available; GEN1 publication not reached under unchanged 12s budget; GEN2 not exercised",
+      "progress": [
+        "kind=xray-domain-tcp state=prepared phase=listener-ready",
+        "kind=synthetic-baseline state=prepared phase=baseline-prepared",
+        "kind=domain-tcp-capture state=prepared phase=planned"
+      ],
+      "overlapping_cumulative_counters_not_wall": {
+        "capture-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "4.034853863s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.621426078s"
+        },
+        "process-current": {
+          "calls": 183,
+          "bytes": 0,
+          "elapsed": "4.427153136s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "12.705µs"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.784702454s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "3.602599946s"
+        },
+        "whole-executable-hash": {
+          "calls": 133,
+          "bytes": 4864794998,
+          "elapsed": "3.545330055s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 7,
+        "original-read-classic-batch": 350
+      },
+      "primitive_measurement_pass": true,
+      "primitive_mutation_pass": true,
+      "primitive_raw": [
+        "original byte reads before={Calls:4 Bytes:160 Elapsed:11.72µs} after={Calls:2 Bytes:80 Elapsed:3.927µs}; no native readiness or speed claim",
+        "original byte reads before={Calls:8 Bytes:320 Elapsed:23.604µs} after={Calls:2 Bytes:80 Elapsed:8.736µs}; no native readiness or speed claim"
+      ],
+      "raw_log": "domain-selected.log",
+      "raw_log_sha256": "319bcd994a605f22be21fe775d41c2d03ec1b5f6c61fa50c09536d2240e506bc",
+      "uploaded_artifact_zip_sha256": "38ecddcb4c508edba8a2c0848d097bbb822093b5deb12798643551a7641a5984",
+      "artifact_id": 13654503051,
+      "artifact_downloaded": false
+    },
+    {
+      "name": "canceled-ready",
+      "job_id": 129021225300,
+      "status": "completed",
+      "conclusion": "failure",
+      "test": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+      "test_wall_seconds": 14.24,
+      "failure": "actual DNS publication did not become available; GEN1 publication not reached under unchanged 12s budget; GEN2 not exercised",
+      "progress": [
+        "kind=xray-domain-tcp state=prepared phase=listener-ready",
+        "kind=synthetic-baseline state=prepared phase=baseline-prepared",
+        "kind=domain-tcp-capture state=prepared phase=planned"
+      ],
+      "overlapping_cumulative_counters_not_wall": {
+        "capture-add-guard": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "3.97470342s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.473979562s"
+        },
+        "process-current": {
+          "calls": 175,
+          "bytes": 0,
+          "elapsed": "4.448983128s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "17.202µs"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.824312331s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "3.735425624s"
+        },
+        "whole-executable-hash": {
+          "calls": 131,
+          "bytes": 4783898620,
+          "elapsed": "3.512199529s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 7,
+        "original-read-classic-batch": 330
+      },
+      "primitive_measurement_pass": true,
+      "primitive_mutation_pass": true,
+      "primitive_raw": [
+        "original byte reads before={Calls:4 Bytes:160 Elapsed:25.068µs} after={Calls:2 Bytes:80 Elapsed:5.22µs}; no native readiness or speed claim",
+        "original byte reads before={Calls:8 Bytes:320 Elapsed:24.715µs} after={Calls:2 Bytes:80 Elapsed:6.502µs}; no native readiness or speed claim"
+      ],
+      "raw_log": "domain-canceled-ready.log",
+      "raw_log_sha256": "1d958f39c99bc20bb49a96f8295c25013e532b5f0579644c3b41c73b95090782",
+      "uploaded_artifact_zip_sha256": "28aae6a6932b353f28381d56cb64ebdfc383e3473261df473bc4e391e670e99d",
+      "artifact_id": 13655410253,
+      "artifact_downloaded": false
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; original native ACK acceptance pending",
+  "files": [
+    {
+      "path": "internal/dataplane/mihomo_live_same_boot_command.go",
+      "sha256": "1126949A918043994BE43F6109C38ACC278F34853F4060EE89EC6B56D4EA8AA3"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_same_boot_absence_read.go",
+      "sha256": "6FD5635F8B895E644FC5F75B4650B26ABA9A0D44A01840A316C2997EDE2FF916"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_same_boot_absence_read_test.go",
+      "sha256": "2A1E8417344F1E9F56FAE6ADD0487DD290CC86D3EAB69F8DC48482647D5AEC5E"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_same_boot_measurements_native_linux.go",
+      "sha256": "A1BD658A7B19DACADC0E79CB897D1CD6A9FFFB956F25839627D4CDD1F846713E"
+    }
+  ],
+  "findings": [
+    "Original absent body extracted unchanged: current, platform proof, original process/interface/kernel absence, current. No effect or journal transition within read scope.",
+    "Only original source WithReadOnlyToolObservation wraps hardcoded pure absence. Provider/source/runner exact identity, tool fields, process Args and plan slices frozen and rechecked before/after including failure.",
+    "Independent review found and fixed missing/double callback acceptance, dropped callback errors, and DeepEqual provider identity gap. Exactly one invocation, preserved callback error and valid expected identity now required before success.",
+    "Actual original per-read SHA, current process/kernel checks, IP version and deadline remain. Unsupported observer retains old unshared path.",
+    "Structural model tests refuse late tuple changes, equal-valued provider replacement, missing/double/error/canceled observations; native timing adds fixed absence-tool-read category only."
+  ],
+  "limitations": [
+    "No local Go tests/builds.",
+    "Tests are negative association models, not original producer or kernel absence proof.",
+    "Same-boot normal/race and all ACK-cut scenarios must run against new exact SHA; current4cc passes baseline but six ACK scenarios fail budget."
+  ]
+}

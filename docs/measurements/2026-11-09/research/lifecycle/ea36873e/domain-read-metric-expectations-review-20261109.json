@@ -1,0 +1,18 @@
+{
+  "status": "source_approved_pending_native_CI",
+  "reviewer": "/root/verification",
+  "observed_failure_sha": "ea36873e28509ff59c626bceb7ded7827b7e23ab",
+  "files_sha256": {
+    "internal/dataplane/domain_tcp_preadd_measurement_linux_test.go": "680222bab7b824f1761992922ceba827e44917a9260ea94d8e932edbf0da8793",
+    "internal/dataplane/domain_tcp_standby_read_measurement_linux_test.go": "5031ca7c3942a89dd901f412ac81e4a75b709d00299b01c8158dca8de8564e84"
+  },
+  "reason": "Existing tests counted only whole-executable-hash; fresh image capture/complete compare now have distinct metrics.",
+  "preserved": [
+    "Exact independent SHA count and exact bracket capture+compare or full-SHA fallback category shapes.",
+    "Every category Bytes equals Calls times actual executable size.",
+    "PreAdd complete executable reads8->2, four original callbacks, next scope fresh.",
+    "Standby independent4/8->2, fresh repeated scope and final independent SHA1 with no image reuse."
+  ],
+  "scope": "Native-tagged measurement assertions only; production runtime and original deadline unchanged.",
+  "validation": "Source inspection and gofmt/diff-check; no local Go execution."
+}

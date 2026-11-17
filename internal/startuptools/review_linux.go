@@ -13,11 +13,16 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 func acquire(ctx context.Context, provider *netidentity.Provider, p profile) (*Lease, error) {
+	return acquireWithDeadline(ctx, provider, p, time.Time{})
+}
+
+func acquireWithDeadline(ctx context.Context, provider *netidentity.Provider, p profile, deadline time.Time) (*Lease, error) {
 	if ctx == nil || ctx.Err() != nil || provider == nil || os.Geteuid() != 0 || runtime.GOARCH != p.arch {
 		return nil, at("ACQUIRE_PLATFORM", nil)
 	}
@@ -25,7 +30,7 @@ func acquire(ctx context.Context, provider *netidentity.Provider, p profile) (*L
 	l := &Lease{provider: provider, profile: p, lifetime: lifetime, cancel: lifetimeCancel, gate: make(chan struct{}, 1), closeDone: make(chan struct{})}
 	l.gate <- struct{}{}
 	l.review = &heldReview{profile: p, images: map[string]*heldImage{}, nodes: map[string]heldNode{}, absent: map[string]bool{}, roles: map[string]map[imageRole]bool{}}
-	c, cancel := context.WithTimeout(lifetime, operationTimeout)
+	c, cancel := acquisitionContext(lifetime, deadline)
 	defer cancel()
 	err := provider.WithCurrent(c, func(held context.Context, identity netidentity.Identity) error {
 		if !p.acceptsIdentity(identity) {
@@ -259,6 +264,12 @@ func (r *heldReview) image(ctx context.Context, path string, role imageRole) (*h
 }
 
 func (r *heldReview) capture(ctx context.Context) error {
+	variants := []string{"glibc-hwcaps", "tls", "haswell", "x86_64", "aarch64"}
+	if r.profile.arch == "arm64" {
+		// glibc 2.27 AArch64 uses HWCAP_CPUID for library search. Retain
+		// absence even when the current CPU does not advertise that bit.
+		variants = append(variants, "cpuid")
+	}
 	for _, dir := range r.profile.libraries {
 		canonical, err := r.resolve(dir)
 		if err != nil || !r.nodes[canonical].info.IsDir() {
@@ -266,7 +277,7 @@ func (r *heldReview) capture(ctx context.Context) error {
 		}
 		r.directories = append(r.directories, canonical)
 		// This fixed review does not admit loader CPU/TLS search variants.
-		for _, name := range []string{"glibc-hwcaps", "tls", "haswell", "x86_64", "aarch64"} {
+		for _, name := range variants {
 			path := filepath.Join(dir, name)
 			if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 				return at("LOADER_VARIANT", err)
@@ -338,6 +349,9 @@ func (r *heldReview) capture(ctx context.Context) error {
 		}
 	}
 	slices.Sort(r.extensions)
+	if err := r.checkExtensionExpectations(canonical); err != nil {
+		return err
+	}
 	for _, path := range []string{"/etc/ld.so.preload", "/opt/etc/ld.so.preload"} {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return at("LOADER_PRELOAD", err)
@@ -349,7 +363,43 @@ func (r *heldReview) capture(ctx context.Context) error {
 	return r.captureWG(ctx)
 }
 
+// Compare only after the original complete scan has retained each image,
+// link, ownership and ELF role. This does not add an ELF search directory.
+// Subsequent original checks rehash these images and recheck the full node
+// graph and exact directory membership; no package bytes are cached here.
+func (r *heldReview) checkExtensionExpectations(canonical string) error {
+	expected := r.profile.extensionExpectations
+	if expected == nil {
+		return nil
+	}
+	if canonical != r.profile.extension || len(expected) == 0 || !slices.Equal(sortedKeys(expected), r.extensions) {
+		return at("EXTENSION_PACKAGE_SET", nil)
+	}
+	for name, want := range expected {
+		path := filepath.Join(canonical, name)
+		n, ok := r.nodes[path]
+		image := r.images[want.target]
+		if !libraryName(name) || !strings.HasSuffix(name, ".so") || !ok || n.info == nil || n.link != want.link || image == nil || image.path != want.target || hex.EncodeToString(image.hash[:]) != want.sha256 {
+			return at("EXTENSION_PACKAGE_PIN", nil)
+		}
+		if want.link == "" {
+			if !n.info.Mode().IsRegular() || want.target != path {
+				return at("EXTENSION_PACKAGE_PIN", nil)
+			}
+		} else if n.info.Mode()&os.ModeSymlink == 0 || filepath.Base(want.link) != want.link || want.link == "." || want.link == ".." || want.target != filepath.Join(canonical, want.link) {
+			return at("EXTENSION_PACKAGE_PIN", nil)
+		}
+	}
+	return nil
+}
+
 func (r *heldReview) unchanged(ctx context.Context) error {
+	return r.unchangedWithImageRead(ctx, nil)
+}
+
+// The sole optional reader is private to one original readonly observation.
+// Ordinary checks and every effect retain the complete original SHA path.
+func (r *heldReview) unchangedWithImageRead(ctx context.Context, read *toolObservationImage) error {
 	if err := r.pathsCurrent(ctx); err != nil {
 		return err
 	}
@@ -359,7 +409,12 @@ func (r *heldReview) unchanged(ctx context.Context) error {
 		if err != nil || pathErr != nil || !sameNode(image.info, before) || !sameNode(before, path) {
 			return at("CHECK_HELD_FILE", errors.Join(err, pathErr))
 		}
-		hash, err := hashImage(ctx, image.file, before.Size())
+		var hash [32]byte
+		if read == nil {
+			hash, err = hashImage(ctx, image.file, before.Size())
+		} else {
+			hash, err = read.read(ctx, image, before.Size())
+		}
 		after, afterErr := image.file.Stat()
 		path, pathErr = os.Lstat(image.path)
 		if err != nil || afterErr != nil || pathErr != nil || !sameNode(before, after) || !sameNode(after, path) || hash != image.hash {

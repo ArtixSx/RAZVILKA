@@ -1,0 +1,101 @@
+{
+  "run": 42563038017,
+  "job": 128983426084,
+  "artifact": 13650303477,
+  "candidate": "a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a",
+  "baseline": "c4399c948a5f65cf413c879b2b746f1bf80eefaa",
+  "baseline_overlay_sha256": "faf3160cc9b0173c2e66074a6e9fd9cbd870dcfa12fc780fd642fb8d91bc143f",
+  "diagnostic_publication_seconds": 30,
+  "diagnostic_client_seconds": 10,
+  "same_runner": true,
+  "baseline_refusal_reproduced": true,
+  "candidate_cleanup_accepted": false,
+  "partial_ack_reached": false,
+  "rows": [
+    {
+      "sample": "baseline-clean",
+      "outcome": "revision=baseline cut=clean exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": true,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "test_elapsed_s": 94.59,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:999: original failed ready generation retirement domain restore original source/capture: original synthetic TCP capture/transition consumer is unavailable"
+      ],
+      "log_sha256": "416b5d048df13600d49d1b3f04eec9dc1f5ac1c58df5018507802112219f6cbf"
+    },
+    {
+      "sample": "candidate-capture-transaction",
+      "outcome": "revision=candidate cut=capture-transaction exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": false,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "test_elapsed_s": 94.24,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:989: actual failed retirement ACK cut missing domain restore original source/capture: original synthetic TCP capture/transition consumer is unavailable"
+      ],
+      "log_sha256": "2e6d3635c51e97b8ed85a963e8db45b1c8dd225c5c7bb4b76b1b259c5041620b"
+    },
+    {
+      "sample": "candidate-clean",
+      "outcome": "revision=candidate cut=clean exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": true,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "test_elapsed_s": 94.28,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:999: original failed ready generation retirement domain restore original source/capture: original synthetic TCP capture/transition consumer is unavailable"
+      ],
+      "log_sha256": "5e77e867925c6947d290904e8c520826ead19763940986093cc24fe2909e751f"
+    },
+    {
+      "sample": "candidate-standby-transaction",
+      "outcome": "revision=candidate cut=standby-transaction exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": false,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "test_elapsed_s": 94.4,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:989: actual failed retirement ACK cut missing domain restore original source/capture: original synthetic TCP capture/transition consumer is unavailable"
+      ],
+      "log_sha256": "b1b0256397b11c9c517bc425ee6454f755b5163064d7f87f82c9ed82776a382a"
+    }
+  ],
+  "limitation": "No cleanup completion or performance acceptance; diagnostic 30s/10s fixture separate from strict12s/4s. Native fail at original source/capture restoration precedes intended ACK cuts."
+}

@@ -1,0 +1,132 @@
+{
+  "sha": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "run_id": 42684649760,
+  "conclusion": "failure",
+  "actual_jobs": 14,
+  "success_jobs": 10,
+  "failed_jobs": 4,
+  "cases": [
+    {
+      "original_ack_retry": true,
+      "final_stage": "",
+      "file": "sameboot-normal-completed.json.log",
+      "sha256": "6f1d5ce441328b678e4a80838b59d59cb67a8663417ea47b6e2fe37bb6095502",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 67.55
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "",
+      "file": "sameboot-normal-retirement.json.log",
+      "sha256": "726905317fe4b280a8b8ec7de26762e6f04090c0afec8561c72c3825df56ad67",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 46.51
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "",
+      "file": "sameboot-normal-runtime-history.log",
+      "sha256": "8fb1dc758fb241cc8c9fbea9dc8ed82e758a5e9045abae9c8623280539711b84",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 50.38
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "",
+      "file": "sameboot-normal-terminal-global.log",
+      "sha256": "073caf1d717ab2e54cbecfe7eee151f679a46d4357cfb3a48b9080c91183c608",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 74.18
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "absence-source-opening",
+      "file": "sameboot-normal-terminal-transaction.log",
+      "sha256": "6f1c1daf0d5a8fb5d2c110b7ce5326ed64d9087f6c7971ee93f32dc88feebdc6",
+      "result": "FAIL",
+      "failure_labels": [
+        "failure-processes"
+      ],
+      "elapsed_s": 59.94
+    },
+    {
+      "original_ack_retry": false,
+      "final_stage": "",
+      "file": "sameboot-parent-normal.log",
+      "sha256": "f406848ed2f9684d1911a54394061c3c73296ea30277a71f377e23d2038773c4",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 41.62
+    },
+    {
+      "original_ack_retry": false,
+      "final_stage": "",
+      "file": "sameboot-parent-race.log",
+      "sha256": "582f5cbac57850dc432c4eba8d1cd72c6a6866f855a07436d00549a807c9a0d8",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 90.77
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "unclassified",
+      "file": "sameboot-race-completed.json.log",
+      "sha256": "1dd3965fdd13e252e063e1df1c6979e9870d542b17ff5d9e705971bac6a598b7",
+      "result": "FAIL",
+      "failure_labels": [
+        "failure-processes"
+      ],
+      "elapsed_s": 120.0
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "",
+      "file": "sameboot-race-retirement.json.log",
+      "sha256": "f8ea3ba2f549642539a75ce4abb4dccd2bb3ffebbfd0d40c5b2ffe45940b94f8",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 114.25
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "absence-process-kernel",
+      "file": "sameboot-race-runtime-history.log",
+      "sha256": "19ea633762470ebd5925dba6e7acaf70ded185fdd6186cebea552cb3e1d78352",
+      "result": "FAIL",
+      "failure_labels": [],
+      "elapsed_s": 120.0
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "",
+      "file": "sameboot-race-terminal-global.log",
+      "sha256": "a4e93de4ec93cf492a155a227dcc568730c3cda681d9a6dfbccbf10151fe0e38",
+      "result": "PASS",
+      "failure_labels": [],
+      "elapsed_s": 109.93
+    },
+    {
+      "original_ack_retry": true,
+      "final_stage": "absence-process-kernel",
+      "file": "sameboot-race-terminal-transaction.log",
+      "sha256": "dcd39ce40982ad0f716b13785a86d81e491c0b64ed9a5fe5bf1b007f4093a352",
+      "result": "FAIL",
+      "failure_labels": [],
+      "elapsed_s": 120.0
+    }
+  ],
+  "critical_findings": [
+    "Normal terminal-transaction fails on original ACK retry at59.94s: exact failure-processes1, absence-source-opening; not120s deadline",
+    "Race history/completed/terminal-transaction each reaches original retry then fails120s aggregate production CLI deadline",
+    "Normal parent41.62/raceparent90.77; all80 baselineabsences/245sourceCurrents preserved",
+    "New original sameboot failure diagnostics actual normal/race PASS"
+  ],
+  "limitations": [
+    "No timeout widening or split permitted: original command and bounded ACK retry share one deadline",
+    "Complete ACK matrix remains failed; no router or release readiness claim"
+  ]
+}

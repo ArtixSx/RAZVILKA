@@ -1,0 +1,28 @@
+{
+  "review": "APPROVED_CODE_PENDING_CI",
+  "date": "2026-11-09",
+  "reviewer": "verification",
+  "files": {
+    "internal/dataplane/nfqws2_active_execution.go": "f18ed5dcc34ff0726afcb0013005f065c538a27886eb2307fc150bda746b4bca",
+    "internal/dataplane/nfqws2_active_stock_queue.go": "c18a58b54ac177ce234f296fea5a0215a4f2b56d3a178e92100871752815faa5",
+    "internal/dataplane/nfqws2_active_read_observation_test.go": "241c8243eaf4a7bbb784ec8da7cef9a6781e21250205c9f3d8889e8ec1290ea6",
+    "internal/dataplane/nfqws_scoped_readback.go": "d888dc5659c3fa5220f666aed38d14cf2a0ece34cf641685f0482bd281963482",
+    "internal/dataplane/nfqws_scoped_inspect_observation_test.go": "d4a8862ea719309455cecf48d748f24538ec3448025688d7a5d7f82604e59e46"
+  },
+  "checks": [
+    "pure current/health/queue/ExactPresence only; no writer/start/add/delete spans loan",
+    "all original source/process/kernel inventory checks retained",
+    "closing refusal suppresses positive bool/count",
+    "retirement queue before association clear; terminal absence remains independent",
+    "custom/non-original producer fallback preserved",
+    "fixed health nested model counting before CI",
+    "exact-presence fresh counts and failure cases; existing post-add intent/refusal test covers unborrowed actual mutation"
+  ],
+  "executed": [
+    "git diff --check"
+  ],
+  "not_executed": [
+    "Go build/tests, local cache rebuild prohibited",
+    "native normal/race/LAN/manual/cleanup (required CI)"
+  ]
+}

@@ -1,0 +1,292 @@
+{
+  "baseline_sha": "a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a",
+  "candidate_sha": "d5fd9774dc8598a11da152f6ee34ef7f3ec2a3a7",
+  "publication_budget_seconds": 12,
+  "diagnostic_only": false,
+  "samples_per_scenario": 1,
+  "limits": [
+    "Different hosted runner jobs; single samples, no same-runner paired strict measurement.",
+    "Counters cover Run through join; nested durations overlap and must not be added.",
+    "Both versions time out in GEN1; canceled-ready does not exercise GEN2.",
+    "Partial capture durations have different progress and are not comparable full-phase latencies.",
+    "No successful full-route or end-to-end speed claim."
+  ],
+  "scenarios": [
+    {
+      "commit_prefix": "a9bd8d75",
+      "case": "selected",
+      "status": "failure",
+      "test": "TestDomainTCPOriginalNativeAcceptedFlows",
+      "test_wall": "14.09s",
+      "publication_available": false,
+      "gen2_exercised": false,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 8,
+          "bytes": 0,
+          "elapsed": "2.95722385s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "4.965984028s"
+        },
+        "process-current": {
+          "calls": 137,
+          "bytes": 0,
+          "elapsed": "4.451587503s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "10.529\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "2.372615901s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "4.852075698s"
+        },
+        "whole-executable-hash": {
+          "calls": 137,
+          "bytes": 5011104622,
+          "elapsed": "3.615941008s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 6,
+        "original-read-classic-batch": 250
+      },
+      "last_common_phases": [
+        {
+          "kind": "xray-domain-tcp",
+          "state": "prepared",
+          "phase": "listener-ready"
+        },
+        {
+          "kind": "synthetic-baseline",
+          "state": "prepared",
+          "phase": "baseline-prepared"
+        },
+        {
+          "kind": "domain-tcp-capture",
+          "state": "prepared",
+          "phase": "planned"
+        }
+      ],
+      "raw_log": "C:\\RAZVILKA-research-20261109\\lifecycle-a9bd8d75\\domain-selected-artifact\\native.log",
+      "raw_log_sha256": "9123d41ea7d5b634107fdbaf92b33871a362e8a22dba9970de95c01484a307eb"
+    },
+    {
+      "commit_prefix": "a9bd8d75",
+      "case": "canceled-ready",
+      "status": "failure",
+      "test": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+      "test_wall": "14.16s",
+      "publication_available": false,
+      "gen2_exercised": false,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 8,
+          "bytes": 0,
+          "elapsed": "3.040984978s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "5.069272957s"
+        },
+        "process-current": {
+          "calls": 138,
+          "bytes": 0,
+          "elapsed": "4.442442726s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "12.682\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "2.336223689s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "4.765078396s"
+        },
+        "whole-executable-hash": {
+          "calls": 137,
+          "bytes": 5011104622,
+          "elapsed": "3.62541437s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 6,
+        "original-read-classic-batch": 260
+      },
+      "last_common_phases": [
+        {
+          "kind": "xray-domain-tcp",
+          "state": "prepared",
+          "phase": "listener-ready"
+        },
+        {
+          "kind": "synthetic-baseline",
+          "state": "prepared",
+          "phase": "baseline-prepared"
+        },
+        {
+          "kind": "domain-tcp-capture",
+          "state": "prepared",
+          "phase": "planned"
+        }
+      ],
+      "raw_log": "C:\\RAZVILKA-research-20261109\\lifecycle-a9bd8d75\\domain-canceled-ready.log",
+      "raw_log_sha256": "a203a8a8db840fb7099261655df000da0853f6185fa8c9a8de93930bf832f59a"
+    },
+    {
+      "commit_prefix": "d5fd9774",
+      "case": "selected",
+      "status": "failure",
+      "test": "TestDomainTCPOriginalNativeAcceptedFlows",
+      "test_wall": "14.19s",
+      "publication_available": false,
+      "gen2_exercised": false,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "4.23590173s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "7.510102678s"
+        },
+        "process-current": {
+          "calls": 285,
+          "bytes": 0,
+          "elapsed": "5.106251372s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "11.274\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.267156097s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.738786296s"
+        },
+        "whole-executable-hash": {
+          "calls": 201,
+          "bytes": 7352058606,
+          "elapsed": "5.069282923s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 11,
+        "original-read-classic-batch": 530
+      },
+      "last_common_phases": [
+        {
+          "kind": "xray-domain-tcp",
+          "state": "prepared",
+          "phase": "listener-ready"
+        },
+        {
+          "kind": "synthetic-baseline",
+          "state": "prepared",
+          "phase": "baseline-prepared"
+        },
+        {
+          "kind": "domain-tcp-capture",
+          "state": "prepared",
+          "phase": "capture-prepared"
+        }
+      ],
+      "raw_log": "C:\\RAZVILKA-research-20261109\\lifecycle-d5fd9774\\domain-selected-artifact\\native.log",
+      "raw_log_sha256": "96eeab1bf55331737aaeeabc02ad2fe8b86434cea4747bb5c770effd83e8e01a"
+    },
+    {
+      "commit_prefix": "d5fd9774",
+      "case": "canceled-ready",
+      "status": "failure",
+      "test": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+      "test_wall": "14.23s",
+      "publication_available": false,
+      "gen2_exercised": false,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "3.777297767s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.338758624s"
+        },
+        "process-current": {
+          "calls": 176,
+          "bytes": 0,
+          "elapsed": "5.336500614s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "10.129\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.748391092s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "3.813715424s"
+        },
+        "whole-executable-hash": {
+          "calls": 155,
+          "bytes": 5669497930,
+          "elapsed": "4.105422517s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 7,
+        "original-read-classic-batch": 330
+      },
+      "last_common_phases": [
+        {
+          "kind": "xray-domain-tcp",
+          "state": "prepared",
+          "phase": "listener-ready"
+        },
+        {
+          "kind": "synthetic-baseline",
+          "state": "prepared",
+          "phase": "baseline-prepared"
+        },
+        {
+          "kind": "domain-tcp-capture",
+          "state": "prepared",
+          "phase": "planned"
+        }
+      ],
+      "raw_log": "C:\\RAZVILKA-research-20261109\\lifecycle-d5fd9774\\domain-canceled-ready-artifact\\native.log",
+      "raw_log_sha256": "6536e497548d1d8a6fa731b550a84c8f4ce14ffb659021d497ab5d192481758a"
+    }
+  ]
+}

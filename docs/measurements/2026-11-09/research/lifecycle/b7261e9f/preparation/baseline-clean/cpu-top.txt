@@ -1,0 +1,44 @@
+File: app.test
+Build ID: ff87e0abfa57e2824b13107d6bb530a7987f2a09
+Type: cpu
+Time: 2026-11-09 05:36:31 UTC
+Duration: 35.60s, Total samples = 35.54s (99.83%)
+Showing nodes accounting for 27.77s, 78.14% of 35.54s total
+Dropped 879 nodes (cum <= 0.18s)
+Showing top 35 nodes out of 458
+      flat  flat%   sum%        cum   cum%
+    12.38s 34.83% 34.83%     12.38s 34.83%  internal/runtime/syscall/linux.Syscall6
+    10.89s 30.64% 65.48%     10.89s 30.64%  crypto/internal/fips140/sha256.blockSHANI
+     0.51s  1.44% 66.91%      0.72s  2.03%  runtime.tryDeferToSpanScan
+     0.41s  1.15% 68.06%      1.20s  3.38%  runtime.scanObject
+     0.35s  0.98% 69.05%      0.50s  1.41%  strings.Fields
+     0.26s  0.73% 69.78%      0.26s  0.73%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.23s  0.65% 70.43%      0.23s  0.65%  runtime.memclrNoHeapPointers
+     0.23s  0.65% 71.07%      0.24s  0.68%  runtime.typePointers.next
+     0.20s  0.56% 71.64%      0.20s  0.56%  runtime.nextFreeFast (inline)
+     0.17s  0.48% 72.12%      0.24s  0.68%  runtime.findObject
+     0.17s  0.48% 72.59%      0.31s  0.87%  runtime.scanblock
+     0.15s  0.42% 73.02%      0.33s  0.93%  encoding/json.(*Decoder).readValue
+     0.15s  0.42% 73.44%      0.19s  0.53%  reflect.Value.Field
+     0.15s  0.42% 73.86%      0.28s  0.79%  runtime.mProf_FlushLocked
+     0.14s  0.39% 74.25%         2s  5.63%  runtime.mallocgc
+     0.13s  0.37% 74.62%      0.23s  0.65%  runtime.exitsyscall
+     0.12s  0.34% 74.96%      0.18s  0.51%  runtime.mallocgcTiny
+     0.10s  0.28% 75.24%      0.84s  2.36%  os.(*File).Stat
+     0.10s  0.28% 75.52%      0.22s  0.62%  runtime.(*unwinder).resolveInternal
+     0.10s  0.28% 75.80%     12.37s 34.81%  syscall.RawSyscall6
+     0.09s  0.25% 76.06%      6.74s 18.96%  syscall.Syscall6
+     0.07s   0.2% 76.25%      0.87s  2.45%  runtime.mallocgcSmallScanNoHeader
+     0.07s   0.2% 76.45%      0.31s  0.87%  runtime.reentersyscall
+     0.07s   0.2% 76.65%      0.53s  1.49%  runtime.scanSpan
+     0.06s  0.17% 76.81%      0.26s  0.73%  runtime.(*sweepLocked).sweep
+     0.06s  0.17% 76.98%      0.55s  1.55%  runtime.newobject
+     0.05s  0.14% 77.12%      0.41s  1.15%  os.(*File).readdir
+     0.05s  0.14% 77.27%      0.45s  1.27%  runtime.(*mcache).nextFree
+     0.05s  0.14% 77.41%      0.70s  1.97%  runtime.growslice
+     0.05s  0.14% 77.55%      0.30s  0.84%  runtime.makeslicecopy
+     0.05s  0.14% 77.69%      0.58s  1.63%  runtime.mallocgcSmallNoscan
+     0.04s  0.11% 77.80%      0.27s  0.76%  encoding/json.structEncoder.encode
+     0.04s  0.11% 77.91%      0.47s  1.32%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.04s  0.11% 78.02%      0.54s  1.52%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).openDir
+     0.04s  0.11% 78.14%      3.49s  9.82%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent

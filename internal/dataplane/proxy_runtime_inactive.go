@@ -33,6 +33,7 @@ func (a *ProxyTunnelAdapter) VerifyRuntimeInactive(ctx context.Context) error {
 // Private local fixtures can supply a populated proc tree and interface list;
 // production always uses the actual Linux inventory, never Running(false).
 type proxyInactiveProof struct {
+	procPass   inactiveProcFactory
 	procRoot   string
 	selfPID    int
 	interfaces func() ([]net.Interface, error)

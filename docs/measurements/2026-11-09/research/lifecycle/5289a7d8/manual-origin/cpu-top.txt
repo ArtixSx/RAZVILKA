@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 822b9ee4d3ae751fea922dfd9ed4f226a4eb0327
+Type: cpu
+Time: 2026-11-09 19:08:57 UTC
+Duration: 119.17s, Total samples = 149310ms (125.29%)
+Showing nodes accounting for 145930ms, 97.74% of 149310ms total
+Dropped 976 nodes (cum <= 746.55ms)
+Showing top 35 nodes out of 190
+      flat  flat%   sum%        cum   cum%
+  118560ms 79.41% 79.41%   118560ms 79.41%  crypto/internal/fips140/sha256.blockSHANI
+   26820ms 17.96% 97.37%    26820ms 17.96%  internal/runtime/syscall/linux.Syscall6
+     110ms 0.074% 97.44%    26830ms 17.97%  syscall.RawSyscall6
+      50ms 0.033% 97.48%    95930ms 64.25%  io.copyBuffer
+      50ms 0.033% 97.51%    19390ms 12.99%  syscall.Syscall6
+      40ms 0.027% 97.54%    17450ms 11.69%  syscall.Pread (inline)
+      40ms 0.027% 97.56%    17410ms 11.66%  syscall.pread
+      30ms  0.02% 97.58%    16980ms 11.37%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+      30ms  0.02% 97.60%    17540ms 11.75%  os.(*File).ReadAt
+      20ms 0.013% 97.62%   118600ms 79.43%  crypto/internal/fips140/sha256.(*Digest).Write
+      20ms 0.013% 97.63%   118580ms 79.42%  crypto/internal/fips140/sha256.block
+      20ms 0.013% 97.64%    41380ms 27.71%  github.com/ArtixSx/razvilka/internal/components.originHash
+      20ms 0.013% 97.66%     5460ms  3.66%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+      20ms 0.013% 97.67%     5840ms  3.91%  internal/poll.(*FD).Read
+      20ms 0.013% 97.68%     6230ms  4.17%  io.(*LimitedReader).Read
+      20ms 0.013% 97.70%    11680ms  7.82%  io.(*SectionReader).Read
+      20ms 0.013% 97.71%     6020ms  4.03%  syscall.Read (inline)
+      10ms 0.0067% 97.72%    29660ms 19.86%  github.com/ArtixSx/razvilka/internal/restorejournal.(*ArtifactFileTarget).Read
+      10ms 0.0067% 97.72%    17500ms 11.72%  internal/poll.(*FD).Pread
+      10ms 0.0067% 97.73%    17510ms 11.73%  os.(*File).pread (inline)
+      10ms 0.0067% 97.74%     7660ms  5.13%  syscall.Syscall
+         0     0% 97.74%    81250ms 54.42%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+         0     0% 97.74%    81250ms 54.42%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+         0     0% 97.74%    81230ms 54.40%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+         0     0% 97.74%    81060ms 54.29%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane (inline)
+         0     0% 97.74%    81060ms 54.29%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplaneOriginal
+         0     0% 97.74%    81060ms 54.29%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+         0     0% 97.74%    81260ms 54.42%  github.com/ArtixSx/razvilka/internal/app.(*App).mihomoNodeAction
+         0     0% 97.74%    81160ms 54.36%  github.com/ArtixSx/razvilka/internal/app.(*App).mihomoNodeApply
+         0     0% 97.74%     1680ms  1.13%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalManualHTTPApplyStop
+         0     0% 97.74%     1680ms  1.13%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow
+         0     0% 97.74%     1000ms  0.67%  github.com/ArtixSx/razvilka/internal/app.runMihomoLiveOriginalNativeWorkflow.func3
+         0     0% 97.74%     1260ms  0.84%  github.com/ArtixSx/razvilka/internal/components.(*Manager).ApplyMihomoGuarded (inline)
+         0     0% 97.74%     1260ms  0.84%  github.com/ArtixSx/razvilka/internal/components.(*Manager).applyMihomoGuarded
+         0     0% 97.74%     9240ms  6.19%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithCleanupReadObservation

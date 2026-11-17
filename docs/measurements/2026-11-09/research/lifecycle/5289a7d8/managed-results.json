@@ -1,0 +1,38 @@
+{
+  "sha": "5289a7d8cace5c63641d14218ca1f48b4d17fa2e",
+  "run_id": 42680280990,
+  "production": {
+    "job_id": 129372632000,
+    "conclusion": "failure",
+    "core_native": "pass",
+    "full_lan": "fail",
+    "manual": "fail",
+    "intent_recovered": true,
+    "settlement_sync_recovered": true,
+    "fresh_apply_after_recovery": "fail",
+    "cleanup_only_second_stop": "pass_permanent_fence_retained",
+    "rpdb_pair_before_ms": 53.737566,
+    "rpdb_pair_after_ms": 22.63933,
+    "rpdb_pair_before_bytes_per_op": 1447617,
+    "rpdb_pair_after_bytes_per_op": 889102,
+    "manual_activation_seconds": 15.858492453,
+    "manual_native_seconds": 18.145,
+    "manual_phase": "lan-preflight-rpdb-read",
+    "manual_reason": "LAN_CONSUMER_REFUSED",
+    "raw_sha256": "032926ea750cfe5e058a26e6a8e0087b0caed9116ad9eb18ed89a55c6c93fa81"
+  },
+  "race": {
+    "job_id": 129372632420,
+    "conclusion": "failure",
+    "core_native": "fail",
+    "full_lan": "fail",
+    "manual": "fail",
+    "cuts_reached": false,
+    "rpdb_pair_before_ms": 90.661377,
+    "rpdb_pair_after_ms": 44.300499,
+    "rpdb_pair_before_bytes_per_op": 8382818,
+    "rpdb_pair_after_bytes_per_op": 3493906,
+    "raw_sha256": "1721b8c7be5b32820054ba3f5dc1f90750e31f134a8526a3490373fa31a63389"
+  },
+  "limits": "Pair microbench improvement is not complete route acceptance; unchanged native deadlines, original source checks and actual two IP children retained; router untested"
+}

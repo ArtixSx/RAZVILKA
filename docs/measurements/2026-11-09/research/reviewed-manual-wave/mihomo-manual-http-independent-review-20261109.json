@@ -1,0 +1,90 @@
+{
+  "finding_resolved": "Exact CIDR slice order mismatched compiler canonicalization; cloned sorted set comparator now preserves scope and rejects duplicates, with unsorted multi-prefix native case",
+  "date": "2026-11-09",
+  "contract": [
+    "Private ephemeral self-bound exact-context planning ticket only issued in dedicated preview/apply",
+    "Frozen node/config/catalog/service/probe/sources/profile revalidated before and after compilation",
+    "Ticket closes on all returns and never becomes runtime binding or health evidence",
+    "Generic planner and AUTO capability remain closed",
+    "Single-use owner-bound review token consumed before fresh rebuild and actual original runtime binding",
+    "Existing exact exclusions native policies cancellation and actual transaction guards remain",
+    "Selection declares structural manual support separately from live service availability"
+  ],
+  "decision": "approved source review; new exact-SHA generic and manual HTTP native CI required",
+  "files": [
+    {
+      "path": "internal/app/app.go",
+      "sha256": "671BC7938ACF71C4CEA47124823F0767D9BD51B1B07E22A1D755092F963C38F7"
+    },
+    {
+      "path": "internal/app/mihomo_node_apply.go",
+      "sha256": "7E5487FB99CC040E5FF4CCC25E510403F7255D7D8641383E87301353FD6D759D"
+    },
+    {
+      "path": "internal/app/mihomo_node_plan.go",
+      "sha256": "054DBDE9F82EABECA2BE670B85EA97DF83E40280823EAFCCC933B6ECB088CBDF"
+    },
+    {
+      "path": "internal/app/mihomo_node_planning.go",
+      "sha256": "88E8E9994D973A2D4FEAE72D8C82F189F2CF726F57239DE2408AFB4D628986B2"
+    },
+    {
+      "path": "internal/app/mihomo_node_planning_test.go",
+      "sha256": "B678D0BEE3B24694917F350D580D7ED333C69202CE1471ACB246EAFF62C82C81"
+    },
+    {
+      "path": "internal/app/mihomo_live_native_linux_test.go",
+      "sha256": "E42BB04D8F5B3BEB828477F900A68AF428B4D4B70DE5F8562B713F8758FC1FBD"
+    },
+    {
+      "path": "internal/app/mihomo_manual_http_native_linux_test.go",
+      "sha256": "06C695FFAF9730C677678D24F661E31BB2649A25735D20D36217F08714B76B50"
+    },
+    {
+      "path": "internal/dataplane/mihomo_live_registration.go",
+      "sha256": "C7AFDA730BDDBD88A482BF0DA95976D2D8A43D7C55626E89DFF3368A8B986D39"
+    },
+    {
+      "path": "cmd/razvilka/web/mihomo-node-apply-ui.js",
+      "sha256": "589C30AA1D13733ED2E7D492084768E9910883988BC6DEB359BD8E683CA12E6D"
+    },
+    {
+      "path": "scripts/test-mihomo-node-apply-ui.mjs",
+      "sha256": "7A1B1A5284F84CFC9DB27EF398F2C4516D231075F59CF9EAE7909DAD6202B0EF"
+    },
+    {
+      "path": "scripts/test-mihomo-live-native.sh",
+      "sha256": "EDEECDB2F3D294170915A415227CB8AAFB392BA67129E5ECDAE1E971087D90F7"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "41791914805514C951ADDE7D08751E52498ACFDF32B3197FB1C3A7FC10477763"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "A267E847BCD255797F8DD8954F3AA9F8B8AC08949A9BC7A02918DEBB1E3FF204"
+    },
+    {
+      "path": ".github/workflows/mihomo-workflow-validation.yml",
+      "sha256": "719F9799ED45056986DE9575CF156792EB8797FACBA836B74F99C1E81C44A64D"
+    }
+  ],
+  "verification": [
+    "Independent complete source call graph and test review",
+    "Local Node UI tests PASS",
+    "git diff --check PASS",
+    "Native fixture uses actual Handler preview token Apply HTTP Stop and fresh second cycle with original LAN/TLS assertions",
+    "Native negative cases expired copied derived ticket stale preview all-source removed runtime token replay",
+    "Generic focused suite includes planning and NFQ preAdd tests",
+    "Managed native logs require original closed index0 presence2 guard2 marker plus whole-case pass"
+  ],
+  "limits": [
+    "No local Go tests/builds due disk constraint",
+    "New manual HTTP native case not yet executed",
+    "Fixture per-operation110s per-cycle300s unchanged; preview shares Apply budget",
+    "Old e685 native lifecycle success does not validate this new HTTP admission path",
+    "No router deployment or hardware LAN approval; no speed claim"
+  ],
+  "base_sha": "e685eb757ae4faf55a98158ab4abfeecb4e4c2c1",
+  "reviewer": "independent verification agent"
+}

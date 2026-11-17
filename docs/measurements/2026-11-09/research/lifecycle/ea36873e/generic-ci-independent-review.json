@@ -1,0 +1,205 @@
+{
+  "head_sha": "ea36873e28509ff59c626bceb7ded7827b7e23ab",
+  "overall": "mixed_PR_success_push_failure",
+  "runs": {
+    "pr": {
+      "run_id": 42667946135,
+      "job_id": 129336519097,
+      "status": "completed",
+      "conclusion": "success",
+      "raw_file": "generic-pr.log",
+      "raw_sha256": "3001be86c11ad81e523335424fe6b9a96924ca3fb9281404babc7eb98b39221f",
+      "steps": [
+        {
+          "name": "Original unpublished intent with actual denied write",
+          "conclusion": "success"
+        },
+        {
+          "name": "Focused ownership and recovery regressions",
+          "conclusion": "success"
+        },
+        {
+          "name": "Full project checks",
+          "conclusion": "success"
+        }
+      ],
+      "package_results": [
+        [
+          "ok",
+          "internal/dataplane",
+          "0.108s"
+        ],
+        [
+          "ok",
+          "internal/dataplane",
+          "6.090s"
+        ],
+        [
+          "ok",
+          "internal/app",
+          "0.400s"
+        ],
+        [
+          "ok",
+          "internal/updatecheck",
+          "1.168s"
+        ],
+        [
+          "ok",
+          "cmd/razvilka",
+          "0.153s"
+        ],
+        [
+          "ok",
+          "cmd/razvilka",
+          "9.717s"
+        ],
+        [
+          "ok",
+          "internal/app",
+          "122.767s"
+        ],
+        [
+          "ok",
+          "internal/dataplane",
+          "192.751s"
+        ],
+        [
+          "ok",
+          "internal/updatecheck",
+          "78.972s"
+        ],
+        [
+          "ok",
+          "cmd/razvilka",
+          "57.326s"
+        ],
+        [
+          "ok",
+          "internal/app",
+          "284.712s"
+        ],
+        [
+          "ok",
+          "internal/dataplane",
+          "470.963s"
+        ],
+        [
+          "ok",
+          "internal/updatecheck",
+          "449.155s"
+        ]
+      ]
+    },
+    "push": {
+      "run_id": 42667937007,
+      "job_id": 129336488230,
+      "status": "completed",
+      "conclusion": "failure",
+      "raw_file": "generic-push.log",
+      "raw_sha256": "2afea05cef2f27fa251ebe08df753d902fd8c09389161e6f4728e7611bbde404",
+      "steps": [
+        {
+          "name": "Original unpublished intent with actual denied write",
+          "conclusion": "success"
+        },
+        {
+          "name": "Focused ownership and recovery regressions",
+          "conclusion": "success"
+        },
+        {
+          "name": "Full project checks",
+          "conclusion": "failure"
+        }
+      ],
+      "package_results": [
+        [
+          "ok",
+          "internal/dataplane",
+          "0.101s"
+        ],
+        [
+          "ok",
+          "internal/dataplane",
+          "7.962s"
+        ],
+        [
+          "ok",
+          "internal/app",
+          "0.617s"
+        ],
+        [
+          "ok",
+          "internal/updatecheck",
+          "1.477s"
+        ],
+        [
+          "ok",
+          "cmd/razvilka",
+          "0.218s"
+        ],
+        [
+          "ok",
+          "cmd/razvilka",
+          "10.203s"
+        ],
+        [
+          "ok",
+          "internal/app",
+          "150.098s"
+        ],
+        [
+          "ok",
+          "internal/dataplane",
+          "219.324s"
+        ],
+        [
+          "ok",
+          "internal/updatecheck",
+          "99.331s"
+        ],
+        [
+          "ok",
+          "cmd/razvilka",
+          "63.651s"
+        ],
+        [
+          "ok",
+          "internal/app",
+          "473.420s"
+        ],
+        [
+          "FAIL",
+          "internal/dataplane",
+          "628.399s"
+        ],
+        [
+          "ok",
+          "internal/updatecheck",
+          "605.897s"
+        ]
+      ]
+    }
+  },
+  "push_failure": {
+    "suite": "full race",
+    "test": "TestCloudflareScanRunnerOwnsTemporaryInterfacePolicyAndCleanup",
+    "source": "internal/dataplane/cloudflare_scan_runner_test.go:84",
+    "failure": "WARP WireGuard handshake was not confirmed",
+    "cleanup_confirmed": true,
+    "cause_source_evidence": "Positive fixture used1ms handshake timeout; production correctly rejects attempt deadline before/after fake wg command. Race scheduling can exhaust fixture1ms budget.",
+    "fix_scope": "Subsequent test-only1s positive fixture budget plus cleanup failure stage assertion; independent root review/new CI required."
+  },
+  "gates": {
+    "both_nonroot_and_focused": "PASS",
+    "both_gofmt_vet_full_normal": "PASS",
+    "PR_full_race_shell_UI_crossbuilds": "PASS",
+    "push_full_race": "FAIL",
+    "push_post_race_shell_UI_crossbuilds": "NOT_REACHED"
+  },
+  "limits": [
+    "No rerun or cancellation; exact same SHA PR success does not override push failure.",
+    "Native DNS metric assertion failures/public old193 bootstrap failure/NFQ deadline remain separate.",
+    "No local Go builds; subsequent fixes are not validated by these runs."
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "revision": "f54e091482effc536d38124066e219e4970b4493",
+  "run_id": "44061086488",
+  "modes": {
+    "normal": {
+      "pass_count": 7,
+      "skips": 0,
+      "paired_rows": 16,
+      "log_sha256": "7a40d81d1be1f3571e1539950cfde722ea801a36244bc5c71a649f8854b14746",
+      "quantitative": {
+        "wall_ns": {
+          "original_mean_per_call": 4763.51123046875,
+          "fixed_mean_per_call": 4055.178466796875,
+          "original_median_per_call": 4597.39453125,
+          "fixed_median_per_call": 3984.5537109375,
+          "paired_median_delta_per_call": -947.369140625,
+          "paired_delta_range_per_call": [
+            -2109.443359375,
+            762.5234375
+          ],
+          "pairs_fixed_lower": 6
+        },
+        "thread_cpu_ns": {
+          "original_mean_per_call": 4028.80859375,
+          "fixed_mean_per_call": 3111.083984375,
+          "original_median_per_call": 4124.0234375,
+          "fixed_median_per_call": 3338.8671875,
+          "paired_median_delta_per_call": -855.46875,
+          "paired_delta_range_per_call": [
+            -2718.75,
+            869.140625
+          ],
+          "pairs_fixed_lower": 5
+        },
+        "process_cpu_ns": {
+          "original_mean_per_call": 5404.541015625,
+          "fixed_mean_per_call": 4613.037109375,
+          "original_median_per_call": 5531.25,
+          "fixed_median_per_call": 4123.046875,
+          "paired_median_delta_per_call": -1554.6875,
+          "paired_delta_range_per_call": [
+            -2968.75,
+            2380.859375
+          ],
+          "pairs_fixed_lower": 5
+        },
+        "allocated_bytes": {
+          "original_mean_per_call": 5200.078125,
+          "fixed_mean_per_call": 1363.74609375,
+          "original_median_per_call": 5200.0,
+          "fixed_median_per_call": 1360.0,
+          "paired_median_delta_per_call": -3840.0,
+          "paired_delta_range_per_call": [
+            -3840.53125,
+            -3810.59375
+          ],
+          "pairs_fixed_lower": 8
+        },
+        "allocations": {
+          "original_mean_per_call": 23.000732421875,
+          "fixed_mean_per_call": 24.00732421875,
+          "original_median_per_call": 23.0,
+          "fixed_median_per_call": 24.0,
+          "paired_median_delta_per_call": 1.0,
+          "paired_delta_range_per_call": [
+            0.994140625,
+            1.052734375
+          ],
+          "pairs_fixed_lower": 0
+        }
+      },
+      "thread_cpu_zero_rows": 0
+    },
+    "race": {
+      "pass_count": 7,
+      "skips": 0,
+      "paired_rows": 16,
+      "log_sha256": "99129bcf3d682ab8415e98a97c97c1495d9f9c19d21fc6504de84b602761f9c0",
+      "quantitative": {
+        "wall_ns": {
+          "original_mean_per_call": 12184.306884765625,
+          "fixed_mean_per_call": 11419.06787109375,
+          "original_median_per_call": 11720.40234375,
+          "fixed_median_per_call": 10946.74609375,
+          "paired_median_delta_per_call": -957.791015625,
+          "paired_delta_range_per_call": [
+            -3320.34375,
+            2195.14453125
+          ],
+          "pairs_fixed_lower": 5
+        },
+        "thread_cpu_ns": {
+          "original_mean_per_call": 11533.447265625,
+          "fixed_mean_per_call": 10706.54296875,
+          "original_median_per_call": 11317.3828125,
+          "fixed_median_per_call": 10647.4609375,
+          "paired_median_delta_per_call": -830.078125,
+          "paired_delta_range_per_call": [
+            -2820.3125,
+            1296.875
+          ],
+          "pairs_fixed_lower": 5
+        },
+        "process_cpu_ns": {
+          "original_mean_per_call": 13072.021484375,
+          "fixed_mean_per_call": 12714.111328125,
+          "original_median_per_call": 12643.5546875,
+          "fixed_median_per_call": 12387.6953125,
+          "paired_median_delta_per_call": -1009.765625,
+          "paired_delta_range_per_call": [
+            -4712.890625,
+            5720.703125
+          ],
+          "pairs_fixed_lower": 4
+        },
+        "allocated_bytes": {
+          "original_mean_per_call": 5312.04296875,
+          "fixed_mean_per_call": 1475.82421875,
+          "original_median_per_call": 5312.0,
+          "fixed_median_per_call": 1472.0,
+          "paired_median_delta_per_call": -3840.0,
+          "paired_delta_range_per_call": [
+            -3840.1875,
+            -3809.65625
+          ],
+          "pairs_fixed_lower": 8
+        },
+        "allocations": {
+          "original_mean_per_call": 23.00048828125,
+          "fixed_mean_per_call": 24.007568359375,
+          "original_median_per_call": 23.0,
+          "fixed_median_per_call": 24.0,
+          "paired_median_delta_per_call": 1.0,
+          "paired_delta_range_per_call": [
+            0.998046875,
+            1.056640625
+          ],
+          "pairs_fixed_lower": 0
+        }
+      },
+      "thread_cpu_zero_rows": 0
+    }
+  },
+  "measurement_source_git_blob_sha256": "32f605554f82e73c5cd62421215f7a640186ed757db28dcfa6f79c568017e99a",
+  "limits": [
+    "Fresh namespace directory enumeration only; not full Provider, DNS or router acceptance.",
+    "Both modes on one hosted job, populations interpreted separately; no cross-run causal timing comparison.",
+    "Global process CPU and allocations include possible runtime activity.",
+    "Prior00fc thread_cpu_ns invalid RUSAGE_CHILDREN; this run uses actual RUSAGE_THREAD.",
+    "Source parser/state factoring adds allocations while removing4KiB scratch; report net measured bytes/count, not just buffer size."
+  ]
+}

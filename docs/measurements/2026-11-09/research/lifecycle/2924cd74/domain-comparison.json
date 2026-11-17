@@ -1,0 +1,236 @@
+{
+  "publication_budget_seconds": 12,
+  "diagnostic_only": false,
+  "samples_per_scenario": 1,
+  "limits": [
+    "Different hosted runner jobs; no same-runner paired strict measurement.",
+    "Counters cover Run through join; durations overlap, extra completed cleanup changes totals.",
+    "Only selected runtime executed on2924; canceled-ready failed external pinned asset download HTTP504 after4 attempts (curl22), no artifact.",
+    "Readiness time not timestamped. Post-deadline diagnostic shows accept phase, all12 client publication attempts preceded open; readiness may have opened before or after deadline; exact retry-alignment contribution unmeasured.",
+    "No full-route readiness or end-to-end speed claim."
+  ],
+  "scenarios": [
+    {
+      "commit_prefix": "d5fd9774",
+      "case": "selected",
+      "status": "failure",
+      "test": "TestDomainTCPOriginalNativeAcceptedFlows",
+      "test_wall": "14.19s",
+      "publication_available": false,
+      "gen2_exercised": false,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "4.23590173s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "7.510102678s"
+        },
+        "process-current": {
+          "calls": 285,
+          "bytes": 0,
+          "elapsed": "5.106251372s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "11.274\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.267156097s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.738786296s"
+        },
+        "whole-executable-hash": {
+          "calls": 201,
+          "bytes": 7352058606,
+          "elapsed": "5.069282923s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 11,
+        "original-read-classic-batch": 530
+      },
+      "last_common_phases": [
+        {
+          "kind": "xray-domain-tcp",
+          "state": "prepared",
+          "phase": "listener-ready"
+        },
+        {
+          "kind": "synthetic-baseline",
+          "state": "prepared",
+          "phase": "baseline-prepared"
+        },
+        {
+          "kind": "domain-tcp-capture",
+          "state": "prepared",
+          "phase": "capture-prepared"
+        }
+      ],
+      "raw_log": "C:\\RAZVILKA-research-20261109\\lifecycle-d5fd9774\\domain-selected-artifact\\native.log",
+      "raw_log_sha256": "96eeab1bf55331737aaeeabc02ad2fe8b86434cea4747bb5c770effd83e8e01a"
+    },
+    {
+      "commit_prefix": "d5fd9774",
+      "case": "canceled-ready",
+      "status": "failure",
+      "test": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+      "test_wall": "14.23s",
+      "publication_available": false,
+      "gen2_exercised": false,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "3.777297767s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.338758624s"
+        },
+        "process-current": {
+          "calls": 176,
+          "bytes": 0,
+          "elapsed": "5.336500614s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "10.129\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.748391092s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "3.813715424s"
+        },
+        "whole-executable-hash": {
+          "calls": 155,
+          "bytes": 5669497930,
+          "elapsed": "4.105422517s"
+        }
+      },
+      "actual_tool_starts": {
+        "original-effect": 7,
+        "original-read-classic-batch": 330
+      },
+      "last_common_phases": [
+        {
+          "kind": "xray-domain-tcp",
+          "state": "prepared",
+          "phase": "listener-ready"
+        },
+        {
+          "kind": "synthetic-baseline",
+          "state": "prepared",
+          "phase": "baseline-prepared"
+        },
+        {
+          "kind": "domain-tcp-capture",
+          "state": "prepared",
+          "phase": "planned"
+        }
+      ],
+      "raw_log": "C:\\RAZVILKA-research-20261109\\lifecycle-d5fd9774\\domain-canceled-ready-artifact\\native.log",
+      "raw_log_sha256": "6536e497548d1d8a6fa731b550a84c8f4ce14ffb659021d497ab5d192481758a"
+    },
+    {
+      "commit": "2924cd7410f57069c470743eafa99a696d3e4455",
+      "run": 42566485742,
+      "case": "selected",
+      "status": "failure",
+      "test_wall": "19.25s",
+      "publication_available": false,
+      "gen2_exercised": false,
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 22,
+          "bytes": 0,
+          "elapsed": "3.55868933s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.349527977s"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "778.884839ms"
+        },
+        "kernel-observe-success": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "1.02\u00b5s"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "593.032708ms"
+        },
+        "mapping-compare-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "365ns"
+        },
+        "process-current": {
+          "calls": 347,
+          "bytes": 0,
+          "elapsed": "4.691676835s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "11.952\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.111664444s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.396340246s"
+        },
+        "whole-executable-hash": {
+          "calls": 208,
+          "bytes": 7608100448,
+          "elapsed": "4.630453348s"
+        }
+      },
+      "last_progress": [
+        "xray listener-ready",
+        "standby capture-ready",
+        "capture capture-prepared"
+      ],
+      "deadline_stack": "WithCapture -> consume -> AcceptTCP; post-deadline diagnostic shows publication opened; no synthetic answer observed by fixed deadline",
+      "raw_log": "C:\\RAZVILKA-research-20261109\\lifecycle-2924cd74\\domain-selected-artifact\\native.log",
+      "raw_sha256": "10f22bd16b5847192fbde3ec3bd4bd9d4a73091e942a011ca1b304bb3a627122",
+      "artifact_zip_sha256": "22bda9a7d1f743d4e74c6a3d85edf46f0cec089db41bd2144d8d6b418d4fc66a"
+    },
+    {
+      "commit_prefix": "2924cd74",
+      "case": "canceled-ready",
+      "status": "setup-failure",
+      "runtime_executed": false,
+      "cause": "pinned Xray asset HTTP504 after4 attempts",
+      "curl_exit": 22,
+      "artifact": null
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "source_revision": "0a29300f52cf89787b99c7b876c5d94d791fb9a9",
+  "source_archive_sha256": "11de2d38b47d019023b70e89070b8bd76bfc0b814304b2e127015c1ec1c38865",
+  "saved_bytes": 15005491,
+  "saved_fraction": 0.25385113232255563,
+  "read_cost": {
+    "whole_file_bytes_saved_per_full_pass": 15005491,
+    "whole_file_bytes_saved_per_open_close_pair": 30010982,
+    "wall_time_measured": false
+  },
+  "removed_sections": [
+    ".debug_abbrev",
+    ".debug_line",
+    ".debug_frame",
+    ".debug_gdb_scripts",
+    ".debug_info",
+    ".debug_loclists",
+    ".debug_rnglists",
+    ".debug_addr",
+    ".symtab",
+    ".strtab"
+  ],
+  "symbol_proof": {
+    "pclntab_bytes_identical": true,
+    "gosym_resolved_same_actual_PC_file_line": true,
+    "functions": [
+      "(*domainTCPCaptureExecutionResource).prepare",
+      "TestDomainTCPOriginalNativeAcceptedFlows"
+    ],
+    "evidence_sha256": "a3a53a9ccf2c64dc22567a9845d67bda68add464d14af6586228cfcb4c3f4b97",
+    "runtime_pprof_source": "Go1.26.5 runtime/pprof/proto.go uses runtime.CallersFrames and emits Function/Filename/Line; not DWARF dependent",
+    "limit": "External disassembly/native C symbolization may lose ELF symbol/debug data. Native profile validation still required."
+  },
+  "limits": [
+    "Linux crosscompile only, no native runtime or route performance result.",
+    "Both builds from same immutable git archive, strip flags only difference."
+  ],
+  "proposal": {
+    "selector": "RAZVILKA_DOMAIN_BUILD_MODE=debug|production-strip",
+    "default": "debug unchanged",
+    "difference": "only linker -s -w",
+    "comparison": "same source+host ABBA debug/production-strip/production-strip/debug; no test/timeout/admission changes",
+    "required_evidence": [
+      "binary SHA/size/build mode",
+      "source parity",
+      "all four strict child outcomes retained",
+      "raw CPU profiles and named function attribution",
+      "publication and accepted-flow stages separately",
+      "cleanup results and process joins"
+    ],
+    "limits": [
+      "Test binary still includes test code; not identical to shipped cmd/razvilka.",
+      "Only strip fidelity isolated, not -trimpath/version linker metadata.",
+      "Do not infer route throughput/latency from removed bytes."
+    ]
+  },
+  "variants": [
+    {
+      "file": "app-debug.test",
+      "size": 59111381,
+      "sha256": "cd103a13b9120a2041957f87f958ec244ec5674f40bc4d258d39a404116c7c6a"
+    },
+    {
+      "file": "app-stripped.test",
+      "size": 44105890,
+      "sha256": "ee6e592f68dbddf42b52953245aa85f036edf697fa7f335fc2096ab560797dca"
+    }
+  ],
+  "raw_evidence": {
+    "ELF-RESULT.json": "cc9a62057757c431a05b37af88a1f4ae82de57ff70bae7b6bed8fcb31f350b09",
+    "symbol-proof.jsonl": "a3a53a9ccf2c64dc22567a9845d67bda68add464d14af6586228cfcb4c3f4b97",
+    "symbol-proof.go": "6f53c5c2fda8e4a3871f9ac9240d58b4bc2e9cf213dfa587bcfa1d24e6e01105"
+  },
+  "status": "crosscompile_and_ELF_inspection_only_native_ABBA_pending"
+}

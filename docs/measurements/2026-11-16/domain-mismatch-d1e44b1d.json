@@ -1,0 +1,424 @@
+{
+  "schema": 1,
+  "run_id": "44053144237",
+  "scope": "read-only critical-path analysis; no production edits",
+  "raw_root": "C:\\RAZVILKA-research-20261117\\domain-prepared-d1e44b1d\\raw\\domain-prepared-read\\abba",
+  "arms": [
+    {
+      "arm": "01-baseline",
+      "native_log_sha256": "43dc551d15125cb6bd572c8dfac0dfc6aabc73559c3f462de2dfec31b2b3de8d",
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "boundary_metrics": {
+        "accepted-stage/relay-enter/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/completed": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "290.301298ms"
+          }
+        },
+        "accepted-stage/direct-connect-wait/completed": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "2.775µs"
+          }
+        },
+        "accepted-stage/direct-current-post/started": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-post/completed": {
+          "selected": null,
+          "mismatch": null
+        },
+        "accepted-stage/post-dial-check/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "419.544693ms"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "419.544693ms"
+          }
+        },
+        "mapping-compare": {
+          "selected": {
+            "calls": 15,
+            "elapsed": "5.552800384s"
+          },
+          "mismatch": {
+            "calls": 23,
+            "elapsed": "8.156315099s"
+          }
+        },
+        "kernel-observe": {
+          "selected": {
+            "calls": 16,
+            "elapsed": "4.339754444s"
+          },
+          "mismatch": {
+            "calls": 27,
+            "elapsed": "7.053949587s"
+          }
+        },
+        "process-current": {
+          "selected": {
+            "calls": 729,
+            "elapsed": "4.591180501s"
+          },
+          "mismatch": {
+            "calls": 1027,
+            "elapsed": "6.221872893s"
+          }
+        }
+      },
+      "pprof_sha256": "86d02fddcc170956cf1ef909e9602fe46515cb47f1d7cdbdf6c72ad766796737"
+    },
+    {
+      "arm": "02-candidate",
+      "native_log_sha256": "0bb7d1775ab4d8319f91463262b9bbb137025d3022da5220ac44bbd8d6be0607",
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "boundary_metrics": {
+        "accepted-stage/relay-enter/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/completed": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "284.5771ms"
+          }
+        },
+        "accepted-stage/direct-connect-wait/completed": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "5.273µs"
+          }
+        },
+        "accepted-stage/direct-current-post/started": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-post/completed": {
+          "selected": null,
+          "mismatch": null
+        },
+        "accepted-stage/post-dial-check/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "391.502221ms"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "391.502221ms"
+          }
+        },
+        "mapping-compare": {
+          "selected": {
+            "calls": 15,
+            "elapsed": "5.20329034s"
+          },
+          "mismatch": {
+            "calls": 23,
+            "elapsed": "7.669147043s"
+          }
+        },
+        "kernel-observe": {
+          "selected": {
+            "calls": 16,
+            "elapsed": "4.096411874s"
+          },
+          "mismatch": {
+            "calls": 27,
+            "elapsed": "6.698044817s"
+          }
+        },
+        "process-current": {
+          "selected": {
+            "calls": 679,
+            "elapsed": "4.381871658s"
+          },
+          "mismatch": {
+            "calls": 957,
+            "elapsed": "5.937632498s"
+          }
+        }
+      },
+      "pprof_sha256": "928c58364af8d820b0f27e12a7511624835ecfe74d88c7e523aad12222928304"
+    },
+    {
+      "arm": "03-candidate",
+      "native_log_sha256": "fbf0c5ff2d5afe0654b37322c60e13858127772101edfc12710b1642ff10bf8d",
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "boundary_metrics": {
+        "accepted-stage/relay-enter/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/completed": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "278.42424ms"
+          }
+        },
+        "accepted-stage/direct-connect-wait/completed": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "3.345µs"
+          }
+        },
+        "accepted-stage/direct-current-post/started": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-post/completed": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "280.392973ms"
+          }
+        },
+        "accepted-stage/post-dial-check/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 2,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "390.405109ms"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "390.405109ms"
+          }
+        },
+        "mapping-compare": {
+          "selected": {
+            "calls": 15,
+            "elapsed": "5.233877095s"
+          },
+          "mismatch": {
+            "calls": 23,
+            "elapsed": "7.637754314s"
+          }
+        },
+        "kernel-observe": {
+          "selected": {
+            "calls": 16,
+            "elapsed": "4.155376962s"
+          },
+          "mismatch": {
+            "calls": 28,
+            "elapsed": "6.929340453s"
+          }
+        },
+        "process-current": {
+          "selected": {
+            "calls": 679,
+            "elapsed": "4.414098494s"
+          },
+          "mismatch": {
+            "calls": 961,
+            "elapsed": "5.959407674s"
+          }
+        }
+      },
+      "pprof_sha256": "201fd476a19e0eb0531bc30126502e68b3981925385fd53b4c3b92d94e8fb594"
+    },
+    {
+      "arm": "04-baseline",
+      "native_log_sha256": "cd6c52c07e48b66d4d22a7ad7e2232c695c06098300372d747f25c9811ac9816",
+      "selected_returned": true,
+      "mismatch_returned": false,
+      "boundary_metrics": {
+        "accepted-stage/relay-enter/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/started": {
+          "selected": null,
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/direct-current-pre/completed": {
+          "selected": null,
+          "mismatch": null
+        },
+        "accepted-stage/direct-connect-wait/completed": {
+          "selected": null,
+          "mismatch": null
+        },
+        "accepted-stage/direct-current-post/started": {
+          "selected": null,
+          "mismatch": null
+        },
+        "accepted-stage/direct-current-post/completed": {
+          "selected": null,
+          "mismatch": null
+        },
+        "accepted-stage/post-dial-check/started": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "0s"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "0s"
+          }
+        },
+        "accepted-stage/post-dial-check/completed": {
+          "selected": {
+            "calls": 1,
+            "elapsed": "429.650331ms"
+          },
+          "mismatch": {
+            "calls": 1,
+            "elapsed": "429.650331ms"
+          }
+        },
+        "mapping-compare": {
+          "selected": {
+            "calls": 15,
+            "elapsed": "5.606154324s"
+          },
+          "mismatch": {
+            "calls": 23,
+            "elapsed": "8.276326833s"
+          }
+        },
+        "kernel-observe": {
+          "selected": {
+            "calls": 16,
+            "elapsed": "4.363138449s"
+          },
+          "mismatch": {
+            "calls": 26,
+            "elapsed": "6.896314155s"
+          }
+        },
+        "process-current": {
+          "selected": {
+            "calls": 729,
+            "elapsed": "4.677437816s"
+          },
+          "mismatch": {
+            "calls": 1023,
+            "elapsed": "6.321278148s"
+          }
+        }
+      },
+      "pprof_sha256": "e69b61146b83a5d220219838e99a2335c168cbedab0e7dc2b85bbedbd4557a4a"
+    }
+  ],
+  "conclusion": "All four mismatch requests time out before second relay entry. Completed DIRECT connect waits are microseconds. Evidence supports cumulative synchronous freshness checks before TLS replay, not observed socket-connect stall or tuple-collision failure. Missing stages are censored, not failure-location proofs after the snapshot.",
+  "constraints": [
+    "Original 12s publication and 4s requests unchanged.",
+    "Nested metric durations must not be added as wall time.",
+    "Whole acceptedPrefix mapping-comparison removal rejected with independent lifecycle review: final material callbacks separate independent kernel observations.",
+    "OriginalCurrentSources freezes associations but does not prove FreshProfile/scope.guard/Resolver callbacks pure."
+  ],
+  "profile03": {
+    "duration_s": 21.49,
+    "sample_cpu_s": 18.52,
+    "process_current_cpu_s": 5.59,
+    "listener_current_in_file_observation_cpu_s": 5.01,
+    "material_current_within_listener_cpu_s": 3.05,
+    "original_sources_current_total_cpu_s": 2.92,
+    "binding_current_within_original_sources_cpu_s": 1.17,
+    "identity_within_binding_subset_cpu_s": 1.12,
+    "note": "CPU cumulative subsets overlap and include whole test, not request-only wall time."
+  }
+}

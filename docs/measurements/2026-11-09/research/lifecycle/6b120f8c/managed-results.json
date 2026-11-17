@@ -1,0 +1,179 @@
+{
+  "commit": "6b120f8c92fb4d6e93f786d84d28c7245efc2725",
+  "run_id": 42677249225,
+  "jobs": [
+    {
+      "mode": "production",
+      "job_id": 129361850102,
+      "conclusion": "failure",
+      "actual_test_results": [
+        {
+          "test": "TestManagedStrategyProbeNativeConsumer",
+          "status": "PASS",
+          "seconds": 6.48
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeConsumerLateWaitCleanup",
+          "status": "PASS",
+          "seconds": 9.53
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeAppHTTP",
+          "status": "PASS",
+          "seconds": 22.92
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeAppHTTP",
+          "status": "PASS",
+          "seconds": 22.92
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "status": "FAIL",
+          "seconds": 41.71
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "FAIL",
+          "seconds": 20.44
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "FAIL",
+          "seconds": 63.76
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "FAIL",
+          "seconds": 48.82
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "PASS",
+          "seconds": 31.22
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "PASS",
+          "seconds": 31.22
+        }
+      ],
+      "native_refusals": [
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 17589
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-consumer-close",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 17525
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "NATIVE_OWNER_REFUSED",
+          "total_ms": 27014
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 33449
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 13051
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 17589
+        },
+        {
+          "outer": "native-apply",
+          "inner": "native-apply",
+          "reason": "LAN_CONSUMER_REFUSED",
+          "total_ms": 13076
+        }
+      ],
+      "intent_recovered": true,
+      "sync_recovered": true,
+      "continuous_original_quarantine": true,
+      "cleanup_only_retry_pass": true,
+      "full_fresh_apply": "not passed",
+      "log": "managed-production.log",
+      "log_sha256": "4571f21b35ae9d6fedf7532c519ed9568b8a480aadd8ed1e55daff52736d720a"
+    },
+    {
+      "mode": "race",
+      "job_id": 129361850160,
+      "conclusion": "failure",
+      "actual_test_results": [
+        {
+          "test": "TestManagedStrategyProbeNativeConsumer",
+          "status": "FAIL",
+          "seconds": 19.01
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "status": "FAIL",
+          "seconds": 21.58
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "FAIL",
+          "seconds": 31.3
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "FAIL",
+          "seconds": 31.73
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "status": "FAIL",
+          "seconds": 31.18
+        }
+      ],
+      "native_refusals": [
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 23665
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 23944
+        },
+        {
+          "outer": "native-apply",
+          "inner": "lan-preflight-inventory-nfq-consumer-open",
+          "reason": "DEADLINE_EXCEEDED",
+          "total_ms": 23766
+        }
+      ],
+      "intent_recovered": false,
+      "sync_recovered": false,
+      "continuous_original_quarantine": false,
+      "cleanup_only_retry_pass": false,
+      "full_fresh_apply": "not passed",
+      "log": "managed-race.log",
+      "log_sha256": "186ad712c815b07e1d2fb6d48779faacf7e2e13084334608829a20bb3e4f0cdb"
+    }
+  ],
+  "scope": [
+    "Normal recovery of original never-entered intent is separate from failed successor Apply",
+    "Race did not reach recovery cuts",
+    "No increased deadlines, no fullroute/router readiness claim",
+    "RPDB candidate a8ff1515 is later untested code, not included in these outcomes"
+  ]
+}

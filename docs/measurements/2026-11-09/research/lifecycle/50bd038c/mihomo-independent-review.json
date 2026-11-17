@@ -1,0 +1,97 @@
+{
+  "sha": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "run_id": 42684857938,
+  "conclusion": "success",
+  "actual_jobs": 4,
+  "success_jobs": 4,
+  "cases": {
+    "check_settlement": {
+      "stop_s": 8.597258562,
+      "original_child_sidecar_tun_preserved": true,
+      "job_id": 129388789259,
+      "total_s": 115.27,
+      "cuts": 2,
+      "all_original_rows_terminal": true,
+      "retired_header_reader": 9,
+      "result": "PASS"
+    },
+    "postcas": {
+      "desired_exact_restored": true,
+      "result": "PASS",
+      "original_pending": false,
+      "http_status": 503,
+      "rollback_verified": true,
+      "job_id": 129388789696,
+      "total_s": 82.51
+    },
+    "lifecycle": {
+      "apply_s": [
+        96.110979125,
+        96.095060999
+      ],
+      "same_host_4cc": {
+        "total_s": 277.63,
+        "apply_s": [
+          95.396751735,
+          95.024575659
+        ],
+        "stop_s": [
+          6.004455133,
+          6.023642871
+        ],
+        "result": "PASS"
+      },
+      "official_child_normal_race_bookends": "PASS",
+      "result": "PASS",
+      "stop_s": [
+        6.12847244,
+        6.059953242
+      ],
+      "job_id": 129388789792,
+      "total_s": 280.58
+    },
+    "manual_http": {
+      "apply_s": [
+        74.11094453,
+        72.234023212
+      ],
+      "same_host_4cc": {
+        "total_s": 206.8,
+        "apply_s": [
+          71.11412832,
+          72.080291557
+        ],
+        "stop_s": [
+          4.373513548,
+          4.430976132
+        ],
+        "result": "PASS"
+      },
+      "result": "PASS",
+      "stop_s": [
+        4.4492273,
+        4.378615278
+      ],
+      "witnesses": [
+        "Real preview/token authenticated Apply/required LAN service",
+        "General AUTO remains closed; stale/all-source/removed-runtime and token replay refusal",
+        "Both physical baselines restored; second closing Stop retry and fresh cycle"
+      ],
+      "job_id": 129388789911,
+      "total_s": 210.65
+    }
+  },
+  "raw_sha256": {
+    "mihomo-postcas.log": "a54e59cd45d1809541011deeb9312693a72dbba5657b1a45f4f4d6201346989a",
+    "mihomo-settlement.log": "8fa5380bb29db95033396274c6513d5180d300dc01d712b95d30930386a8cfaa",
+    "mihomo-manual.log": "fc9c203640575e4a45239e7017a01ef839c9edcd20fe0d31c1a4be0017dba8eb",
+    "mihomo-lifecycle.log": "1d8d222cfdc1ec121acd2124856df7cd806a59de00bfe0c27d50a70ab4f1fe7b",
+    "mihomo-run.json": "e0badc47a2ba1817fca63faa7880758133f910ae7cc1b744fa1474203513e419"
+  },
+  "limitations": [
+    "Native disposable Ubuntu profile, not physical router/LAN acceptance",
+    "Same-host fixed candidate-then-baseline order; no measured speedup claim",
+    "Earlier5289 matching manual pair both failed remains preserved",
+    "Separate samebootACK matrix stillFAIL10of14PASS; full DNS/NFQ forward gates independentlyfail"
+  ]
+}

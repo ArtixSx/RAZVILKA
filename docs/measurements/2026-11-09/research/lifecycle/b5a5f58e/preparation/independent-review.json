@@ -1,0 +1,104 @@
+{
+  "run": 42575195644,
+  "job": 129021224684,
+  "artifact": 13654788287,
+  "candidate": "b5a5f58ee0bdddf62dd7f53bef020a42dc1ed5c9",
+  "baseline": "c4399c948a5f65cf413c879b2b746f1bf80eefaa",
+  "baseline_overlay_sha256": "faf3160cc9b0173c2e66074a6e9fd9cbd870dcfa12fc780fd642fb8d91bc143f",
+  "result": "PASS functional successor preparation cleanup in diagnostic30s isolated native fixture",
+  "same_runner": true,
+  "same_pinned_xray": true,
+  "scenarios": [
+    {
+      "scenario": "baseline-clean",
+      "sha256": "0625a678546ee2b2d49289a458f56b5f33d74a46a759ba842846c24582e79aa0",
+      "status": {
+        "child_exit_status": "1",
+        "publication_budget_seconds": "30",
+        "profile_span": "original_Run_through_join",
+        "diagnostic_only": "30",
+        "native_case": "TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      },
+      "outcome": "revision=baseline cut=clean exit=1 diagnostic_budget=30",
+      "actual_cut": true,
+      "cleanup_complete": false,
+      "cleanup_refused": true,
+      "skip": false,
+      "test_pass": false,
+      "elapsed_seconds": 95.8,
+      "partial_ack_fence_and_same_original_retry_assertions_passed": false
+    },
+    {
+      "scenario": "candidate-capture-transaction",
+      "sha256": "89bc3c37acf2d9185f6a3878119c09b1993d025a4a01cd47b5c377fb1bb1458a",
+      "status": {
+        "child_exit_status": "0",
+        "publication_budget_seconds": "30",
+        "profile_span": "original_Run_through_join",
+        "diagnostic_only": "30",
+        "native_case": "TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      },
+      "outcome": "revision=candidate cut=capture-transaction exit=0 diagnostic_budget=30",
+      "actual_cut": true,
+      "cleanup_complete": true,
+      "cleanup_refused": false,
+      "skip": false,
+      "test_pass": true,
+      "elapsed_seconds": 135.15,
+      "partial_ack_fence_and_same_original_retry_assertions_passed": true
+    },
+    {
+      "scenario": "candidate-clean",
+      "sha256": "fd4e2e0829d7d3d485d7110499e9c4b1e8b52ce0d9cb9d0162cd6890cd245a1b",
+      "status": {
+        "child_exit_status": "0",
+        "publication_budget_seconds": "30",
+        "profile_span": "original_Run_through_join",
+        "diagnostic_only": "30",
+        "native_case": "TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      },
+      "outcome": "revision=candidate cut=clean exit=0 diagnostic_budget=30",
+      "actual_cut": true,
+      "cleanup_complete": true,
+      "cleanup_refused": false,
+      "skip": false,
+      "test_pass": true,
+      "elapsed_seconds": 127.99,
+      "partial_ack_fence_and_same_original_retry_assertions_passed": false
+    },
+    {
+      "scenario": "candidate-standby-transaction",
+      "sha256": "0d3f60f29ac90a4dee1d1a86166f923d22e7c22571b24fd31b3de29eda119a30",
+      "status": {
+        "child_exit_status": "0",
+        "publication_budget_seconds": "30",
+        "profile_span": "original_Run_through_join",
+        "diagnostic_only": "30",
+        "native_case": "TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      },
+      "outcome": "revision=candidate cut=standby-transaction exit=0 diagnostic_budget=30",
+      "actual_cut": true,
+      "cleanup_complete": true,
+      "cleanup_refused": false,
+      "skip": false,
+      "test_pass": true,
+      "elapsed_seconds": 127.82,
+      "partial_ack_fence_and_same_original_retry_assertions_passed": true
+    }
+  ],
+  "assertions_reviewed": [
+    "exact original injected preparation cut and cleanup failure capsule",
+    "same original child joined and no surviving runtime child",
+    "capture/standby ACK cuts return exact sentinel and retain recovery fence",
+    "repeat original retirement succeeds",
+    "CheckExecutionRecovery passes after completion",
+    "actual old published alias request retains original source and source port, native-domain-service marker"
+  ],
+  "limits": [
+    "Diagnostic publication30s/client10s; not strict12s/4s acceptance",
+    "Baseline fails at earlier stage: elapsed times are not before-after speed comparison",
+    "Linux CI isolated namespaces; not router/LAN hardware approval",
+    "Only successor original custody; no claim generic first-generation recovery",
+    "Different runner than prior revisions: no cross-run acceleration claim from elapsed delta"
+  ]
+}

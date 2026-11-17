@@ -1,0 +1,58 @@
+{
+  "run_id": 43974467145,
+  "revision": "6f84ec1f0e1c9cfbbaf3fd541961d49e6289647a",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "name": "native (direct-deny)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133674766366
+    },
+    {
+      "name": "native (canceled-ready)",
+      "status": "completed",
+      "conclusion": "failure",
+      "databaseId": 133674766928
+    },
+    {
+      "name": "native (selected)",
+      "status": "completed",
+      "conclusion": "failure",
+      "databaseId": 133674766943
+    }
+  ],
+  "records": [
+    {
+      "log": "artifacts\\domain-router-direct-canceled-ready-6f84ec1f0e1c9cfbbaf3fd541961d49e6289647a\\native.log",
+      "evidence": [
+        "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (21.87s)"
+      ]
+    },
+    {
+      "log": "artifacts\\domain-router-direct-direct-deny-6f84ec1f0e1c9cfbbaf3fd541961d49e6289647a\\native.log",
+      "evidence": [
+        "    domain_tcp_original_native_linux_test.go:620: ACTUAL_DIRECT_FORWARD_DENY_ZERO_SYN: published alias accepted client port=51416; positive same-FD observer control; FORWARD DROP/OUTPUT ACCEPT; explicit EOF/reset, zero outbound target SYN; original policy restored; observer joined",
+        "--- PASS: TestDomainTCPOriginalNativeDirectForwardDeny (19.70s)"
+      ]
+    },
+    {
+      "log": "artifacts\\domain-router-direct-selected-6f84ec1f0e1c9cfbbaf3fd541961d49e6289647a\\native.log",
+      "evidence": [
+        "    domain_tcp_original_native_linux_test.go:641: actual client mismatch: exit status 1 === RUN   TestDomainTCPOriginalNativePeer",
+        "        --- FAIL: TestDomainTCPOriginalNativePeer (4.00s)",
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.34s)"
+      ]
+    }
+  ],
+  "raw_root": "C:\\RAZVILKA-research-20261117\\domain-prefix-6f84ec1f",
+  "raw_files": 25,
+  "manifest_sha256": "c19d7e78ab754efc162f90b71eeca50bfdb4d30342b3cd876e8c2be87d85bcfb",
+  "limits": [
+    "Earlier293 run43973862428 failed noSKIP before native because unit selector included two opt-in socket helpers;6f84 narrows selector, not tests or budgets.",
+    "Selected HTTPS request completes; full selected/mismatch/opaque test fails at mismatch4s while direct-current-post is in progress.",
+    "Direct denied-policy actual flow PASS; canceled-ready fails initial DNS12s before accepted-prefix execution.",
+    "No causal speedup or full DNS readiness claim; same-host comparison pending.",
+    "No router changes or acceptance."
+  ]
+}

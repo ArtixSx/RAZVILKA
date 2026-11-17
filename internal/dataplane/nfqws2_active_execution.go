@@ -16,39 +16,41 @@ import (
 // The existing Manager supplies its sole resource and both execution records.
 // It owns no separate ledger and accepts no process factory or caller argv.
 type nfqws2ActiveExecution struct {
-	self                   *nfqws2ActiveExecution
-	mu                     sync.Mutex
-	material               *NFQWSActiveMaterial
-	selection              *NFQWSScopedSelection
-	comparisonSelection    *NFQWSScopedSelection // Original BindExecution reader, before activation issuance.
-	plan                   Plan
-	spec                   NFQWSScopedSpec
-	panel                  context.Context
-	cleanup                *operationgate.ExclusiveCleanupReview
-	committedGuard         NFQWSActiveGuard
-	cleanupGuard           NFQWSActiveGuard
-	inventory              BackendInventory
-	gate                   *NetworkPolicyAdapter
-	lan                    *LANPolicyReceiptBinding
-	runtime                *LANPolicyRuntime
-	runtimeFrozen          LANPolicyRuntime
-	lanFrozen              LANPolicyReceiptBinding
-	gateInventoryCheck     func(context.Context) error
-	identity               *networkPolicyIdentity
-	resource               *NFQWSExecutionResource
-	binding                *NFQWSScopedBinding
-	prepared               *NFQWSPreparedHandle
-	started                bool
-	launchInvoked          bool
-	noLaunch               *nfqws2ActiveNoLaunch
-	preparationErr         error
-	retired                bool
-	activationAttempted    bool
-	activationSeal         *nfqws2ActiveActivationSeal
-	lanActivationAttempted bool
-	processDirectory       *nfqwsActiveProcessDirectory
-	preEffectLAN           *nfqwsPreEffectLANReview
-	directPreparation      *nfqwsDirectPreparationWitness
+	self                       *nfqws2ActiveExecution
+	mu                         sync.Mutex
+	material                   *NFQWSActiveMaterial
+	selection                  *NFQWSScopedSelection
+	comparisonSelection        *NFQWSScopedSelection // Original BindExecution reader, before activation issuance.
+	plan                       Plan
+	spec                       NFQWSScopedSpec
+	panel                      context.Context
+	cleanup                    *operationgate.ExclusiveCleanupReview
+	inventoryInactivityCleanup *operationgate.ExclusiveCleanupReview // Original forward-operation comparison carrier only.
+	committedGuard             NFQWSActiveGuard
+	cleanupGuard               NFQWSActiveGuard
+	inventory                  BackendInventory
+	gate                       *NetworkPolicyAdapter
+	lan                        *LANPolicyReceiptBinding
+	runtime                    *LANPolicyRuntime
+	runtimeFrozen              LANPolicyRuntime
+	lanFrozen                  LANPolicyReceiptBinding
+	gateInventoryCheck         func(context.Context) error
+	identity                   *networkPolicyIdentity
+	resource                   *NFQWSExecutionResource
+	binding                    *NFQWSScopedBinding
+	prepared                   *NFQWSPreparedHandle
+	started                    bool
+	launchInvoked              bool
+	noLaunch                   *nfqws2ActiveNoLaunch
+	preparationErr             error
+	retired                    bool
+	activationAttempted        bool
+	activationSeal             *nfqws2ActiveActivationSeal
+	lanActivationAttempted     bool
+	processDirectory           *nfqwsActiveProcessDirectory
+	preEffectLAN               *nfqwsPreEffectLANReview
+	directPreparation          *nfqwsDirectPreparationWitness
+	partialRecovery            *nfqwsPolicyRecovery
 }
 
 type nfqws2ActiveExecutionKey struct{}
@@ -97,6 +99,10 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 	if err != nil {
 		return nil, errors.Join(ErrNFQWSScopedOwner, err)
 	}
+	inactivityCleanup, err := nfqInventoryOriginalInactivityCleanup(ctx, r.control)
+	if err != nil {
+		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.executionBound || r.command.ID != "" {
@@ -105,7 +111,7 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 	if err := r.currentLocked(ctx); err != nil {
 		return nil, err
 	}
-	e := &nfqws2ActiveExecution{material: r, selection: selection, comparisonSelection: selection, plan: cloneExecutionResourcePlan(expected), spec: spec.Clone(), panel: panel, cleanup: cleanup, committedGuard: committed, cleanupGuard: cleanupGuard,
+	e := &nfqws2ActiveExecution{material: r, selection: selection, comparisonSelection: selection, plan: cloneExecutionResourcePlan(expected), spec: spec.Clone(), panel: panel, cleanup: cleanup, inventoryInactivityCleanup: inactivityCleanup, committedGuard: committed, cleanupGuard: cleanupGuard,
 		inventory: *inventory, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, identity: gate.identity, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding, gateInventoryCheck: gate.InventoryCheck}
 	e.self = e
 	e.lanFrozen.Runtime = &e.runtimeFrozen
@@ -278,10 +284,19 @@ func (e *nfqws2ActiveExecution) current(ctx context.Context, p *NFQWSScopedPlan)
 	if e == nil || e.resource == nil || p != e.resource.Plan() {
 		return ErrNFQWSScopedOwner
 	}
-	if err := e.forward(ctx); err != nil {
-		return err
+	read := func(observed context.Context) error {
+		if err := e.forward(observed); err != nil {
+			return err
+		}
+		return e.resource.Current(observed, e.resource.Binding())
 	}
-	return e.resource.Current(ctx, e.resource.Binding())
+	if e.binding == nil {
+		return read(ctx) // Before original binding issuance, retain the full path.
+	}
+	// Current performs only owner/source/journal reads. Reuse one original
+	// finite tool observation across its nested checks, never across Start,
+	// COMMON publication, or a policy effect.
+	return e.binding.observeActiveTools(ctx, p, read)
 }
 
 func (e *nfqws2ActiveExecution) owner() (*nfqws2ActiveOwner, error) {
@@ -367,7 +382,7 @@ func (e *nfqws2ActiveExecution) verifyLANObserved(ctx context.Context, lan *LANP
 	if err != nil || !status.Complete || status.Unknown || status.Removed || status.Promoted {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	if err := e.runtimeFrozen.Verify(ctx, lan); err != nil {
+	if err := e.verifyLANRPDB(ctx, lan); err != nil {
 		return err
 	}
 	after, err := e.gate.readOwner()
@@ -545,16 +560,26 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) 
 			if err := r.bindPrepared(c, p, obs); err != nil {
 				return err
 			}
-			phase = "prepared.active"
-			preparedErr := func() error {
-				defer measureNFQWSActivePhase(e, nfqwsProbePhasePrepared)()
-				return r.PreparedActive(c, b, obs)
-			}()
-			if preparedErr != nil {
-				return preparedErr
+			phase = "prepared.policy-owner"
+			var preparation *nfqwsActivePreparedPolicy
+			if _, original := e.inventory.reader.Runner.(nfqwsProbeToolObserver); original {
+				var err error
+				preparation, err = newNFQWSActivePreparedPolicy(c, e, p, b, obs)
+				if err != nil {
+					return err
+				}
+			} else {
+				phase = "prepared.active"
+				preparedErr := func() error {
+					defer measureNFQWSActivePhase(e, nfqwsProbePhasePrepared)()
+					return r.PreparedActive(c, b, obs)
+				}()
+				if preparedErr != nil {
+					return preparedErr
+				}
 			}
 			phase = "prepared.policy-apply"
-			if err := e.binding.Apply(networkPolicyConsumerContext(c, e.plan), r.Plan(), r.Root()); err != nil {
+			if err := e.binding.applyPreparedPolicy(networkPolicyConsumerContext(c, e.plan), r.Plan(), r.Root(), preparation); err != nil {
 				return err
 			}
 			phase = "prepared.owner-closing"
@@ -586,6 +611,13 @@ func (e *nfqws2ActiveExecution) health(ctx context.Context) error {
 		return ErrNFQWSScopedOwner
 	}
 	ctx = networkPolicyConsumerContext(ctx, e.plan)
+	return e.binding.observeActiveTools(ctx, e.resource.Plan(), e.healthObserved)
+}
+
+// The full opening/closing owner checks and independent receipt/inventory
+// reads remain inside one synchronous read-only tool observation. Its result
+// is not accepted until the original tool source's closing byte check passes.
+func (e *nfqws2ActiveExecution) healthObserved(ctx context.Context) error {
 	if err := e.current(ctx, e.resource.Plan()); err != nil {
 		return err
 	}
@@ -603,7 +635,7 @@ func (e *nfqws2ActiveExecution) health(ctx context.Context) error {
 	return e.current(ctx, e.resource.Plan())
 }
 
-func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
+func (e *nfqws2ActiveExecution) rollbackOriginal(ctx context.Context) error {
 	e.mu.Lock()
 	started, unused, retired, p := e.started, e.unusedLaunch(), e.retired, e.prepared
 	e.mu.Unlock()
@@ -641,22 +673,32 @@ func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	common := func(c context.Context, binding NFQWSExecutionBinding, proof NFQWSScopedProcessProof) error {
+	if err := e.settleNeverIssuedPolicy(ctx); err != nil {
+		return err
+	}
+	common := func(c context.Context, binding NFQWSExecutionBinding, proof NFQWSScopedProcessProof) (result error) {
+		stage := "retire.common-binding"
+		defer func() { result = nfqwsExecutionFailure(stage, result) }()
 		if binding != e.resource.Binding() || nfqwsScopedProcessProof(e.resource.Plan(), proof, true) != nil {
 			return ErrNFQWSScopedOwner
 		}
+		stage = "retire.cleanup-owner"
 		if err := e.cleanupCurrent(c); err != nil {
 			return err
 		}
-		if err := e.binding.Remove(c, e.resource.Plan(), e.resource.Root()); err != nil {
+		stage = "retire.policy-remove"
+		if err := e.removeOriginalPolicy(c); err != nil {
 			return err
 		}
+		stage = "retire.verify-inactive"
 		if err := e.binding.VerifyInactive(c, e.resource.Plan(), e.resource.Root()); err != nil {
 			return err
 		}
+		stage = "retire.settle-removed"
 		if err := e.resource.SettleRemoved(c); err != nil {
 			return err
 		}
+		stage = "retire.closing-owner"
 		return e.cleanupCurrent(c)
 	}
 	if final && h != nil {

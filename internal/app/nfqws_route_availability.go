@@ -14,6 +14,7 @@ import (
 // route choice available. It proves installed assets, not native activation,
 // service health or permission to execute a candidate/global init script.
 func (a *App) prepareManagedNFQRouteOption(parent context.Context, option *routecatalog.Option) {
+	defer a.restrictManagedNFQRouteOption(option)
 	if a == nil || a.Components == nil || parent == nil || option == nil || option.ID != "nfqws2" {
 		return
 	}

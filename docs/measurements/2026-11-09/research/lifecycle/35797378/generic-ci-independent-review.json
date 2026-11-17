@@ -1,0 +1,30 @@
+{
+  "reviewer": "verification",
+  "head_sha": "357973787e20f6a1bd7cad8841e290e15e6603d4",
+  "conclusion": "FAILURE both generic runs: formatting gate",
+  "runs": [
+    {
+      "event": "push",
+      "run_id": 42649330351,
+      "job_id": 129271104712,
+      "log": "generic-push-ci.log",
+      "sha256": "4E7F87FB792937A1C8CFC54CACA5F14CBCD72DE7B49EAC5BFB113971FEC91F23"
+    },
+    {
+      "event": "pull_request",
+      "run_id": 42649344189,
+      "job_id": 129271144950,
+      "log": "generic-pr-ci.log",
+      "sha256": "7E3726CE20439FCDFC876D84C9711323B81100BD1BBBCA0D44D24147402DC0A2"
+    }
+  ],
+  "verified": [
+    "Focused normal critical tests completed successfully, including corrected NFQ managed fresh-files, both external bootstrap source config regressions and exact sameboot table read predicate.",
+    "Full check.sh stops before go test at gofmt check: audit_capacity_measurement_native_linux_test.go requires blank // doc line before go:embed.",
+    "Independent local gofmt -d confirms sole comment separator insertion, no body/source parity change."
+  ],
+  "limitations": [
+    "Full generic normal/race not executed; no full PASS claim.",
+    "Native workflows run independently and are reported separately."
+  ]
+}

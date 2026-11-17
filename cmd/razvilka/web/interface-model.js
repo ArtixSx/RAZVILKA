@@ -284,7 +284,12 @@
     engines:{title:'Обходы',children:[['engines','Обходы'],['engineconfig','Настройка обхода']]},
     devices:{title:'Устройства',children:[['devices','Домашняя сеть'],['exclusions','Исключения устройств и сайтов']]},
     activity:{title:'События',children:[['activity','События']]},
-    settings:{title:'Настройки',children:[['settings','Настройки'],['updates','Обновления'],['diagnostics','Диагностика'],['dns','DNS'],['sources','Списки сайтов'],['strategylab','Стратегии NFQWS2'],['testlab','Проверки подключений']]}
+    dns:{title:'DNS',children:[['dns','DNS']]},
+    strategylab:{title:'Стратегии NFQWS2',children:[['strategylab','Стратегии NFQWS2']]},
+    testlab:{title:'Проверки',children:[['testlab','Проверки подключений']]},
+    diagnostics:{title:'Диагностика',children:[['diagnostics','Диагностика']]},
+    updates:{title:'Обновления',children:[['updates','Обновления']]},
+    settings:{title:'Настройки',children:[['settings','Настройки'],['sources','Списки сайтов']]}
   });
   const settingsTasks = Object.freeze([
     {target:'autopilot',title:'Автопилот',detail:'Проверки, резерв и разрешённые способы подключения.',icon:'route'},

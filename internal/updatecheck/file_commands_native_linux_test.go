@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 		}
 		data, err := os.ReadFile(filepath.Join(filepath.Dir(binary), "native-fixture.json"))
 		var p nativeFileProfile
-		if err != nil || decodeFileProtocol(data, &p) != nil || (p.Scenario != "candidate-stopped-before" && p.Scenario != "candidate-stopped-after" && p.Scenario != "candidate-stopped-strategy" && p.Scenario != "candidate-stopped-strategy-crash" && p.Scenario != "candidate-stopped-strategy-drift") {
+		if err != nil || decodeFileProtocol(data, &p) != nil || (p.Scenario != "candidate-stopped-before" && p.Scenario != "candidate-stopped-after" && p.Scenario != "candidate-stopped-strategy" && p.Scenario != "candidate-stopped-strategy-crash" && p.Scenario != "candidate-stopped-strategy-drift" && p.Scenario != "candidate-stopped-strategy-rollback-files" && p.Scenario != "candidate-stopped-strategy-rollback-private") {
 			os.Exit(92)
 		}
 		if flag.Set("test.run", "^TestNativeCandidateStoppedCompletionHelperFixture$") != nil {

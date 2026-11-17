@@ -1,0 +1,381 @@
+{
+  "selected": {
+    "stages": {
+      "before-failure": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.148651691s"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "1.065715282s"
+        },
+        "kernel-observe-success": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "491ns"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "744.578069ms"
+        },
+        "mapping-compare-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "491ns"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "891ns"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.833600937s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "6.69\u00b5s"
+        },
+        "process-current": {
+          "calls": 325,
+          "bytes": 0,
+          "elapsed": "4.808350481s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.143952112s"
+        },
+        "whole-executable-hash": {
+          "calls": 128,
+          "bytes": 4681907968,
+          "elapsed": "2.967173752s"
+        }
+      },
+      "joined": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.148651691s"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "1.065715282s"
+        },
+        "kernel-observe-success": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "491ns"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "744.578069ms"
+        },
+        "mapping-compare-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "491ns"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "891ns"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.833600937s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "6.69\u00b5s"
+        },
+        "process-current": {
+          "calls": 325,
+          "bytes": 0,
+          "elapsed": "4.808350481s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.143952112s"
+        },
+        "whole-executable-hash": {
+          "calls": 132,
+          "bytes": 4828217592,
+          "elapsed": "3.059530243s"
+        }
+      }
+    },
+    "benchmark": {
+      "4096": [
+        {
+          "ns_op": 103919,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 30001,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 103342,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 30000,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 103123,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 30000,
+          "allocs_op": 209
+        }
+      ],
+      "16384": [
+        {
+          "ns_op": 104650,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 54576,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 104521,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 54576,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 104139,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 54576,
+          "allocs_op": 209
+        }
+      ],
+      "32768": [
+        {
+          "ns_op": 105533,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 87344,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 105289,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 87344,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 106822,
+          "read_bytes_op": 5030,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 87345,
+          "allocs_op": 209
+        }
+      ]
+    },
+    "failure": [
+      "2026-11-09T14:31:00.5614474Z --- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (20.99s)"
+    ],
+    "progress": [
+      "2026-11-09T14:30:53.4139202Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=xray-domain-tcp state=prepared phase=listener-ready",
+      "2026-11-09T14:30:53.4140514Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=synthetic-baseline state=prepared phase=capture-ready",
+      "2026-11-09T14:30:53.4141876Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=domain-tcp-capture state=prepared phase=capture-prepared"
+    ]
+  },
+  "canceled": {
+    "stages": {
+      "before-failure": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.189557926s"
+        },
+        "kernel-observe": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "493.053768ms"
+        },
+        "kernel-observe-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "323ns"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "1.518\u00b5s"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.663609917s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "6.053\u00b5s"
+        },
+        "process-current": {
+          "calls": 323,
+          "bytes": 0,
+          "elapsed": "4.937138454s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.353619904s"
+        },
+        "whole-executable-hash": {
+          "calls": 127,
+          "bytes": 4645330562,
+          "elapsed": "4.060806867s"
+        }
+      },
+      "joined": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.189557926s"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "965.359637ms"
+        },
+        "kernel-observe-success": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "323ns"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "634.812227ms"
+        },
+        "pre-add-original-command-boundary": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "1.518\u00b5s"
+        },
+        "pre-add-original-read": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "3.663609917s"
+        },
+        "pre-add-original-read-complete": {
+          "calls": 11,
+          "bytes": 0,
+          "elapsed": "6.053\u00b5s"
+        },
+        "process-current": {
+          "calls": 325,
+          "bytes": 0,
+          "elapsed": "4.948026177s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.353619904s"
+        },
+        "whole-executable-hash": {
+          "calls": 131,
+          "bytes": 4791640186,
+          "elapsed": "4.189569033s"
+        }
+      }
+    },
+    "benchmark": {
+      "4096": [
+        {
+          "ns_op": 70975,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 30002,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 70870,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 30000,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 70486,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 30000,
+          "allocs_op": 209
+        }
+      ],
+      "16384": [
+        {
+          "ns_op": 75318,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 54576,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 76070,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 54576,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 75122,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 54576,
+          "allocs_op": 209
+        }
+      ],
+      "32768": [
+        {
+          "ns_op": 79750,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 87344,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 79274,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 87344,
+          "allocs_op": 209
+        },
+        {
+          "ns_op": 81665,
+          "read_bytes_op": 5006,
+          "read_syscalls_op": 4.0,
+          "bytes_op": 87344,
+          "allocs_op": 209
+        }
+      ]
+    },
+    "failure": [
+      "2026-11-09T14:31:41.7182726Z --- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (21.00s)"
+    ],
+    "progress": [
+      "2026-11-09T14:31:34.6096144Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=xray-domain-tcp state=prepared phase=listener-ready",
+      "2026-11-09T14:31:34.6097026Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=synthetic-baseline state=prepared phase=capture-ready",
+      "2026-11-09T14:31:34.6097937Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=domain-tcp-capture state=prepared phase=capture-prepared"
+    ]
+  }
+}

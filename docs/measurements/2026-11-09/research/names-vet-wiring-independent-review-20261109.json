@@ -1,0 +1,23 @@
+{
+  "files": [
+    {
+      "path": "scripts/check.sh",
+      "sha256": "78645250e8b3598282e71e3c93675dfee4d0d8ad4beabe19a0262b40e3d52316"
+    },
+    {
+      "path": "scripts/test-managed-probe-native.sh",
+      "sha256": "72cce93a51b683f1f936af4e6bb0c65ae0be926393811532edc909bf4b6caee4"
+    }
+  ],
+  "findings": [
+    "Identical go vet ./... runs before both full runtime suites, no check removed.",
+    "Only new names measurement case adds benchmark and count3 in existing original namespace fixture and already-built startuptools binary.",
+    "All other cases preserve exact argv through set -- and exec \"$@\"; no previous positional parameters consumed elsewhere.",
+    "Existing operation timeouts, source setup, failure propagation and post-scenario profile behavior unchanged."
+  ],
+  "validation": [
+    "Exact diff and complete positional-parameter usage inspected; runtime CI pending."
+  ],
+  "reviewer": "verification",
+  "decision": "APPROVE early vet and measurement wiring"
+}

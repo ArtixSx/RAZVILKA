@@ -19,7 +19,21 @@ import (
 )
 
 func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
+	return e.counterForRole(ctx, "unspecified")
+}
+
+func (e *nfqwsProbeExecution) counterForRole(ctx context.Context, role string) (count uint64, result error) {
 	defer measureNFQWSProbePhase(e, nfqwsProbePhaseCounter)()
+	measurement := beginNFQWSBoundaryMeasurement(ctx, "counter", role)
+	returned := false
+	defer func() { measurement.finish(ctx, result, returned) }()
+	count, result = e.counterMeasured(ctx, &measurement)
+	returned = true
+	return count, result
+}
+
+func (e *nfqwsProbeExecution) counterMeasured(ctx context.Context, measurement *nfqwsBoundaryMeasurement) (uint64, error) {
+	measurement.begin("capture-opening")
 	if err := e.captureCurrent(ctx); err != nil {
 		return 0, fmt.Errorf("probe counter opening capture: %w", err)
 	}
@@ -27,18 +41,28 @@ func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
 		return 0, ErrNFQWSScopedOwner
 	}
 	chain := e.resource.plan.chains[0].name
+	measurement.begin("command")
 	out, err := e.binding.Runner.Run(ctx, e.binding.Tools.IPTables, "-t", "mangle", "-L", chain, "-n", "-v", "-x")
 	if err != nil || len(out) > 16<<10 {
 		return 0, fmt.Errorf("probe counter command: %w", errors.Join(ErrNFQWSScopedOwner, err))
 	}
+	// The admitted command remains outside the optional pure suffix scope.
+	// Format timing includes its opening; closing timing includes its closing.
+	measurement.begin("format")
+	return e.counterSuffix(ctx, out, chain, measurement)
+}
+
+func (e *nfqwsProbeExecution) counterSuffixBody(ctx context.Context, out []byte, chain string, measurement *nfqwsBoundaryMeasurement) (uint64, error) {
 	protocol, protocolErr := e.counterProtocol(ctx)
 	if protocolErr != nil {
 		return 0, fmt.Errorf("probe counter original tool format: %w", protocolErr)
 	}
+	measurement.begin("parse")
 	count, err := nfqwsProbeParseCounter(out, chain, protocol)
 	if err != nil {
 		return 0, fmt.Errorf("probe counter parse: %w", err)
 	}
+	measurement.begin("capture-closing")
 	if err := e.captureCurrent(ctx); err != nil {
 		return 0, fmt.Errorf("probe counter closing capture: %w", err)
 	}
@@ -109,7 +133,7 @@ func (e *nfqwsProbeExecution) observeService(ctx context.Context, r *NFQWSExecut
 	if r != e.resource || b != e.binding {
 		return ErrNFQWSScopedOwner
 	}
-	before, err := e.counter(ctx)
+	before, err := e.counterForRole(ctx, "negative-before")
 	if err != nil {
 		stage("firewall", "fail", "owned exact counter unavailable")
 		return err
@@ -129,7 +153,7 @@ func (e *nfqwsProbeExecution) observeService(ctx context.Context, r *NFQWSExecut
 		stage("socket", "fail", "negative source tuple not independent")
 		return ErrNFQWSScopedOwner
 	}
-	afterNegative, err := e.counter(ctx)
+	afterNegative, err := e.counterForRole(ctx, "negative-after")
 	if err != nil {
 		stage("firewall", "fail", "negative control counter unavailable")
 		return err
@@ -156,7 +180,7 @@ func (e *nfqwsProbeExecution) observeService(ctx context.Context, r *NFQWSExecut
 		stage("http", "fail", "bounded TLS/HTTP observation failed")
 		return err
 	}
-	after, err := e.counter(ctx)
+	after, err := e.counterForRole(ctx, "positive-after")
 	if err != nil || after <= afterNegative {
 		stage("firewall", "fail", "successful response lacks owned NFQUEUE packet proof")
 		return errors.Join(ErrNFQWSScopedOwner, err)

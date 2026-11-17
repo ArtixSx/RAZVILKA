@@ -1,0 +1,6 @@
+=== RUN   TestMihomoRetiredHealthHeaderScopeCloseKeepsOriginalOwnedRow
+    mihomo_live_closing_scope_test.go:30: retired original reader9 terminal rejected at scope close dataplane transaction journal is unavailable
+--- FAIL: TestMihomoRetiredHealthHeaderScopeCloseKeepsOriginalOwnedRow (0.02s)
+FAIL
+FAIL	github.com/ArtixSx/razvilka/internal/dataplane	0.141s
+FAIL

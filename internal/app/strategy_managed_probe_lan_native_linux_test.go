@@ -34,6 +34,22 @@ func TestManagedStrategyProbeNativeLANManualApply(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
 }
 
+// Explicit recovery-only population. The normal manual/full cases retain
+// their later fresh positive Apply and cannot finish at this recovery cut.
+func TestManagedStrategyProbeNativeLANPreLedgerRecovery(t *testing.T) {
+	if os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != "pre-ledger" || os.Getenv("RAZVILKA_MANAGED_PROBE_LAN_CASE") != "pre-ledger" {
+		t.Skip("requires explicit native pre-ledger recovery population")
+	}
+	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
+}
+
+func TestManagedStrategyProbeNativeLANPreparedActiveRecovery(t *testing.T) {
+	if os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != "prepared-active" || os.Getenv("RAZVILKA_MANAGED_PROBE_LAN_CASE") != "prepared-active" {
+		t.Skip("requires explicit native prepared-active recovery population")
+	}
+	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
+}
+
 func managedProbeNativeWANListener() (listener net.Listener, result error) {
 	runtime.LockOSThread()
 	unlock := true
@@ -131,11 +147,22 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		t.Fatal("original App runtime absent")
 	}
 	stopped := false
+	var failedRollback *dataplane.Execution
 	defer func() {
 		if !stopped {
 			c, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			if err := r.Stop(c); err != nil {
+			// A verified failed Apply has already retired its execution. It has
+			// no active/stopped owner from which production Stop could mint a
+			// retirement witness. Close only after independent fixture absence
+			// proofs; the original Apply failure remains fatal below.
+			if failedRollback != nil && managedProbeFailedCleanupState(a, r, failedRollback) == nil {
+				if err := managedProbeCloseFailedApply(c, a, r, failedRollback, readEmpty); err != nil {
+					t.Error("verified failed Apply fixture cleanup", err)
+				} else {
+					t.Log("actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true")
+				}
+			} else if err := r.Stop(c); err != nil {
 				t.Error("retained original LAN cleanup", err)
 			}
 		}
@@ -166,6 +193,157 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 	if err != nil {
 		t.Fatal(err)
 	}
+	if mode := os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE"); mode != "" {
+		witness, releasePublicationFault, err := dataplane.ArmNFQWSNeverIssuedNativeFixture(a.Dataplane, mode)
+		if err != nil {
+			t.Fatal("arm original never-issued writer cut", err)
+		}
+		failedCode, _ := request(http.MethodPost, "/api/v1/apply?scope=all", string(body))
+		intentCut, publicationCut := witness()
+		if failedCode == http.StatusOK || !intentCut || publicationCut != (mode == "settlement-sync") {
+			t.Fatal("actual original fault was not reached", failedCode, intentCut, publicationCut)
+		}
+		if mode == "intent" || mode == "pre-ledger" || mode == "prepared-active" {
+			status, err := a.Dataplane.Status()
+			if err != nil || status.Execution == nil || status.Execution.State != "rolled-back" || !status.Execution.RollbackVerified {
+				t.Fatal("original never-issued failure did not join and verify rollback", err, status.Execution)
+			}
+		}
+		// A new user operation uses original retained ownership, including retry
+		// of the actual post-sync cut. No test edits the journal or owner flags.
+		cleanup, done := context.WithTimeout(context.Background(), time.Minute)
+		if mode == "settlement-sync" {
+			r.mu.Lock()
+			pending := r.pending != nil && r.pending.pendingQuarantine != nil
+			r.mu.Unlock()
+			if !pending {
+				done()
+				t.Fatal("publication cut did not retain original pending operation")
+			}
+			gate := a.Operations.Snapshot()
+			if !gate.Exclusive || gate.Fenced {
+				done()
+				t.Fatal("original quarantine did not continuously retain exclusive admission", gate)
+			}
+			releasePublicationFault() // Remove only the injected IO failure, no state mutation.
+			stopErr := r.Stop(cleanup)
+			if os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") == "1" {
+				gate = a.Operations.Snapshot()
+				r.mu.Lock()
+				retainedClosed := r.pending != nil && r.pending.pendingJoined && r.pending.pendingSourcesClosed
+				r.mu.Unlock()
+				if !errors.Is(stopErr, context.DeadlineExceeded) || !gate.Fenced || !gate.Exclusive || !retainedClosed {
+					done()
+					t.Fatal("real source-close cut lost original cleanup", stopErr, gate, retainedClosed)
+				}
+				done()
+				cleanup, done = context.WithTimeout(context.Background(), time.Minute)
+				stopErr = r.Stop(cleanup)
+				gate = a.Operations.Snapshot()
+				if stopErr != nil || !gate.Fenced || gate.Exclusive {
+					done()
+					t.Fatal("fresh Stop stranded or reopened permanently fenced original", stopErr, gate)
+				}
+			} else if stopErr != nil {
+				done()
+				t.Fatal("fresh original partial recovery Stop", stopErr)
+			}
+		}
+		if mode == "settlement-sync" {
+			gate := a.Operations.Snapshot()
+			if gate.Exclusive || gate.Fenced != (os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") == "1") {
+				done()
+				t.Fatal("joined original quarantine did not release its own lease", gate)
+			}
+			t.Log("actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false")
+		}
+		if err := readEmpty(cleanup); err != nil {
+			done()
+			t.Fatal("partial recovery left actual rules/queue", err)
+		}
+		queue, err := os.ReadFile("/proc/net/netfilter/nfnetlink_queue")
+		if err != nil || strings.TrimSpace(string(queue)) != "" {
+			done()
+			t.Fatal("partial recovery retained original NFQUEUE registration", err)
+		}
+		for _, tool := range []string{"/usr/sbin/iptables-legacy", "/usr/sbin/ip6tables-legacy"} {
+			rules, err := exec.CommandContext(cleanup, tool, "-t", "mangle", "-S").Output()
+			if err != nil || strings.Contains(string(rules), "RZQ_") || strings.Contains(string(rules), "NFQUEUE") {
+				done()
+				t.Fatal("partial recovery retained original classifier body", err)
+			}
+		}
+		status, err := a.Dataplane.Status()
+		if err != nil || status.Execution == nil || !status.Execution.RollbackVerified || status.Execution.State != "rolled-back" {
+			done()
+			t.Fatal("fresh original cleanup did not finish resource retirement", err, status.Execution)
+		}
+		for _, row := range status.Execution.Resources {
+			if row.State != "removed" && row.State != "unused" {
+				done()
+				t.Fatal("partial recovery left resource custody", row.Kind, row.State)
+			}
+		}
+		managedProbeNativeLANRequest(t, cleanup, "rzincluded")
+		managedProbeNativeLANRequest(t, cleanup, "rzexcluded")
+		done()
+		r.mu.Lock()
+		retained := r.pending != nil || r.active != nil
+		r.mu.Unlock()
+		if retained || !reflect.DeepEqual(beforeConfig, a.Store.Get()) {
+			t.Fatal("partial recovery retained route owner or changed panel choice", retained)
+		}
+		if mode == "pre-ledger" && t.Name() == "TestManagedStrategyProbeNativeLANPreLedgerRecovery" || mode == "prepared-active" && t.Name() == "TestManagedStrategyProbeNativeLANPreparedActiveRecovery" {
+			// Restore panel readiness before closing original sources; this
+			// read-only plan does not stand in for a successful new Apply.
+			code, raw := request(http.MethodGet, "/api/v1/plan?scope=all", "")
+			var restored struct {
+				Review      applyReview    `json:"review"`
+				Transaction dataplane.Plan `json:"transaction"`
+			}
+			if code != http.StatusOK || json.Unmarshal(raw, &restored) != nil || !restored.Transaction.Ready || restored.Review.Digest == "" {
+				t.Fatal("recovery did not restore panel review", code)
+			}
+			closing, finish := context.WithTimeout(context.Background(), time.Minute)
+			defer finish()
+			failedRollback = status.Execution
+			if err := managedProbeCloseFailedApply(closing, a, r, status.Execution, readEmpty); err != nil {
+				t.Fatal("original recovery Close and independent absence", err)
+			}
+			stopped = true
+			if mode == "prepared-active" {
+				t.Log("actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false")
+			} else {
+				t.Log("actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false")
+			}
+			return
+		}
+		stopped = true // The failed Apply has already joined its original owner.
+		t.Logf("actual_never_issued_recovered mode=%s intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=%t", mode, os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") != "1")
+		if os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") == "1" {
+			code, _ = request(http.MethodGet, "/api/v1/plan?scope=all", "")
+			if code == http.StatusOK {
+				t.Fatal("permanent fence was cleared by cleanup retry")
+			}
+			t.Log("actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true")
+			return
+		}
+		// Continue the SAME complete Apply/positive+excluded LAN/Stop scenario.
+		// A later forward failure still fails this test; recovery is not readiness.
+		code, data = request(http.MethodGet, "/api/v1/plan?scope=all", "")
+		plan = struct {
+			Review      applyReview    `json:"review"`
+			Transaction dataplane.Plan `json:"transaction"`
+		}{}
+		if code != http.StatusOK || json.Unmarshal(data, &plan) != nil || !plan.Transaction.Ready || plan.Review.Digest == "" {
+			t.Fatal("fresh review after original partial recovery", code)
+		}
+		body, err = json.Marshal(plan.Review)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stopped = false
+	}
 	code, data = request(http.MethodPost, "/api/v1/apply?scope=all", string(body))
 	r.mu.Lock()
 	measured := r.active
@@ -181,6 +359,9 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		if statusErr != nil || status.Execution == nil {
 			t.Log("actual original LAN execution unavailable")
 		} else {
+			if managedProbeRolledBackExecution(status.Execution) {
+				failedRollback = status.Execution // Status decodes a separate journal snapshot.
+			}
 			t.Logf("actual original LAN execution state=%s rollback_verified=%t", status.Execution.State, status.Execution.RollbackVerified)
 			for _, step := range status.Execution.Steps {
 				// Fixed protocol coordinates only; never print Detail or Error,

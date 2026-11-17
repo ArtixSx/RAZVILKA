@@ -86,7 +86,10 @@ jobs:
           # Internal delivery logs, research notes and lab diagnostics stay in
           # Git only: they describe the owner's test network and devices and
           # are not needed to install or run RAZVILKA on a router.
-          rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/scripts/diagnostics"
+          rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/docs/measurements" "$STAGE/scripts/diagnostics"
+          # Raw native logs/profiles remain available at the exact source SHA;
+          # they are not runtime files and fail the private-file guard below.
+          printf 'Native measurements and raw evidence: https://github.com/%s/tree/%s/docs/measurements\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" > "$STAGE/docs/MEASUREMENTS_SOURCE.md"
           test -x "$STAGE/scripts/install-entware.sh"
           test -x "$STAGE/scripts/upgrade-entware.sh"
           test -x "$STAGE/scripts/rollback-entware.sh"
@@ -105,7 +108,7 @@ jobs:
           const root = path.resolve(process.argv[2]);
           const privateDirectories = new Set(['.hil', '.git', '.ssh', '__pycache__', 'nodes-private', 'native-enrollment', 'configs/local']);
           const privateName = /(?:\.(?:private|secret)(?:\.|$)|\.(?:token|key|pem|p12|pfx|log|pid|bak|pyc)$|^\.env(?:\.|$)|^admin\.credentials\.json$|^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$))/i;
-          const internalMaterial = /^(?:docs\/(?:delivery|research|implementation)-|scripts\/diagnostics(?:\/|$))/i;
+          const internalMaterial = /^(?:docs\/(?:(?:delivery|research|implementation)-|measurements(?:\/|$))|scripts\/diagnostics(?:\/|$))/i;
           function visit(directory) {
             for (const item of fs.readdirSync(directory, {withFileTypes: true})) {
               const filename = path.join(directory, item.name);
@@ -138,6 +141,21 @@ jobs:
           }
           (cd dist && sha256sum -c ../SHA256SUMS)
 
+      - name: Prepare pinned AMD64 HEV vendor assets with complete source and notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Preparation only: this does not change the application's default
+          # component catalog, qualify ARM64, or publish a component release.
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y curl ca-certificates make patch python3 xz-utils
+          python3 scripts/test-prepare-hev-vendor-assets.py
+          sh scripts/build-hev-runtime-altstack-lab.sh "$RUNNER_TEMP/hev-vendor-build"
+          python3 scripts/prepare-hev-vendor-assets.py \
+            --repo "$GITHUB_WORKSPACE" --build-dir "$RUNNER_TEMP/hev-vendor-build" \
+            --output "$RUNNER_TEMP/hev-vendor-assets"
+          (cd "$RUNNER_TEMP/hev-vendor-assets" && sha256sum -c razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS)
+
       - name: Attest release provenance
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
@@ -152,6 +170,9 @@ jobs:
             RAZVILKA-*.SHA256SUMS
             RAZVILKA-entware.tar.gz
             RAZVILKA-entware.tar.gz.sha256
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-linux-amd64
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS
 
       - name: Prepare draft GitHub Release
         env:
@@ -160,7 +181,10 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           NOTES_OPTION="--generate-notes"
           if [[ -f "docs/releases/${VERSION}.md" ]]; then
-            NOTES_OPTION="--notes-file=docs/releases/${VERSION}.md"
+            python3 scripts/prepare-release-notes.py --root . \
+              --version "$VERSION" --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" \
+              --notes "docs/releases/${VERSION}.md" --output "$RUNNER_TEMP/razvilka-release-notes.md"
+            NOTES_OPTION="--notes-file=$RUNNER_TEMP/razvilka-release-notes.md"
           fi
           RELEASE_OPTIONS=(--verify-tag)
           # Promote only after the exact attached artifacts pass router checks.
@@ -182,4 +206,7 @@ jobs:
             "RAZVILKA-${VERSION}-entware.zip" \
             "RAZVILKA-${VERSION}.SHA256SUMS" \
             RAZVILKA-entware.tar.gz \
-            RAZVILKA-entware.tar.gz.sha256
+            RAZVILKA-entware.tar.gz.sha256 \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-linux-amd64" \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz" \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS"

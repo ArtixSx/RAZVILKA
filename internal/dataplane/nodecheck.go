@@ -55,6 +55,10 @@ type NodeCheckStage struct {
 	Duration int64  `json:"duration_ms,omitempty"`
 }
 
+// Only the synchronous start call owns this sink. It contains bounded stage
+// names and durations, never runtime arguments, output or endpoint addresses.
+type nodeRuntimeStagesKey struct{}
+
 // NodeCleanupStatus describes the original temporary session's cleanup only;
 // it is diagnostic metadata and grants no route or runtime admission.
 type NodeCleanupStatus string
@@ -78,33 +82,34 @@ const (
 // NodeCheckResult is deliberately safe for persistence and the Web API. Raw
 // process output, the remote endpoint and direct egress address are omitted.
 type NodeCheckResult struct {
-	SchemaVersion        int                    `json:"schema_version"`
-	ProbeID              string                 `json:"probe_id"`
-	NodeID               string                 `json:"node_id"`
-	ServiceID            string                 `json:"service_id"`
-	NetworkProfile       string                 `json:"network_profile"`
-	RoutePathID          string                 `json:"route_path_id"`
-	StartedAt            time.Time              `json:"started_at"`
-	FinishedAt           time.Time              `json:"finished_at"`
-	ExpiresAt            time.Time              `json:"expires_at"`
-	TestLevel            string                 `json:"test_level"`
-	Stage                string                 `json:"stage"`
-	Verdict              evidence.Verdict       `json:"verdict"`
-	Available            bool                   `json:"available"`
-	EgressIP             string                 `json:"egress_ip,omitempty"`
-	HTTPStatus           int                    `json:"http_status,omitempty"`
-	LatencyMS            int64                  `json:"latency_ms,omitempty"`
-	ErrorCode            string                 `json:"error_code,omitempty"`
-	Message              string                 `json:"message"`
-	DirectControl        string                 `json:"direct_control"`
-	CleanupStatus        NodeCleanupStatus      `json:"cleanup_status,omitempty"`
-	DirectLeak           bool                   `json:"direct_leak"`
-	ServiceErrorCategory string                 `json:"service_error_category,omitempty"`
-	DirectEgressError    string                 `json:"direct_egress_error,omitempty"`
-	ProxyEgressError     string                 `json:"proxy_egress_error,omitempty"`
-	RuntimeContract      string                 `json:"runtime_contract,omitempty"`
-	Stages               []NodeCheckStage       `json:"stages"`
-	Evidence             evidence.ProbeEvidence `json:"evidence"`
+	NetworkTimings       []probecheck.NetworkTiming `json:"network_timings,omitempty"` // Diagnostic only; not persisted in NodeStore.
+	SchemaVersion        int                        `json:"schema_version"`
+	ProbeID              string                     `json:"probe_id"`
+	NodeID               string                     `json:"node_id"`
+	ServiceID            string                     `json:"service_id"`
+	NetworkProfile       string                     `json:"network_profile"`
+	RoutePathID          string                     `json:"route_path_id"`
+	StartedAt            time.Time                  `json:"started_at"`
+	FinishedAt           time.Time                  `json:"finished_at"`
+	ExpiresAt            time.Time                  `json:"expires_at"`
+	TestLevel            string                     `json:"test_level"`
+	Stage                string                     `json:"stage"`
+	Verdict              evidence.Verdict           `json:"verdict"`
+	Available            bool                       `json:"available"`
+	EgressIP             string                     `json:"egress_ip,omitempty"`
+	HTTPStatus           int                        `json:"http_status,omitempty"`
+	LatencyMS            int64                      `json:"latency_ms,omitempty"`
+	ErrorCode            string                     `json:"error_code,omitempty"`
+	Message              string                     `json:"message"`
+	DirectControl        string                     `json:"direct_control"`
+	CleanupStatus        NodeCleanupStatus          `json:"cleanup_status,omitempty"`
+	DirectLeak           bool                       `json:"direct_leak"`
+	ServiceErrorCategory string                     `json:"service_error_category,omitempty"`
+	DirectEgressError    string                     `json:"direct_egress_error,omitempty"`
+	ProxyEgressError     string                     `json:"proxy_egress_error,omitempty"`
+	RuntimeContract      string                     `json:"runtime_contract,omitempty"`
+	Stages               []NodeCheckStage           `json:"stages"`
+	Evidence             evidence.ProbeEvidence     `json:"evidence"`
 }
 
 type NodeChecker interface {
@@ -466,7 +471,10 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
 		return result, err
 	}
-	if err := c.start(ctx, session); err != nil {
+	var runtimeStages []NodeCheckStage
+	startErr := c.start(context.WithValue(ctx, nodeRuntimeStagesKey{}, &runtimeStages), session)
+	result.Stages = append(result.Stages, runtimeStages...)
+	if startErr != nil {
 		result.TestLevel = "protocol"
 		result.fail("protocol", "node-protocol-start-failed", "Узел не смог запустить рабочий протокольный сеанс.")
 		result.addStage("protocol", "failed", "Временный клиент не открыл локальный проверочный канал.", stageStarted, c.currentTime())
@@ -474,6 +482,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		return result, nil
 	}
 
+	stageStarted = c.currentTime()
 	passport, err := c.identity(session)
 	if err != nil || passport.Outbound != endpoint.Protocol {
 		result.TestLevel = "protocol"
@@ -1160,25 +1169,54 @@ func preserveNodeHostname(outbound map[string]any, hostname string) {
 	}
 }
 
-func (c *ExactNodeChecker) startSession(ctx context.Context, session exactNodeSession) error {
-	if err := c.Processes.Start(ctx, session.Spec); err != nil {
+func (c *ExactNodeChecker) startSession(ctx context.Context, session exactNodeSession) (resultErr error) {
+	record := func(id string, started time.Time, err error) {
+		if stages, _ := ctx.Value(nodeRuntimeStagesKey{}).(*[]NodeCheckStage); stages != nil {
+			status := "passed"
+			if err != nil {
+				status = "failed"
+			}
+			*stages = append(*stages, NodeCheckStage{ID: id, Status: status, Duration: max(0, c.currentTime().Sub(started).Milliseconds())})
+		}
+	}
+	started := c.currentTime()
+	if err := ctx.Err(); err != nil {
+		record("runtime_start", started, err)
 		return err
 	}
-	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) {
+	err := errors.Join(c.Processes.Start(ctx, session.Spec), ctx.Err())
+	record("runtime_start", started, err)
+	if err != nil {
+		return err
+	}
+	readyStarted := c.currentTime()
+	defer func() { record("runtime_ready", readyStarted, resultErr) }()
+	// The deadline must also bound an in-flight SOCKS greeting. Checking it
+	// only between attempts can both overrun the budget and accept late success.
+	readyCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	// Add three early observations for fast native startup, then retain the
+	// original 100ms cadence: nominal probes at 0/10/30/70/100/200/...ms.
+	// Actual process/socket checks also take time; the context bounds all of it.
+	readinessPauses := [...]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond, 30 * time.Millisecond, 100 * time.Millisecond}
+	retry := 0
+	for {
+		if err := readyCtx.Err(); err != nil {
+			return err
+		}
 		if !c.Processes.Running(session.Spec) {
 			return errors.New("candidate exited")
 		}
-		if probeSOCKS5(ctx, session.Address) == nil {
-			return nil
+		if probeSOCKS5(readyCtx, session.Address) == nil {
+			return readyCtx.Err()
 		}
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(100 * time.Millisecond):
+		case <-readyCtx.Done():
+			return readyCtx.Err()
+		case <-time.After(readinessPauses[min(retry, len(readinessPauses)-1)]):
 		}
+		retry++
 	}
-	return errors.New("SOCKS readiness timeout")
 }
 
 func (c *ExactNodeChecker) verifyIdentity(session exactNodeSession) (routeidentity.Passport, error) {

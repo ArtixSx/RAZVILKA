@@ -1,0 +1,15 @@
+{
+  "decision": "APPROVED fixture-only followup",
+  "file": "cmd/razvilka/paired_public_history_native_linux_test.go",
+  "sha256": "048362e38cd4d098403264673d89bf696a2e570f255d17920286024e69e9fb42",
+  "cause": "actual6b history fixture defaultiptables alternative producedstderr; oldsource and baseline must select genuinelegacybackend consistently",
+  "changes": [
+    "explicit legacy baseline",
+    "exclusiveprivate/opt/sbin aliases tofixed genuinelegacytools; sameinode/readlink beforeownedremoval",
+    "bounded256stderr/fixedargvdiagnostic; stderrrefusalunchanged"
+  ],
+  "limits": [
+    "no hostalternatives or productionchange",
+    "nativehistory acceptance pending"
+  ]
+}

@@ -64,6 +64,13 @@ func (r *policyRunner) Run(ctx context.Context, name string, args ...string) ([]
 	if r == nil || r.lease == nil {
 		return nil, at("POLICY_UNISSUED", nil)
 	}
+	if scope, present := nfqLANRPDBMarker(ctx); present {
+		release, err := scope.enter(ctx, r, name, args)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+	}
 	return r.lease.runPolicy(ctx, name, args...)
 }
 

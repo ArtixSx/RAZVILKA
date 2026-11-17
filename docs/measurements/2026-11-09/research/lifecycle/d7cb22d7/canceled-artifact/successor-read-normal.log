@@ -1,0 +1,12 @@
+=== RUN   TestDomainSuccessorReadRejectsForeignAndCopiedCarriers
+--- PASS: TestDomainSuccessorReadRejectsForeignAndCopiedCarriers (0.00s)
+=== RUN   TestDomainSuccessorReadRejectsChangedOwnerAndExpiredLoan
+--- PASS: TestDomainSuccessorReadRejectsChangedOwnerAndExpiredLoan (0.00s)
+=== RUN   TestDomainSuccessorReadCanceledAndInvalidMarkers
+--- PASS: TestDomainSuccessorReadCanceledAndInvalidMarkers (0.00s)
+=== RUN   TestDomainSuccessorReadNoWitnessCannotHideInvalidLoan
+--- PASS: TestDomainSuccessorReadNoWitnessCannotHideInvalidLoan (0.00s)
+=== RUN   TestDomainSuccessorReadRetainsOuterActualByteClosing
+--- PASS: TestDomainSuccessorReadRetainsOuterActualByteClosing (0.00s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	0.018s

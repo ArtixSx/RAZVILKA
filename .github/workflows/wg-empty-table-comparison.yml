@@ -1,0 +1,50 @@
+name: Original WG inactivity paired comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/wg-empty-table-comparison-20261117']
+permissions:
+  contents: read
+jobs:
+  measurement:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install isolated native dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+      - name: Retain exact reviewed legacy tool closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=$(sudo mktemp -d /tmp/razvilka-wg-packages.XXXXXX)
+          case "$packages" in /tmp/razvilka-wg-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$packages/iptables.deb" "$packages/libip4tc2.deb" \
+            "$packages/libip6tc2.deb" "$packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+      - name: Fixed same-host source pairs with original eight-second bodies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/platform.txt
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/compare-wg-empty-table.sh "$GITHUB_WORKSPACE/artifacts/comparison" \
+            2>&1 | tee artifacts/driver.log
+      - name: Preserve complete samples including refusals
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wg-empty-table-comparison-${{ github.sha }}
+          path: artifacts/

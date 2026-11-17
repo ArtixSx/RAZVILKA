@@ -36,7 +36,7 @@ func (r *domainTCPCaptureExecutionResource) cleanupCurrent(ctx context.Context) 
 // handlers joined. The original acknowledged standby remains installed; this
 // is not permission to retire caches, conntrack or reuse a synthetic address.
 func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline *syntheticBaselineExecutionResource, kernel *domainTCPBaselineKernelOwner) error {
-	if r == nil || r.self != r || baseline == nil || baseline.self != baseline || baseline.capture != r.capture || baseline.mapping != r.mapping || baseline.inspector == nil || kernel == nil || kernel.capture != r || kernel.baseline != baseline {
+	if r == nil || r.self != r || baseline == nil || baseline.self != baseline || baseline.capture != r.capture || baseline.mapping != r.mapping || baseline.inspector == nil || kernel != nil && (kernel.capture != r || kernel.baseline != baseline) {
 		return ErrDomainPolicyTCPConsumer
 	}
 	ctx = context.WithValue(ctx, domainTCPCaptureCleanupKey{}, r)
@@ -49,6 +49,29 @@ func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline
 			return ErrDomainPolicyTCPConsumer
 		}
 		cursor.capture = r
+	}
+	// A constructor failure before the original kernel owner exists is not a
+	// ready capture. Only the SAME joined, never-published failed preparation
+	// may remove its own capture; no baseline-flow issuer may have escaped.
+	checkUnpublished := func(c context.Context) error {
+		if kernel != nil {
+			return nil
+		}
+		if cursor == nil || cursor.local(c, r.process) != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
+		s := r.process.scope
+		s.mu.Lock()
+		o := s.domainTCPOwner
+		s.mu.Unlock()
+		if o == nil {
+			return ErrDomainPolicyTCPConsumer
+		}
+		_, err := o.unpublishedInputsCurrent(c, r.process, r, baseline)
+		return errors.Join(err, cursor.control.CurrentForCleanupOperation(c, cursor.cleanup))
+	}
+	if err := checkUnpublished(ctx); err != nil {
+		return err
 	}
 	if err := r.cleanupCurrent(ctx); err != nil {
 		return fmt.Errorf("domain capture cleanup opening: %w", err)
@@ -65,11 +88,14 @@ func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline
 			return err
 		}
 	}
-	if kernel.flow.Load() != nil {
+	if kernel != nil && kernel.flow.Load() != nil {
 		return ErrDomainTCPBaselineKernel
 	}
 	// Preserve the exact original restorative dependency throughout cutover.
 	checkStandby := func(c context.Context) error {
+		if err := checkUnpublished(c); err != nil {
+			return err
+		}
 		if err := r.cleanupCurrent(c); err != nil {
 			return err
 		}

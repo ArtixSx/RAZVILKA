@@ -1,0 +1,9 @@
+{
+  "sha": "9c5fac0e5af4419023c3b50d9830a92b93d28341",
+  "run": 42690593933,
+  "job": 129409142179,
+  "physical_repeat_gate": "success",
+  "contract": "two exact tests each30 repetitions normal and race, exact PASS count, no SKIP",
+  "full_ci": "in_progress",
+  "full_success_claim": false
+}

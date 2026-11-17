@@ -1,0 +1,22 @@
+--- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals (0.34s)
+    --- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals/fresh (0.05s)
+        nfqws_scoped_apply_observation_test.go:54: post-RPC read escaped original observation
+    --- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals/opening (0.05s)
+        nfqws_scoped_apply_observation_test.go:54: post-RPC read escaped original observation
+    --- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals/closing (0.05s)
+        nfqws_scoped_apply_observation_test.go:54: post-RPC read escaped original observation
+    --- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals/read-error (0.05s)
+        nfqws_scoped_apply_observation_test.go:54: post-RPC read escaped original observation
+    --- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals/cancel (0.05s)
+        nfqws_scoped_apply_observation_test.go:54: post-RPC read escaped original observation
+    --- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals/closing-owner (0.05s)
+        nfqws_scoped_apply_observation_test.go:54: post-RPC read escaped original observation
+    --- FAIL: TestNFQWSScopedPostAddObservationFreshImageAndRefusals/foreign-plan (0.05s)
+        nfqws_scoped_apply_observation_test.go:54: post-RPC read escaped original observation
+--- FAIL: TestNFQWSScopedPostAddClosingRefusalKeepsCOMMONIntent (0.08s)
+    nfqws_scoped_apply_observation_test.go:136: closing refusal acknowledged or continued mutation policy addition or cleanup result unknown; reconciliation required
+        post-add original tool closing refusal
+        post-add original tool closing refusal {1e3626f67b73fc0dcdcf9f95d2f44400 false false true false 1 1 0} <nil> true [{0 true iptables [-t mangle -N RZQ_ae529fd78981948312_4]}]
+FAIL
+FAIL	github.com/ArtixSx/razvilka/internal/dataplane	0.557s
+FAIL

@@ -22,6 +22,8 @@ type mihomoLiveStop struct {
 	cleanup           *operationgate.ExclusiveCleanupReview
 	context           context.Context
 	release           func()
+	stage             string // Fixed private diagnostics; never part of HTTP/restore data.
+	lastFailure       error
 }
 
 func mihomoLivePlan(plan dataplane.Plan) bool {
@@ -63,7 +65,7 @@ func (a *App) observeCommittedMihomo(ctx context.Context, expected dataplane.Pla
 		// pending before this outer frame runs. Never release that admission
 		// or substitute the original Apply compensation for a failed Check.
 		if manager.HasPendingMihomoLive() {
-			cursor := &mihomoLiveStop{manager: manager, store: store, before: &before, context: context.WithoutCancel(held), cleanup: cleanup, release: release}
+			cursor := &mihomoLiveStop{manager: manager, store: store, before: &before, context: context.WithoutCancel(held), cleanup: cleanup, release: release, stage: "admission"}
 			a.mihomoProbe.liveStop = cursor
 			keep = true
 			a.Operations.FenceJournal()
@@ -93,6 +95,9 @@ func (a *App) executeMihomoServiceRuntime(parent context.Context, action string,
 	}
 	a.mihomoProbe.liveStopMu.Lock()
 	defer a.mihomoProbe.liveStopMu.Unlock()
+	if cursor := a.mihomoProbe.liveStop; cursor != nil {
+		cursor.stage, cursor.lastFailure = "admission", nil
+	}
 	cfg := a.Store.Get()
 	plan, found, planErr := a.Dataplane.Committed()
 	selected := found && mihomoLivePlan(plan) || a.Dataplane.HasPendingMihomoLive() || a.mihomoProbe.liveStop != nil || a.mihomoProbe.liveApply != nil
@@ -176,7 +181,7 @@ func (a *App) executeMihomoServiceRuntime(parent context.Context, action string,
 			return fail("SERVICE_RUNTIME_CHANGED", "Применённый маршрут изменился. Обновите состояние перед остановкой.")
 		}
 		before := cfg
-		cursor = &mihomoLiveStop{manager: a.Dataplane, store: a.Store, before: &before}
+		cursor = &mihomoLiveStop{manager: a.Dataplane, store: a.Store, before: &before, stage: "admission"}
 		a.mihomoProbe.liveStop = cursor
 	}
 	wanted := cursor.before
@@ -198,6 +203,7 @@ func (a *App) executeMihomoServiceRuntime(parent context.Context, action string,
 	}()
 	err = func() error {
 		if cursor.closing {
+			cursor.stage = "close-retry"
 			// The root closing cursor may already have closed scope/native
 			// comparison handles. Only the same in-memory terminal can resume;
 			// replaying earlier observations here would strand that owner.
@@ -207,16 +213,19 @@ func (a *App) executeMihomoServiceRuntime(parent context.Context, action string,
 			return cursor.terminal.Close(held, cleanup)
 		}
 		if cursor.terminal == nil {
+			cursor.stage = "native-stop"
 			var err error
 			cursor.terminal, err = a.Dataplane.StopMihomoLive(held, cleanup)
 			if err != nil {
 				return err
 			}
 		}
+		cursor.stage = "observe-retired"
 		if err := cursor.terminal.ObserveRetired(held, cleanup); err != nil {
 			return err
 		}
 		if cursor.committed == nil {
+			cursor.stage = "config-cas"
 			resolved := map[string]string{}
 			for _, route := range plan.Routes {
 				state, ok := cursor.before.AppliedServices[route.LogicalServiceID]
@@ -242,6 +251,7 @@ func (a *App) executeMihomoServiceRuntime(parent context.Context, action string,
 		if !reflect.DeepEqual(a.Store.Get(), *cursor.committed) {
 			return config.ErrRevisionChanged
 		}
+		cursor.stage = "stopped-plan-ack"
 		if _, err := a.Dataplane.CommitRetiredMihomo(held, cursor.terminal, cleanup, cursor.committed.Revision); err != nil {
 			return err
 		}
@@ -249,9 +259,11 @@ func (a *App) executeMihomoServiceRuntime(parent context.Context, action string,
 			return config.ErrRevisionChanged
 		}
 		cursor.closing = true
+		cursor.stage = "terminal-close"
 		return cursor.terminal.Close(held, cleanup)
 	}()
 	if err != nil {
+		cursor.lastFailure = err
 		cursor.context, cursor.release, cursor.cleanup = context.WithoutCancel(held), release, cleanup
 		keep = true
 		a.Operations.FenceJournal()

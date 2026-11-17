@@ -1,0 +1,390 @@
+{
+  "schema": 1,
+  "head_sha": "69423dfe693e8e0dcb36fcbf487f2876d0a227c1",
+  "run_id": 43962866341,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43962866341",
+  "run_conclusion": "failure",
+  "platform": "Ubuntu 24.04 disposable native namespace; normal runtime, normal/race contract tests",
+  "cases": {
+    "selected": {
+      "status": {
+        "child_exit_status": "1",
+        "publication_budget_seconds": "12",
+        "profile_enabled": "1",
+        "profile_span": "original_Run_through_join",
+        "diagnostic_only": "false",
+        "native_case": "TestDomainTCPOriginalNativeAcceptedFlows"
+      },
+      "failure": "actual DNS publication did not become available",
+      "contracts": {
+        "normal": {
+          "top_level_passes": [
+            "TestDomainTCPDirectRouteIsExactLocalPath",
+            "TestDomainTCPDirectRefusesUnownedEntry",
+            "TestDomainTCPDirectRejectsReadOnlyCarriersBeforeCallbacks",
+            "TestDomainTCPDirectCloseJoinsCancellationAndRetainsFailure",
+            "TestDomainTCPDirectCloseStopsUnusedCancellationCallback",
+            "TestDomainTCPDirectCopiedOrCanceledTransportCannotUseConnection",
+            "TestDomainNativeAcceptedStagesAreClosedAndIncomplete",
+            "TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement",
+            "TestDomainBaselineObservedReadIsClosedToOriginalQueries"
+          ],
+          "skip_count": 0
+        },
+        "race": {
+          "top_level_passes": [
+            "TestDomainTCPDirectRouteIsExactLocalPath",
+            "TestDomainTCPDirectRefusesUnownedEntry",
+            "TestDomainTCPDirectRejectsReadOnlyCarriersBeforeCallbacks",
+            "TestDomainTCPDirectCloseJoinsCancellationAndRetainsFailure",
+            "TestDomainTCPDirectCloseStopsUnusedCancellationCallback",
+            "TestDomainTCPDirectCopiedOrCanceledTransportCannotUseConnection",
+            "TestDomainNativeAcceptedStagesAreClosedAndIncomplete",
+            "TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement",
+            "TestDomainBaselineObservedReadIsClosedToOriginalQueries"
+          ],
+          "skip_count": 0
+        }
+      },
+      "failure_snapshot": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "5.748390156s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "1.890351462s"
+        },
+        "initial-capture-to-publication-open": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "10.331693349s"
+        },
+        "initial-kernel": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "602.246376ms"
+        },
+        "initial-mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "736.175274ms"
+        },
+        "dns-publication-opening": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed_go": "747.699185ms"
+        },
+        "process-current": {
+          "calls": 361,
+          "bytes": 0,
+          "elapsed_go": "4.691367399s"
+        },
+        "executable-image-capture": {
+          "calls": 61,
+          "bytes": 2231221766,
+          "elapsed_go": "1.509160776s"
+        }
+      },
+      "direct_stage_present": false,
+      "zero_syn_marker_present": false
+    },
+    "direct-deny": {
+      "status": {
+        "child_exit_status": "1",
+        "publication_budget_seconds": "12",
+        "profile_enabled": "1",
+        "profile_span": "original_Run_through_join",
+        "diagnostic_only": "false",
+        "native_case": "TestDomainTCPOriginalNativeDirectForwardDeny"
+      },
+      "failure": "actual DNS publication did not become available",
+      "contracts": {
+        "normal": {
+          "top_level_passes": [
+            "TestDomainTCPDirectRouteIsExactLocalPath",
+            "TestDomainTCPDirectRefusesUnownedEntry",
+            "TestDomainTCPDirectRejectsReadOnlyCarriersBeforeCallbacks",
+            "TestDomainTCPDirectCloseJoinsCancellationAndRetainsFailure",
+            "TestDomainTCPDirectCloseStopsUnusedCancellationCallback",
+            "TestDomainTCPDirectCopiedOrCanceledTransportCannotUseConnection",
+            "TestDomainNativeAcceptedStagesAreClosedAndIncomplete",
+            "TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement",
+            "TestDomainBaselineObservedReadIsClosedToOriginalQueries"
+          ],
+          "skip_count": 0
+        },
+        "race": {
+          "top_level_passes": [
+            "TestDomainTCPDirectRouteIsExactLocalPath",
+            "TestDomainTCPDirectRefusesUnownedEntry",
+            "TestDomainTCPDirectRejectsReadOnlyCarriersBeforeCallbacks",
+            "TestDomainTCPDirectCloseJoinsCancellationAndRetainsFailure",
+            "TestDomainTCPDirectCloseStopsUnusedCancellationCallback",
+            "TestDomainTCPDirectCopiedOrCanceledTransportCannotUseConnection",
+            "TestDomainNativeAcceptedStagesAreClosedAndIncomplete",
+            "TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement",
+            "TestDomainBaselineObservedReadIsClosedToOriginalQueries"
+          ],
+          "skip_count": 0
+        }
+      },
+      "failure_snapshot": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "6.175132485s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "2.018124594s"
+        },
+        "initial-capture-to-publication-open": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "11.108040492s"
+        },
+        "initial-kernel": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "653.56353ms"
+        },
+        "initial-mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "795.170707ms"
+        },
+        "dns-publication-opening": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed_go": "4.356\u00b5s"
+        },
+        "process-current": {
+          "calls": 324,
+          "bytes": 0,
+          "elapsed_go": "4.723651535s"
+        },
+        "executable-image-capture": {
+          "calls": 59,
+          "bytes": 2158066954,
+          "elapsed_go": "1.62848336s"
+        }
+      },
+      "direct_stage_present": false,
+      "zero_syn_marker_present": false
+    },
+    "canceled-ready": {
+      "status": {
+        "child_exit_status": "1",
+        "publication_budget_seconds": "12",
+        "profile_enabled": "1",
+        "profile_span": "original_Run_through_join",
+        "diagnostic_only": "false",
+        "native_case": "TestDomainTCPOriginalNativeCanceledReadyRetirement"
+      },
+      "failure": "actual DNS publication did not become available",
+      "contracts": {
+        "normal": {
+          "top_level_passes": [
+            "TestDomainTCPDirectRouteIsExactLocalPath",
+            "TestDomainTCPDirectRefusesUnownedEntry",
+            "TestDomainTCPDirectRejectsReadOnlyCarriersBeforeCallbacks",
+            "TestDomainTCPDirectCloseJoinsCancellationAndRetainsFailure",
+            "TestDomainTCPDirectCloseStopsUnusedCancellationCallback",
+            "TestDomainTCPDirectCopiedOrCanceledTransportCannotUseConnection",
+            "TestDomainNativeAcceptedStagesAreClosedAndIncomplete",
+            "TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement",
+            "TestDomainBaselineObservedReadIsClosedToOriginalQueries"
+          ],
+          "skip_count": 0
+        },
+        "race": {
+          "top_level_passes": [
+            "TestDomainTCPDirectRouteIsExactLocalPath",
+            "TestDomainTCPDirectRefusesUnownedEntry",
+            "TestDomainTCPDirectRejectsReadOnlyCarriersBeforeCallbacks",
+            "TestDomainTCPDirectCloseJoinsCancellationAndRetainsFailure",
+            "TestDomainTCPDirectCloseStopsUnusedCancellationCallback",
+            "TestDomainTCPDirectCopiedOrCanceledTransportCannotUseConnection",
+            "TestDomainNativeAcceptedStagesAreClosedAndIncomplete",
+            "TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement",
+            "TestDomainBaselineObservedReadIsClosedToOriginalQueries"
+          ],
+          "skip_count": 0
+        }
+      },
+      "failure_snapshot": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "5.497004661s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "1.815808553s"
+        },
+        "initial-capture-to-publication-open": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "9.935173784s"
+        },
+        "initial-kernel": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "593.013578ms"
+        },
+        "initial-mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed_go": "720.342677ms"
+        },
+        "dns-publication-opening": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed_go": "718.117745ms"
+        },
+        "process-current": {
+          "calls": 362,
+          "bytes": 0,
+          "elapsed_go": "4.589001035s"
+        },
+        "executable-image-capture": {
+          "calls": 61,
+          "bytes": 2231221766,
+          "elapsed_go": "1.480247677s"
+        }
+      },
+      "direct_stage_present": false,
+      "zero_syn_marker_present": false
+    }
+  },
+  "raw_sha256": [
+    {
+      "path": "artifacts/domain-router-direct-selected-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/cpu-cumulative.txt",
+      "bytes": 4828,
+      "sha256": "4fce8bdaad5f8e2c7839e0da550e51a23ef6d04a76c5b41e0b586ae77011f45b"
+    },
+    {
+      "path": "artifacts/domain-router-direct-selected-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/cpu-top.txt",
+      "bytes": 3322,
+      "sha256": "995d1d17a745b139cdf1d9bce28b690c953ab00412a71c6d7bfa9bd86f8f2af1"
+    },
+    {
+      "path": "artifacts/domain-router-direct-selected-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/direct-contract-normal.log",
+      "bytes": 3358,
+      "sha256": "3f7612ae8a0a30b73ebbef54ca9c96a7f41baadc5758cb153ccd693f43f2602f"
+    },
+    {
+      "path": "artifacts/domain-router-direct-selected-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/direct-contract-race.log",
+      "bytes": 3051,
+      "sha256": "519c545de3d120b1d7156327f84e7389150213b7f353217c89a3ea88c289a38d"
+    },
+    {
+      "path": "artifacts/domain-router-direct-selected-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/native.log",
+      "bytes": 55670,
+      "sha256": "0bfd47d2d0cc39f8854676a51e808d42782a54aa9c47f1f930e9b0e14503f0cb"
+    },
+    {
+      "path": "artifacts/domain-router-direct-selected-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/original-run.cpu.pprof",
+      "bytes": 81898,
+      "sha256": "6fcdde3b1b984fd2590b085c63cb51e93d96908186f5f9fd762bd3c05b51efd8"
+    },
+    {
+      "path": "artifacts/domain-router-direct-selected-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/status.txt",
+      "bytes": 182,
+      "sha256": "dd07be5c1633b6e3d3ea075634618325a9131ea50eb9d9a1ca85b7ddb4536fa5"
+    },
+    {
+      "path": "artifacts/domain-router-direct-direct-deny-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/cpu-cumulative.txt",
+      "bytes": 4800,
+      "sha256": "5fcbc1964a85ea0ad62f8bfb8484d77c95bf64249226195d528a8e1624893c3e"
+    },
+    {
+      "path": "artifacts/domain-router-direct-direct-deny-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/cpu-top.txt",
+      "bytes": 3157,
+      "sha256": "50a4f9c40d9203c74dba8bb694e658cb5fc269acf4ee434ce1da778edab73eb2"
+    },
+    {
+      "path": "artifacts/domain-router-direct-direct-deny-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/direct-contract-normal.log",
+      "bytes": 3358,
+      "sha256": "d5b8eb28216de4bb62efad3c759b00e3aaae460d5a0a82b8bb0be26adfe589f0"
+    },
+    {
+      "path": "artifacts/domain-router-direct-direct-deny-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/direct-contract-race.log",
+      "bytes": 3051,
+      "sha256": "077a634ed9589ee6288a03d5505fc598260db9d91145467c8038325462fa71b1"
+    },
+    {
+      "path": "artifacts/domain-router-direct-direct-deny-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/native.log",
+      "bytes": 33982,
+      "sha256": "2d4f72cbf6e51ff73e8fe034078dbf594a11dd350c256304828fe999e15c8d23"
+    },
+    {
+      "path": "artifacts/domain-router-direct-direct-deny-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/original-run.cpu.pprof",
+      "bytes": 80675,
+      "sha256": "77e5dfde97ffd2dbad18ab1582e73fd834686840753a090bb6b22d6e7b7d50e8"
+    },
+    {
+      "path": "artifacts/domain-router-direct-direct-deny-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/status.txt",
+      "bytes": 186,
+      "sha256": "08cc0e09e78ad09fe7708b9ccaf8f6ab95e5529d3f29cf9dd1c5c2ffd55d0039"
+    },
+    {
+      "path": "artifacts/domain-router-direct-canceled-ready-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/cpu-cumulative.txt",
+      "bytes": 4798,
+      "sha256": "c0a434052b05e723b43f5c8aca72fd01c11eceb4118d0456c1324cec37819e4b"
+    },
+    {
+      "path": "artifacts/domain-router-direct-canceled-ready-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/cpu-top.txt",
+      "bytes": 3412,
+      "sha256": "cab9960d56a3694107907eb53e571dc2352dd38712c54aa2aa44f2e9d15359ff"
+    },
+    {
+      "path": "artifacts/domain-router-direct-canceled-ready-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/direct-contract-normal.log",
+      "bytes": 3358,
+      "sha256": "983654e46e49061c33220e66eb855f1730315c97bc9b6a3cdfeb7143e06fefec"
+    },
+    {
+      "path": "artifacts/domain-router-direct-canceled-ready-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/direct-contract-race.log",
+      "bytes": 3051,
+      "sha256": "fbd72fd9b73764f63e20ca2c9f43184698d17c307171469184ca55e3a9036136"
+    },
+    {
+      "path": "artifacts/domain-router-direct-canceled-ready-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/native.log",
+      "bytes": 58434,
+      "sha256": "a7e00bc0d4148f5c16d49a13c728c050e333526e2de05ee116f681928e80a9ce"
+    },
+    {
+      "path": "artifacts/domain-router-direct-canceled-ready-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/original-run.cpu.pprof",
+      "bytes": 79745,
+      "sha256": "4d579cf5c5e95d1abcc55449ee22b75685704513ff38a7311c454c7238098746"
+    },
+    {
+      "path": "artifacts/domain-router-direct-canceled-ready-69423dfe693e8e0dcb36fcbf487f2876d0a227c1/status.txt",
+      "bytes": 192,
+      "sha256": "34c74a8d0a96e2a07cd15bf9259ae1823ac98f7b456fc61bfff3e41dbbe3a90e"
+    }
+  ],
+  "conclusion_ru": "\u0412\u0441\u0435 \u0442\u0440\u0438 runtime-\u0441\u0446\u0435\u043d\u0430\u0440\u0438\u044f \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u043b\u0438\u0441\u044c \u043d\u0430 \u043f\u0435\u0440\u0432\u043e\u043d\u0430\u0447\u0430\u043b\u044c\u043d\u043e\u0439 DNS publication12s \u0434\u043e selected/mismatch/DIRECT/deny. \u041d\u043e\u0432\u044b\u0439 DIRECT \u043f\u043e\u043a\u0430 \u043d\u0435 \u043f\u043e\u043b\u0443\u0447\u0438\u043b runtime acceptance. \u041a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u044b normal/race \u043f\u0440\u043e\u0448\u043b\u0438.",
+  "limits": [
+    "No runtime DIRECT, zero-SYN deny, selected service, canceled GEN2 or router PASS is inferred from contract PASS.",
+    "Initial-capture-to-publication-open is nested with prepare/kernel/mapping timings; do not sum inclusive counters.",
+    "The full CPU profile includes cleanup after the failed publication. Its totals are not the 12-second critical path.",
+    "No same-host before/after pair; no causal speedup or regression claim.",
+    "Physical router untouched; old unknown/finalizing BF recovery fences retained."
+  ],
+  "selected_profile": {
+    "duration_seconds": 19.6,
+    "cpu_samples_seconds": 17.76,
+    "syscall_flat_seconds": 9.82,
+    "sha256_flat_seconds": 3.75,
+    "prepare_capture_focus_cpu_seconds": 7.83,
+    "prepare_capture_focus_syscall_flat_seconds": 4.34,
+    "prepare_capture_focus_sha256_flat_seconds": 1.4,
+    "profile_scope": "pprof full run incl cleanup; separate focus=prepareCapture, same full-profile denominator"
+  }
+}

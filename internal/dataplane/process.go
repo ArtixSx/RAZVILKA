@@ -192,6 +192,12 @@ func (OSProcessController) Stop(ctx context.Context, spec ProcessSpec) error {
 	}
 	_ = process.Signal(os.Interrupt)
 	deadline := time.Now().Add(4 * time.Second)
+	// Most owned children stop promptly after Interrupt. Observe those exits
+	// within the first 100ms, then retain the original cadence and grace bound.
+	// Each observation still checks the exact managed identity; elapsed time
+	// alone never establishes absence or grants cleanup authority.
+	pauses := [...]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond, 30 * time.Millisecond, 100 * time.Millisecond}
+	poll := 0
 	for time.Now().Before(deadline) {
 		if !processMatches(pid, spec) {
 			_ = owned.Remove(pidName)
@@ -200,8 +206,9 @@ func (OSProcessController) Stop(ctx context.Context, spec ProcessSpec) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(pauses[min(poll, len(pauses)-1)]):
 		}
+		poll++
 	}
 	if !processMatches(pid, spec) {
 		_ = owned.Remove(pidName)

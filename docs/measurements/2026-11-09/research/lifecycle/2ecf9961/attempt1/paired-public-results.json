@@ -1,0 +1,35 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run": 42673010546,
+  "empty": {
+    "job": 129350125047,
+    "restoreSeconds": 70.41,
+    "logSHA256": "FB50DBA9DE9560247005274AA1E6D2FD27D80FD049CEC4C61DA4D66AD20DBA3B",
+    "bootstrapSeconds": 31.35,
+    "result": "PASS",
+    "totalSeconds": 101.78
+  },
+  "draft": {
+    "logSHA256": "63D5B8AF84021AA5F144E2A592B079272FDD1A150F6A31EED68045292F6EB75B",
+    "restoreSeconds": 74.31,
+    "result": "PASS",
+    "job": 129350123920,
+    "bootstrapSeconds": 41.55
+  },
+  "proven": [
+    "Real unmodified817old193 binary/script under existing configured layout",
+    "Actual public bootstrap producer completes paired offline installation",
+    "Actual fresh Gate owner publishes durable matching Stop",
+    "Public CLI paired restore returns original source executable offline",
+    "Protected current state/fences and complete prior pair verified by existing consumer assertions",
+    "Draft: genuine old HTTP writer authored nonempty candidate, exact bytes and current-reader candidate preserved"
+  ],
+  "limits": [
+    "Ubuntu disposable native namespaces and tagged platform classification only",
+    "Configured old layout, not default /opt/var migration",
+    "Draft is not completed history/manual selection proof",
+    "Old live panel compatibility and physical router acceptance not claimed"
+  ],
+  "fix": "5612c16f original bootstrap joined-worker witness actualnative accepted",
+  "noRouterChanges": true
+}

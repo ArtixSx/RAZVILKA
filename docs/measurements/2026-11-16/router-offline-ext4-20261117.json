@@ -1,0 +1,277 @@
+{
+  "schema": 1,
+  "status": "EXACT_OFFLINE_EXT4_RESTORE_VERIFIED",
+  "timestamp_utc": "2026-11-17T07:25:15Z",
+  "archive_sha256": "2dafa2c116693ea7646e3861e19a2a778bd570bb4afd922ef69f85ebecb65897",
+  "archive_bytes_each": 10424843,
+  "input_archives": 2,
+  "verification": {
+    "members": 925,
+    "regular_files": 578,
+    "symlinks": 263,
+    "archive_hardlinks": 0,
+    "all_regular_nlink_one": true,
+    "exact_namespace_and_metadata": true
+  },
+  "symlink_mode_octal": "0755",
+  "synthetic": {
+    "original_linux_tests": 10,
+    "exact_ext4_members": 14,
+    "map_negatives": 4,
+    "uncertain_attachment_models": 3
+  },
+  "actual": {
+    "status": "EXACT_EXT4_METADATA_VERIFIED",
+    "mode": "actual",
+    "executed_restored_files": false,
+    "network_requests": 0,
+    "xattrs_acl_caps": "NOT_PROVEN",
+    "router_boot_acceptance": false,
+    "verifier_sha256": "7afde5994aa3acf0e7d2ec4ae016ca4abcd3ebc133239bd312389abc948c7a05",
+    "driver_sha256": "0026de7086dd8e1977c8309c663ffd8043a895fee5fff822fbeecb5c5b421a5d",
+    "verification": {
+      "members": 925,
+      "regular_files": 578,
+      "symlinks": 263,
+      "archive_hardlinks": 0,
+      "all_regular_nlink_one": true,
+      "exact_namespace_and_metadata": true
+    },
+    "original_symlink_mode": "0755",
+    "symlinks": 263,
+    "image_sha256": "b884310f006d2a90c83452ce401ed78776d8df3683a7304c567757a56ef7c447",
+    "image_bytes": 134217728,
+    "owned_loop_detached": true
+  },
+  "synthetic_result": {
+    "status": "EXACT_EXT4_METADATA_VERIFIED",
+    "mode": "synthetic",
+    "executed_restored_files": false,
+    "network_requests": 0,
+    "xattrs_acl_caps": "NOT_PROVEN",
+    "router_boot_acceptance": false,
+    "verifier_sha256": "7afde5994aa3acf0e7d2ec4ae016ca4abcd3ebc133239bd312389abc948c7a05",
+    "driver_sha256": "0026de7086dd8e1977c8309c663ffd8043a895fee5fff822fbeecb5c5b421a5d",
+    "attach_error_negatives": 3,
+    "negative_cases": 4,
+    "verification": {
+      "members": 14,
+      "regular_files": 6,
+      "symlinks": 2,
+      "archive_hardlinks": 0,
+      "all_regular_nlink_one": true,
+      "exact_namespace_and_metadata": true
+    },
+    "original_symlink_mode": "0755",
+    "symlinks": 2,
+    "image_sha256": "5ecc1d45d38b9bd7e6f57729f705d7e0929b89393c8945b9fd8487a2695c42b0",
+    "image_bytes": 134217728,
+    "owned_loop_detached": true
+  },
+  "iso": {
+    "iso_sha256": "fac4f746d6a79ec5b26962f6a7ca3de6f8e3257ed3b7055525b64c182e18e934",
+    "iso_bytes": 35862528,
+    "verified_payloads": 31,
+    "private_config_or_firmware": false
+  },
+  "signed_apks_verified": 25,
+  "cleanup": {
+    "uuid": "22acc61e-3c02-423b-8575-90eaa4003f95",
+    "state": "POWERED_OFF_AND_UNREGISTERED",
+    "config_retained_private": true,
+    "files_deleted": false,
+    "router_operations": 0,
+    "last_guest_owned_loop_count": 0,
+    "timestamp_utc": "2026-11-17T07:24:19Z"
+  },
+  "prior_results_retained": [
+    "tmpfs strict restore INCOMPLETE symlink_mode_not_supported",
+    "first ext4 synthetic INCOMPLETE BusyBox losetup --show unsupported; no payload restored",
+    "CRLF manifest parsing refusal and RAM-only package install acknowledgment refusal"
+  ],
+  "limits": [
+    "No router mutation or restoration performed",
+    "No restored file executed",
+    "No public/cloud upload of private data",
+    "Basic tar does not prove xattrs/ACL/capabilities/atime/ctime/source-hardlink relationships",
+    "Not firmware/config import, startup, LAN or power-loss acceptance",
+    "Lab ext4 filesystem uses current e2fsprogs defaults; not an image qualified for router kernel4.9",
+    "RAM images discarded after verified unmount/detach; private results/rawlogs/source and immutable input ISOs retained",
+    "240s external-tool budget is not a hard process-wide Python wall bound; host serial timeout is refusal, not completion"
+  ],
+  "evidence": [
+    {
+      "path": "ext4_restore_drill.py",
+      "bytes": 13521,
+      "sha256": "0026de7086dd8e1977c8309c663ffd8043a895fee5fff822fbeecb5c5b421a5d"
+    },
+    {
+      "path": "payload-ext4-busybox/verify_offline_restore.py",
+      "bytes": 10865,
+      "sha256": "7afde5994aa3acf0e7d2ec4ae016ca4abcd3ebc133239bd312389abc948c7a05"
+    },
+    {
+      "path": "iso-signature-verification.txt",
+      "bytes": 946,
+      "sha256": "6610ece2388a8e9a5809d84991ae6ca915453124d51a3466346e6f0882f04009"
+    },
+    {
+      "path": "iso-ext4-busybox-readback.json",
+      "bytes": 182,
+      "sha256": "55150647a887e57822c456634e1d1e676a5150da01d75b66792fe72649e766f7"
+    },
+    {
+      "path": "vm-before-ext4-busybox-boot.txt",
+      "bytes": 3587,
+      "sha256": "fa5a5fe1b1b5adc1eba26f3b232f1de4cd1a24526f6023db610d40f95b362306"
+    },
+    {
+      "path": "vm-after-ext4-busybox-boot.txt",
+      "bytes": 3948,
+      "sha256": "bf423cfa7d0b60facea27c0372542ba46698c7ff1f191234b2339a03fb345824"
+    },
+    {
+      "path": "prepare-guest-ext4-busybox.private.txt",
+      "bytes": 16879,
+      "sha256": "b8257651eab67cd9c06579e6617b977b14555ed6c83f2ac10b3bc2bed207914a"
+    },
+    {
+      "path": "synthetic-linux-ext4-busybox.private.txt",
+      "bytes": 1187,
+      "sha256": "9e38dfc30163cc29f58f378ca31b98dd4cd45542e5489193ddb6d5705f79ae40"
+    },
+    {
+      "path": "ext4-synthetic-busybox.private.txt",
+      "bytes": 558,
+      "sha256": "fdfedb21c910f0b400ebd335b699f3ab224cee43545e7529148da1c5a4cc89c3"
+    },
+    {
+      "path": "ext4-actual.private.txt",
+      "bytes": 556,
+      "sha256": "1d17eddde46f3a4f1a0c6e1e9efe87c0ea9a68b5cae0143d991cdd6d3dfc30e2"
+    },
+    {
+      "path": "ext4-evidence.private.tar.gz",
+      "bytes": 22386,
+      "sha256": "e2cba814b5cbf09348ab6183630a52266c94e8de051d40d403a33f7a94f2ca3f"
+    },
+    {
+      "path": "ext4-evidence-manifest.json",
+      "bytes": 120,
+      "sha256": "102fe6e16f17d96ae70d15059a5197939c4bb5070bced35a33a1c5e9985905b9"
+    },
+    {
+      "path": "ext4-synthetic-full-result.json",
+      "bytes": 842,
+      "sha256": "78fc3f2b536aeb4fbd94bfac6c13681f22ed7684eeb313efe0bdc63b5ba8b1fb"
+    },
+    {
+      "path": "ext4-actual-full-result.json",
+      "bytes": 790,
+      "sha256": "b3b533ac885522604f17b2be93e3c37e70386478698f41ac833ed5188aba4232"
+    },
+    {
+      "path": "final-guest-isolation.private.txt",
+      "bytes": 1718,
+      "sha256": "3ee0e3a83adf913de6744c6cd67e58f0d966e4b33489bb9732ef84ee5f76002a"
+    },
+    {
+      "path": "vm-final-poweroff.txt",
+      "bytes": 3587,
+      "sha256": "0ccaabfeab33020e87179c800d1f6f0123c03a29e3b870ade85cce34ae5acaf7"
+    },
+    {
+      "path": "vm-cleanup.json",
+      "bytes": 269,
+      "sha256": "d81ce83705c7420c5905e2f3127d4abe7382260c70a2b98542ef234531c85f95"
+    },
+    {
+      "path": "offline-restore-linux-result.json",
+      "bytes": 4836,
+      "sha256": "2887e1ccd24d0884a25897131c9ca4e5d2f010fc13989d9f218cb6fc5d0dcf32"
+    }
+  ],
+  "independent_review": {
+    "verdict": "VERIFIED_OFFLINE_EXT4_RECONSTRUCTION_ONLY",
+    "actual": {
+      "status": "EXACT_EXT4_METADATA_VERIFIED",
+      "mode": "actual",
+      "executed_restored_files": false,
+      "network_requests": 0,
+      "xattrs_acl_caps": "NOT_PROVEN",
+      "router_boot_acceptance": false,
+      "verifier_sha256": "7afde5994aa3acf0e7d2ec4ae016ca4abcd3ebc133239bd312389abc948c7a05",
+      "driver_sha256": "0026de7086dd8e1977c8309c663ffd8043a895fee5fff822fbeecb5c5b421a5d",
+      "verification": {
+        "members": 925,
+        "regular_files": 578,
+        "symlinks": 263,
+        "archive_hardlinks": 0,
+        "all_regular_nlink_one": true,
+        "exact_namespace_and_metadata": true
+      },
+      "original_symlink_mode": "0755",
+      "symlinks": 263,
+      "image_sha256": "b884310f006d2a90c83452ce401ed78776d8df3683a7304c567757a56ef7c447",
+      "image_bytes": 134217728,
+      "owned_loop_detached": true
+    },
+    "synthetic": {
+      "status": "EXACT_EXT4_METADATA_VERIFIED",
+      "mode": "synthetic",
+      "executed_restored_files": false,
+      "network_requests": 0,
+      "xattrs_acl_caps": "NOT_PROVEN",
+      "router_boot_acceptance": false,
+      "verifier_sha256": "7afde5994aa3acf0e7d2ec4ae016ca4abcd3ebc133239bd312389abc948c7a05",
+      "driver_sha256": "0026de7086dd8e1977c8309c663ffd8043a895fee5fff822fbeecb5c5b421a5d",
+      "attach_error_negatives": 3,
+      "negative_cases": 4,
+      "verification": {
+        "members": 14,
+        "regular_files": 6,
+        "symlinks": 2,
+        "archive_hardlinks": 0,
+        "all_regular_nlink_one": true,
+        "exact_namespace_and_metadata": true
+      },
+      "original_symlink_mode": "0755",
+      "symlinks": 2,
+      "image_sha256": "5ecc1d45d38b9bd7e6f57729f705d7e0929b89393c8945b9fd8487a2695c42b0",
+      "image_bytes": 134217728,
+      "owned_loop_detached": true
+    },
+    "independent_checks": [
+      "exact SHA of297-regular-member raw evidence bundle and safe member paths",
+      "2+263 fixed numeric-inode mode commands match unique captured maps and exact raw prewrite symlink0777 probes",
+      "both e2fsck-fn logs contain five checking passes; original driver requires exit0",
+      "full result JSON agrees with private archive copies",
+      "actual serial exit0 and925/578/263 original verifier result",
+      "same driver pin for synthetic gate andactual",
+      "actual ISO SHA matches source payload provenance",
+      "final guest only stock modloop remains; no own ext4 mounts orloops; zero routes/noNIC",
+      "owned VM final poweroff and8NICnone"
+    ],
+    "limits": [
+      "Original tmpfs symlink-mode refusal and first BusyBox unsupportedCLI failure retained, not rewritten as success.",
+      "Current proof reconstructs original bytes, literal targets, namespace, uid/gid/mode/mtime on ext4; it does not prove router firmware boot or service operation.",
+      "ACL/xattrs/capabilities and hardware-specific semantics remain unproved.",
+      "No restored code execution or router writes.",
+      "RAM images were not exported; final image hashes are guest evidence, not host rehashes."
+    ],
+    "raw_sha256": {
+      "ext4_restore_drill.py": "0026de7086dd8e1977c8309c663ffd8043a895fee5fff822fbeecb5c5b421a5d",
+      "ext4-evidence.private.tar.gz": "e2cba814b5cbf09348ab6183630a52266c94e8de051d40d403a33f7a94f2ca3f",
+      "ext4-actual-full-result.json": "b3b533ac885522604f17b2be93e3c37e70386478698f41ac833ed5188aba4232",
+      "ext4-synthetic-full-result.json": "78fc3f2b536aeb4fbd94bfac6c13681f22ed7684eeb313efe0bdc63b5ba8b1fb",
+      "ext4-actual.private.txt": "1d17eddde46f3a4f1a0c6e1e9efe87c0ea9a68b5cae0143d991cdd6d3dfc30e2",
+      "ext4-synthetic-busybox.private.txt": "fdfedb21c910f0b400ebd335b699f3ab224cee43545e7529148da1c5a4cc89c3",
+      "synthetic-linux-ext4-busybox.private.txt": "9e38dfc30163cc29f58f378ca31b98dd4cd45542e5489193ddb6d5705f79ae40",
+      "prepare-guest-ext4-busybox.private.txt": "b8257651eab67cd9c06579e6617b977b14555ed6c83f2ac10b3bc2bed207914a",
+      "final-guest-isolation.private.txt": "3ee0e3a83adf913de6744c6cd67e58f0d966e4b33489bb9732ef84ee5f76002a",
+      "vm-final-poweroff.txt": "0ccaabfeab33020e87179c800d1f6f0123c03a29e3b870ade85cce34ae5acaf7",
+      "iso-ext4-busybox-readback.json": "55150647a887e57822c456634e1d1e676a5150da01d75b66792fe72649e766f7"
+    }
+  },
+  "root_verification": "Private bundle size/SHA and all297 regular relative-path entries checked; driver SHA matches both full results; archive contents not published."
+}

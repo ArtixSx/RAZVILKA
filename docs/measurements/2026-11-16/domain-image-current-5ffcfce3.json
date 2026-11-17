@@ -1,0 +1,627 @@
+{
+  "schema": 1,
+  "revision": "5ffcfce31c6a8571fb6a92778736bcf8b9da79cb",
+  "run": {
+    "id": 43934766672,
+    "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43934766672",
+    "status": "completed",
+    "conclusion": "failure"
+  },
+  "acceptance": {
+    "passed": 0,
+    "failed": 8,
+    "full_route_ready": false,
+    "router_tested": false
+  },
+  "method": {
+    "order": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline"
+    ],
+    "same_host": "All four samples of each scenario ran sequentially in one hosted job on the same VM. The two scenario jobs used separate VMs; matching CPU/kernel labels do not establish shared host identity.",
+    "baseline": "Synthetic exact-current-source full-SHA fallback, not a historical commit",
+    "candidate": "Unmodified exact current-source image feature, including dependent pre-Add/Guard sharing",
+    "publication_budget_seconds": 12,
+    "client_budget_seconds": 4,
+    "samples_per_side_per_job": 2,
+    "cache_state": "Fresh process/namespace per sample, warm host page cache; not cold IO",
+    "statistical_claim": false
+  },
+  "scenarios": [
+    {
+      "name": "canceled-ready",
+      "job_id": 133536357178,
+      "job_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43934766672/job/133536357178",
+      "conclusion": "failure",
+      "host": {
+        "cpu_model": "Intel(R) Xeon(R) 6975P-C",
+        "kernel": "7.0.0-1014-aws",
+        "go": "go version go1.26.5 linux/amd64",
+        "native_GOMAXPROCS": 2,
+        "cgroup_cpu_max": "unavailable"
+      },
+      "runner_label": "ubuntu-24.04",
+      "pinned_assets_sha256": {
+        "/usr/local/lib/razvilka-fixtures/xray": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+        "/usr/sbin/xtables-legacy-multi": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52",
+        "/usr/bin/ip": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92"
+      },
+      "source_variants": {
+        "baseline": "synthetic-current-source-full-SHA-fallback",
+        "candidate": "unmodified-current-source-image-feature",
+        "changed_path": "internal/dataplane/xray_domain_tcp_image_read.go",
+        "changed_statements": 1,
+        "helper_sha256": "fa281bfff9faa4f9ca41d213207f12b685e4f8a71a7372cd57a7c1f504561a30",
+        "limits": [
+          "Image feature includes dependent pre-Add/Guard sharing; not memcmp-only measurement",
+          "Synthetic variant is not historical344912c or a production release",
+          "No harness, dependency, budget or cleanup changes between sides"
+        ],
+        "patch_sha256": "39ad4378a237dd53251adaa78378672b5fd4fe6256b9b7ae4fe5c626fde1e6ce",
+        "reviewed_fallbacks": {
+          "internal/dataplane/domain_tcp_guard_read.go": "ca57f917bbf69c864c1efb59eea0ac078f169807e9d1e6091bc55a2aa8f78a4b",
+          "internal/dataplane/domain_tcp_successor_byte_comparison.go": "6a401537df0f71b285e97c1b87a21266177c45d4912301d95b98cc770afec18f",
+          "internal/dataplane/xray_domain_tcp_execution.go": "4777181fc947837a3f2ec7990c22a2b032c2f873a5993a9534074e03c263c23e",
+          "internal/dataplane/xray_domain_tcp_file_observation.go": "7d2d2fd866b01b755a4515daa2573c4ee6a89e64bf5ddfaca5cb876abcdcc72e",
+          "internal/dataplane/xray_domain_tcp_image_read.go": "8cf454171cd0df8de84ccf2aa5a282e18c00952c6415aa65226cc552733358ae",
+          "internal/dataplane/xray_domain_tcp_resource_files.go": "69126b36dd1c2604767ed145fecbdfc560399ae482445c83f48734ec29cedf74"
+        },
+        "schema": 1,
+        "source_commit": "5ffcfce31c6a8571fb6a92778736bcf8b9da79cb",
+        "whole_file_ast_parity": true,
+        "whole_tree_parity": true
+      },
+      "samples": [
+        {
+          "sample": 1,
+          "side": "baseline",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (33.81s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "child/readiness cancellation witness not reached; policy cleanup unknown",
+          "failure_hostname": null,
+          "selected_service_request_completed_before_later_failure": false
+        },
+        {
+          "sample": 2,
+          "side": "candidate",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (32.51s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "child/readiness cancellation witness not reached; policy cleanup unknown",
+          "failure_hostname": null,
+          "selected_service_request_completed_before_later_failure": false
+        },
+        {
+          "sample": 3,
+          "side": "candidate",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (32.58s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "child/readiness cancellation witness not reached; policy cleanup unknown",
+          "failure_hostname": null,
+          "selected_service_request_completed_before_later_failure": false
+        },
+        {
+          "sample": 4,
+          "side": "baseline",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (33.69s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "child/readiness cancellation witness not reached; policy cleanup unknown",
+          "failure_hostname": null,
+          "selected_service_request_completed_before_later_failure": false
+        }
+      ],
+      "completed_first_answer_stage_comparison": {
+        "capture-prepare": {
+          "raw_seconds": {
+            "baseline": [
+              3.845263621,
+              3.939904036
+            ],
+            "candidate": [
+              3.439225558,
+              3.435976023
+            ]
+          },
+          "baseline_mean_seconds": 3.8925838285000003,
+          "candidate_mean_seconds": 3.4376007905,
+          "change_percent": -11.688458310615935
+        },
+        "standby-prepare": {
+          "raw_seconds": {
+            "baseline": [
+              1.54546461,
+              1.541795964
+            ],
+            "candidate": [
+              1.289449036,
+              1.292850482
+            ]
+          },
+          "baseline_mean_seconds": 1.543630287,
+          "candidate_mean_seconds": 1.291149759,
+          "change_percent": -16.356282338220275
+        },
+        "mapping-compare": {
+          "raw_seconds": {
+            "baseline": [
+              1.202537051,
+              1.218532257
+            ],
+            "candidate": [
+              1.148158164,
+              1.19141008
+            ]
+          },
+          "baseline_mean_seconds": 1.210534654,
+          "candidate_mean_seconds": 1.169784122,
+          "change_percent": -3.3663251081121004
+        },
+        "kernel-observe": {
+          "raw_seconds": {
+            "baseline": [
+              1.074163042,
+              1.093892167
+            ],
+            "candidate": [
+              1.056406458,
+              1.104805595
+            ]
+          },
+          "baseline_mean_seconds": 1.0840276045,
+          "candidate_mean_seconds": 1.0806060265,
+          "change_percent": -0.3156356891463208
+        },
+        "process-current": {
+          "raw_seconds": {
+            "baseline": [
+              2.911984571,
+              2.976844472
+            ],
+            "candidate": [
+              2.686057156,
+              2.72814054
+            ]
+          },
+          "baseline_mean_seconds": 2.9444145214999997,
+          "candidate_mean_seconds": 2.7070988480000002,
+          "change_percent": -8.059859498964217
+        }
+      },
+      "first_answer_executable_io": [
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        },
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        },
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        },
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        }
+      ],
+      "raw_evidence": [
+        {
+          "artifact": "canceled-ready",
+          "path": "comparison.json",
+          "bytes": 27841,
+          "sha256": "84a3a755ab338e98ba60d6c93044ecf3ad3ec250df8baad71b2f6a77e2e69ee2"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "provenance.json",
+          "bytes": 3110,
+          "sha256": "43f13840f670a4a001cf2aff1ed641839c5c6e765f1444e956b910f8a274822f"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "source-comparison/variant.json",
+          "bytes": 1573,
+          "sha256": "60d89e9cfb5e66912027c1476957218b038e8197f8675cedb888665e6ef5b641"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "source-comparison/variant.patch",
+          "bytes": 227,
+          "sha256": "39ad4378a237dd53251adaa78378672b5fd4fe6256b9b7ae4fe5c626fde1e6ce"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "source-comparison/candidate-source.json",
+          "bytes": 1185699,
+          "sha256": "96c0ea2cbf55674e2dad1802e9543b8caab40d46c5d0325b37ad01cfba5f6137"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "source-comparison/baseline-source.json",
+          "bytes": 1185699,
+          "sha256": "2c214d9be0ffd151fad97b8430158da4faf1d0c6d5a11402800128196580e319"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "01-baseline/native.log",
+          "bytes": 35369,
+          "sha256": "1b8e40bf251e6adaf51ad1fa21558508ae93543fab1ad0f1855a19f8b7f4b2e4"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "02-candidate/native.log",
+          "bytes": 20338,
+          "sha256": "91e6c2dea3f7da5ab92621ebaf4df25cace43a6c841144e4b66d291464b27408"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "03-candidate/native.log",
+          "bytes": 20301,
+          "sha256": "1a838b5bc5168bb8bd59d0b13846e50049189c92153120e310a066255189ddd6"
+        },
+        {
+          "artifact": "canceled-ready",
+          "path": "04-baseline/native.log",
+          "bytes": 35016,
+          "sha256": "800c6e36e403bf3f7c8486a1cab4beb0fa4cb6a760cdf497c94b599f4386ae00"
+        }
+      ],
+      "embedded_evidence_files_verified": 64
+    },
+    {
+      "name": "selected",
+      "job_id": 133536356612,
+      "job_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43934766672/job/133536356612",
+      "conclusion": "failure",
+      "host": {
+        "cpu_model": "Intel(R) Xeon(R) 6975P-C",
+        "kernel": "7.0.0-1014-aws",
+        "go": "go version go1.26.5 linux/amd64",
+        "native_GOMAXPROCS": 2,
+        "cgroup_cpu_max": "unavailable"
+      },
+      "runner_label": "ubuntu-24.04",
+      "pinned_assets_sha256": {
+        "/usr/local/lib/razvilka-fixtures/xray": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+        "/usr/sbin/xtables-legacy-multi": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52",
+        "/usr/bin/ip": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92"
+      },
+      "source_variants": {
+        "baseline": "synthetic-current-source-full-SHA-fallback",
+        "candidate": "unmodified-current-source-image-feature",
+        "changed_path": "internal/dataplane/xray_domain_tcp_image_read.go",
+        "changed_statements": 1,
+        "helper_sha256": "fa281bfff9faa4f9ca41d213207f12b685e4f8a71a7372cd57a7c1f504561a30",
+        "limits": [
+          "Image feature includes dependent pre-Add/Guard sharing; not memcmp-only measurement",
+          "Synthetic variant is not historical344912c or a production release",
+          "No harness, dependency, budget or cleanup changes between sides"
+        ],
+        "patch_sha256": "39ad4378a237dd53251adaa78378672b5fd4fe6256b9b7ae4fe5c626fde1e6ce",
+        "reviewed_fallbacks": {
+          "internal/dataplane/domain_tcp_guard_read.go": "ca57f917bbf69c864c1efb59eea0ac078f169807e9d1e6091bc55a2aa8f78a4b",
+          "internal/dataplane/domain_tcp_successor_byte_comparison.go": "6a401537df0f71b285e97c1b87a21266177c45d4912301d95b98cc770afec18f",
+          "internal/dataplane/xray_domain_tcp_execution.go": "4777181fc947837a3f2ec7990c22a2b032c2f873a5993a9534074e03c263c23e",
+          "internal/dataplane/xray_domain_tcp_file_observation.go": "7d2d2fd866b01b755a4515daa2573c4ee6a89e64bf5ddfaca5cb876abcdcc72e",
+          "internal/dataplane/xray_domain_tcp_image_read.go": "8cf454171cd0df8de84ccf2aa5a282e18c00952c6415aa65226cc552733358ae",
+          "internal/dataplane/xray_domain_tcp_resource_files.go": "69126b36dd1c2604767ed145fecbdfc560399ae482445c83f48734ec29cedf74"
+        },
+        "schema": 1,
+        "source_commit": "5ffcfce31c6a8571fb6a92778736bcf8b9da79cb",
+        "whole_file_ast_parity": true,
+        "whole_tree_parity": true
+      },
+      "samples": [
+        {
+          "sample": 1,
+          "side": "baseline",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (20.97s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "selected-service TLS client4s",
+          "failure_hostname": "service.example.com",
+          "selected_service_request_completed_before_later_failure": false
+        },
+        {
+          "sample": 2,
+          "side": "candidate",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (19.57s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "selected-service TLS client4s",
+          "failure_hostname": "service.example.com",
+          "selected_service_request_completed_before_later_failure": false
+        },
+        {
+          "sample": 3,
+          "side": "candidate",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.48s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "unknown-host TLS client4s",
+          "failure_hostname": "unknown.example.com",
+          "selected_service_request_completed_before_later_failure": true
+        },
+        {
+          "sample": 4,
+          "side": "baseline",
+          "status": "fail",
+          "variant_path_valid": true,
+          "gen1_publication_failure": false,
+          "native_outcomes": [
+            "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (20.88s)"
+          ],
+          "descendant_boundary": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "actual_primary_failure": "selected-service TLS client4s",
+          "failure_hostname": "service.example.com",
+          "selected_service_request_completed_before_later_failure": false
+        }
+      ],
+      "completed_first_answer_stage_comparison": {
+        "capture-prepare": {
+          "raw_seconds": {
+            "baseline": [
+              3.731904558,
+              3.614002088
+            ],
+            "candidate": [
+              3.292892767,
+              3.286803118
+            ]
+          },
+          "baseline_mean_seconds": 3.6729533229999998,
+          "candidate_mean_seconds": 3.2898479425,
+          "change_percent": -10.430445116222897
+        },
+        "standby-prepare": {
+          "raw_seconds": {
+            "baseline": [
+              1.494338864,
+              1.416757758
+            ],
+            "candidate": [
+              1.254762572,
+              1.23466362
+            ]
+          },
+          "baseline_mean_seconds": 1.4555483109999998,
+          "candidate_mean_seconds": 1.244713096,
+          "change_percent": -14.484934193297272
+        },
+        "mapping-compare": {
+          "raw_seconds": {
+            "baseline": [
+              1.165126828,
+              1.214962516
+            ],
+            "candidate": [
+              1.106493392,
+              1.114126033
+            ]
+          },
+          "baseline_mean_seconds": 1.190044672,
+          "candidate_mean_seconds": 1.1103097124999999,
+          "change_percent": -6.700165243880873
+        },
+        "kernel-observe": {
+          "raw_seconds": {
+            "baseline": [
+              1.027498992,
+              1.072584284
+            ],
+            "candidate": [
+              1.011855422,
+              1.019064826
+            ]
+          },
+          "baseline_mean_seconds": 1.050041638,
+          "candidate_mean_seconds": 1.015460124,
+          "change_percent": -3.293346925353058
+        },
+        "process-current": {
+          "raw_seconds": {
+            "baseline": [
+              2.827179702,
+              2.792915509
+            ],
+            "candidate": [
+              2.585134984,
+              2.616946537
+            ]
+          },
+          "baseline_mean_seconds": 2.8100476055000003,
+          "candidate_mean_seconds": 2.6010407605,
+          "change_percent": -7.437840006372809
+        }
+      },
+      "first_answer_executable_io": [
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        },
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        },
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        },
+        {
+          "calls": 126,
+          "bytes": 4608753156
+        }
+      ],
+      "raw_evidence": [
+        {
+          "artifact": "selected",
+          "path": "comparison.json",
+          "bytes": 22867,
+          "sha256": "821aec8a496d352ac97889577331abfbb5aad1da0e16af1058261262745e7e06"
+        },
+        {
+          "artifact": "selected",
+          "path": "provenance.json",
+          "bytes": 3104,
+          "sha256": "75bab05dd9de0af6d65fc41d42cfae321b0dafa09129fbea2eece1e687c5c0ff"
+        },
+        {
+          "artifact": "selected",
+          "path": "source-comparison/variant.json",
+          "bytes": 1573,
+          "sha256": "60d89e9cfb5e66912027c1476957218b038e8197f8675cedb888665e6ef5b641"
+        },
+        {
+          "artifact": "selected",
+          "path": "source-comparison/variant.patch",
+          "bytes": 227,
+          "sha256": "39ad4378a237dd53251adaa78378672b5fd4fe6256b9b7ae4fe5c626fde1e6ce"
+        },
+        {
+          "artifact": "selected",
+          "path": "source-comparison/candidate-source.json",
+          "bytes": 1185699,
+          "sha256": "96c0ea2cbf55674e2dad1802e9543b8caab40d46c5d0325b37ad01cfba5f6137"
+        },
+        {
+          "artifact": "selected",
+          "path": "source-comparison/baseline-source.json",
+          "bytes": 1185699,
+          "sha256": "2c214d9be0ffd151fad97b8430158da4faf1d0c6d5a11402800128196580e319"
+        },
+        {
+          "artifact": "selected",
+          "path": "01-baseline/native.log",
+          "bytes": 21898,
+          "sha256": "6ece038cd92114356951401096f1e61e341cfca6bf9be6a527ee5b82f3e56e8d"
+        },
+        {
+          "artifact": "selected",
+          "path": "02-candidate/native.log",
+          "bytes": 13285,
+          "sha256": "b1e0b7bceb32c50c74e79aed53e3ee468970d50382c2d35f69f428ca2de32d10"
+        },
+        {
+          "artifact": "selected",
+          "path": "03-candidate/native.log",
+          "bytes": 14304,
+          "sha256": "fd4cb93e485e8c10526e5a8e5bb1ee7b20c9a17064ad624e4bf784ab1a5ca03c"
+        },
+        {
+          "artifact": "selected",
+          "path": "04-baseline/native.log",
+          "bytes": 21582,
+          "sha256": "47f66094d1dd74d05ef424272b078559b181f526cdf12876aaa48a5408c97d61"
+        }
+      ],
+      "embedded_evidence_files_verified": 60
+    }
+  ],
+  "evidence_root": "C:\\RAZVILKA-research-20261116\\domain-image-current-5ffcfce3",
+  "limitations": [
+    "All eight native outcomes remain FAIL. Completed-stage measurements do not establish full-route performance or readiness.",
+    "Stage elapsed counters overlap and must not be added. Host/time differences prevent comparison to earlier absolute durations.",
+    "No-overlap descendant absence is distinct from successful policy cleanup; canceled-ready retained policy cleanup unknown.",
+    "Two samples per side are descriptive, not statistically significant.",
+    "The legacy comparison.json selected_tls_timeout boolean matches a general TLS timeout; exact requested hostname is recorded below.",
+    "No router/LAN hardware acceptance, release, publication, or production change was performed."
+  ]
+}

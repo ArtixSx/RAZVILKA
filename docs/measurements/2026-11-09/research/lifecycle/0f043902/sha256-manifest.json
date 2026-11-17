@@ -1,0 +1,20 @@
+{
+  ".gitattributes": "ffe82f3c5b968ed009c2577fa38f32c83be167799ee565d40a18e3440c57b342",
+  "classic-save-provisional-parity.json": "ddff256508bb85a1cdd87d8b99b3ffae01af9bd1de4860e5303b78fd93f98ad6",
+  "dns-readonly-allocation-attribution.txt": "c0898a315945ba6cc41f88c3da7557443ab5aa917a105182ecb53ea5548fa0d6",
+  "domain-0f04-canceled.log": "69d3ebaf540b768e2ac2dd95fdf6903c78bae377a6c3dfe6754ed8d34b9a0980",
+  "domain-0f04-selected.log": "3e6885012b4c3ad839a7e0cdc90cc6705aae8293295ee84b4bb2080db85fac80",
+  "generic-ci-independent-review.json": "ca20a1225f9af0149bf82e1179295a16de126fa07455f0a1b84e9e138201505d",
+  "generic-pr-ci.log": "d801d45c9c8a06029b062f60919e40e40a118e2be009d693912169534023be8b",
+  "generic-push-ci.log": "00274910c8d3f4f6fd80abea3e5712aef24d9da362a85788e6a04421a5e7fee9",
+  "managed-production.log": "fd818a26378a9325adc12f90bb1c6cb659672fc976f55a40ab29144d05a3c2b3",
+  "managed-race.log": "efb118e1d98587a63dbe7a5f5c8cf3e00a573e2cb9408a07b6a35226bceb85c4",
+  "managed-results.json": "1d542ab3f5615de23e13663b6dd96c9cdb755061d39cce2236490f6d570b714c",
+  "mihomo-independent-review.json": "916565ade4a172886530f8bb98b542a1eae4010a25bc0b6c467c49487e89d149",
+  "mihomo-lifecycle.log": "56009c7c45ea9d82374ea62001f1512765c221114e65c91ec16973cb26b19801",
+  "mihomo-manual-http.log": "4d826ecca84a3926f585e80081bd102c31c2813d8bf779ce1de4cabf4be6ed5c",
+  "mihomo-postcas.log": "ed9683cdf74a4141235b0903021ea2ad3a740bcf8dba6b6daafe2de3bef5b0a1",
+  "mihomo-settlement.log": "7185d80c702b19efa174226d8b27eb44848311205506c7c91aedafac3f08b753",
+  "strategy-pair-results.json": "36d7a1601f199dcbf78453957c3584b10bfc153c72948a5ef05367715b8d1f73",
+  "strategy-pair.log": "94eb1914f7aca864151c6046fb7ac75cc2139f774e15b3ee5d775235df450101"
+}

@@ -1,0 +1,16 @@
+{
+  "decision": "approved",
+  "reviewed_at_utc": "2026-11-09T19:34:24.9547357Z",
+  "base_head": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "file": "scripts/test-managed-probe-native.sh",
+  "worktree_sha256": "a9c070335252b81d84fc85a52b4f5ad5db8c3086f73d3a8fcfdaba513522f755",
+  "scope": "Three test-only dispatch edits",
+  "findings": [
+    "All three TestMetadataParallel tests selected, three repetitions",
+    "Exact BenchmarkMetadataParallelCostModel runs in the same original private mount/network namespace and genuine tool fixture",
+    "Uses already-built startuptools.test; existing 100s test deadline and other cases unchanged",
+    "Full original provider and worker namespace costs remain included; no production promotion or runtime acceptance inferred"
+  ],
+  "local_validation": "Source review only; no local Go builds or tests",
+  "required_evidence": "Actual normal and race native parity, refusal, and paired cost results"
+}

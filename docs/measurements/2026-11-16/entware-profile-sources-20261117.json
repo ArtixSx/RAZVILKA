@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "scope": "public package/source pin provenance only; no router admission or private configuration",
+  "files": [
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\entware-current-profile\\manifest.json",
+      "sha256": "86eb7cbe71ba420e291a2bc17d5349847cc78014a1d73ccfbf1d72866d7d1b38"
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\entware-current-profile\\actual-closure-20261117\\current-closure.json",
+      "sha256": "ae27db9ded0182560151bbe45cffd34afd65cd02158088973c6a984a0fdf7a75"
+    }
+  ],
+  "image_graph_sha256": "ba2e2a3d66e3a6471bdf6cc100d42f25a6280c747255fb1d0eee44be42a11fdf",
+  "image_graph_encoding": "sorted canonical path + ASCII space + SHA256 + LF",
+  "xtables_images": 40,
+  "policy_images": 41,
+  "extension_names": [
+    "libxt_ACCOUNT.so",
+    "libxt_CHAOS.so",
+    "libxt_CT.so",
+    "libxt_DELUDE.so",
+    "libxt_DHCPMAC.so",
+    "libxt_DNETMAP.so",
+    "libxt_ECHO.so",
+    "libxt_IPMARK.so",
+    "libxt_LOGMARK.so",
+    "libxt_NOTRACK.so",
+    "libxt_RAWDNAT.so",
+    "libxt_RAWSNAT.so",
+    "libxt_STEAL.so",
+    "libxt_SYSRQ.so",
+    "libxt_TARPIT.so",
+    "libxt_condition.so",
+    "libxt_conntrack.so",
+    "libxt_dhcpmac.so",
+    "libxt_fuzzy.so",
+    "libxt_geoip.so",
+    "libxt_gradm.so",
+    "libxt_iface.so",
+    "libxt_ipp2p.so",
+    "libxt_ipv4options.so",
+    "libxt_length2.so",
+    "libxt_lscan.so",
+    "libxt_pknock.so",
+    "libxt_psd.so",
+    "libxt_quota2.so",
+    "libxt_state.so"
+  ],
+  "packages": {
+    "keenetic:iptables": {
+      "sha256": "36999650d64ace11ccbdfd8cc66b68ccad0b2d1d32ffcdb8a36fe2ab26a1cf15",
+      "url": "https://bin.entware.net/aarch64-k3.10/keenetic/iptables_1.4.21-6_aarch64-3.10_kn.ipk"
+    },
+    "main:libc": {
+      "sha256": "2e0890ada42c28676135198b325b215e169c2549e646a20d3cbb55bcf9be5a61",
+      "url": "https://bin.entware.net/aarch64-k3.10/libc_2.27-12_aarch64-3.10.ipk"
+    },
+    "main:libgcc": {
+      "sha256": "8cfa38d0a541419413dbf4b24983eeb572e3c61d3a4424939ee27fab89ebe990",
+      "url": "https://bin.entware.net/aarch64-k3.10/libgcc_8.4.0-12_aarch64-3.10.ipk"
+    },
+    "main:ip-full": {
+      "sha256": "bc5fd8f91c956dc112138749903511800354abd074ed37578bde313d9abbd60c",
+      "url": "https://bin.entware.net/aarch64-k3.10/ip-full_4.4.0-11_aarch64-3.10.ipk"
+    },
+    "main:xtables-addons_legacy": {
+      "sha256": "50e8a0dc9afa6841117bfc21294de569ec5926354207c94b730c44f06fce318d",
+      "url": "https://bin.entware.net/aarch64-k3.10/xtables-addons_legacy_1.47.1-2_aarch64-3.10.ipk"
+    }
+  },
+  "source_snapshots": {
+    "entware_recipe_snapshot": {
+      "revision": "541289a115d32d1ab044e87608bc0ca6b2154ee9",
+      "sha256": "55ecb1bba6a47bc24e73cf9ba91728e8dd54cff052f5c98dac9a85d08765b128",
+      "url": "https://codeload.github.com/Entware/Entware/tar.gz/541289a115d32d1ab044e87608bc0ca6b2154ee9"
+    },
+    "glibc": {
+      "sha256": "e49c919c83579984f7c2442243861d04227e8dc831a08d7bf60cdacfdcd08797",
+      "url": "https://ftp.gnu.org/gnu/glibc/glibc-2.27.tar.bz2"
+    },
+    "iptables": {
+      "sha256": "52004c68021da9a599feed27f65defcfb22128f7da2c0531c0f75de0f479d3e0",
+      "url": "https://www.netfilter.org/projects/iptables/files/iptables-1.4.21.tar.bz2"
+    },
+    "addons_recipe_repo": {
+      "revision": "0e8841717b34a4aeac2c280618c50590c65e65f7",
+      "sha256": "66f38dfb2f4fdd24ddefd14104f324930ee8e93cdbcd22f4692e7ff7b58572df",
+      "url": "https://codeload.github.com/Entware/entware-oldpackages-ports/tar.gz/0e8841717b34a4aeac2c280618c50590c65e65f7"
+    },
+    "addons_upstream": {
+      "sha256": "06535dbefaa7725870750048842b4b53f5a4f8d8b16d5ce61bb4cc28e0b99326",
+      "url": "https://inai.de/files/xtables-addons/xtables-addons-1.47.1.tar.xz"
+    },
+    "poorbox_recipe_repo": {
+      "revision": "9aa40a4101c6e6e772e3b312705b1d2c02a12041",
+      "sha256": "ed5318f209c5096ac2df61478a76e4ca999f4cfec901f6645b225f0366cabd94",
+      "url": "https://codeload.github.com/The-BB/keendev-3x/tar.gz/9aa40a4101c6e6e772e3b312705b1d2c02a12041"
+    }
+  },
+  "limits": [
+    "package-byte provenance is not reproducible-build attestation",
+    "full acquisition retains original ownership/provider/Start-Wait/closing checks",
+    "UID1001, absent ip-full, namespace/custody and boot-shell proof remain separate"
+  ]
+}

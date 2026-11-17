@@ -1,0 +1,72 @@
+[
+  {
+    "path": "analysis-output.txt",
+    "sha256": "19b0ad6542cbd71e7de42d6ece9421713a78c083c3137bfad9d0faaba1a03dbc",
+    "bytes": 1224
+  },
+  {
+    "path": "analyze_pair.py",
+    "sha256": "715ef928474ffed6f9c0bbf94f84adda01543037cb86a903382c910bdc1145cf",
+    "bytes": 6941
+  },
+  {
+    "path": "baseline/check-current-reuse.csv",
+    "sha256": "29a32c05452b50fc9b61713180feeb36a6b9862251004aa9f5568c79eb05b7a1",
+    "bytes": 79624
+  },
+  {
+    "path": "baseline/environment.txt",
+    "sha256": "3e4939e385b667c5fffdb23914f45af7585ea6617502d5c1780395ec2009ee09",
+    "bytes": 1463
+  },
+  {
+    "path": "baseline/native-performance.log",
+    "sha256": "c6e85085d775ac2d3c15f81e2100bd7d47dfa2440019e7d5182b0e894b9177be",
+    "bytes": 1550
+  },
+  {
+    "path": "baseline/queue-http-current.csv",
+    "sha256": "54f2df195a027480c66dc77d42ed582083e28b86df244abbb7b34c29c5d3e375",
+    "bytes": 240408
+  },
+  {
+    "path": "baseline/resource-helper.log",
+    "sha256": "d680f8beeec4e0e90f9ceb36a25538901af83d69ce933cd2e393b54481d4a881",
+    "bytes": 350
+  },
+  {
+    "path": "candidate/check-current-reuse.csv",
+    "sha256": "7f8bef767042cedd640c7bc2e860e6daad5b634f771cb3019d8308dcaf83c782",
+    "bytes": 85741
+  },
+  {
+    "path": "candidate/environment.txt",
+    "sha256": "697bb1ed7a7c3d87350fa1f96e12fb3d13d36658a6e228882837f274caf8dbed",
+    "bytes": 1463
+  },
+  {
+    "path": "candidate/native-performance.log",
+    "sha256": "54ba7c79e54b28bb508e7317aee3c7cc9269bbbd97c8f8760c43ad052f50a828",
+    "bytes": 1550
+  },
+  {
+    "path": "candidate/queue-http-current.csv",
+    "sha256": "d18f277ef52e4088427de5a3a93c264c18b5f936c5cd725adf0f8d41811a4977",
+    "bytes": 251318
+  },
+  {
+    "path": "candidate/resource-helper.log",
+    "sha256": "c5f7d34260303c6e701609a2e0944a1f81cf56d432208676e28b49f869a64081",
+    "bytes": 350
+  },
+  {
+    "path": "comparison.txt",
+    "sha256": "f5d4553b33ed59288f86c66315a02a70b7bfd96e704a3d923187c368cc1e5a5f",
+    "bytes": 317
+  },
+  {
+    "path": "paired-analysis.json",
+    "sha256": "cb2cc06aab76cbb4293c51eb014d74940950d79aa8b1080c26a6f234912d2c5b",
+    "bytes": 51050
+  }
+]

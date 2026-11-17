@@ -1,0 +1,21 @@
+{
+  "head_sha":"bfc96dd2de2e3e6fa8f21e75eab8dd1f1ca3a406",
+  "run_id":42569258846,
+  "attempt":1,
+  "lifecycle_job":129002589631,
+  "lifecycle_result":"FAIL",
+  "lifecycle_test_seconds":15.18,
+  "first_failure":"round0 activate: exact original Mihomo IPv4 node material is unavailable",
+  "activate_seconds":2.932463,
+  "error_flags":{"deadline_exceeded":false,"canceled":false,"live_owner_unavailable":false,"parent_origin_unavailable":false},
+  "preceding_phases":"snapshot, stage, validate, canary passed",
+  "rollback":{"state":"rolled-back","rollback_seconds":1.005214,"verify_rollback_seconds":0.797617,"http_status":409},
+  "check_stop_reapply":"Not reached by failed lifecycle case",
+  "official_child_normal_and_race_bookends":"PASS",
+  "settlement":{"job":129002589817,"result":"PASS","test_seconds":127.33,"apply_seconds":96.112302452,"stop_seconds":9.572873331,"cuts":2,"original_prerequisites_preserved":true,"retired_header_reader":9,"all_rows_terminal":true},
+  "postcas":{"job":129002589893,"result":"PASS","test_seconds":94.18,"http_status":503,"desired_exact_restored":true,"rollback_verified":true,"original_pending":false},
+  "diagnosis":"Generic errMihomoLiveMaterial covers multiple original owner/profile/compiled-file/kernel checks in liveActivate. No specific cause identified. No evidence supports calling it a TTL failure: health-handoff TTL is established later; no active deadline flag. A single same-SHA rerun was requested and started by root, with original failure preserved.",
+  "cpu":{"wall_seconds":15.18,"cpu_sample_seconds":15.08,"sha256_flat_seconds":12.05,"sha256_flat_percent":79.91,"syscall_flat_seconds":2.40,"syscall_flat_percent":15.92},
+  "limitation":"Previous b7261e9f full lifecycle PASS cannot be attributed to this SHA. Even a successful rerun will not erase this unresolved nondeterministic material refusal. No code, TTL or ownership guard changed.",
+  "evidence":["mihomo-lifecycle.log","mihomo-settlement.log","mihomo-postcas.log","mihomo-cpu-artifacts/status.txt","mihomo-cpu-artifacts/live.cpu.pprof"]
+}

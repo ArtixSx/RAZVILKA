@@ -1,0 +1,185 @@
+{
+  "selected": {
+    "before-failure": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.224388776s"
+      },
+      "coordinator-original-read": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "337.792004ms"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.464\u00b5s"
+      },
+      "process-current": {
+        "calls": 280,
+        "bytes": 0,
+        "elapsed": "4.733945461s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.474710502s"
+      },
+      "whole-executable-hash": {
+        "calls": 119,
+        "bytes": 4352711314,
+        "elapsed": "3.143529944s"
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.224388776s"
+      },
+      "coordinator-original-read": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "337.792004ms"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.464\u00b5s"
+      },
+      "kernel-observe": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "104.374904ms"
+      },
+      "process-current": {
+        "calls": 282,
+        "bytes": 0,
+        "elapsed": "4.738153526s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.474710502s"
+      },
+      "whole-executable-hash": {
+        "calls": 123,
+        "bytes": 4499020938,
+        "elapsed": "3.249723894s"
+      }
+    },
+    "failure": [
+      "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (14.03s)"
+    ],
+    "benchmarks": [
+      "BenchmarkProcMountinfoUnescape/before_builder-4         \t  134658\t      2445 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4         \t  136113\t      2437 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4         \t  136047\t      2465 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4            \t  901424\t       385.5 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4            \t  928262\t       385.7 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4            \t  922278\t       392.1 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4            \t    2672\t    124980 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4            \t    2654\t    123364 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4            \t    2653\t    123361 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4           \t    2690\t    124805 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4           \t    2643\t    125825 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4           \t    2565\t    124479 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4           \t    2481\t    128908 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4           \t    2426\t    129127 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   85538 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4           \t    2475\t    128482 ns/op\t      5006 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op"
+    ]
+  },
+  "canceled": {
+    "before-failure": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.8522609s"
+      },
+      "coordinator-original-read": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "370.608778ms"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "2.154\u00b5s"
+      },
+      "process-current": {
+        "calls": 251,
+        "bytes": 0,
+        "elapsed": "4.640083262s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.675880898s"
+      },
+      "whole-executable-hash": {
+        "calls": 112,
+        "bytes": 4096669472,
+        "elapsed": "3.019093872s"
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.8522609s"
+      },
+      "coordinator-original-read": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "370.608778ms"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "2.154\u00b5s"
+      },
+      "process-current": {
+        "calls": 251,
+        "bytes": 0,
+        "elapsed": "4.640083262s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.675880898s"
+      },
+      "whole-executable-hash": {
+        "calls": 117,
+        "bytes": 4276336920,
+        "elapsed": "3.151423739s"
+      }
+    },
+    "failure": [
+      "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (14.16s)"
+    ],
+    "benchmarks": [
+      "BenchmarkProcMountinfoUnescape/before_builder-4         \t  133929\t      2557 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4         \t  134256\t      2531 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/before_builder-4         \t  127182\t      2519 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t     896 B/op\t      72 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4            \t  851376\t       386.6 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4            \t  932197\t       385.2 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoUnescape/plain_field-4            \t  807036\t       386.9 ns/op\t        48.00 paths/op\t        48.00 plain-paths/op\t       0 B/op\t       0 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4            \t    2535\t    126710 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4            \t    2695\t    129172 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes4096-4            \t    2540\t    127914 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   28192 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4           \t    2491\t    130711 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4           \t    2458\t    133181 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes16384-4           \t    2473\t    130465 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   52768 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4           \t    2401\t    133719 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   85538 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4           \t    2365\t    134693 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op",
+      "BenchmarkProcMountinfoReadChunks/bytes32768-4           \t    2354\t    133177 ns/op\t      5004 read-bytes/op\t         4.000 read-syscalls/op\t   85536 B/op\t      65 allocs/op"
+    ]
+  },
+  "_scope": {
+    "sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+    "run": 42642213655,
+    "decoder": "same captured actual mountinfo field corpus; decode-only; not fresh source/provider/router proof",
+    "strict": "both failed before GEN1 ready; snapshots completed only; joined timings include cleanup"
+  }
+}

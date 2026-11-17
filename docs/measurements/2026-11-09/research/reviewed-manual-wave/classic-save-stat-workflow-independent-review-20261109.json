@@ -1,0 +1,27 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T13:42:17.8602364Z",
+  "base_head": "66c5c3d6abd90afa4fe0961902c03167f53a4cce",
+  "status": "source approved; execution pending",
+  "scope": "Focused classic save/parser/held-stat normal and race selection, root parity tests, paired allocation benchmarks, mandatory actual native row/child parity markers",
+  "checks": [
+    "Startuptools package now included in portable focused gate; native-tag tests remain actual separate harness only",
+    "Both native build modes require exact save inventory and lock test PASS, sample5 and 20-to-4 child marker, no SKIP",
+    "Actual root-owned held-stat fixture runs under sudo; benchmark uses existing actual root-owned /bin/sh without setup authority",
+    "Existing deadlines, whole lifecycle checks, quarantine cleanup-only distinction and normal fresh Apply gates unchanged"
+  ],
+  "limitations": [
+    "All new SHA execution results pending; regex or source review alone is not native proof",
+    "Allocation benchmark and isolated inventory measurements do not establish router/LAN readiness"
+  ],
+  "files": [
+    {
+      "sha256": "CCFDCD066CFB6FBF1547675BC739AEC9BD0212F5C3B31C2C0CF197521FD17C03",
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "sha256": "A001D49FB56758CCBF7090A9035888A9D1DC0B6BDB4D522235A84E6D4C8E68D3",
+      "path": ".github/workflows/research-lifecycle.yml"
+    }
+  ]
+}

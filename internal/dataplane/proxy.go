@@ -22,6 +22,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/usquediag"
 	xnetproxy "golang.org/x/net/proxy"
@@ -2523,7 +2524,10 @@ func socksHTTPGet(ctx context.Context, rawURL, address string) (*http.Response, 
 	}
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
-			return dialer.(xnetproxy.ContextDialer).DialContext(ctx, network, target)
+			observed := probecheck.BeginSOCKSConnect(ctx)
+			conn, err := dialer.(xnetproxy.ContextDialer).DialContext(ctx, network, target)
+			observed(err)
+			return conn, err
 		},
 		ForceAttemptHTTP2: true,
 	}
@@ -2533,7 +2537,7 @@ func socksHTTPGet(ctx context.Context, rawURL, address string) (*http.Response, 
 		return nil, nil, err
 	}
 	request.Header.Set("User-Agent", "RAZVILKA-Proxy-Health/1")
-	response, err := serviceProbeClient(&http.Client{Transport: transport, Timeout: 15 * time.Second}, rawURL).Do(request)
+	response, err := probecheck.TimingClient(ctx, serviceProbeClient(&http.Client{Transport: transport, Timeout: 15 * time.Second}, rawURL)).Do(request)
 	if err != nil {
 		transport.CloseIdleConnections()
 		return nil, nil, err

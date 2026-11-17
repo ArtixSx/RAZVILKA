@@ -1,0 +1,44 @@
+File: app.test
+Build ID: ff87e0abfa57e2824b13107d6bb530a7987f2a09
+Type: cpu
+Time: 2026-11-09 19:51:17 UTC
+Duration: 42.71s, Total samples = 42.88s (100.39%)
+Showing nodes accounting for 35.04s, 81.72% of 42.88s total
+Dropped 885 nodes (cum <= 0.21s)
+Showing top 35 nodes out of 435
+      flat  flat%   sum%        cum   cum%
+    21.48s 50.09% 50.09%     21.48s 50.09%  internal/runtime/syscall/linux.Syscall6
+     8.94s 20.85% 70.94%      8.94s 20.85%  crypto/internal/fips140/sha256.blockSHANI
+     0.50s  1.17% 72.11%      0.75s  1.75%  runtime.tryDeferToSpanScan
+     0.33s  0.77% 72.88%      1.25s  2.92%  runtime.scanObject
+     0.32s  0.75% 73.62%      0.33s  0.77%  runtime.(*bucket).mp
+     0.32s  0.75% 74.37%      0.32s  0.75%  runtime.nextFreeFast (inline)
+     0.31s  0.72% 75.09%      0.48s  1.12%  runtime.scanObjectsSmall
+     0.24s  0.56% 75.65%      0.24s  0.56%  runtime.memclrNoHeapPointers
+     0.22s  0.51% 76.17%      0.31s  0.72%  strings.Fields
+     0.21s  0.49% 76.66%      0.32s  0.75%  runtime.exitsyscall
+     0.17s   0.4% 77.05%      0.26s  0.61%  runtime.typePointers.next
+     0.15s  0.35% 77.40%      1.92s  4.48%  runtime.mallocgc
+     0.15s  0.35% 77.75%      0.26s  0.61%  runtime.reentersyscall
+     0.14s  0.33% 78.08%      0.36s  0.84%  encoding/json.(*Decoder).readValue
+     0.14s  0.33% 78.40%     21.51s 50.16%  syscall.RawSyscall6
+     0.13s   0.3% 78.71%      0.83s  1.94%  runtime.mallocgcSmallScanNoHeader
+     0.10s  0.23% 78.94%      3.67s  8.56%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.10s  0.23% 79.17%      0.42s  0.98%  reflect.deepValueEqual
+     0.10s  0.23% 79.41%      0.24s  0.56%  runtime.findObject
+     0.10s  0.23% 79.64%      0.45s  1.05%  runtime.mallocgcSmallNoscan
+     0.10s  0.23% 79.87%     12.41s 28.94%  syscall.Syscall6
+     0.09s  0.21% 80.08%      0.52s  1.21%  os.(*File).readdir
+     0.09s  0.21% 80.29%      0.73s  1.70%  runtime.growslice
+     0.09s  0.21% 80.50%      0.26s  0.61%  runtime.scanblock
+     0.07s  0.16% 80.67%      0.41s  0.96%  syscall.ByteSliceFromString
+     0.06s  0.14% 80.81%      1.73s  4.03%  os.(*File).ReadAt
+     0.06s  0.14% 80.95%      1.24s  2.89%  os.doInRoot[go.shape.interface { IsDir bool; ModTime time.Time; Mode io/fs.FileMode; Name string; Size int64; Sys interface {} }]
+     0.06s  0.14% 81.09%      0.37s  0.86%  runtime.entersyscall
+     0.04s 0.093% 81.18%      0.22s  0.51%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.04s 0.093% 81.27%      6.84s 15.95%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.04s 0.093% 81.37%      1.37s  3.19%  os.(*File).Stat
+     0.04s 0.093% 81.46%      2.15s  5.01%  runtime.gcDrain
+     0.04s 0.093% 81.55%      0.39s  0.91%  runtime.mProf_FlushLocked
+     0.04s 0.093% 81.65%      9.90s 23.09%  syscall.Syscall
+     0.03s  0.07% 81.72%      0.67s  1.56%  encoding/json.(*decodeState).object

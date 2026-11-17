@@ -1,0 +1,38 @@
+[
+  {
+    "case": "direct",
+    "passed": true,
+    "curl_calls": 1,
+    "exit": 0
+  },
+  {
+    "case": "fallback",
+    "passed": true,
+    "curl_calls": 2,
+    "exit": 0
+  },
+  {
+    "case": "direct-wrong",
+    "passed": true,
+    "curl_calls": 1,
+    "exit": 1
+  },
+  {
+    "case": "api-wrong",
+    "passed": true,
+    "curl_calls": 2,
+    "exit": 1
+  },
+  {
+    "case": "both-fail",
+    "passed": true,
+    "curl_calls": 2,
+    "exit": 22
+  },
+  {
+    "case": "unknown",
+    "passed": true,
+    "curl_calls": 0,
+    "exit": 2
+  }
+]

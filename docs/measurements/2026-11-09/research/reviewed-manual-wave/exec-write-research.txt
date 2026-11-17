@@ -1,0 +1,41 @@
+RAZVILKA: exec write-denial research, 2026-11-09
+Decision: REJECT deny_write_access/ETXTBSY as a substitute for executable SHA observations in the existing runtime. No production code or SHA check changed. This is source analysis, not a completed native experiment.
+
+Pinned source: Linux v6.1, commit 830b3c68c1fb1e9176028d02ef86f3cf76aa2476. Individual source files, hashes and sizes: sources/linux-v6.1-exec-write/manifest.json. No Linux implementation copied into RAZVILKA; source headers retain their licenses (mostly GPL-2.0, NFS XDR has its BSD-style header). Total source download 862,915 bytes; no clone or local build.
+
+What the mechanism actually guarantees
+- include/linux/fs.h:2962-3000: deny_write_access decrements a LOCAL inode i_writecount only while it is not positive; ordinary writable opens increment only while not negative. ETXTBSY excludes ordinary writable opens against that same inode while the exclusion remains held.
+  https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/include/linux/fs.h#L2962
+- fs/exec.c:902-942 obtains the exec file then denies write. kernel/fork.c:1241-1265 manages mm->exe_file, denying the new image and allowing writes to the previous image. The retained read-only file reference is not itself another deny-write holder. Existing processes can change their executable without exiting.
+  https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/exec.c#L902
+  https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/kernel/fork.c#L1241
+
+Why the required equivalence fails
+1. Continuous process lifetime is not continuous executable lifetime. An original child can exec A -> B -> A with the same PID/starttime/group, while sole Wait has not returned. In the B interval the old A inode's exclusion can be released. Parent holding a read-only FD to A does not retain the mm exclusion. PR_SET_MM_EXE_FILE is an additional privileged image-replacement route, with restrictions: replace_mm_exe_file refuses while old-image mappings remain, and releases the previous exclusion after the replacement. Do not claim this prctl works without its capability/mapping prerequisites.
+   https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/kernel/fork.c#L1270
+2. Filesystem semantics are not universal. The pinned overlayfs documentation explicitly describes lower-layer executable cases where write/truncate is not refused with ETXTBSY. Lower/upper backing-tree changes while mounted are outside the supported overlay contract; they cannot serve as an integrity theorem. Copy-up may change identity, and current held/named/inode checks must continue independently.
+   https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/Documentation/filesystems/overlayfs.rst#L419
+   https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/Documentation/filesystems/overlayfs.rst#L470
+3. NFS i_writecount is client-local, not a server-wide content seal. Linux NFSv4 encodes share_deny=0; reads revalidate remote mapping state. Another client/server-side write is not excluded by this client's executable counter. Attribute caching also makes same size/mtime insufficient to prove bytes. No NFS mount is authorized or created in this task.
+   https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/nfs/nfs4xdr.c#L1401
+   https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/nfs/file.c#L158
+4. Reflink does not turn a file into a permanent seal. Ordinary clone-destination writes go through destination write-mode checks; a distinct cloned inode is separately governed. Dedupe remapping has different rules and is designed to preserve equal logical bytes, not certify process custody. Do not infer executable immutability merely from shared extents or treat reflink as a demonstrated bypass.
+   https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/remap_range.c#L370
+5. A writable shared mapping requires a write-capable file; existing writable descriptors/mappings can cause a later exec to be denied. Private mappings change private pages, not underlying executable bytes. Mapped executable memory, dynamic libraries and JIT state are separate from hashing the original executable file; ETXTBSY is not code-memory integrity.
+   https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/mm/mmap.c#L1338
+
+Existing RAZVILKA guard scope
+- xray_selected_tcp_runtime_process.go retains the same exec.Cmd/os.Process and exactly one Wait. domainProcessCurrent checks the exact resource/context association, original Cmd, closed flag and done channel. There is no application-level continuous exec event monitor or persistent deny-write token.
+- xray_domain_tcp_process_linux.go:80 already explicitly recognizes that execve/setns can preserve PID/start/parent/group. It re-reads kernel exe/argv/namespace/config-FDs around observations. These are current endpoint observations, not proof of no intervening exec.
+- Go 1.26.5 os/pidfd_linux.go may use pidfd when supported; it eliminates process/PID-reuse ambiguity for Wait/signal, not exec-image replacement. Router kernel 4.9 lacks that modern facility. Current code's lifetime guarantees must not be relabeled as a byte seal.
+
+Reproducible negative native test PLAN (not run)
+A. Isolated local filesystem, two tiny ELF helper copies A/B. Parent opens A read-only, hashes it, starts A, retains exact child and sole Wait. A reports readiness over an inherited pipe. Ordinary O_WRONLY/O_TRUNC against A must return ETXTBSY while A remains its executable; hardlink alias should behave identically. Record filesystem/mount identity and kernel.
+B. Have original child exec B without exit, retaining the control pipe and exact PID/group. While B is current, modify only a non-loaded ELF tail byte in A, preserve length and restore mtime. Then exec A again with original argv/environment. Assert original PID/starttime and no completed Wait; held A FD now has a different SHA. The experiment establishes a gap in write exclusion and a changed SHA, not that all current metadata guards pass: ctime may change even when mtime is restored. Existing validation may refuse earlier; if it reaches the full SHA, that SHA must refuse. This is the decisive continuity counterexample, not a test of a fabricated resource.
+C. Child exits while parent delays observing its Wait; verify writable A becomes possible but current proc/child guards refuse. No successful evidence may escape between cancel/exit and joined cleanup; keep both source SHA bookends.
+D. Separate private mount namespace overlay fixture with disposable lower/upper/work trees: exercise documented lower executable write/copy-up behavior; compare held FD versus named inode and SHA. Never touch host/router trees. Observe and label unsupported kernel/fs modes rather than reporting SKIP as coverage.
+E. Optional externally provisioned two-client NFS lab: execute on client1 and attempt same-length content change from client2; force actual revalidation and compare digest. Requires an isolated export and second client, unavailable here. Reflink/share-mapping variants need Btrfs/XFS or suitable mounted test filesystems, also separate acceptance.
+
+Any future stronger optimization would need a genuinely immutable owned executable object (for example a separately reviewed sealed memfd producer with full launch/provenance changes), not a metadata cache justified by ETXTBSY. That is a new design and not implemented or claimed compatible with router 4.9 by this research.
+
+Independent review: verification agent confirmed rejection from pinned source. Native A→B→A, overlay/NFS/reflink counterexamples remain proposed, NOT executed. Reviewer highlighted ctime: do not promise every existing metadata guard accepts the mutated fixture.

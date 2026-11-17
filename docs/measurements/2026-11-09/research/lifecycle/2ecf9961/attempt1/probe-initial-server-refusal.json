@@ -1,0 +1,8 @@
+{
+  "head_sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010417,
+  "initial_status": "paired-native missing; existing Mihomo job success",
+  "annotation": "Internal server error. Correlation ID: 56cfc10c-ebc2-4a32-87bb-880460a036eb",
+  "source": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42673010417",
+  "action": "Failed-jobs rerun rejected because no failed job exists; one authorized full rerun accepted, source unchanged."
+}

@@ -1,0 +1,19 @@
+{
+  "reviewer": "verification",
+  "limitations": [
+    "Fixed candidate-then-baseline order and small samples are diagnostic, not causal performance proof.",
+    "20 minute job remains an outer ceiling; two maximal660s test runs plus builds would exceed it, but actual observed cases are shorter."
+  ],
+  "validation": [
+    "Source diff and pinned4cc script mode/profile-path verification; execution pending next CI."
+  ],
+  "decision": "APPROVE diagnostic same-host manual comparison",
+  "sha256": "c11e22ff7720e070581db22067365b167df3217e0d66a9c619d03c8dd3a1a80c",
+  "findings": [
+    "Candidate manual HTTP profile already collected by unchanged script; workflow now exports from exact approved private path with EXIT ownership restoration.",
+    "Same-runner pinned 4cc baseline explicitly matches lifecycle/manual-http scenario and exact expected native test, retains PASS/noSKIP assertion.",
+    "Original script/source untouched; 110s operations,300s cycles and original aggregate harness limits preserved.",
+    "Artifacts separated by matrix scenario; no successful result inferred from running or failed candidate."
+  ],
+  "file": ".github/workflows/mihomo-workflow-validation.yml"
+}

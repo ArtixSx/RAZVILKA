@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "revision": "20e3d848a302a0802cc49c8bcdffb37917c15328",
+  "run": 43945221382,
+  "selected": {
+    "job": 133572994086,
+    "result": "FAIL",
+    "selected_https": "PASS with unchanged 4s client deadline",
+    "mismatch": "4s Client.Timeout awaiting headers; inline returned=false before outer cleanup",
+    "mismatch_delta_at_abort": {
+      "accepted-flow-lookup": {
+        "calls": 1,
+        "elapsed_ns": 738536961
+      },
+      "accepted-flow-guard": {
+        "calls": 3,
+        "elapsed_ns": 1284235074
+      },
+      "accepted-stage/initial-current/completed": {
+        "calls": 1,
+        "elapsed_ns": 294495724
+      },
+      "accepted-stage/admit/completed": {
+        "calls": 1,
+        "elapsed_ns": 372934451
+      },
+      "accepted-stage/baseline/completed": {
+        "calls": 1,
+        "elapsed_ns": 372196215
+      },
+      "baseline-current-original-file-read": {
+        "calls": 1,
+        "elapsed_ns": 301270341
+      }
+    },
+    "baseline_issuer_stage_started_absent_at_abort_and_join": [
+      "accepted-stage/baseline-issue/started",
+      "accepted-stage/baseline-prepare/started",
+      "accepted-stage/baseline-connect/started"
+    ],
+    "baseline_current_after_join": {
+      "calls": 2,
+      "elapsed_ns": 568512121
+    },
+    "effect_children_after_join": 18,
+    "capture_to_publication_open_ns": 6256896642
+  },
+  "canceled_ready": {
+    "job": 133572994094,
+    "result": "FAIL",
+    "boundary": "GEN1 published; GEN2 full original mapping-readiness cancellation witness unavailable within unchanged 12s",
+    "capture_to_publication_open_ns": 6143746372
+  },
+  "checks": {
+    "accepted_stage_tests": "Both exact tests PASS normal and race in each strict job, no SKIP",
+    "windows_regressions": "14 top-level plus28 subtests PASS with razvilka_native_fixture; Linux-only stage tests excluded on Windows"
+  },
+  "limits": [
+    "Cumulative counters overlap; lookup delta excludes the separate explicit test lookup before client request.",
+    "Missing new started markers plus original call order place this failure before baseline issue/prepare/connect; no evidence that fsync/effect mutation or native Connect caused it.",
+    "Snapshot includes all observations up to abort; after-join includes cancellation/cleanup and is not request wall time.",
+    "No before/after speedup or router acceptance claim.",
+    "Independent7a inactive-proc statx leaf is not on this Xray pre-dial call path; its LinuxInactiveProc functions have no samples in the full or HandleTCP-focused profile. Existing Xray and netidentity mount readers already use separate statx adapters."
+  ],
+  "raw_files": [
+    {
+      "path": "research-domain-selected-20e3d848a302a0802cc49c8bcdffb37917c15328/native.log",
+      "bytes": 29846,
+      "sha256": "8c034b44b3756da12f47cf7b6eec030c2a7aff78629989952f625a971177fc84"
+    },
+    {
+      "path": "research-domain-selected-20e3d848a302a0802cc49c8bcdffb37917c15328/accepted-stages-normal.log",
+      "bytes": 348,
+      "sha256": "414bd98ad25fb732738a6d7516e3f29738afa377896533299a1c5adab95baaf0"
+    },
+    {
+      "path": "research-domain-selected-20e3d848a302a0802cc49c8bcdffb37917c15328/accepted-stages-race.log",
+      "bytes": 348,
+      "sha256": "c1ae220bb6390e88474a3ec4acb3ccba016f4ffcfdf7747cf141351beb967537"
+    },
+    {
+      "path": "research-domain-selected-20e3d848a302a0802cc49c8bcdffb37917c15328/cpu-top.txt",
+      "bytes": 2908,
+      "sha256": "87cbc4b66ebfc91e1d9ff1ca13121d88975dfbca2467183df202644e8cec3cb4"
+    },
+    {
+      "path": "research-domain-selected-20e3d848a302a0802cc49c8bcdffb37917c15328/original-run.cpu.pprof",
+      "bytes": 100754,
+      "sha256": "ce8ea68d0e8239515e20507eff31360d154d51cff63fb51611b9553fd78c24e9"
+    },
+    {
+      "path": "research-domain-canceled-ready-20e3d848a302a0802cc49c8bcdffb37917c15328/native.log",
+      "bytes": 21035,
+      "sha256": "7f2a330114f6a53f3139c81699c0de497e2c1d58eaad010d0556684976f3e7db"
+    },
+    {
+      "path": "research-domain-canceled-ready-20e3d848a302a0802cc49c8bcdffb37917c15328/accepted-stages-normal.log",
+      "bytes": 348,
+      "sha256": "414bd98ad25fb732738a6d7516e3f29738afa377896533299a1c5adab95baaf0"
+    },
+    {
+      "path": "research-domain-canceled-ready-20e3d848a302a0802cc49c8bcdffb37917c15328/accepted-stages-race.log",
+      "bytes": 348,
+      "sha256": "59bf8416fc4a6a884ed06da8a4f16888ba452828a3e977988f993dc60e9120ae"
+    },
+    {
+      "path": "research-domain-canceled-ready-20e3d848a302a0802cc49c8bcdffb37917c15328/cpu-top.txt",
+      "bytes": 3142,
+      "sha256": "5059b90a4d3e65b278adb784f98fe4d88576aaa41fb5a168c07f7e7d6e18eddf"
+    },
+    {
+      "path": "research-domain-canceled-ready-20e3d848a302a0802cc49c8bcdffb37917c15328/original-run.cpu.pprof",
+      "bytes": 70519,
+      "sha256": "157a5755cb228b01736a2c79ecd95ef314142eca96c5e793fbc7665e7ceba34b"
+    },
+    {
+      "path": "research-domain-canceled-ready-20e3d848a302a0802cc49c8bcdffb37917c15328/successor-run.cpu.pprof",
+      "bytes": 63408,
+      "sha256": "151ae18f47d546b97acaa23f9553db1a77f3b9066cb4e500146aa8ad732edb92"
+    }
+  ],
+  "diagnostic30": {
+    "job": 133572993599,
+    "result": "SUCCESS",
+    "not_strict_acceptance": true
+  }
+}

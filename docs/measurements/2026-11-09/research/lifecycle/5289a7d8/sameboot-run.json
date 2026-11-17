@@ -1,0 +1,1042 @@
+{
+  "attempt": 1,
+  "conclusion": "failure",
+  "headSha": "5289a7d8cace5c63641d14218ca1f48b4d17fa2e",
+  "jobs": [
+    {
+      "completedAt": "2026-11-09T19:13:35Z",
+      "conclusion": "success",
+      "databaseId": 129372912168,
+      "name": "original-parent-native (race)",
+      "startedAt": "2026-11-09T19:09:01Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:09:02Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:09:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:08Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:09:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:17Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:09:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:28Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:09:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:33Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:09:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:33Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:13:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:33Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:13:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:33Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:13:33Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129372912168"
+    },
+    {
+      "completedAt": "2026-11-09T19:10:05Z",
+      "conclusion": "success",
+      "databaseId": 129372912322,
+      "name": "original-private-set (normal)",
+      "startedAt": "2026-11-09T19:08:39Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:08:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:08:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:08:47Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:08:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:08:54Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:08:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:03Z",
+          "conclusion": "success",
+          "name": "Actual private leases original files archive retry and sealed Start leaf",
+          "number": 4,
+          "startedAt": "2026-11-09T19:08:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:03Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 7,
+          "startedAt": "2026-11-09T19:10:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:04Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 8,
+          "startedAt": "2026-11-09T19:10:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:04Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 9,
+          "startedAt": "2026-11-09T19:10:04Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129372912322"
+    },
+    {
+      "completedAt": "2026-11-09T19:10:25Z",
+      "conclusion": "success",
+      "databaseId": 129372912458,
+      "name": "original-private-set (race)",
+      "startedAt": "2026-11-09T19:08:44Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:08:46Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:08:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:08:52Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:08:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:08:59Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:08:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:21Z",
+          "conclusion": "success",
+          "name": "Actual private leases original files archive retry and sealed Start leaf",
+          "number": 4,
+          "startedAt": "2026-11-09T19:08:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:21Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 7,
+          "startedAt": "2026-11-09T19:10:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:22Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 8,
+          "startedAt": "2026-11-09T19:10:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:10:22Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 9,
+          "startedAt": "2026-11-09T19:10:22Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129372912458"
+    },
+    {
+      "completedAt": "2026-11-09T19:11:48Z",
+      "conclusion": "success",
+      "databaseId": 129372912721,
+      "name": "original-parent-native (normal)",
+      "startedAt": "2026-11-09T19:09:29Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:09:30Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:09:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:36Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:09:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:43Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:09:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:09:52Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:09:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:45Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:09:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:45Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:11:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:45Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:11:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:11:45Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:11:45Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129372912721"
+    },
+    {
+      "completedAt": "2026-11-09T19:17:25Z",
+      "conclusion": "failure",
+      "databaseId": 129376237051,
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:47Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:54Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:08Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:22Z",
+          "conclusion": "failure",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:22Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:17:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:22Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:17:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:22Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:17:22Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237051"
+    },
+    {
+      "completedAt": "2026-11-09T19:17:39Z",
+      "conclusion": "success",
+      "databaseId": 129376237104,
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:45Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:52Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:08Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:36Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:36Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:17:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:36Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:17:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:36Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:17:36Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237104"
+    },
+    {
+      "completedAt": "2026-11-09T19:16:03Z",
+      "conclusion": "failure",
+      "databaseId": 129376237131,
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:47Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:54Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:05Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:00Z",
+          "conclusion": "failure",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:00Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:16:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:00Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:16:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:00Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:16:00Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237131"
+    },
+    {
+      "completedAt": "2026-11-09T19:16:14Z",
+      "conclusion": "success",
+      "databaseId": 129376237146,
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:47Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:53Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:04Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:10Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:10Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:16:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:11Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:16:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:11Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:16:11Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237146"
+    },
+    {
+      "completedAt": "2026-11-09T19:16:46Z",
+      "conclusion": "success",
+      "databaseId": 129376237156,
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:45Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:54Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:05Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:44Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:44Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:16:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:44Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:16:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:44Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:16:44Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237156"
+    },
+    {
+      "completedAt": "2026-11-09T19:18:28Z",
+      "conclusion": "success",
+      "databaseId": 129376237246,
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "startedAt": "2026-11-09T19:13:39Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:41Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:46Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:55Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:08Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:18:24Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:18:24Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:18:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:18:25Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:18:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:18:25Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:18:25Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237246"
+    },
+    {
+      "completedAt": "2026-11-09T19:15:15Z",
+      "conclusion": "failure",
+      "databaseId": 129376237256,
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:47Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:53Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:04Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:15:12Z",
+          "conclusion": "failure",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:15:12Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:15:12Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:15:12Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:15:12Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:15:12Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:15:12Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237256"
+    },
+    {
+      "completedAt": "2026-11-09T19:16:08Z",
+      "conclusion": "success",
+      "databaseId": 129376237275,
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:46Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:53Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:04Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:05Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:05Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:16:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:05Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:16:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:05Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:16:05Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237275"
+    },
+    {
+      "completedAt": "2026-11-09T19:17:26Z",
+      "conclusion": "success",
+      "databaseId": 129376237369,
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "startedAt": "2026-11-09T19:13:38Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:40Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:45Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:52Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:02Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:23Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:23Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:17:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:23Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:17:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:17:23Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:17:23Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237369"
+    },
+    {
+      "completedAt": "2026-11-09T19:17:01Z",
+      "conclusion": "success",
+      "databaseId": 129376237450,
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "startedAt": "2026-11-09T19:13:39Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T19:13:41Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T19:13:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:46Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T19:13:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:13:54Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T19:13:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:14:06Z",
+          "conclusion": "success",
+          "name": "Pinned official Xray and disposable namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T19:13:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:57Z",
+          "conclusion": "success",
+          "name": "Actual producer parent death CLI cleanup and updater fences",
+          "number": 5,
+          "startedAt": "2026-11-09T19:14:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:57Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 9,
+          "startedAt": "2026-11-09T19:16:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:57Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-11-09T19:16:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T19:16:57Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-11-09T19:16:57Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42680358563/job/129376237450"
+    }
+  ],
+  "status": "completed"
+}

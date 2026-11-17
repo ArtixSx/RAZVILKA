@@ -1,0 +1,32 @@
+{
+  "sha": "2df338cb29358c5f43a81380d54d058a68c84fbc",
+  "run_id": 43924566276,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43924566276",
+  "conclusion": "success",
+  "total_samples": 64,
+  "patched_samples": 32,
+  "all_cleanup_verified": true,
+  "raw_log_sha256": "da80597fbbfcd17dcc1fd35b91d6b26bf5fc954495a268fc96f03578c4963af4",
+  "jobs": [
+    {
+      "name": "source-lab (ubuntu-24.04)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "source-lab (ubuntu-26.04)",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "preceding_failures": [
+    43921540740,
+    43924080500
+  ],
+  "correction": "Native strict decoder now accepts license symlink provenance introduced by collector; ELF pins unchanged",
+  "limits": [
+    "Source lab only",
+    "No router/LAN qualification",
+    "No default production pin or published asset change"
+  ]
+}

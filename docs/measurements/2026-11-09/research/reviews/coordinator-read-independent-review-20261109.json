@@ -1,0 +1,35 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; real factory CI pending",
+  "files": [
+    {
+      "sha256": "D90122E2E0A8D85B5AFECB7452C88E0B2E6DD37BC616A792FE126CE512688D2A",
+      "path": "internal/dataplane/synthetic_baseline_coordinator.go"
+    },
+    {
+      "sha256": "3B3306E552C28ED1F18DF212F34E8635EE454304A646DB603A9349A5CEC402F9",
+      "path": "internal/dataplane/synthetic_baseline_coordinator_read.go"
+    },
+    {
+      "sha256": "C357D2D8074EF6DABE94198B42D7B1431FB8B7671D92E17C187FBBE5EAE0AF0A",
+      "path": "internal/dataplane/synthetic_baseline_coordinator_read_test.go"
+    },
+    {
+      "sha256": "3A71CF79DC368968E105F789F695C63CC1890FEEEF131E23D7F846350E28CEF4",
+      "path": "internal/dataplane/domain_tcp_native_measurement.go"
+    }
+  ],
+  "findings": [
+    "Original prefix and readonly tail call order retained; capture.Current delegates directly to currentWithFiles(nil).",
+    "Exact original coordinator/owner/capture/process/material/binding/control/tools/backend/source associations frozen and checked before/after, including tail refusal.",
+    "Both full capture/process/material/source/live checks kept; only immutable-file fullSHA opening/closing borrowed within one synchronous Current.",
+    "Registration, durable reserve and effects remain outside; custom producer keeps original full-byte path.",
+    "Tests assert late pointer/value/source/socket/cancel refusals and inability of comparison-only tuple to mint complete Current."
+  ],
+  "limitations": [
+    "No local Go builds/tests.",
+    "Native exact producer entry/completion and actual hash counts required; six-hash saving is hypothesis until measured.",
+    "Existing strictDNS full scenario still failed on6df; source review does not close that direction."
+  ],
+  "source_commit": "828d086e052e2dc5b6a63848fa544b660f0115fb"
+}

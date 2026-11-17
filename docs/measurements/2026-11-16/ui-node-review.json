@@ -1,0 +1,975 @@
+{
+  "node": "v24.22.1",
+  "platform": "Windows",
+  "rows": [
+    {
+      "command": "node scripts/build-interface.mjs --check",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.116,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\000-build-interface.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-interface-model.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.116,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\001-test-interface-model.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-ui-icons.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.165,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\002-test-ui-icons.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-pending-changes-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.121,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\003-test-pending-changes-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-interface-contract.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.146,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\004-test-interface-contract.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-console-route-hash.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.116,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\005-test-console-route-hash.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-interface-home.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.151,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\006-test-interface-home.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-simple-home.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.141,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\007-test-simple-home.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-autopilot-settings.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.134,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\008-test-autopilot-settings.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-nfqws-first-start-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.13,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\009-test-nfqws-first-start-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-active-panel.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.113,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\010-test-active-panel.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-inspector-focus.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.112,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\011-test-inspector-focus.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-inspector-controls-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.112,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\012-test-inspector-controls-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-inspector-deletion-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.124,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\013-test-inspector-deletion-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-component-cards-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.145,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\014-test-component-cards-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-operation-notifications.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.123,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\015-test-operation-notifications.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-strategy-compatibility-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.163,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\016-test-strategy-compatibility-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-managed-nfq-bundle-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.139,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\017-test-managed-nfq-bundle-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-component-recovery-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.149,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\018-test-component-recovery-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-engine-card-flow-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.134,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\019-test-engine-card-flow-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-diagnostics-observation-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.113,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\020-test-diagnostics-observation-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-ui-http-perf.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.114,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\021-test-ui-http-perf.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/project-log.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.099,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\022-project-log.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-project-log-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.128,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\023-test-project-log-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-onboarding-escape-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.12,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\024-test-onboarding-escape-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/theme.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.106,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\025-theme.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-theme.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.113,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\026-test-theme.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-console-autonomy-auth.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.212,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\027-test-console-autonomy-auth.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-console-sources.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.123,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\028-test-console-sources.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-console-providers.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.114,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\029-test-console-providers.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-auth-resume-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.139,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\030-test-auth-resume-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-auth-actions-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.12,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\031-test-auth-actions-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-connection-session-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.111,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\032-test-connection-session-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/dns-service-lab.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.102,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\033-dns-service-lab.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-dns-service-lab.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.125,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\034-test-dns-service-lab.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/dns-scoped.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.103,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\035-dns-scoped.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-dns-scoped.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.119,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\036-test-dns-scoped.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/awg-workspace.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.101,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\037-awg-workspace.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-awg-workspace.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.127,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\038-test-awg-workspace.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/workflow-actions.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\039-workflow-actions.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/interface.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.104,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\040-interface.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/interface-model.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.106,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\041-interface-model.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/console.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.104,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\042-console.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/console-autonomy.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\043-console-autonomy.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/autonomy-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.101,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\044-autonomy-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-runtime-capabilities-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.108,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\045-test-runtime-capabilities-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-runtime-lifecycle-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.107,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\046-test-runtime-lifecycle-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-proxy-sidecar-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.108,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\047-test-proxy-sidecar-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-hev-recovery-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.114,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\048-test-hev-recovery-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-mihomo-recovery-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.115,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\049-test-mihomo-recovery-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-mihomo-node-apply-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.115,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\050-test-mihomo-node-apply-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-job-timing-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.115,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\051-test-node-job-timing-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-autonomy-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.135,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\052-test-autonomy-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/app.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.114,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\053-app.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/node-browser.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.109,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\054-node-browser.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-measurements-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.115,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\055-test-node-measurements-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/node-intent-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.108,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\056-node-intent-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/node-service-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.108,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\057-node-service-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/node-policy-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.108,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\058-node-policy-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/node-activity-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.106,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\059-node-activity-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/workspace-controls.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.105,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\060-workspace-controls.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/service-dashboard-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.104,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\061-service-dashboard-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/app-update-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.106,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\062-app-update-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/cloudflare-accounts.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.158,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\063-cloudflare-accounts.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/cloudflare-backups.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.11,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\064-cloudflare-backups.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/cloudflare-migration.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.112,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\065-cloudflare-migration.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-probe-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.128,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\066-test-probe-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-cloudflare-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.116,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\067-test-cloudflare-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-cloudflare-backup-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.119,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\068-test-cloudflare-backup-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-cloudflare-migration-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.116,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\069-test-cloudflare-migration-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-private-backup-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.121,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\070-test-private-backup-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-devices-persistence-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.115,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\071-test-devices-persistence-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-device-addresses-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.113,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\072-test-device-addresses-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-exclusions-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.171,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\073-test-exclusions-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-resource-exclusions-model.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.113,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\074-test-resource-exclusions-model.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-resource-exclusions-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.157,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\075-test-resource-exclusions-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/list-scope-ui.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.108,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\076-list-scope-ui.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-list-scope-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.143,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\077-test-list-scope-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-usque-dns-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.114,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\078-test-usque-dns-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-provider-import-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.114,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\079-test-provider-import-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-route-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.119,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\080-test-node-route-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-browser-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.167,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\081-test-node-browser-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-group-save.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.119,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\082-test-node-group-save.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-data-mutation-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.12,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\083-test-data-mutation-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-bulk-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.124,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\084-test-node-bulk-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/setup-workflows.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.11,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\085-setup-workflows.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-setup-repair.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.123,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\086-test-setup-repair.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-intent-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.118,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\087-test-node-intent-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-service-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.171,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\088-test-node-service-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-policy-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.116,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\089-test-node-policy-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-app-update-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.126,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\090-test-app-update-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/automation-setup.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.109,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\091-automation-setup.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-maintenance-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.134,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\092-test-maintenance-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/extension-lab.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.107,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\093-extension-lab.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-extension-lab.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.132,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\094-test-extension-lab.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-workspace-controls-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.12,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\095-test-workspace-controls-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-interface-manage-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.121,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\096-test-interface-manage-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-interface-unified.cjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.147,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\097-test-interface-unified.cjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-notice-lifecycle.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.117,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\098-test-notice-lifecycle.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-autonomy-controls-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.117,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\099-test-autonomy-controls-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-service-dashboard-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.18,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\100-test-service-dashboard-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-engine-intent-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.136,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\101-test-engine-intent-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-node-activity-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.115,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\102-test-node-activity-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-panel-loading-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.331,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\103-test-panel-loading-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-panel-snapshot-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.12,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\104-test-panel-snapshot-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-panel-device-browse-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.153,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\105-test-panel-device-browse-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-panel-community-browse-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.147,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\106-test-panel-community-browse-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node --check cmd/razvilka/web/panel-node-browse.js",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.104,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\107-panel-node-browse.js.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-panel-node-browse-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.168,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\108-test-panel-node-browse-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-ux-stage1.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.18,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\109-test-ux-stage1.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-bundle-integration.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.119,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\110-test-bundle-integration.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-warp-generation-ui.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.117,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\111-test-warp-generation-ui.mjs.log",
+      "shell_model": null
+    },
+    {
+      "command": "node scripts/test-restore-busy-supervision.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.487,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\112-test-restore-busy-supervision.mjs.log",
+      "shell_model": "Git Bash/MSYS, not native Linux"
+    },
+    {
+      "command": "node scripts/test-native-enrollment-supervision.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 1.354,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\113-test-native-enrollment-supervision.mjs.log",
+      "shell_model": "Git Bash/MSYS, not native Linux"
+    },
+    {
+      "command": "node scripts/test-component-update-supervision.mjs",
+      "status": "fail",
+      "exit_code": 1,
+      "seconds": 0.161,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\114-test-component-update-supervision.mjs.log",
+      "shell_model": "Git Bash/MSYS, not native Linux",
+      "classification": "Platform prerequisite absent: Git Bash has no /opt. No source/assertion change; actual Linux CI still required."
+    },
+    {
+      "command": "node scripts/test-self-update-supervision.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 3.059,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\115-test-self-update-supervision.mjs.log",
+      "shell_model": "Git Bash/MSYS, not native Linux"
+    },
+    {
+      "command": "node scripts/test-self-update-legacy-fence.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 5.552,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\116-test-self-update-legacy-fence.mjs.log",
+      "shell_model": "Git Bash/MSYS, not native Linux"
+    },
+    {
+      "command": "node scripts/test-self-update-rollback-reader.mjs sh rollback-entware.sh",
+      "status": "not-run",
+      "reason": "Explicit Linux shell rollback reader gate reserved for CI"
+    },
+    {
+      "command": "node scripts/test-self-update-rollback-reader.mjs sh upgrade-entware.sh",
+      "status": "not-run",
+      "reason": "Explicit Linux shell rollback reader gate reserved for CI"
+    },
+    {
+      "command": "node scripts/test-node-history-admission.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.578,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\119-test-node-history-admission.mjs.log",
+      "shell_model": "Git Bash/MSYS, not native Linux"
+    },
+    {
+      "command": "node scripts/test-native-opkg-runner.mjs",
+      "status": "pass",
+      "exit_code": 0,
+      "seconds": 0.3,
+      "log": "C:\\RAZVILKA-research-20261116\\ui-node-review\\120-test-native-opkg-runner.mjs.log",
+      "shell_model": "Git Bash/MSYS, not native Linux"
+    }
+  ],
+  "source_commit": "e8954294229a7677da0e91db09aee5de5446682d",
+  "scope": "Node commands extracted from scripts/check.sh; no Go/build/native router checks. Two explicit shell rollback-reader gates not run. MSYS shell fixture successes are not Linux runtime evidence.",
+  "source_hashes": {
+    "scripts\\check.sh": "cd5af38e33e30880ccd21dd7058602600f7028d7c322e0492d83dbd20129b35d",
+    "scripts\\test-notice-lifecycle.mjs": "896efb1eb941d9499a72e45a946920bce9bc518eb2408e74636f7e17df5a99f1"
+  }
+}

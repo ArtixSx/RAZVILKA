@@ -35,6 +35,21 @@ func checkSelfUpdateJournalState(ctx context.Context, roots selfUpdateJournalRoo
 	if ctx == nil || ctx.Err() != nil || reader < 1 || reader > updatecheck.SelfUpdateReadVersion {
 		return errSelfUpdateJournalState
 	}
+	return checkSelfUpdateJournalFormats(ctx, roots, reader)
+}
+
+// Only the explicit offline restore dispatcher calls this separate admission.
+// Normal startup and updater metadata retain reader4 and must refuse pending5.
+// Reading a format here grants no effect: the original Stop owner, writer,
+// immutable archive and every retained image are still checked by restore.
+func checkPairedOfflineRestoreJournalState(ctx context.Context, roots selfUpdateJournalRoots) error {
+	if ctx == nil || ctx.Err() != nil {
+		return errSelfUpdateJournalState
+	}
+	return checkSelfUpdateJournalFormats(ctx, roots, updatecheck.SelfUpdateOfflineRestoreReadVersion)
+}
+
+func checkSelfUpdateJournalFormats(ctx context.Context, roots selfUpdateJournalRoots, reader int) error {
 	for _, root := range []string{roots.installation, roots.helper, roots.files} {
 		if !filepath.IsAbs(root) || filepath.Clean(root) != root || root == filepath.VolumeName(root)+string(filepath.Separator) {
 			return errSelfUpdateJournalState
@@ -71,7 +86,7 @@ func runSelfUpdateJournalReadCommand(args []string, roots selfUpdateJournalRoots
 		if strings.HasPrefix(name, "--") {
 			name = strings.TrimPrefix(name, "-")
 		}
-		if name == "-self-update-read-version" || name == "-check-self-update-state" {
+		if name == "-self-update-read-version" || name == "-self-update-offline-restore-read-version" || name == "-check-self-update-state" {
 			command = name
 		}
 	}
@@ -84,6 +99,10 @@ func runSelfUpdateJournalReadCommand(args []string, roots selfUpdateJournalRoots
 	}
 	if command == "-self-update-read-version" {
 		fmt.Println(updatecheck.SelfUpdateReadVersion)
+		return true, 0
+	}
+	if command == "-self-update-offline-restore-read-version" {
+		fmt.Println(updatecheck.SelfUpdateOfflineRestoreReadVersion)
 		return true, 0
 	}
 	if !allowSelfUpdateJournalCommand(roots) {

@@ -363,15 +363,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		}
 		c.runtimeAfter = &after
 	}
-	absent := func() error {
-		if err := c.beforeSidecar(); err != nil {
-			return err
-		}
-		if _, err := o.absent(c.ctx); err != nil {
-			return err
-		}
-		return c.homeCurrent()
-	}
+	absent := c.archiveCurrent
 	if err := c.publishArchive("runtime-history", struct {
 		Schema  int
 		Runtime mihomoColdRuntimeArchive
@@ -401,13 +393,26 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	if err := c.finalTree.currentAt(c.archive.root, "runtime"); err != nil {
 		return Execution{}, err
 	}
-	terminalCurrent := func() error {
-		return errors.Join(absent(), c.finalTree.currentAt(c.archive.root, "runtime"), checkMihomoColdRuntimePair(o.inputs.roots[0], c.archive.root, o.read.proxy, *c.runtimeAfter))
-	}
+	terminalCurrent := c.terminalCurrent
 	if err := mihomoSameBootNativeStage(c.ctx, c, "archive", terminalCurrent); err != nil {
 		return Execution{}, err
 	}
-	phase("phase-terminal")
+	finishPhase()
+	finishPhase = func() {}
+	return c.runTerminalSuffix(nil)
+}
+
+// This is the original terminal/completed suffix, also used after a classified
+// retained ACK. The publishers and their fresh opening/closing checks are the
+// same; no effect, runtime move or saved absence result is exposed here.
+func (c *mihomoSameBootRetirementCursor) runTerminalSuffix(resume *mihomoSameBootACKResume) (Execution, error) {
+	finishPhase := mihomoSameBootNativeTiming(c, "phase-terminal")
+	defer func() { finishPhase() }()
+	terminalCurrent := c.terminalCurrent
+	if resume != nil {
+		terminalCurrent = resume.current
+	}
+	o := c.owner
 	for n := range 2 {
 		if bytes.Equal(o.inputs.records[n].data, c.intent.After) && !c.terminalPending[n] {
 			continue
@@ -418,8 +423,18 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		if err := c.checkHistory(); err != nil {
 			return Execution{}, err
 		}
+		if resume != nil {
+			if err := resume.beforeTerminal(n); err != nil {
+				return Execution{}, err
+			}
+		}
 		if err := c.publishTerminal(n, terminalCurrent); err != nil {
 			return Execution{}, err
+		}
+		if resume != nil {
+			if err := resume.afterTerminal(n); err != nil {
+				return Execution{}, err
+			}
 		}
 		stage := "terminal-transaction"
 		if n == 1 {
@@ -429,7 +444,8 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 			return Execution{}, err
 		}
 	}
-	phase("phase-completed")
+	finishPhase()
+	finishPhase = mihomoSameBootNativeTiming(c, "phase-completed")
 	if err := c.publishArchive("completed.json", struct {
 		Schema                    int
 		BeforeSHA256, AfterSHA256 string
@@ -440,6 +456,20 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		return Execution{}, err
 	}
 	return c.terminal, nil
+}
+
+func (c *mihomoSameBootRetirementCursor) archiveCurrent() error {
+	if err := c.beforeSidecar(); err != nil {
+		return err
+	}
+	// SAME complete absence before and after the fresh home read. No callback
+	// or effect precedes its opening proof; no result survives this invocation.
+	return c.homeCurrent()
+}
+
+func (c *mihomoSameBootRetirementCursor) terminalCurrent() error {
+	o := c.owner
+	return errors.Join(c.archiveCurrent(), c.finalTree.currentAt(c.archive.root, "runtime"), checkMihomoColdRuntimePair(o.inputs.roots[0], c.archive.root, o.read.proxy, *c.runtimeAfter))
 }
 
 func (c *mihomoSameBootRetirementCursor) homeCurrent() error {

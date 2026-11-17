@@ -1,0 +1,12 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; corrected installation pending",
+  "file": ".github/workflows/research-lifecycle.yml",
+  "sha256": "40A9E20A4AFD83B0FDA8050F947C36F98FBCF9CEDC6A2B1C313248654CB44D19",
+  "change": "Only --allow-downgrades added to existing apt --reinstall exactfour reviewed local archive paths in disposableUbuntu26.04. Unchanged pin/byte/alias/publicAcquire and native acceptance follows.",
+  "evidence": "60e pinned race apt refused beforebuild: Packages were downgraded and -y was used without --allow-downgrades.",
+  "limits": [
+    "No profile widening; no arbitrary unpinned packages added.",
+    "Installation failure is not runtime acceptance."
+  ]
+}

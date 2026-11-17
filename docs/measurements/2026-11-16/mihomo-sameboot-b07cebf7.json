@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "kind": "native_mihomo_sameboot_acceptance",
+  "revision": "b07cebf7295239921f63b5c9639e413d8db4ba07",
+  "run_id": 43935059769,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43935059769",
+  "result": "FAIL",
+  "jobs": [
+    {
+      "name": "original-parent-native (race)",
+      "job_id": 133537386926,
+      "result": "failure"
+    },
+    {
+      "name": "original-private-set (race)",
+      "job_id": 133537387464,
+      "result": "success"
+    },
+    {
+      "name": "original-private-set (normal)",
+      "job_id": 133537387634,
+      "result": "success"
+    },
+    {
+      "name": "original-parent-native (normal)",
+      "job_id": 133537387941,
+      "result": "success"
+    },
+    {
+      "name": "original-parent-native-ack-cuts",
+      "job_id": 133542825398,
+      "result": "skipped"
+    }
+  ],
+  "failure": {
+    "mode": "race",
+    "stage": "absence-process-kernel",
+    "absence_stage": "proxy-firewall-read",
+    "actor_elapsed_ms": 119994,
+    "deadline": true,
+    "canceled": false
+  },
+  "inclusive_measurements": [
+    {
+      "phase": "absence",
+      "calls": 51,
+      "ms": 70667
+    },
+    {
+      "phase": "source-current",
+      "calls": 186,
+      "ms": 69041
+    },
+    {
+      "phase": "home-current",
+      "calls": 15,
+      "ms": 42034
+    }
+  ],
+  "limits": [
+    "Nested timings overlap and must not be summed.",
+    "Failure stage names are not measurements of command execution time.",
+    "ACK matrix was skipped after parent race failed; requested completed.json cut did not execute.",
+    "The process terminal correctness PASS at the same revision is a separate gate.",
+    "No before/after speed or physical router claim."
+  ],
+  "raw_artifact_root": "C:\\RAZVILKA-research-20261116\\sameboot-b07",
+  "raw_sha256_manifest": [
+    {
+      "path": "run.json",
+      "bytes": 8961,
+      "sha256": "8f6e6496e8e9167f8f8c84308961d8da93268bbc8e4ad8198d30a687acd50610"
+    },
+    {
+      "path": "failed.log",
+      "bytes": 20309,
+      "sha256": "b7695c7ebcaea5875c7c2aec2ef569ab8631ccca6f7d11b1e4756b47c7a3f4cc"
+    }
+  ]
+}

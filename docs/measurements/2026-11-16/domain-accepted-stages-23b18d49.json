@@ -1,0 +1,195 @@
+{
+  "schema": 1,
+  "revision": "23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70",
+  "run": 43937749558,
+  "selected": {
+    "job": 133546734767,
+    "result": "FAIL",
+    "boundary": "initial DNS publication12s; no selected request or accepted-stage counters reached",
+    "capture_prepare_seconds": 6.079558996,
+    "standby_prepare_seconds": 1.92499431,
+    "capture_to_publication_open_seconds": 10.870925043,
+    "publication_opening_calls": 12,
+    "publication_opening_seconds": 8.894e-06,
+    "initial_kernel_seconds": 0.647982435,
+    "initial_mapping_seconds": 0.785952439,
+    "full_test_seconds": 21.57,
+    "profile_wall_seconds": 19.75,
+    "profile_cpu_seconds": 17.44,
+    "syscall_flat_seconds": 9.98,
+    "sha_flat_seconds": 3.53
+  },
+  "canceled_ready": {
+    "job": 133546734826,
+    "result": "FAIL",
+    "boundary": "GEN2 actual original child/readiness witness unavailable",
+    "capture_prepare_seconds": 6.215030981,
+    "standby_prepare_seconds": 2.251233677,
+    "initial_kernel_attempt_seconds": 0.056021191,
+    "full_test_seconds": 32.38
+  },
+  "diagnostic30": {
+    "job": 133546734528,
+    "result": "SUCCESS",
+    "not_strict_acceptance": true
+  },
+  "limits": [
+    "No new downstream timing conclusion: strict selected request never ran.",
+    "Cumulative nested counters overlap; do not sum them as wall time.",
+    "All stage instrumentation unit tests passed normal/race.",
+    "No performance improvement claim from cross-runner values.",
+    "No production optimization or rerun authorized by these observations alone.",
+    "The profile includes preparation and cleanup. No downstream SOCKS/post-check/relay timing was obtained in the strict selected population; no new deadline or route success conclusion."
+  ],
+  "raw_files": [
+    {
+      "path": "research-domain-canceled-ready-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/accepted-stages-normal.log",
+      "sha256": "414bd98ad25fb732738a6d7516e3f29738afa377896533299a1c5adab95baaf0",
+      "bytes": 348
+    },
+    {
+      "path": "research-domain-canceled-ready-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/accepted-stages-race.log",
+      "sha256": "7f52fd448c2c290bc7da850ef38c3e3651e2cbd1cd22c4ee270bbc94f325afb0",
+      "bytes": 348
+    },
+    {
+      "path": "research-domain-canceled-ready-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/cpu-top.txt",
+      "sha256": "e9df16582a779de92b484dc0743f10a58c8cf11cd0fef0056f204f75064336f8",
+      "bytes": 3331
+    },
+    {
+      "path": "research-domain-canceled-ready-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/native.log",
+      "sha256": "70e1c36b3270daccf897579c326fad3544a841d5a0c151374c1ba87fd73f51d8",
+      "bytes": 20612
+    },
+    {
+      "path": "research-domain-selected-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/accepted-stages-normal.log",
+      "sha256": "6e66a04baed1ee43efb9e23d920fc5c19ae5d58581aad28874599bbe7f69e858",
+      "bytes": 348
+    },
+    {
+      "path": "research-domain-selected-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/accepted-stages-race.log",
+      "sha256": "6e3691a13341a675eed1a1fec00159d4e5afc06f7c0be2362767607e3799487a",
+      "bytes": 348
+    },
+    {
+      "path": "research-domain-selected-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/cpu-top.txt",
+      "sha256": "4b5cdf358fdb533040b5ebbc349cdaf30b069dc48f44558d1fb35e909b761d7a",
+      "bytes": 3512
+    },
+    {
+      "path": "research-domain-selected-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/native.log",
+      "sha256": "9dae0573d3f6ae5402b040a344e8c7277e9af1924c2bf6a77b49e66dca3efcd6",
+      "bytes": 33952
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/baseline-clean/cpu-top.txt",
+      "sha256": "2efb63d7496d4d50f0920b531a1ef33cdc1e0c1fbbbc3cc19a497141fa04d80b",
+      "bytes": 2907
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/baseline-clean/native.log",
+      "sha256": "d0b69d145595508794be7cd38dfa78bdec7644469a695fc8c4f25a991d8191b8",
+      "bytes": 16857
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/candidate-capture-transaction/cpu-top.txt",
+      "sha256": "48b0254c6f15135fe3b944ac72ca7b23472b63540938f21af5375c2c808608f0",
+      "bytes": 3267
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/candidate-capture-transaction/native.log",
+      "sha256": "b793973058d00a92e15b56c563b99586792b808fe1a53048c01705e96b80e2b9",
+      "bytes": 15768
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/candidate-clean/cpu-top.txt",
+      "sha256": "68ce8b8cd3bc37c77a380a23e5013f35987627c39c11dc98958f97b91bd06943",
+      "bytes": 3490
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/candidate-clean/native.log",
+      "sha256": "9aff85fdfab13db209bdfaeaf7b0bee1df2381387780fe5dc13b491763750dc4",
+      "bytes": 15852
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/candidate-standby-transaction/cpu-top.txt",
+      "sha256": "a65fb0f7d73f97b973cbf581cb94711ed128aff7dd61647f7a13b6de927e32d6",
+      "bytes": 3556
+    },
+    {
+      "path": "research-preparation-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70/candidate-standby-transaction/native.log",
+      "sha256": "0ff8a74eb65b439bed8eb91c12ce1b4713d10d2348d5c47adb48ae099643598c",
+      "bytes": 15868
+    }
+  ],
+  "candidate_rationale": {
+    "profile_sha256": "c51d66518e503376da560818d70f199a0d6a82adec817a3a7d2ff1a8298fb4c1",
+    "command": [
+      "C:/Projects/RAZVILKA/tools/go/bin/go.exe",
+      "tool",
+      "pprof",
+      "-top",
+      "-cum",
+      "-nodecount=40",
+      "-focus=compareInOriginalFileObservation",
+      "C:\\RAZVILKA-research-20261116\\domain-accepted-stages-23b\\artifacts\\research-domain-selected-23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70\\original-run.cpu.pprof"
+    ],
+    "helper_inclusive_cpu_seconds": 1.59,
+    "sha_cpu_seconds": 0.41,
+    "tool_unchanged_inclusive_cpu_seconds": 0.14,
+    "version_batch_inclusive_cpu_seconds": 0.3,
+    "interpretation": "Inclusive CPU of existing pure helper, not savings. Candidate outer original tool-byte bracket preserves all version/process/source/kernel reads; native paired test required.",
+    "owned_files": [
+      "internal/dataplane/domain_tcp_tool_observation.go",
+      "internal/dataplane/domain_tcp_baseline_tool_comparison_test.go"
+    ]
+  },
+  "kind": "accepted_flow_boundary_diagnostic_not_reached",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43937749558",
+  "source": {
+    "ref": "work/domain-accepted-stages-20261116",
+    "revision": "23b18d49c3fe2e5d0b15e0d89cdbc8019e254d70",
+    "profile": "Ubuntu24.04 GitHub native isolated Linux amd64; not router",
+    "artifacts_root": "C:\\RAZVILKA-research-20261116\\domain-accepted-stages-23b\\artifacts"
+  },
+  "selection": {
+    "selected": {
+      "test": "TestDomainTCPOriginalNativeAcceptedFlows",
+      "publication_budget_seconds": 12,
+      "client_budget_seconds": 4,
+      "client_reached": false
+    },
+    "canceled_ready": {
+      "test": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+      "readiness_budget_seconds": 12,
+      "witness_reached": false
+    },
+    "diagnostic30": {
+      "publication_budget_seconds": 30,
+      "client_budget_seconds": 10,
+      "acceptance": false
+    }
+  },
+  "accepted_stage_unit_checks": {
+    "normal": "PASS",
+    "race": "PASS",
+    "selected_skips": 0,
+    "tests": [
+      "TestDomainNativeAcceptedStagesAreClosedAndIncomplete",
+      "TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement"
+    ]
+  },
+  "followup_candidate_validation": {
+    "source_file": "internal/dataplane/domain_tcp_tool_observation.go",
+    "source_sha256": "f9a3c60ad5c79ace93ae437d1152461499751e5a5b95cf3e5708d5e25f49b87a",
+    "windows_focused": "PASS0.323s",
+    "windows_vet": "PASS",
+    "linux_amd64_crosscompile_command": "GOOS=linux GOARCH=amd64 go test -tags razvilka_native_fixture -c ./internal/dataplane",
+    "linux_amd64_crosscompile": "PASS",
+    "linux_amd64_vet_command": "GOOS=linux GOARCH=amd64 go vet -tags razvilka_native_fixture ./internal/dataplane",
+    "linux_amd64_vet": "PASS",
+    "correction": "Earlier compile using -tags native was only ordinary Linux compilation because this repository uses razvilka_native_fixture. Correct tag was explicitly rechecked; neither crosscompile is runtime acceptance.",
+    "native_performance": "pending same-source paired comparison; not part of23b run"
+  }
+}

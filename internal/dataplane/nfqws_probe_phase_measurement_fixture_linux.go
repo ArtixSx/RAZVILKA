@@ -4,6 +4,8 @@ package dataplane
 
 import (
 	"context"
+	"errors"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -68,6 +70,91 @@ func NativeFixtureNFQWSProbePhases(c *ManagedNFQWSProbeConsumer) map[string]Nati
 }
 
 var nfqwsActiveNativePhases sync.Map // Diagnostic process lifetime only.
+
+var nfqwsActiveNativePopulation sync.Mutex
+
+// This is a numeric process-wide population, not an owner observation. The
+// native HTTP fixture runs serially and consumes this after its cleanup returns.
+// Reject overlap, unfinished readers and counter regression instead of making
+// an invalid delta look like zero. Nothing is reset or retained for authority.
+func NativeFixtureBeginNFQWSActivePhaseMeasurement() (func() (map[string]NativeFixtureNFQWSProbePhase, error), error) {
+	if !nfqwsActiveNativePopulation.TryLock() {
+		return nil, errors.New("native active phase population already open")
+	}
+	before, err := nfqwsActivePhaseTotals()
+	if err != nil {
+		nfqwsActiveNativePopulation.Unlock()
+		return nil, err
+	}
+	var once sync.Once
+	return func() (map[string]NativeFixtureNFQWSProbePhase, error) {
+		var out map[string]NativeFixtureNFQWSProbePhase
+		err := errors.New("native active phase population already consumed")
+		once.Do(func() {
+			defer nfqwsActiveNativePopulation.Unlock()
+			after, readErr := nfqwsActivePhaseTotals()
+			if readErr != nil {
+				err = readErr
+				return
+			}
+			out, err = nfqwsActivePhaseDelta(before, after)
+		})
+		return out, err
+	}, nil
+}
+
+type nfqwsActivePhaseSnapshot map[*[nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts][nfqwsProbePhaseCount]NativeFixtureNFQWSProbePhase
+
+func nfqwsActivePhaseTotals() (nfqwsActivePhaseSnapshot, error) {
+	totals := make(nfqwsActivePhaseSnapshot)
+	var failure error
+	nfqwsActiveNativePhases.Range(func(_, value any) bool {
+		counts, ok := value.(*[nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts)
+		if !ok || counts == nil {
+			failure = errors.New("native active phase counter type")
+			return false
+		}
+		var values [nfqwsProbePhaseCount]NativeFixtureNFQWSProbePhase
+		for i := range counts {
+			c := NativeFixtureNFQWSProbePhase{counts[i].started.Load(), counts[i].completed.Load(), time.Duration(counts[i].nanos.Load())}
+			if c.Started != c.Completed || c.Wall < 0 {
+				failure = errors.New("native active phase incomplete or overflowing population")
+				return false
+			}
+			values[i] = c
+		}
+		totals[counts] = values
+		return true
+	})
+	return totals, failure
+}
+
+func nfqwsActivePhaseDelta(before, after nfqwsActivePhaseSnapshot) (map[string]NativeFixtureNFQWSProbePhase, error) {
+	out := make(map[string]NativeFixtureNFQWSProbePhase)
+	for source := range before {
+		if _, ok := after[source]; !ok {
+			return nil, errors.New("native active phase generation missing")
+		}
+	}
+	for source, values := range after {
+		for i, name := range nfqwsActivePhaseNames {
+			b, a := before[source][i], values[i]
+			if b.Started != b.Completed || a.Started != a.Completed || b.Wall < 0 || a.Started < b.Started || a.Completed < b.Completed || a.Wall < b.Wall {
+				return nil, errors.New("native active phase counter regression or unfinished population")
+			}
+			d := NativeFixtureNFQWSProbePhase{a.Started - b.Started, a.Completed - b.Completed, a.Wall - b.Wall}
+			v := out[name]
+			if math.MaxUint64-v.Started < d.Started || math.MaxInt64-int64(v.Wall) < int64(d.Wall) {
+				return nil, errors.New("native active phase delta overflow")
+			}
+			out[name] = NativeFixtureNFQWSProbePhase{v.Started + d.Started, v.Completed + d.Completed, v.Wall + d.Wall}
+		}
+	}
+	return out, nil
+}
+
+var nfqwsActivePhaseNames = [nfqwsProbePhaseCount]string{"current", "owners", "environment", "epoch-source-runtime", "cleanup-current", "counter", "capture-current", "policy-apply", "policy-remove", "policy-readback", "active-lan", "activate", "prepared-active", "active-read-pair", "active-inventory-capture"}
+
 func measureNFQWSActivePhase(e *nfqws2ActiveExecution, phase nfqwsProbeMeasuredPhase) func() {
 	if e == nil || e.self != e || e.material == nil || e.material.self != e.material || phase >= nfqwsProbePhaseCount {
 		return func() {}
@@ -90,7 +177,7 @@ func NativeFixtureNFQWSActivePhases(material *NFQWSActiveMaterial) map[string]Na
 		return out
 	}
 	counts := value.(*[nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts)
-	for phase, name := range [...]string{"current", "owners", "environment", "epoch-source-runtime", "cleanup-current", "counter", "capture-current", "policy-apply", "policy-remove", "policy-readback", "active-lan", "activate", "prepared-active", "active-read-pair", "active-inventory-capture"} {
+	for phase, name := range nfqwsActivePhaseNames {
 		count := &counts[phase]
 		out[name] = NativeFixtureNFQWSProbePhase{Started: count.started.Load(), Completed: count.completed.Load(), Wall: time.Duration(count.nanos.Load())}
 	}

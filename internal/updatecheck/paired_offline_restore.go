@@ -333,10 +333,12 @@ func (a *SelfUpdateFileAdapter) RestorePairedPriorState(ctx context.Context, id 
 		return result, err
 	}
 	defer store.Close()
-	err = store.WithPairedOfflineRestore(ctx, id, check, quiescence, func(c context.Context, receipt selfupdatejournal.Receipt, held selfupdatejournal.Check) error {
-		return restorePairedOffline(c, a.installation, receipt, a.owned, held, func(effect string, begin func() error) error {
+	err = store.WithPairedOfflineRetry(ctx, id, check, quiescence, func(c context.Context, effect string, begin func() error) error {
+		return admission(c, id, effect, begin)
+	}, func(c context.Context, receipt selfupdatejournal.Receipt, plan []byte, verifyOnly bool, held selfupdatejournal.Check, bind func([]byte, selfupdatejournal.Check) error) error {
+		return restorePairedOfflineWithRetry(c, a.installation, receipt, a.owned, held, func(effect string, begin func() error) error {
 			return admission(c, id, effect, begin)
-		}, commitOfflinePriorReplacement, nil)
+		}, commitOfflinePriorReplacement, nil, &offlineRetryState{data: plan, bind: bind, verifyOnly: verifyOnly})
 	})
 	if err == nil {
 		result.State = "offline-requires-review"
@@ -617,6 +619,16 @@ func verifyOfflinePriorStage(ctx context.Context, item *offlinePriorReplacement)
 }
 
 func restorePairedOffline(ctx context.Context, installation string, receipt selfupdatejournal.Receipt, owned func(string) error, check selfupdatejournal.Check, admission func(string, func() error) error, commit offlinePriorCommit, cut func(string) error) error {
+	return restorePairedOfflineWithRetry(ctx, installation, receipt, owned, check, admission, commit, cut, nil)
+}
+
+type offlineRetryState struct {
+	data       []byte
+	bind       func([]byte, selfupdatejournal.Check) error
+	verifyOnly bool
+}
+
+func restorePairedOfflineWithRetry(ctx context.Context, installation string, receipt selfupdatejournal.Receipt, owned func(string) error, check selfupdatejournal.Check, admission func(string, func() error) error, commit offlinePriorCommit, cut func(string) error, retry *offlineRetryState) error {
 	if ctx == nil || owned == nil || check == nil || admission == nil || commit == nil || receipt.Schema != selfupdatejournal.PairedSchema || receipt.Paired == nil {
 		return ErrPairedOfflineRestore
 	}
@@ -684,6 +696,46 @@ func restorePairedOffline(ctx context.Context, installation string, receipt self
 		return err
 	}
 	defer fs.Close()
+	if retry != nil && len(retry.data) != 0 {
+		if retry.verifyOnly {
+			doc, err := decodeOfflinePriorPlan(receipt, retry.data)
+			if err != nil {
+				return err
+			}
+			completed, err := offlinePriorPlanPosition(ctx, installation, fs, doc, owned)
+			if err != nil {
+				return err
+			}
+			if completed == 0 {
+				if retry.bind == nil {
+					return ErrPairedOfflineRestore
+				}
+				ready := func(c context.Context) error {
+					if c != ctx {
+						return ErrPairedOfflineRestore
+					}
+					if err := boundary("before:offline-rebind"); err != nil {
+						return err
+					}
+					fresh, freshData, err := readPairedPriorArchive(c, archive, archiveFS, binding)
+					if err != nil || !reflect.DeepEqual(prior, fresh) || !bytes.Equal(data, freshData) {
+						return ErrPairedOfflineRestore
+					}
+					return verifyOfflinePriorUnbound(c, installation, source, fs, archiveFS, prior, doc, owned)
+				}
+				if err := ready(ctx); err != nil {
+					return err
+				}
+				if err := retry.bind(retry.data, ready); err != nil {
+					return err
+				}
+				retry.verifyOnly = false
+			} else if completed != len(doc.Items) {
+				return ErrPairedOfflineRestore
+			}
+		}
+		return resumeOfflinePriorPlan(ctx, installation, fs, receipt, retry.data, owned, boundary, admission, commit, retry.verifyOnly)
+	}
 	current, seen, err := scanPairedPriorState(ctx, source, fs, nil, binding, owned, boundary)
 	if err != nil {
 		return err
@@ -756,6 +808,19 @@ func restorePairedOffline(ctx context.Context, installation string, receipt self
 		if err := verifyOfflinePriorStage(ctx, &plan[i]); err != nil {
 			return err
 		}
+	}
+	if retry != nil {
+		if retry.bind == nil {
+			return ErrPairedOfflineRestore
+		}
+		data, err := encodeOfflinePriorPlan(ctx, receipt, plan, before, seen)
+		if err != nil {
+			return err
+		}
+		if err := retry.bind(data, nil); err != nil {
+			return err
+		}
+		return resumeOfflinePriorPlan(ctx, installation, fs, receipt, data, owned, boundary, admission, commit, false)
 	}
 	for i := range plan {
 		item := &plan[i]

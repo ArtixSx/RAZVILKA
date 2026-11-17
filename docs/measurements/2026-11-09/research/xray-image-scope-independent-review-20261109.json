@@ -1,0 +1,51 @@
+{
+  "status": "source-approved-native-and-race-pending",
+  "base_sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "scope": "Only outer synchronous original withFileObservation fresh SHA capture and full-byte closing comparison",
+  "invariants": [
+    "Exact executable/resource/heldFD/info/path/digest/context/deadline tuple; image never in view/context/resource/callback",
+    "One nonwaiting process-private scratch slot, first capacity fixed<=64MiB; contention/oversize before attempt use original SHA path, no fallback after attempted failure",
+    "All config/root/metadata/source calls retained; opening fresh SHA, closing every current32KiB block including after mismatch",
+    "Consumed-opening path and derived/nested views retain original nil-image behavior",
+    "View revoked before cleanup; owned bytes cleared before CAS release on return/panic; context and absolute deadline checked after clear",
+    "Self-bound lease/image release prevents copied/stale release from clearing successor"
+  ],
+  "review_fixes": [
+    "Copied lease/image release guarded and regression added",
+    "Invalid closed/missing resource rejected before scratch allocation",
+    "Foreign context rejected before callback",
+    "Actual concurrent16borrower test and actual>2chunk production mismatch/read-cancel test added"
+  ],
+  "tests_reviewed": [
+    "Fixed capacity/exclusivity/noresize/zeroing/stale copied release",
+    "Actual original file/config clean/mutation/restoredmtime/replacement/panic/cancel/capturefailure/fallback and escaped view",
+    "Original tuple/context/consumed opening and single-close reuse refusal",
+    "Production full-read past first mismatch and later cancellation",
+    "Post-clear cancellation and absolute expired deadline without timer"
+  ],
+  "limitations": [
+    "Source review only; no local Go build/test execution",
+    "Actual original native factory entry/completion and full normal/race regressions required",
+    "Bound is retained backing per process, not global app memory or RSS; clearing does not deallocate backing",
+    "First small capacity can force later large-image fallback; actual optimization eligibility must be observed",
+    "Primitive measured speedup is not whole route or physical router readiness"
+  ],
+  "files": [
+    {
+      "sha256": "429b9e7ce502383277339c5ab6c6c06fbde6fd3cd27b9ba5d7f95a44bf340a88",
+      "path": "internal/dataplane/xray_domain_tcp_image_read.go"
+    },
+    {
+      "sha256": "f5fc0a2576d7b48a593cb3e5aa692b4a9c3492cbb3b84bddaf0b55a730da6121",
+      "path": "internal/dataplane/xray_domain_tcp_image_read_test.go"
+    },
+    {
+      "sha256": "7d2d2fd866b01b755a4515daa2573c4ee6a89e64bf5ddfaca5cb876abcdcc72e",
+      "path": "internal/dataplane/xray_domain_tcp_file_observation.go"
+    },
+    {
+      "sha256": "ecb93c9a7233166449d5028280409c9f6e965182fb293242a9637388c0ac38a7",
+      "path": "internal/dataplane/xray_domain_tcp_resource_files.go"
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "head_sha": "bfc96dd2de2e3e6fa8f21e75eab8dd1f1ca3a406",
+  "run_id": 42569258820,
+  "publication_budget_seconds": 12,
+  "diagnostic_only": false,
+  "limits": [
+    "Single samples on different hosted jobs; no same-runner speed comparison.",
+    "Both strict cases failed GEN1 publication; GEN2 not exercised.",
+    "Primitive original held-file4/8\u21922 hash counts and mutation/error/fresh-bracket tests PASS, but these40-byte files establish no Xray or router performance.",
+    "Run-through-join counters overlap and incomplete capture progress differs, so lower hashes or CPU totals do not establish speed.",
+    "Post-deadline stack is diagnostic phase only, not a readiness timestamp."
+  ],
+  "scenarios": [
+    {
+      "case": "selected",
+      "test": "TestDomainTCPOriginalNativeAcceptedFlows",
+      "status": "failure",
+      "test_wall": "14.02s",
+      "gen1_published": false,
+      "gen2_exercised": false,
+      "last_common_phase": {
+        "xray": "listener-ready",
+        "standby": "baseline-prepared",
+        "capture": "planned"
+      },
+      "deadline_diagnostic_phase": "COMMON capture guardAfterPresence, baseline.currentBaselineWithFiles source/process comparison",
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 18,
+          "bytes": 0,
+          "elapsed": "4.65123443s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "7.486456767s"
+        },
+        "process-current": {
+          "calls": 224,
+          "bytes": 0,
+          "elapsed": "4.49167752s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "10.984\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.515229552s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "3.04448599s"
+        },
+        "whole-executable-hash": {
+          "calls": 153,
+          "bytes": 5596343118,
+          "elapsed": "3.551037796s"
+        }
+      },
+      "primitive_measurements": [
+        {
+          "before_calls": 4,
+          "before_bytes": 160,
+          "before_elapsed": "19.58\u00b5s",
+          "after_calls": 2,
+          "after_bytes": 80,
+          "after_elapsed": "4.438\u00b5s"
+        },
+        {
+          "before_calls": 8,
+          "before_bytes": 320,
+          "before_elapsed": "17.036\u00b5s",
+          "after_calls": 2,
+          "after_bytes": 80,
+          "after_elapsed": "4.967\u00b5s"
+        }
+      ],
+      "primitive_measurement_PASS": true,
+      "mutation_callback_error_PASS": true,
+      "native_log": "C:\\RAZVILKA-research-20261109\\lifecycle-bfc96dd2\\domain-selected-artifact\\native.log",
+      "native_log_sha256": "3247658c82364610698050ad065dda4f76027359d3e41509e655f14a199ba44c",
+      "artifact_sha256": "74649313d92780a1b48ffa61fbd0d9f41e283d66d3eb0e1128ffecb2a7fbfbe3"
+    },
+    {
+      "case": "canceled-ready",
+      "test": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+      "status": "failure",
+      "test_wall": "14.10s",
+      "gen1_published": false,
+      "gen2_exercised": false,
+      "last_common_phase": {
+        "xray": "listener-ready",
+        "standby": "baseline-prepared",
+        "capture": "planned"
+      },
+      "deadline_diagnostic_phase": "COMMON capture exactPresence opening executable byte bracket",
+      "metrics": {
+        "capture-add-guard": {
+          "calls": 14,
+          "bytes": 0,
+          "elapsed": "4.235031602s"
+        },
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.808028525s"
+        },
+        "process-current": {
+          "calls": 192,
+          "bytes": 0,
+          "elapsed": "4.506550644s"
+        },
+        "publication-gate": {
+          "calls": 12,
+          "bytes": 0,
+          "elapsed": "9.648\u00b5s"
+        },
+        "standby-add-guard": {
+          "calls": 13,
+          "bytes": 0,
+          "elapsed": "1.746337709s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "3.505695901s"
+        },
+        "whole-executable-hash": {
+          "calls": 139,
+          "bytes": 5049680876,
+          "elapsed": "3.644172162s"
+        }
+      },
+      "primitive_measurements": [
+        {
+          "before_calls": 4,
+          "before_bytes": 160,
+          "before_elapsed": "21.881\u00b5s",
+          "after_calls": 2,
+          "after_bytes": 80,
+          "after_elapsed": "3.928\u00b5s"
+        },
+        {
+          "before_calls": 8,
+          "before_bytes": 320,
+          "before_elapsed": "24.426\u00b5s",
+          "after_calls": 2,
+          "after_bytes": 80,
+          "after_elapsed": "4.609\u00b5s"
+        }
+      ],
+      "primitive_measurement_PASS": true,
+      "mutation_callback_error_PASS": true,
+      "native_log": "C:\\RAZVILKA-research-20261109\\lifecycle-bfc96dd2\\domain-canceled-ready-artifact\\native.log",
+      "native_log_sha256": "49967fe1b6d38385302106ba8420e6ec1437b0f8f3fd26b512819bc154263a90",
+      "artifact_sha256": "a8d94254360eefa3878c61d23b85328d3cacfb33df60212fe96cd9c62ef27293"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; corrected native execution pending",
+  "base_sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+  "files": [
+    {
+      "path": "scripts/check-classic-save-pinned-fixture.py",
+      "sha256": "013520935454C82C8DEDA6D2B99BA621294281D963FF6963BF36E92429EADECC"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "CFD7926501C8ED76CB6CD329C2BCFE3821A6488B9CD99915780B923279F195F7"
+    },
+    {
+      "path": "scripts/fixtures/paired-public-session.sh",
+      "sha256": "EEAD20BC2854D2EAF64745B6B94ABA46FA89BE506FF58E09BB27426B19C25219"
+    }
+  ],
+  "findings": [
+    "Observed4cc exact1.8.11 preflight correctly refused different installed bytes at the same package version; installed Architecture-Variant was not printed. An official amd64v3 variant is a verified candidate explanation, not a confirmed runner identity. Production SHA/profile unchanged.",
+    "Downloader prepares only four exact already-pinned bounded baseline archives in canonical empty root0700 directory using O_EXCL/O_NOFOLLOW0600+fsync; archives-only marker is not acceptance.",
+    "Disposable ubuntu26.04 workflow installs all four local reviewed archives with reinstall; guarded mktemp prefix/EXITcleanup; unchanged full installed byte/alias/publicAcquire verification follows.",
+    "Installed Architecture-Variant must be blank; expected/actual bytes hashes reported on mismatch.",
+    "Observed4cc publicpair queue initializer passed but genuine oldinit rejected BusyBox -O; copied actual dpkg daemon now checks >=1.20.6 and --output, matches source/copied SHA, leaves old init/args unchanged.",
+    "Daemon copy occurs after original namespace/private tmpfs guards and is explicitly configuredUbuntu fixture only."
+  ],
+  "primary_daemon_source": "https://manpages.debian.org/testing/dpkg/start-stop-daemon.8.en.html",
+  "limitations": [
+    "No local Linux or Go execution; corrected native positive outcomes pending.",
+    "No production/router profile expansion, no changed pin, no arbitrary environment forwarding or generated receipts.",
+    "Current4cc generic and Mihomo status evaluated independently; these followups not covered."
+  ]
+}

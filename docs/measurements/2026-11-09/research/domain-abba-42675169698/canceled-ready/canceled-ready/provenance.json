@@ -1,0 +1,28 @@
+{
+  "baseline": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "candidate": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "scenario": "canceled-ready",
+  "order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline"
+  ],
+  "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
+  "kernel": "7.0.0-1017-azure",
+  "go": "go version go1.26.5 linux/amd64",
+  "assets_sha256": {
+    "/usr/local/lib/razvilka-fixtures/xray": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+    "/usr/sbin/xtables-legacy-multi": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52",
+    "/usr/bin/ip": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92"
+  },
+  "native_GOMAXPROCS": 2,
+  "limits": [
+    "Unchanged publication12s/client4s; no diagnostic deadline override",
+    "Fresh process/namespace each sample; warm host page cache, not cold IO",
+    "Original profile span label is Run-through-join; failed cleanup error is not retained, so counter/profile markers do not prove joined cleanup",
+    "Retained image bytes are not process RSS or router memory proof",
+    "Two samples per side do not establish statistical significance; compare identical completed stages only"
+  ],
+  "cgroup_cpu_max": "unavailable"
+}

@@ -1,0 +1,37 @@
+{
+  "files": [
+    {
+      "path": "internal/netidentity/observe_linux.go",
+      "sha256": "73d354cddc0232d0e64f29c2e8eff19b2455914cbe77527a0da77067e987bc51"
+    },
+    {
+      "path": "internal/netidentity/observe_mount_id_linux.go",
+      "sha256": "e45bb2821b80a0849a0e5f13a6fe89a9a3a6a2331ab4cad6dbc80667a292b0f7"
+    },
+    {
+      "path": "internal/netidentity/observe_mount_id_linux_test.go",
+      "sha256": "ee61b08574457f63a013680b6fd168ec23840d7663c220087cb6fc9b951dec2a"
+    },
+    {
+      "path": "internal/netidentity/observe_mount_id_measurement_linux_test.go",
+      "sha256": "cc2ca7527310939cc0f9dc78047eb72bc951b65301f2f8c96ca1689a95c806ca"
+    }
+  ],
+  "constraints": [
+    "Only existing mountID implementation changes; all audit caller checks remain.",
+    "Fresh legacy STATX_MNT_ID and AT_EMPTY_PATH; no cached values or UNIQUE-ID substitution.",
+    "Unsupported/denied/missing-mask uses exact protected fdinfo fallback; other failures refuse.",
+    "Held fdinfo mount identity and before/after mount-layout coverage including fdinfo children retained.",
+    "Actual provider late same-inode bindmount closing refusal plus post-unmount fresh success fixture."
+  ],
+  "pending": [
+    "Native bindmount normal/race no-skip execution",
+    "Actual same-profile measurements before performance claim",
+    "Physical old-kernel/router fallback acceptance"
+  ],
+  "reviewer": "independent-verification",
+  "decision": "source reviewed and approved for CI; execution acceptance pending",
+  "base_head": "15bb410869f539e1f9c5467a41c13f2404fa2bd6",
+  "local_validation": "git diff --check PASS; no local Go build per storage constraint",
+  "reviewed_commit": "bc2ea7c2"
+}

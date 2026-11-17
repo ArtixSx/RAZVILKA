@@ -1,5 +1,227 @@
 # Совместимость и состояние разработки 0.20.0
 
+<a id="current-release-checkpoint"></a>
+
+## Ограниченный RC — решение 17.11.2026
+
+На `f324d018` все 13 включённых native jobs завершены SUCCESS: release-core
+44085081104 и Mihomo 44085081198. Проверены парное восстановление, три варианта
+старой 0.19.3, возврат панели, Apply/Stop и восстановление после отказов.
+Семь release-scope и три startup timing теста прошли normal/race без SKIP.
+[Точная ревизия и хеши журналов](measurements/2026-11-16/limited-rc-native-f324d018.json).
+Отложенные DNS/managed сценарии в эти 13 jobs не входят; прежние FAIL сохранены.
+
+Generic PR CI44085093171 выявил гонку тестового сценария metadata-Mkdir:
+таймер закрывал parent.Done до отмены дочернего контекста Prepare. В fixture
+добавлено синхронное завершение той же отмены; 500 мс, реальные production
+контексты и проверки точного пустого каталога/одного HTTP-запроса сохранены.
+Это исправление теста, не принятие ещё незавершённого generic gate.
+
+Владелец отложил экспериментальный DNS-обход и подтвердил подготовку
+ограниченного выпуска. Исследование DNS остановлено; ordinary DNS и resolver
+redirect не исключаются. Experimental DomainPolicy/SyntheticDNS не создаются
+рабочим app/cmd; существующий отказ доменных proxy-маршрутов сохраняется.
+`4cb5a147` явно показывает эту границу в API и панели. Два новых теста
+проверяют обычный DNS/draft и отсутствие скрытой замены mixed domain/CIDR
+scope; адресные Go tests и 41 scoped DNS UI check PASS. Независимое ревью APPROVE.
+
+`3a9af67b`: исправлена классификация просроченного cleanup (Busy sentinel
+сохранён, причина DEADLINE_EXCEEDED), добавлено ограниченное совместное чтение
+хвоста counter format/parse/closing. Открывающая capture и фактическая команда
+не объединены; исходные deadlines и свежие закрывающие проверки сохранены.
+Независимое ревью APPROVE, адресные Windows tests PASS. Полный native сценарий
+ещё обязателен; ускорение и устранение NFQWS2 timeout не заявляются.
+`c8a9c383`: отдельно сохранена native диагностика стоимости дочерних чтений
+для отложенного DNS; ordinary Cmd.Run и scoped sole Wait сохранены.
+
+Actual managed run44066476354 завершён FAILURE в обоих режимах. DNS a2ce:
+24 диагностических unit PASS, direct-deny PASS; mismatch4с и первая публикация
+12с FAIL. Последняя подготовка/ACK без ошибок, Stop defect не подтверждён.
+Эти отказы не переименованы в успешные проверки после изменения состава RC.
+
+Критерии выпуска: согласованный состав API/AUTO/UI, generic/native checks
+точной итоговой ревизии, затем router/LAN приёмка. До неё релиз не принят,
+GitHub не пересоздаётся, существующий роутер не меняется. Исторические
+контрольные точки ниже сохраняют происхождение результатов.
+
+Проверки `999a8826`: оба generic CI, все четыре Mihomo jobs и probe SUCCESS.
+Native full managed LAN и manual Apply снова FAIL в обоих режимах,
+поэтому новый managed Apply исключается из RC с согласованным API/AUTO отказом.
+Stop, Current, прежний проверенный active no-op и завершение отката сохраняются;
+отказ не переключает managed-запрос на standalone NFQWS2.
+Автоматическое возобновление managed после upgrade/restart не обещается.
+Новый candidate-check и external bootstrap отклоняют применённый/неоднозначный
+managed NFQ до миграции/остановки старой версии; явный Stop оставляет выборы.
+
+Роутер: actual ARM64 provider/identity PASS, base acquire REFUSED с точными
+кодами `NC1812_SELECTION_PATH / PATH_OWNER_OPT_UID`. `/opt` не принадлежит root;
+права не исправлялись, приложение не установлено. Helper завершён и очищен.
+Отдельный dry plan подтвердил UID1001 и0755 у всех пяти заранее выбранных
+каталогов; исходные inode/device/GID сохранены в приватной резервной папке.
+Подготовленный repair меняет только UID этих исходных inode и ещё не исполнен.
+Read-only сверка opkg/status подтвердила отсутствие зарегистрированных
+libnl-tiny и ip-full, прежний alias ip→BusyBox и неизменность снимка между
+чтениями. Это не установка пакетов и не подтверждение LAN.
+
+Упаковка: выявлен отказ release guard из-за tracked лабораторных `.log` в
+docs/measurements. Они исключаются только из staging установочного пакета;
+репозиторные доказательства сохранены, пакет содержит ссылку на точную ревизию.
+Предварительные четыре бинарника и TAR/ZIP `999a8826` построены, 387 записей
+пакета проверены обратным чтением. Это не финальная принятая сборка.
+
+## Текущая сверка: 17.11.2026, кандидат `f54e0914`
+
+Финальные conclusions этой ревизии: push CI44061043012 и PR CI44061053510 —
+SUCCESS; Mihomo44061043098 — SUCCESS, все четыре jobs; probe44061043360 —
+SUCCESS. Lifecycle44061043128 — FAILURE, 11/15 jobs PASS: два strict DNS
+(selected/mismatch и canceled-ready) и managed production/race остаются FAIL.
+StrategyLab pair, modern rollback и legacy empty/draft/history прошли.
+[Финальные статусы точного SHA](measurements/2026-11-16/integrated-f54e0914-final.json).
+Срез 10:11 UTC ниже сохранён как исторический; он больше не означает ожидание CI.
+
+Следующие `6b0b246a` и `1bd49fc8` добавляют только native диагностику причин
+отказов: request-local DNS pre/post-dial Guard/decision/compare и NFQ Apply,
+counter roles, prepared-owner read. Ordinary build использует no-op;
+исходные deadlines, порядок проверок и ошибки не изменены. Это не исправление
+сетевых сценариев. Независимое source review и адресные Windows/Linux compile
+проверки прошли. Actual DNS44065917683 завершён FAILURE: все три новых
+normal/race contracts PASS/noSKIP, direct-deny PASS; selected HTTPS успешен,
+но mismatch4с остановился внутри direct-current-post, до post-dial Guard.
+Request2 pre-dial: Guard389,147мс, baseline decision283,862мс, сравнение0,939мкс.
+Остаток server context более81с не является остатком client4с.
+Canceled-ready в этом запуске не прошёл ПЕРВУЮ публикацию12с; GEN2 не достигнут.
+Это иной отказ, чем f54 witness. [Точные результаты](measurements/2026-11-16/domain-forward-6b0b246a.json),
+[разбор первого отказа f54](measurements/2026-11-16/canceled-ready-first-failure-f54e0914.json).
+Managed44066476354 пока учитывается отдельно; ни один диагностический маркер
+не даёт допуска маршруту и не заменяет успешный полный сценарий.
+
+Релиз ещё не принят. На `9971aa1bdb4f4daf3afd65b85ebe7e1cdae4156c` полный
+[push CI44049645961](https://github.com/ArtixSx/RAZVILKA/actions/runs/44049645961)
+и [PR CI44049655757](https://github.com/ArtixSx/RAZVILKA/actions/runs/44049655757) — SUCCESS.
+Native lifecycle44049646012 — FAILURE:10 успешных jobs и5 failed. Все четыре
+текущих Mihomo-сценария прошли; красный job относится к отдельному историческому
+4cc manual запуску (sidecar-start material refusal, затем verified rollback).
+Probe comparison — SUCCESS. [Точные исходы и raw SHA](measurements/2026-11-16/integrated-9971aa1b.json).
+
+В `d1e44b1d0c49f7708247a2fffd1fe717787926cb` интегрированы независимо проверенные
+WG cleanup scope (`e3297ff1`), DNS prepared read (`76378802`) и два source-only ABBA
+стенда. Общий [CI44053143961](https://github.com/ArtixSx/RAZVILKA/actions/runs/44053143961) — SUCCESS на точномd1. [Raw hash](measurements/2026-11-16/ci-d1e44b1d.json).
+Windows focused contract tests точногоd1 PASS. Полный managed native
+[44053982264](https://github.com/ArtixSx/RAZVILKA/actions/runs/44053982264) — FAILURE:
+loader normal/race PASS, managed normal/race FAIL. [Доказательства](measurements/2026-11-16/managed-full-d1e44b1d.json).
+
+Следующий00fc добавляет fixed-FD namespace reader со stack-buffer и тем же raw parser.
+Actual Linux [44059135619](https://github.com/ArtixSx/RAZVILKA/actions/runs/44059135619):
+7PASS и16paired rows в каждом режиме. Медианная память на leaf−3840Б, count+1;
+paired wall примерно−1,01мкс normal/−1,66мкс race. [Проверенный отчёт](measurements/2026-11-16/namespace-reader-00fcfec3.json).
+Первоначальное поле thread CPU ошибочно измеряло RUSAGE_CHILDREN и признано
+недействительным; исходные данные сохранены. Вe612 исправлен selector на
+RUSAGE_THREAD. Wall/processCPU/alloc подтверждены отдельно; это не исправление
+DNS4с и не полный новый CI.
+
+Исправленный измеритель на точном `f54e0914` прошёл
+[44061086488](https://github.com/ArtixSx/RAZVILKA/actions/runs/44061086488):
+normal/race по 7 PASS, без SKIP, по 16 строк измерений. Независимое ревью APPROVE.
+Парная медиана экономии wall — 0,947/0,958 мкс, thread CPU — 0,855/0,830 мкс;
+память −3840 Б при +1 allocation. Это восемь пар на режим с разбросом, только
+чтение namespace; полный DNS этим не подтверждён.
+[Измерения](measurements/2026-11-16/namespace-reader-f54e0914.json),
+[независимое ревью](measurements/2026-11-16/namespace-reader-f54e0914-review.json).
+Отдельный [identity regression 44059135497](https://github.com/ArtixSx/RAZVILKA/actions/runs/44059135497)
+на `00fcfec3` завершился SUCCESS, все три jobs: 100/100 live TLS с cleanup,
+оба rollback cuts normal/race и historical reader retry.
+[Отчёт с явными platform/root skips](measurements/2026-11-16/identity-contract-00fcfec3.json).
+Срез CI `f54e0914` на 17.11.2026 10:11 UTC: push44061043012 и PR44061053510
+ещё выполняются; probe44061043360 — SUCCESS. Lifecycle44061043128 и
+Mihomo44061043098 ещё выполняются. Среди завершённых lifecycle jobs:
+direct-deny PASS24,15с с positive sameFD/zeroSYN/restored-policy/join,
+selected HTTPS успешен, затем mismatch4с FAIL23,17с; canceled-ready FAIL36,63с
+без GEN2 child/listener witness. Current Mihomo manual PASS267,25с не означает
+успех незавершённого comparison job. DNS здесь использует исходный debug
+бинарник59 238 855Б; его latency нельзя напрямую сравнивать со stripped ABBA.
+[Срез проверок и raw hashes](measurements/2026-11-16/integrated-f54e0914.json).
+
+Текущие Entware package closure503 и public selection497 уже входят в этот
+кандидат; прежние pins и shortcuts сохранены. Их normal/race проверки прошли,
+но synthetic ARM64 ELF на LinuxAMD64 не доказывает ARM64 execution или router boot.
+
+Root владеет интеграцией, документами и workflow; catalog_product_analysis
+разбирает DNS critical path, catalog_network_analysis — managed lifecycle/busy,
+catalog_lifecycle_review проверяет рискованные изменения и результаты независимо.
+Исходные worktrees и неопубликованная работа сохранены.
+
+| Направление / владелец | Работающий сценарий и доказательство | Оставшееся действие / конкретный блокер |
+| --- | --- | --- |
+| DNS / catalog_product_analysis; lifecycle review | [763 source-only ABBA](measurements/2026-11-16/domain-prepared-76378802.json): выбранный HTTPS успешен во всех4 arms; число process-current в этом запросе270→238, cumulative interval1,572→1,391с. Это вложенные интервалы, не end-to-end latency. Новая ветка действительно выполнялась | Все4 full mixed FAIL: unknown.example.com превышает4с до relay; opaque не достигнут. Direct connect при достижении занимал микросекунды. Strict publication12с и canceled-ready также требуют завершения. [Critical path](measurements/2026-11-16/domain-mismatch-d1e44b1d.json); программная задача, не внешний блокер |
+| Managed NFQWS2 / catalog_network_analysis; lifecycle review | [e329 ABBA](measurements/2026-11-16/wg-cleanup-e3297ff1.json): средняя сумма4 завершённых WG checks production8,303→5,244с, race11,613→8,843с при одинаковых member reads/bytes внутри режима;8/8 independent cleanup PASS. Это стоимость конкретных cleanup checks | Все8 manualApply FAIL. [Полныйd1](measurements/2026-11-16/managed-full-d1e44b1d.json): normal fullLAN/manual Apply DEADLINE, independent cleanup PASS; race fullLAN не доходит доApply, manual DEADLINE. Never-issued recovery-only cuts и последующий freshApply различаются. Исправить forward в исходных budgets; прежний единичный GC crash не объяснён |
+| Mihomo / Root; lifecycle review | На997 текущие actual lifecycle198,19с, manual HTTP230,01с, settlement121,88с, post-CAS66,36с — PASS. Это длительности полных тестов. Старый4cc manual отдельно FAIL14,23с при sidecar-start и успешно откатился | Итоговая ACK матрица и физический LAN точного кандидата. Historical4cc использует другие HEV inputs и fixed order, поэтому не даёт изолированного сравнения ускорения |
+| Binary + StrategyLab / Root | На997 strategy-pair SUCCESS:7 stopped completion cuts и restored-panel boot; modern rollback и legacy empty/draft/history PASS. История, ручной выбор и unknown/finalizing fences сохранены | Аппаратная приёмка финальной ревизии; физическое отключение питания отдельно. Произвольный downgrade не разрешён |
+| VLESS и очередь / Root | На997 probe comparison SUCCESS. [Прежние182строки,N12](measurements/2026-11-16/probe-comparison-33de2dde.json): live Check311,549→220,1895мс, selected group1527,3895→1329,274мс, cleanup verified | Частная Linux-сеть и fixed order; WAN/LAN/flash на роутере отдельно |
+| Панель/API/AUTO / Root |13разделов/21страница,118 Node checks, Chromium desktop/mobile/keyboard проверки; оформление по референсам NetZapret | Actual backend flow на принятом router/LAN-профиле; unknown не превращать в availability |
+| HEV / Root | [ec62](measurements/2026-11-16/hev-default-ec62ac2a.json): AMD64 install и actual HTTP replacement normal/race по10PASS | ARM64 pin прежний; будущая публичная доставка0.20.0 не проверена; выпущенный tag не перемещён |
+| Роутер / catalog_product_analysis; lifecycle review |69backupfiles verified; две /opt copies925members +startup-config+firmware. [Offline ext4](measurements/2026-11-16/router-offline-ext4-20261117.json): exact925entries/578payloads/263links/metadata,fsck иcleanup PASS. [Свежая диагностика](measurements/2026-11-16/router-current-diagnostic-20261117.json):43 tool hashes opening/closing совпали,40ELF/30extension names сверены | Диагностика WITH_GAPS:6 namespace links недоступны; protected custody и service boot closure не доказаны. UID1001 у5каталогов, ip-full отсутствует.503 новый pinned profile прошёл native normal/race; selection497a9e4b подключён, native normal/race PASS; ARM64 полный acquire ещё не проверен. До software acceptance установки нет. Offline restore не router boot/firmware/ACL/xattrs proof |
+| Bootstrap / Root; lifecycle review |168 canonical opkg discovery /opt/bin|sbin; отсутствие отказывает до Runner/state/feed writes. ARM64 cpuid отсутствие сохраняется вcapture/digest/closing; на49 loader4 normal/race PASS | Полная startup selection и действительный package install после software readiness и backup acceptance. Synthetic ARM64 ELF наLinuxAMD64 не подтверждает ARM64 execution |
+| GitHub / Root | Backup51tags/14releases/140assets и historical source archives проверены; draft PR25 обновлён, GitHub не удалялся | После software/router acceptance: свежий refs/local backup, пересоздание и публичная доставка. OAuth delete_repo отсутствует; требуется разрешение удаления в настроенной авторизации |
+
+Вложенные интервалы не складываются. CPU profile ограничен64frames, поэтому
+отсутствие внешнего frame не доказывает ожидание. Latency неуспешного запроса
+не равна скорости работающего маршрута. Неуспешные программные проверки
+требуют исправления и не являются внешними блокерами. Generic CI, native
+fixture, публичная доставка и аппаратная приёмка показываются отдельно.
+[Roadmap](ROADMAP.md), [платформы](RUNTIME_SUPPORT_RU.md), [источники и команды](RESEARCH_LAB_20261109.md).
+
+<a id="текущая-контрольная-точка-16112026-fc5bcc6c"></a>
+## Предыдущая контрольная точка: 16.11.2026, `fc5bcc6c`
+
+Историческая сверка; приоритет имеет текущая матрица в начале документа. Релиз ещё не принят, установленный роутер не изменён.
+
+| Направление | Проверено | Оставшаяся работа |
+| --- | --- | --- |
+| Binary + StrategyLab backup/restore | `492e813b` public history/manual и modern rollback PASS; `9da19ea6` actual historical reader4, bound retry/fences normal/race PASS | Итоговый полный CI и аппаратная приёмка точного кандидата |
+| Панель | Новое меню13 разделов/21 страница,118 локальных Node checks, desktop/mobile Chromium PASS; README с настоящими снимками синтетического состояния | Actual backend/LAN и новая панель на роутере |
+| DNS | `458b20ef` standalone Current сохраняет все исходные проверки, совместно читая файл в пределах одного вызова; focused tests и независимое ревью PASS | Strict native12/4с выполняется, старый mismatch/unknown timeout ещё не закрыт |
+| NFQWS2 | Actual ACK/ECHILD отдельно проверены; исходные scope/exclusions/ownership сохранены | `a84f3c15` fullLAN/manual FAIL: Apply18с, затем policy-remove refusal; локализация и исправление |
+| Mihomo | `9da19ea6` identity normal/race PASS; source-pair stages измерены | Normal narrow warm51.4→34.4мс, race95.8→237.2мс; полный ACK120с FAIL. HEV silent exit254 исследуется отдельно |
+| GitHub recreation | Backup51 тег/14 выпусков/140 assets; `c92fd75a` Linux12 contracts +16 real source restorations PASS | Финальный backup новых refs/локальной работы; будущая HTTP-доставка assets; готовность ПО/роутера; текущему OAuth недостаёт `delete_repo` |
+| Общий CI / роутер | Полный CI `94e85625` PASS, более новые выполняются | Generic CI не заменяет native или router/LAN; установка кандидата ещё не выполнялась |
+
+[Точные ревизии, run IDs и измерения](measurements/2026-11-16/release-fc5bcc6c.json).
+Сохранение raw архивов на временной data-only ветке — лабораторная передача,
+а не новый выпуск. Пользователь разрешил удалить весь репозиторий после проверки;
+исходные теги/выпуски остаются в резервной копии, локальные worktrees сохраняются.
+Все сетевые отказы выше — открытые программные задачи, не отсутствие оборудования.
+
+<a id="текущая-контрольная-точка-16112026-492e813b"></a>
+## Предыдущая контрольная точка `492e813b`
+
+Историческая точка `492e813b`, уточнённая текущей таблицей выше. Выпуск ещё
+не принят. Новое оформление README и проверка исторического reader добавлены
+после этой ревизии; их результаты нельзя подменять результатами `492e813b`.
+
+| Направление | Проверено | Остаток / препятствие |
+| --- | --- | --- |
+| Согласованный binary + StrategyLab restore | `492e813b`: bound offline retry normal/race PASS; plan-only re-derivation, частичные префиксы, foreign inventory, Stop fences; публичный old193 history/manual restore PASS; modern update/rollback PASS125.47с | На `c972ab26` настоящая reader4 библиотека прошла normal/race; физическое прерывание питания не проверено |
+| Совместимость обновления | Обычный reader остаётся4; только standalone offline restore имеет допуск5. Actual CLI отвергает pending5; явный retry возвращает точный исходный receipt4, не меняя config revision | Произвольный downgrade не разрешён; сохранён отказ unknown/finalizing |
+| DNS / точный доменный scope | Свежие полные bytes и все ownership checks сохранены; повторный closing SHA заменён свежим побайтовым сравнением в пределах одного вызова | Строгий run43889223432 FAIL; ускорение полного сценария ещё не доказано. Программная задача, не аппаратный блокер |
+| Managed NFQWS2 | На `4e83e678` диагностический race-helper-exit=0: LateWaitCleanup PASS22.36с, фактический Wait/ACK/cleanup подтверждён | Consumer всё ещё FAIL: Execute15.8845с при исходном14с. Опция только native race fixture; production не меняет задержку завершения |
+| Mihomo recovery | Сохранены исходные scopes, ownership и rollback; consumer CPU profile собран | `4e83e678` race completed.json ACK FAIL120с; SHA33.31с CPU, свежие системные наблюдения26.08с CPU. Не общий elapsed и не оправдание увеличить timeout |
+| Панель | 13 разделов /21 страница; локальная браузерная и Node приёмка завершена; реальные снимки включены в README | Снимки синтетического backend; новая панель на роутер ещё не установлена |
+| Общий CI | Полный CI `492e813b` PASS (run43889164918); адресные результаты выше | `ed4bdf08` generic FAIL из-за обычного reader5, уже возвращённого к4 в `492e813b`; более новые оптимизации проверяются отдельно |
+
+Устаревшие generic runs `43887471647` (`4e83e678`) и `43888232543`
+(`87c95efd`) остановлены после обнаружения той же причины reader5. Это
+отменённые проверки, не PASS; текущие generic и адресные native runs сохранены.
+
+Подготовка пересоздания GitHub: проверены bundle и отдельное восстановление
+71 heads +51 исходного тега; сохранены14 выпусков/140 assets с SHA256.
+Также сохранены метаданные Issues/PR и восемь архивов исходников, необходимых
+для воспроизведения тестов после удаления старых refs. Ветки, добавленные после
+снимка, требуют заключительного backup. Репозиторий пока не удалён. Пользователь
+разрешил полное пересоздание после готовности и router-проверки; текущей GitHub
+авторизации недостаёт `delete_repo`. Токены не требуются в отчётах или чате.
+Локальные рабочие папки и неопубликованная работа должны остаться сохранены.
+
+
 Стабильная 0.20.0 ещё не опубликована. Инструкция установки и приведённые
 в ней команды закреплены за [Test v0.20.0-rc.73](releases/0.20.0-rc.73.md).
 Этот номер обозначает версию инструкции, а не актуальное состояние всех
@@ -15,6 +237,119 @@
 Наличие механизма обновления со снимком и откатом не подтверждает совместимость
 конкретной пары версий: такой переход требует отдельной приёмки. Если результат
 неизвестен, откройте журнал и проверьте причину перед повторной попыткой.
+
+## Панель управления: 16.11.2026
+
+Поверх `71891f5c` обновлена навигация по скриншотам NetZapret 1.5.3 владельца:
+13 пунктов в четырёх группах, прямой доступ к DNS, стратегиям, проверкам,
+диагностике и обновлениям. Сохранены все 21 страницы и прежние адреса переходов.
+Краткий вид упрощает главную и настройки; подменю, черновики, область устройств
+и предупреждения других страниц больше не скрываются. Восстановление HEV/Mihomo
+находится в диагностике; открытие страницы не запускает read/repair этих механизмов.
+Новый пункт обновлений использует прежний пассивный запрос состояния версии.
+Тёмная палитра, компактные карточки, группы меню и зелёные основные действия
+адаптированы под RAZVILKA; код и ресурсы NetZapret не включались.
+
+Локальные Node проверки интерфейса, навигации, auth/cancel/stale, recovery и
+обновлений PASS. Изолированный Chromium: 1440×1000 и 390×844, 28 переходов,
+21 страница, подменю, Tab/Escape/возврат фокуса, отсутствие горизонтального
+переполнения, запись API не вызывается. Скриншоты используют синтетическое
+остановленное состояние, часть данных намеренно недоступна. Это не тест
+серверной логики и не подтверждение router/LAN. Новый CI оценивается отдельно.
+Воспроизведение и границы проверки: [лабораторный журнал](RESEARCH_LAB_20261109.md#панель-по-референсам-netzapret-1016-ноября).
+Независимое ревью обнаружило и помогло устранить скрытие подменю/черновиков
+и пропущенное обновление состояния версии; заключительный source review без
+блокирующих замечаний. Установленная панель роутера не изменялась.
+
+## Подготовка modern update/rollback: 16.11.2026
+
+После UI `35947259` локализовано гарантированное несовпадение в исходном
+modern-pair стенде: example schema1 загружался source0.20 с нормализацией только
+в RAM до schema2. API fingerprint описывал RAM, helper проверял исходный файл.
+Настоящий установщик вызывает `-migrate-config` до запуска; стенд этот шаг
+пропускал. Теперь используется настоящий source CLI, проверены revision/live
+intent и побайтовая неизменность повторной миграции. Production guards не менялись.
+Адресный тест требует исходный отказ, принятие после миграции и отказ при новой
+revision. Изменение прошло независимое чтение ведущим; shell/Python syntax PASS,
+Go regression на147d PASS. Полный native46855c1a всё ещё FAIL: после миграции
+и public Apply кандидат не запущен. На824b3651 закрытая диагностика сократила
+ожидание с1234 до40с без увеличения бюджета: stop-old-panel и prepare-private-state
+завершены exit0/ECHILD, quiesce-old-runtime завершён exit3, опубликован
+requires-review. Причина исправлена в565221ca: quiesce теперь допускает
+уже проверенные snapshot2/3, продолжая отвергать1/неизвестные/непривязанные.
+На453559da полный modern public update→post-Live fault→known rollback PASS
+102.73с: точные бинарник/init/draft state, завершение всех исходных процессов,
+доступность StrategyLab, настоящий restart и kernel cleanup. Это same-source
+lab versions с synthetic release transport, не произвольный downgrade/релиз.
+
+## Проверки и измерения: 16.11.2026
+
+Полный журнал этой серии: [точные ревизии, команды и ограничения](measurements/2026-11-16/README.md).
+На147d8885 четыре isolated Mihomo lifecycle-сценария PASS, Strategy pair,
+public legacy empty/draft/history и pinned iptables1.8.11 normal/race PASS.
+Managed NFQWS2 fullLAN/manual и strict DNS не приняты. Общий CI147d прошёл
+Go normal/race, затем выявил устаревший UI assertion; исправлен наe8954294; оба Linux push/PR CI этой ревизии PASS.
+
+Сопоставимая VLESS-пара182rows: live p50 311.632→223.534мс, selected2 queue
+1440→1267.5мс. Cleanup100.5→11мс; остальные overlapping стадии не суммируются.
+Фиксированный порядок baseline→candidate, локальная модель сервиса, не WAN/LAN.
+
+DNS на новом ubuntu-latest/26.04 отказал из-за фактической effective cgroup
+BPF INET4_BIND программы (count1, errno0), а не CPU profiler. Отказ сохранён;
+На стандартном ubuntu24 этот guard проходит, но strict DNS всё ещё FAIL:
+первая mapping проверка не завершилась к12с. Внешний блокер стенда не установлен.
+В ходе разбора исправлен независимый дефект BPF ABI:32байта storage заменены
+полными64байтами, которые ядро использует для output. Независимое ревью и
+точные ABI tests normal/race PASS на8baead92.
+
+Убран только повторный чистый parser идентичных closing mountinfo bytes.
+Два свежих чтения и все filesystem/process/network guards сохранены.
+Netidentity normal/race и source parity PASS на8baead92. Микробенчмарк N5:
+74.610→36.940мкс, 127296→63648Б на одинаковых валидных данных; это цена
+parser, не полный Apply или LAN. Raw hashes и отрицательные случаи сохранены.
+
+Повтор7b6e: modern/Strategy pair/три legacy recovery и iptables normal/race PASS.
+Mihomo2/4: lifecycle/settlement PASS, manual/post-CAS FAIL при раннем HEV exit254.
+NFQ fullLAN/manual и strict DNS остаются непринятыми. Probe pair PASS:
+314.0245→224.7245мс live,1473→1302.5мс selected queue, N12.
+Generic62b PASS; PR generic7b6e обнаружил недетерминированную предпосылку
+теста committed evidence о неизменности живого inventory. В7561f2ec точный
+state/digest/revision predicate не изменён; fixture стал детерминированным,
+добавлены отрицательные engine/host/route drift проверки и50 normal/race повторов.
+Новый CI оценивается по собственной ревизии, без переноса PASS старого запуска.
+
+## Последний сохранённый сетевой этап: 09.11.2026
+
+Код modern public update/known rollback интегрирован в `690c0c30`, отдельный
+CI workflow — в `83a1a933`. Независимое ревью пройдено; native run
+[42692078602](https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078602)
+завершился FAIL2.75с: `ordinary-preparation-owner-refused` до обновления;
+три focused hook tests PASS. Release transport/rollback не достигнуты.
+Generic [42692078123](https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078123)
+на момент сохранения ещё выполняется. PASS всего сценария не заявлен. Сценарий использует
+два настоящих main-бинарника из одного source, native fixture tag и synthetic
+release transport; это не проверка официального релиза и не router acceptance.
+
+На `d7cb22d7` оба generic CI остановились на неиспользуемом импорте `time`
+в тесте. Исправление `9c5fac0e` уже прошло focused cancellation gate по30
+повторов normal/race; полный generic42690593933 ещё выполняется.
+Последняя интеграция с двумя полными generic PASS остаётся `5289a7d8`.
+
+Проверено наd7: private ledger decode экономит752Б/1allocation для одной
+записи и около180КБ для256; normal/race parity по3повтора PASS. Ускорение
+маршрута этим измерением не подтверждено. Strict DNS selected/canceled FAIL,
+ожидание tool gate0.8–1.8мс не объясняет основной расход времени. Полный NFQ
+LAN/manual и часть Mihomo recovery/settlement остаются незавершёнными.
+
+На0470 public empty/draft/history и actual default old-layout refusal PASS;
+неподдержанный upgrade0.19.x остаётся закрыт. Modern rollback требует разбора исходного preflight owner refusal,
+далее нужны remaining rollback/recovery cuts и отдельная router/LAN приёмка.
+Работа остановлена по просьбе пользователя из-за лимита; объём задач и
+ожидание CI не объявлены внешними блокерами. Действующий роутер не изменён.
+
+[Raw0470](measurements/2026-11-09/research/lifecycle/0470b68b/),
+[rawd7](measurements/2026-11-09/research/lifecycle/d7cb22d7/),
+[ревью modern и исправлений](measurements/2026-11-09/research/reviewed-modern-wave/).
 
 ## Роутеры
 
@@ -82,7 +417,182 @@
 [Матрица поддержки](RUNTIME_SUPPORT_RU.md) · [Установка](INSTALL_RU.md) ·
 [Изменения Test v0.20.0-rc.73](releases/0.20.0-rc.73.md) · [Помощь в Telegram](https://t.me/RAZVILKA_UI)
 
-## Интеграция 31.10.2026: защита состояния при обновлении
+## Исходники и приёмка на 09.11.2026
+
+Последняя интеграция с двумя полными generic PASS: `5289a7d8`, draft PR #25. Оба полных generic CI этого
+SHA прошли (push attempt2 и PR attempt3): normal/race, vet, shell/UI и четыре
+целевые сборки. Первые попытки не создали часть jobs из-за Internal server error
+GitHub; эти отказы сохранены отдельно. Native приёмка не подменяется generic CI. На `ea36873e` полный PR CI прошёл,
+а push CI остановился на нестабильной положительной WireGuard fixture (1 мс).
+Исправлена только fixture; в следующем CI оба сценария повторяются по 10 раз
+normal/race. Production handshake deadlines сохранены.
+
+Проверенные результаты `ea36873e`: все четыре Mihomo сценария PASS; paired182
+PASS, repeated N12 VLESS p50 312→226.918 мс, selected2 completion 1400→1213 мс,
+all 1391→1247 мс. Это Linux-стенд, не WAN или готовность маршрута LAN.
+DNS strict12/4 был пропущен после устаревшего assertion счётчиков;
+исправлены точные категории SHA/capture/compare без сокращения прочитанных байтов.
+Диагностика с отдельным бюджетом 30 с прошла все три сценария, использовала
+одну аллокацию 36,577,406 байт; число полных чтений и Current не уменьшилось.
+
+Public empty/draft update→restore на `2ecf9961` впервые PASS целиком:
+101.78 с и 115.88 с соответственно. Реальный bootstrap, durable Stop и public
+restore восстановили точный старый executable; журналы, StrategyLab и fences
+сохранены. Черновик создан настоящим старым HTTP API, проверен текущим reader.
+Это offline-переход настроенного 0.19.3, без заявления о запуске старой панели
+с современным состоянием. История и ручной выбор отдельно прошли на976fa47c; подробности ниже.
+Совместимая современная пара, encrypted restore и restored-panel PASS на
+`344912c1` остаются отдельной приёмкой; повтор на2ecf во второй попытке
+полностью PASS, включая настоящий запуск восстановленной панели.
+
+Managed NFQWS2 ещё не прошёл полный manual/LAN workflow. Измерено 1796 запусков
+classic-save в normal manual case; два стандартных copy scratch на запуск дают
+112.25 MiB аллокаций. Добавлено переиспользование очищаемого буфера через прежний
+общий лимит Write. Actual-child race benchmark на2ecf: медиана 167,088→68,021 B/op,
+2.042590→2.043532 с — выигрыш памяти, без ускорения по времени. Полный startup
+image comparison остаётся только измерительным тестом: race-пара capture/compare/
+clear 36.03 мс против двух SHA 14.86 мс оказалась хуже. В production не перенесена.
+На отдельной проверочной ветке `6b120f8c` полный fixed-slot pair измерен:
+normal warm 10.137→7.256 мс, race 22.354→50.168 мс. Все проверки границ прошли,
+но продвижение startup image в production отклонено по совокупности результатов.
+Отдельный retained buffer и ухудшение race не скрываются.
+
+Совместимая современная pair/encrypted restore/restored-panel проверка повторно
+PASS на2ecf (панель0.19с). Sameboot полная матрица11/14 PASS: пять обычных cuts
+и race completed/history прошли; retirement/terminal-transaction/terminal-global
+race остаются FAIL на настоящем aggregate120с. Deadline не расширяется.
+Повтор VLESS на5289:182rows PASS, repeatedN12 live p50/p95
+312.846/314.178→222.224/224.104мс, selected queue1438/1452→1253/1284мс.
+Baseline→candidate на одном runner, фиксированный порядок; сравнивать внутри
+этой пары, не между разными машинами. Это не WAN/LAN-ready измерение.
+[Raw и воспроизводимый анализ](measurements/2026-11-09/research/ci-5289a7d8/).
+
+Новая проверочная серия: опубликованный PR HEAD `5289a7d8`, затем focused
+history `976fa47c`. Public history полностью PASS165.09с: bootstrap58.46с,
+restore105.79с. Настоящий старый API создал три native-пробы и frozen manual
+selection; исходные state bytes, история, ручной выбор, cleanup и current reader
+проверены независимо. Legacy readiness остаётся false. Это configured0.19.3
+offline-пара, не запуск старой панели и не произвольный downgrade.
+
+На5289 original RPDB pair normal53.738→22.639мс, race90.661→44.300мс;
+все реальные команды и проверки ownership сохранены. Полный managed NFQWS2
+LAN/manual и fresh Apply ещё FAIL. Mihomo lifecycle, settlement и post-CAS PASS;
+manual у candidate и same-host4cc baseline FAIL на исходных110с. Sameboot11/14
+PASS, но три других отказа: normal retirement (sidecar-child-exited) и race terminal-transaction
+(sidecar-start/route-process-unavailable) до producer ACK; race completed на70.06с source-closing,
+до запрошенного cut. Это не успешное завершение всей recovery-матрицы.
+
+DNS5289 selected дошёл до DNS, но service peer4с FAIL; canceled прошёл GEN1
+и перешёл в GEN2, который не завершился. GEN2 CPU-профиль охватывает preparation
+и Run/join attempt:12.01 CPUс/12.745 wallс, не CPU дочерних процессов.
+Независимо проверенный7428 передаёт существующий pre-add read view только точному
+successor listener; полная runtime-проверка ещё нужна. Новая sameboot диагностика
+фиксирует только закрытый перечень стадий, не изменяя ошибки и deadlines.
+
+Следующие критерии: совместимый live запуск и отрицательная проверка default legacy layout, DNS
+GEN1/GEN2 и отмена на исходных12/4с, matched ABBA на одном runner, managed NFQWS2
+manual/recovery, оставшиеся Mihomo same-boot cuts. Внешних блокеров для этих
+программных задач нет. Оба generic5289 полностью PASS; generic6b отдельно PASS. На50bd PR generic PASS, push generic FAIL из-за нестабильного теста отмены; дальнейший статус ниже.
+[Результаты5289](measurements/2026-11-09/research/lifecycle/5289a7d8/),
+[history976 и независимое ревью](measurements/2026-11-09/research/lifecycle/976fa47c/),
+[generic6b](measurements/2026-11-09/research/lifecycle/6b120f8c/generic/).
+Повтор50bd038c: все4 Mihomo native сценария PASS, включая два настоящих
+manual HTTP Apply/Stop (210.65с; same-host4cc206.80с). Lifecycle280.58с против
+277.63с; ускорения нет. Public empty126.58с/draft149.67с/history164.20с снова
+PASS. История подтверждена вторым настоящим запуском, а не синтетическим JSON.
+Sameboot теперь10/14PASS: normal terminal-transaction59.94с отказал на исходном
+process inventory; race history/completed/terminal-transaction120с FAIL после
+настоящего ACK retry. Это отдельная незавершённая матрица восстановления.
+
+Strict DNS50bd оба GEN1 DNS FAIL. Диагностический30с сценарий отдельно достиг
+GEN2 и подтвердил36 original successor scopes,72 derived reads/72 completions;
+так проверено реальное применение7428, но штатный12с срок ещё не принят.
+Managed NFQWS2 full/manual/fresh Apply также FAIL; original core/recovery cuts
+и cleanup-only normal PASS. Все original budgets сохранены.
+
+Test-only metadata parallel experiment отклонён: normal0.644→1.837мс,
+race1.179→4.897мс, рост CPU/alloc. Namespace/provider overhead включён;
+production traversal не менялся. На0470 диагностика выполнена: default-layout refusal PASS1.21с, sameboot10/14 PASS (все normal ACK cuts PASS; четыре race cuts120с FAIL).
+Это диагностика для следующего исправления, не завершение направлений.
+[Точные50bd результаты и независимые проверки](measurements/2026-11-09/research/lifecycle/50bd038c/),
+[ревью0470](measurements/2026-11-09/research/reviewed-0470-wave/).
+На роутере выполнены только read-only измерения; новая сборка и LAN-профиль
+требуют отдельной авторизации изменений действующего устройства.
+[Полный generic CI](measurements/2026-11-09/research/lifecycle/2ecf9961/generic/),
+[полная повторная native матрица](measurements/2026-11-09/research/lifecycle/2ecf9961/attempt2/),
+[ABBA](measurements/2026-11-09/research/domain-abba-42675169698/),
+[новая paired182 серия](measurements/2026-11-09/research/ci-2ecf9961/),
+[первая native попытка](measurements/2026-11-09/research/lifecycle/2ecf9961/attempt1/),
+[предыдущие raw и независимые проверки](measurements/2026-11-09/research/lifecycle/ea36873e/),
+[парные измерения](measurements/2026-11-09/research/ci-ea36873e/).
+
+Актуальная исследовательская ветка основана на `0e2db5ab`, включая четыре
+локальных коммита после опубликованного `a2d1c3c7` (draft PR #23).
+Это не новый стабильный выпуск и не изменение установленного роутера.
+
+В исходниках уже реализована совместимая snapshot3 пара бинарника и StrategyLab,
+encrypted export/import, сохранение истории и ручного выбора. Старый guard-only
+этап ниже описывает историю, а не полный текущий механизм. Unknown/finalizing,
+владение ресурсами, CAS и проверка совместимости остаются обязательными;
+старый успех не переносится на новую generation. Поддержанные переходы имеют
+отдельный focused native PASS для `a2d1c3c7`, но не универсальное разрешение
+downgrade и не доказательство сохранности при отключении питания роутера.
+
+На `a2d1c3c7` generic CI SUCCESS; специализированные DNS/Mihomo lifecycle
+проверки имеют FAIL/SKIP. Поэтому весь выпуск не объявляется готовым.
+Причины, новые измерения, текущие владельцы и критерии приведены в
+[roadmap](ROADMAP.md), [лабораторном журнале](RESEARCH_LAB_20261109.md) и
+[результатах текущего прохода](measurements/2026-11-09/research/README.md).
+
+Первая новая дельта разделяет запуск движка, готовность SOCKS и проверку
+идентичности, ограничивает готовность приватным deadline и сохраняет стадии
+в nodeeval/API/UI. Новые стадии диагностические; исправление deadline не заменяет
+проверку сервиса. Положительный TCP/SOCKS/delay
+не становится доказательством HTTPS, MTProto или рабочего LAN-маршрута.
+
+На исследовательском `8c869c76` дополнительные первые readiness polls и
+продолжение успешного node-check через обычный scheduler убирают подтверждённые
+простои. В парном Linux опыте N12 full VLESS Check p50
+404.777→314.996мс, selected2 enqueue→server completion2615→1444мс.
+Scope, Stop/recovery, history/CAS/ownership, cancellation и joined cleanup
+сохранены. Это результат контролируемого стенда; аппаратная готовность и
+полный Mihomo/NFQWS/DNS lifecycle по-прежнему требуют отдельного завершения.
+
+Повтор `2924cd74` подтверждает сокращение full VLESS Check p50
+403.157→312.937мс и selected2 completion2604→1423мс на одном runner, N12.
+На этой же ревизии native snapshot3/StrategyLab и restored panel PASS;
+original DNS successor preparation recovery впервые проходит clean и два
+частичных ACK с проверкой прежнего alias. Это диагностический бюджет30с/10с;
+строгая DNS publication12с ещё не проходит. Mihomo lifecycle и managed LAN
+частично остановились до тестов на HTTP504 загрузки pinned fixtures.
+Подготовлен официальный Release Assets API fallback с неизменными SHA256;
+он не изменяет production downloader. Точные результаты и следующие проверки:
+[lifecycle журнал](measurements/2026-11-09/research/lifecycle/README.md).
+
+На следующем `b7261e9f` Mihomo native lifecycle прошёл все три jobs:
+два Apply/Check/Stop с fresh Apply и closing retry, failed Check settlement
+и post-CAS rollback. Preparation recovery и StrategyLab pair повторно PASS.
+Strict DNS12с и managed NFQWS LAN остаются программными незавершёнными задачами;
+подробные причины и владельцы указаны в едином roadmap.
+
+Финальный программный bfc96dd2 прошёл оба общих CI. Его специализированные
+результаты учитываются отдельно: VLESS и DNS successor recovery PASS, полный
+Mihomo lifecycle PASS на повторе с сохранением первого необъяснённого отказа,
+strict DNS и managed NFQWS LAN FAIL. Последующая0a72dfb8 исправляет отображение
+чужой/устаревшей telemetry и неизвестного process state; новые CI проверяются
+для её SHA отдельно.
+
+SSH-профиль реального NC-1812 подтверждён только чтением. Установленныйrc106
+и действующий NFQWS2 не менялись; наличие SSH не является аппаратной приёмкой
+текущего кода. [Фактический профиль](measurements/2026-11-09/research/router-readonly.md).
+
+На `b5a5f58e` Mihomo полный native lifecycle, StrategyLab pair/restored panel
+и paired VLESS повторно PASS. Общий CI нашёл два невалидных тестовых результата
+без StartedAt; fixture исправлен в `441e97e4` без изменения production guards,
+его CI проверяется отдельно. Strict DNS12с и managed NFQWS2 LAN остаются
+незавершёнными программными сценариями. [Подробности и сырые результаты](measurements/2026-11-09/research/lifecycle/README.md#проверенный-b5a5f58e-и-продолжение-09112026).
+
+## История интеграции 31.10.2026: первоначальная защита обновления
 
 Рабочая ветка `work/bypass-integration-20261031` основана на `a36f5343`
 (PR #22); локальная ветка очистки и её незакоммиченные изменения сохранены отдельно.
@@ -120,3 +630,297 @@ recovery и startup пройдены. Более широкий Windows набо
 исходный платформенный отказ в NFQWS2 fixture: `/opt/...` не absolute Windows
 path; дефект воспроизведён также на 577ebe54. Runtime-проверки не ослаблялись.
 Полный Linux gate остаётся обязательным для каждого интегрированного commit.
+
+
+Последняя полностью проверенная исследовательская ревизия `363f4336`:
+оба generic CI и Mihomo isolated native lifecycle, StrategyLab pair/restored
+panel PASS; строгий DNS и полный managed NFQWS LAN ещё FAIL.
+Следующие исправления проходят собственную приёмку; [текущий журнал](measurements/2026-11-09/research/lifecycle/README.md)
+содержит конкретные SHA, ограничения и сырые результаты. Готовность релиза
+и физического router/LAN этим не подтверждается.
+
+
+### Проверенный результат e685eb75 и следующий ручной workflow
+
+На e685eb75 оба общих CI42618633125/42618642475, paired probe42618632990
+и три original Mihomo native job42618633097 завершились SUCCESS.
+Cleanup на одном стенде101→11мс, полный VLESS live Check p50309→217мс;
+[данные, границы и оставшиеся FAIL](measurements/2026-11-09/research/README.md#изолированная-проверка-cleanup-на-e685eb75).
+Strict DNS и полный managed NFQWS не прошли; это открытые программные задачи.
+
+Следующий58becdc9 соединяет специальный ручной Mihomo preview/token/apply/stop
+с оригинальным runtime для одного поддержанного service/client scope.
+Source review и Node UI PASS; новый native HTTP/LAN сценарий требует собственного
+результата CI. Ни registration, ни preview не объявлены service proof;
+общий planner/AUTO не получают этот допуск. Физический роутер не изменялся.
+
+
+### Проверка b9bb3c13 и последующие исправления
+
+Оба generic CI42623923398/42623932233 SUCCESS: normal/race, UI, vet,
+четыре crossbuild и modeled Entware. Три исходных native Mihomo сценария
+также SUCCESS. Новый actual manual HTTP дошёл до commit/replay refusal/LAN,
+после чего Stop вернул401 из-за отсутствовавшей тестовой авторизации;
+3810bec исправляет fixture и сохраняет anonymous Stop refusal.
+[Точные результаты и журналы](measurements/2026-11-09/research/lifecycle/b9bb3c13/).
+
+На1a50bf07 парные VLESS/очередь и исходный двухцикловый Mihomo lifecycle PASS.
+Ручной HTTP Apply/LAN подтверждён, но Stop202 пошёл по self-update recovery
+из-за пустого Directory в fixture;0f043902 исправляет тестовую конфигурацию,
+не обходя production guard. Новый полный manual workflow ещё требует PASS.
+NFQ original quarantine и cleanup-only повторный Stop подтверждены;
+полный fresh Apply и strict DNS12/4 по-прежнему FAIL по времени.
+Fresh Fstat normal/race parity и microbenchmark прошли; end-to-end выигрыш
+не следует из уменьшения allocations. Classic-save работает в DNS fixture,
+но отдельный6pair parity setup исправленe9 и должен пройти новый запуск.
+Generic1a50 focused PASS, полный запуск CANCELLED; dee compile FAIL и его
+исправления сохранены в журнале. Это не заменяет последнего полного b9bb PASS.
+[Точные результаты](measurements/2026-11-09/research/lifecycle/1a50bf07/).
+
+
+### Завершённая общая проверка: 0f043902
+
+Оба generic CI42630488148/42630498206 SUCCESS: normal/race, actual nonroot
+permission refusal, UI, vet,4crossbuild, modeled Entware. Native Mihomo
+lifecycle/settlement/postCAS PASS; manual HTTP отказал в Acquire до preview,
+диагностикаd590 ещё требует следующего запуска. StrategyLab pair/restored panel
+повторно PASS, но публичный executable paired restore ещё не был выбран workflow:
+готовится отдельный isolated harness с настоящим producer и old193 бинарником.
+Strict DNS и full NFQWS остаются FAIL; release/router admission не изменён.
+[Raw](measurements/2026-11-09/research/lifecycle/0f043902/).
+
+Следующая волна включает reviewed App API/UI timing eb1, pathname scratch1af9,
+fair save comparison/lock fixture d762, baseline observation7c3 и отдельные
+measurement-only stack/mountinfo benchmarks. Собственный CI ещё обязателен.
+
+
+### Последняя завершённая интегрированная проверка: 6df3d753
+
+Оба generic CI42634856758/42634845807 SUCCESS, включая полный normal/race,
+UI, vet,4crossbuild и modeled Entware. API network timing прошёл actual TLS503,
+чужие/устаревшие/canceled результаты и независимость снимков; timing не повысил verdict.
+Все4 Mihomo job42634845791 SUCCESS: manual preview/token→Apply→LAN→HTTPStop
+дважды, повторный closing retry, lifecycle, failed-check settlement и post-CAS rollback.
+Manual Apply90.281/90.219с, Stop5.539/5.551с; оба физических baseline восстановлены.
+Это проверка изолированного Linux namespace, не изменения/приёмка действующего роутера.
+
+Classic save на actual1.8.10: normal/race parity,lock,source mutation/cancel PASS,
+одинаковые74строки,20→4 children; steady N5 median80.696→28.465мс normal,
+108.845→38.093мс race. First sample сохранён отдельно. Strict DNS12 и полный NFQ
+LAN/manual ещё FAIL; на6df fault-cut NFQ не достигнуты из-за раннего deadline,
+прежние0f recovery PASS не переносятся автоматически на6df.
+[Отчёты и raw](measurements/2026-11-09/research/lifecycle/6df3d753/).
+
+Следующие reviewed изменения требуют собственного CI: stack pathname scratch
+устраняет измеренную race pool allocation; bounded child output ReaderFrom
+сохраняет все Start/Wait; coordinator readonly scope сохраняет все Current;
+actual1.8.11 и genuine configured-old193 public paired CLI получают отдельные
+native jobs. Ни новый harness, ни source review не являются native PASS.
+
+
+### Последняя полная проверка:4cc9f869
+
+Оба generic CI42642213704/42642229628 SUCCESS. Все4 Mihomo native job PASS,
+paired182rows PASS (live p50 320→229мс, selected2 1497→1300мс). Это собственные
+результаты4cc, не перенос предыдущего CI. Sameboot normal96.53с/race113.13с PASS;
+normal retirement/history/completed ACK cuts PASS, остальные7cuts FAIL120с.
+Strict DNS12 и полный NFQWS2 ещё FAIL; DNS diagnostic30 и production NFQ
+intent/sync/quarantine cleanup-only retry PASS. OutputReader снижает allocations
+actualchild83→28КБ, но его скорость6.424→6.589мс не улучшена.
+
+Public paired fixture остановился доproducer из-за BusyBox -O; actual1.8.11
+preflight корректно отказал при несовпадении установленных байтов. Reviewed
+1e4/af305 исправляют лабораторные prerequisites, сохраняя original guards.
+Следующая e75/a6fe серия проверяет original readonly absence и fresh fullSHA
+scratch. Дополнительные parser/audit capacity варианты пока только test-only.
+Новый commit требует собственного CI; router/release admission не изменён.
+[Доказательства](measurements/2026-11-09/research/lifecycle/4cc9f869/).
+
+
+### Следующая проверка60e0d4ba: отказы сохранены, исправления подготовлены
+
+Generic обаFAIL в новом NFQ тесте: t.TempDir имел0755 вместо required0700;
+d4dace94 исправляет только test fixture. Full gate на60e не достигнут.
+Native managed core не запускался из-за отсутствующего dataplane.test; build
+script исправлен. Отдельные fullLAN/manual запускались и превышают deadline,
+production intent/sync/quarantine cleanup-only retry PASS, freshApply FAIL.
+
+Actual1.8.11 archives прошлиSHA, но apt отказал downgrade без явного флага;
+разрешение ограничено четырьмя exact local.deb в disposable26.04. Public bootstrap
+запустил настоящую старую панель, затем обнаружил fingerprint исходного schema1
+против мигрированной schema2 формы. 7fb32e53 связывает header с actual source config,
+не переписывая исходник; semantic/staged migration и все строгие checks сохранены.
+
+Sameboot normal/race отказали в первом absence: observed ABI не включал четыре
+исходных readonly table207 query. 0cc85f3a сохраняет именно эти argv, все SHA/Start/
+Wait и проверки результата, с actual bytes+exit-status parity тестом. ACK cuts не
+достигнуты. Warm Mihomo lifecycle/manual на60e тоже превысили110с; settlement и
+postCAS PASS. Это не доказанная причинная связь со sameboot изменением; следующий
+CI сравнивает actual lifecycle с preserved4cc на том же runner, deadline unchanged.
+
+Paired probes182rows PASS: live p50/p95307/329→221/287мс, selected2 1364/1521→
+1200/1467мс. У all2 p95 ухудшился1521→1568мс при p50 1384→1214; universal tail
+speedup не заявляется. Последняя полная generic и4Mihomo PASS остаётся4cc.
+[Raw/исправления](measurements/2026-11-09/research/lifecycle/60e0d4ba/).
+
+### Проверка 35797378 и продолжение 3b27bd6e
+
+Общий CI 35797378 остановился на gofmt после успешных адресных тестов;
+полные normal/race не запускались. Форматирование исправлено в 3b27bd6e,
+его CI оценивается отдельно. Последняя полная общая проверка — 4cc9f869.
+
+- Парная проверка VLESS (182 строки, один стенд): live p50/p95
+  313.900/320.086→223.606/227.777 мс; selected-batch 1454/1465→1250/1263 мс.
+  Verdict, identity, отмена и joined cleanup проверены. Это не WAN/LAN-приёмка.
+- Настоящий iptables 1.8.11-2ubuntu3: public AcquireUbuntuLegacy, normal/race,
+  74 одинаковые строки, lock/mutation guards PASS. Медиана пяти повторов
+  57.252→20.439 мс (race 102.467→37.297), процессов 20→4. Все четыре архива
+  и установленные байты проверены. Entware stock1.4.21 этим не подтверждён.
+- Mihomo lifecycle, два Apply/Stop, восстановление baseline и normal/race
+  bookends PASS. На одном runner кандидат 214.56 с, preserved4cc 210.61 с:
+  ускорения нет. Manual/settlement превысили deadline, post-CAS остановился
+  на sidecar-start до намеченного сбоя. В 3b27 добавлены фиксированные стадии
+  диагностики без изменения ошибок, владения ресурсами и deadline.
+- Same-boot parent normal/race и все пять normal ACK cuts PASS; race
+  retirement/history PASS. Race completed.json не дошёл до ACK из-за
+  route-process-unavailable; terminal transaction/global достигли 120 с
+  при повторной проверке отсутствия ресурсов. Полная матрица не принята.
+- NFQWS2 consumer и closing guards normal PASS; full-copy normal/race PASS:
+  1 MiB normal 32952→184 B/op при близком времени полного SHA. Полный LAN/manual
+  и race consumer FAIL. Quarantine и cleanup-only retry normal PASS; новое
+  Apply не прошло. Защитные fences сохранены.
+- StrategyLab pair/restored panel PASS. Public configured-old193 прошёл
+  preparation, затем отказал на quiesce-network-provider. В 3b27 исправлен
+  скрытый второй /proc mount частного стенда; production provider не менялся.
+- DNS strict12 selected/canceled-ready FAIL; diagnostic30 все три recovery
+  PASS. Новая проверка измеряет полное чтение pinned Xray блоками
+  32/64/128/256 KiB. Production размер не изменён до измерения и ревью.
+
+[Исходные результаты и SHA256](measurements/2026-11-09/research/lifecycle/35797378/)
+и [парные измерения](measurements/2026-11-09/research/ci-35797378/) сохранены.
+Аппаратная приёмка, выпуск и изменение действующего роутера не выполнялись.
+
+### Проверка 3b27bd6e и следующая исправленная интеграция
+
+Оба generic CI завершились: полный normal и race PASS, затем go vet обнаружил
+копирование mutex в тесте structural input identity. Это исправлено созданием
+отдельного объекта с теми же полями; assertion сохранён. Shell/UI/cross-build
+шаги на 3b27 не запускались. Следующий gate выполняет тот же go vet раньше
+полных тестов, сохраняя весь набор проверок.
+
+VLESS paired182 PASS: live p50/p95 317.644/321.353→228.483/230.573 мс;
+selected-batch 1465/1487→1285/1302 мс. Dead-node slightly worse
+8.905→9.114 мс, поэтому универсальное ускорение не заявляется.
+Mihomo lifecycle/settlement/postCAS PASS, manual HTTP FAIL на прежних110с.
+Lifecycle same-host candidate251.58с против4cc247.97с, ускорения нет.
+Следующая проверка отдельно сравнивает manual-http с4cc на том же runner,
+с теми же бинарниками и бюджетами; порядок candidate→baseline диагностический.
+
+Public configured-old193 всё ещё отказал до restore. Исправлена реальная
+ошибка классификатора: он не распознавал уже допустимые составные DNS причины.
+Добавлены actual pipe cap regressions и отдельный opt-in empty/draft matrix:
+настоящий старый HTTP API создаёт draft, после публичного restore проверяются
+исходный SHA состояния и нынешний production reader. Это не доказательство
+старого live reader, сохранения ручного выбора или default legacy-layout.
+
+Full managed NFQWS2 LAN/manual остаётся FAIL; original core normal и
+cleanup-only retry PASS. DNS strict12 FAIL, diagnostic30 все3recovery PASS.
+Увеличение Xray ReadAt блока отклонено: actual36577406B file,32KiB29.450мс,
+256KiB28.966мс (~1.64% warm), больше allocation и хуже отмена. Production32KiB
+сохранён. Новый names benchmark проверяет только стоимость полного прежнего
+metadata traversal с bounded backing slice; production алгоритм не менялся.
+
+[Raw и SHA256](measurements/2026-11-09/research/lifecycle/3b27bd6e/),
+[paired182](measurements/2026-11-09/research/ci-3b27bd6e/).
+Новые исправления и сценарии требуют своего CI; router/LAN не подтверждены.
+
+### Проверка 8434e9ae и следующая интеграция
+
+Оба общих CI (PR42655707310, push42655695807) SUCCESS на точном
+`8434e9ae2183ef926a123b1fe4217bc0114d214a`: normal/race, go vet, shell/UI,
+четыре Linux cross-builds. Это не закрывает отдельный native lifecycle workflow.
+В минимальной обвязке build-targets обнаружен скрытый лишний UI-вызов;
+его перенос в общий Node-блок и fail-fast дочернего shell проверены отдельно.
+
+- Paired baseline363f →8434: 182 строки, verdicts, identity, полная cleanup PASS.
+  Повторные N12, p50/p95: live315.190/317.779→228.505/236.826мс;
+  selected2 1456/1463→1287/1323мс; all1473/1489→1304/1341мс.
+  Dead-node8.232→9.079мс: общего ускорения всех сценариев не заявляем.
+- Все4Mihomo native jobs SUCCESS. Manual на одном runner: candidate288.01с,
+  preserved4cc287.93с; Apply~100с у обоих при прежнем110с deadline.
+  Lifecycle254.40с против251.50с. Ускорения нет, запас времени ограничен.
+  Отдельная полная same-boot/race/ACK-cut матрица остаётся незавершённой.
+- DNS strict12 FAIL; diagnostic30 все3recovery PASS. Actual iptables1.8.11
+  normal/race PASS. NFQ normal core/recovery/cleanup retry PASS, fullLAN/manual
+  и race FAIL. Сетевые ограничения и исходные deadlines сохранены.
+- Public empty bootstrap теперь даёт точную причину: 2с scoped DNS inactivity,
+  proc.installer-role-close. Draft достигает настоящего old193 HTTP writer,
+  затем корректно отказывает на обычном StrategyPair admission.
+
+Следующая интеграция прошла независимое source review, но ещё требует своего CI:
+первая SHA + повторные полные чтения executable внутри одного bootstrap-role call;
+отдельное offline сохранение неизменных schema1 StrategyLab bytes без приписывания
+old193 нового reader ABI; резервирование ограниченного names slice.
+Последнее экономит~4.4KiB/6–7alloc на обходе, wall ускорение не подтверждено.
+Offline proof не разрешает live downgrade или private replay; история/manual
+selection и восстановленный старый live panel не объявлены проверенными.
+Полный Xray image compare пока только измерительный тест: retained~37MB,
+первый capture/SHA/clear учитывается отдельно; production cache не добавлен.
+
+На действующем роутере только read-only: SHA256 установленного30.3MB бинарника
+занял0.58/0.59/0.59с, stat неизменен. Это внешний sha256sum прежнего rc106,
+не Go/candidate benchmark и не подтверждение нового LAN маршрута.
+[Профиль и raw](measurements/2026-11-09/research/router-readonly.md).
+[Native raw/review/SHA256](measurements/2026-11-09/research/lifecycle/8434e9ae/),
+[paired182](measurements/2026-11-09/research/ci-8434e9ae/),
+[offline-контракт](measurements/2026-11-09/research/bootstrap-offline-strategy-contract.md).
+
+### Проверка 344912c1 и следующая интеграция
+
+Оба generic CI (PR42660413364, push42660394238) полностью SUCCESS на
+`344912c11f285a4c2dc0ac0eadd8ab64e6110160`: normal/race, vet, shell/UI,
+четыре cross-builds. Исправленная обвязка build-targets больше не печатает
+скрытые MODULE_NOT_FOUND. Все4Mihomo native SUCCESS; совместимая StrategyLab
+пара, encrypted backup/restore и изолированный restored-panel boot PASS.
+Public configured-old193 update→restore остаётся отдельным FAIL в empty/draft.
+
+- Paired182 PASS. Repeated N12 live p50/p95 316.126/463.944→226.614/228.495мс;
+  selected2 completion1445/1461→1263/1286мс; all1468/1485→1287/1321мс.
+  First engine runs сохранены отдельно; это не cold page-cache или WAN proof.
+- Mihomo same-runner lifecycle311.41с против preserved4cc310.16с;
+  Apply~107с у обоих, только~3с запаса к прежним110с. Manual212.89с против224.05с.
+  Порядок candidate→baseline фиксирован, мало повторов: causal speedup не доказан.
+- DNS selected впервые в этой паре дошёл до GEN1 publication, точной mapping,
+  исключённого клиента и единственного child, затем selected TLS timeout4с.
+  Canceled-ready не дошёл до GEN1 за12с. Diagnostic30s recovery все3 PASS.
+  CPU в разных jobs/runs различаются; продвижение нельзя приписать names reserve.
+- NFQ consumer normal/lateWait PASS; fullLAN/manual FAIL. В этой волне все3
+  recovery cuts не достигнуты: forward inventory-open deadline ещё до эффекта.
+  Прежний8434 recovery PASS не переносится. Race consumer/full также FAIL.
+- Names reserve повторно проверен normal/race:~4.4KiB меньше на обходе,
+  без заявления об ускорении всего маршрута. Exact1.8.11 обаnative PASS.
+- Bootstrap image actual13.89MB:16полныхчтений/8occurrences; медианы трёх
+  alternating samples empty186.38→49.46мс, draft146.79→42.93мс; retained14.02MB.
+  Full public flow пока FAIL, restore не достигнут. Отдельный opt-in ordinary
+  actual-fact test пропущен без env; его не считаем пройденным.
+
+По измерениям выбран следующий Xray outer-observation consumer: первый capture
+с SHA, затем полное побайтовое закрывающее чтение; данные не доступны callback,
+derived views или handoff. Storage один на процесс, nonwaiting, первая аллокация
+фиксирует capacity<=64MiB; больший файл/конкуренция используют прежний SHA путь.
+После начала capture fallback нет; clear и отказ по отмене/абсолютному deadline
+выполняются до успеха. Source review67f4557c пройден, runtime этой реализации
+ещё не подтверждён. Primitive37MB measurement: SHA18.08мс, повторное чтение/
+comparison2.89мс, первый capture+SHA+clear20.54мс; это не full-route speedup.
+Удерживаемая память и RSS не тождественны. Сравнение полного сценария планируется
+на одном runner с исходными12/4с и свежим процессом каждого запуска.
+
+Дополнительно исправлено окно отмены после bootstrap image clear; новый закрытый
+словарь стадий и ограниченное чтение receipt локализуют следующий public отказ.
+Ни один запрет scope/ownership/freshness не ослаблен. IP version child сохранён:
+в отличие от двух статических xtables strings, iproute2 может читать runtime
+libbpf сведения. Новые счётчики actual child starts и полного startup image
+payload проверят дальнейшие гипотезы; speculative production patch не добавлен.
+
+[Все raw/review/SHA256](measurements/2026-11-09/research/lifecycle/344912c1/),
+[paired182](measurements/2026-11-09/research/ci-344912c1/).

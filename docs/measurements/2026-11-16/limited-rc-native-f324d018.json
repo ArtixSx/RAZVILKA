@@ -1,0 +1,368 @@
+{
+  "head_sha": "f324d01870aaa683147bae0957bf83d7f06ab5ac",
+  "verified_utc": "2026-11-17T12:57:23.365510+00:00",
+  "runs": [
+    {
+      "id": 44085081104,
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 134045435614,
+          "name": "strategy-pair",
+          "conclusion": "success",
+          "log": "job-134045435614.log",
+          "bytes": 62273,
+          "sha256": "67e5ce72c29c13292f8076529344a3c6fd8fe8881109c9d275f8ae37988949da"
+        },
+        {
+          "id": 134045435898,
+          "name": "Startup loader closure (normal)",
+          "conclusion": "success",
+          "log": "job-134045435898.log",
+          "bytes": 41798,
+          "sha256": "12fac6edaa4fa24c7255b0aaffc6d59e14f4a0084e374cdc5b6e0a41a776c015"
+        },
+        {
+          "id": 134045435981,
+          "name": "Configured old193 public paired restore / history",
+          "conclusion": "success",
+          "log": "job-134045435981.log",
+          "bytes": 78271,
+          "sha256": "62ccb1f97543995c3ecd9bee6b60c854eef45bed26a843f088907e747cc04215"
+        },
+        {
+          "id": 134045436041,
+          "name": "Exact iptables 1.8.11 / race",
+          "conclusion": "success",
+          "log": "job-134045436041.log",
+          "bytes": 78823,
+          "sha256": "7ccce3c233b882d68b4c5052612efb1f43b5694d2bda5ac5aa67279a63f23868"
+        },
+        {
+          "id": 134045436175,
+          "name": "Modern public update and known rollback (isolated lab)",
+          "conclusion": "success",
+          "log": "job-134045436175.log",
+          "bytes": 59474,
+          "sha256": "389a1c42bae11d7e4127f3da317e694b2853ce0b7dc2296f299d68cca4212a7d"
+        },
+        {
+          "id": 134045436204,
+          "name": "Configured old193 public paired restore / empty",
+          "conclusion": "success",
+          "log": "job-134045436204.log",
+          "bytes": 78234,
+          "sha256": "1937aaefcf13323746f0c6db16ec0e6617f3bb6e88f0ad8efae2f210513cc878"
+        },
+        {
+          "id": 134045436206,
+          "name": "Startup loader closure (race)",
+          "conclusion": "success",
+          "log": "job-134045436206.log",
+          "bytes": 41782,
+          "sha256": "5c7f77919449e620b91f0edeba7172f4e665a3af51e4af83cf9104bad115efd0"
+        },
+        {
+          "id": 134045436236,
+          "name": "Configured old193 public paired restore / draft",
+          "conclusion": "success",
+          "log": "job-134045436236.log",
+          "bytes": 77408,
+          "sha256": "b6fde1dbb202b87de0ac74407d7dab1d953fa1776654a5903a38df9a459ff47b"
+        },
+        {
+          "id": 134045436291,
+          "name": "Exact iptables 1.8.11 / production",
+          "conclusion": "success",
+          "log": "job-134045436291.log",
+          "bytes": 78637,
+          "sha256": "20a32e4af715ad26ed496bea1e11deb1cc8ecd48f63197e9248bc98863512b04"
+        },
+        {
+          "id": 134045437912,
+          "name": "Managed scope ${{ (inputs.focus || 'all') }} (${{ matrix.build-mode }})",
+          "conclusion": "skipped"
+        },
+        {
+          "id": 134045438276,
+          "name": "DNS preparation recovery pair (diagnostic 30s)",
+          "conclusion": "skipped"
+        },
+        {
+          "id": 134045438553,
+          "name": "Domain native strict / ${{ matrix.scenario }}",
+          "conclusion": "skipped"
+        }
+      ]
+    },
+    {
+      "id": 44085081198,
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 134045441691,
+          "name": "live-native (check-settlement)",
+          "conclusion": "success",
+          "log": "job-134045441691.log",
+          "bytes": 69484,
+          "sha256": "5ab185d72d10483ac94e62337122de113459faa48c8649010330d52f6e503ca7"
+        },
+        {
+          "id": 134045441999,
+          "name": "live-native (lifecycle)",
+          "conclusion": "success",
+          "log": "job-134045441999.log",
+          "bytes": 196235,
+          "sha256": "2cfcf01b1f4cfa9831b0221dacac3b3b887826bd892baa44f92414d6d26e95eb"
+        },
+        {
+          "id": 134045442197,
+          "name": "live-native (manual-http)",
+          "conclusion": "success",
+          "log": "job-134045442197.log",
+          "bytes": 98001,
+          "sha256": "dc86f7600d54b6572b071e4de93e8ef78817487ef8202fc1896899534981509a"
+        },
+        {
+          "id": 134045442372,
+          "name": "live-native (postcas-failure)",
+          "conclusion": "success",
+          "log": "job-134045442372.log",
+          "bytes": 69416,
+          "sha256": "d3924eb1e7be7e5405b951e08ef65b0105e57328252f05eb6ba5e8ea69b43e1a"
+        }
+      ]
+    }
+  ],
+  "contract_tests": {
+    "normal": {
+      "job": 134045435898,
+      "exact_pass_once": {
+        "TestManagedNFQReleaseRefusesNewStartBeforeAdmission": 1,
+        "TestManagedNFQReleaseKeepsExistingOwnerRefusalsAndCleanup": 1,
+        "TestManagedNFQReleaseHTTPPreviewApplyAndAutoAgree": 1,
+        "TestManagedNFQReleaseChoicePreservesLegacyAndObservedState": 1,
+        "TestManagedNFQReleaseNativeExceptionRequiresOriginalActor": 1,
+        "TestDNSReleaseStatusPreservesOrdinaryDNS": 1,
+        "TestDNSReleaseScopeKeepsDomainRefusalAndExplicitCIDRs": 1,
+        "TestDomainBaselineReadTimingFixedLabelsAndEpoch": 1,
+        "TestDomainBaselineReadTimingOriginalStartAndWait": 1,
+        "TestDomainBaselineReadTimingOverflowSeparateFromExit": 1
+      },
+      "no_skip": true
+    },
+    "race": {
+      "job": 134045436206,
+      "exact_pass_once": {
+        "TestManagedNFQReleaseRefusesNewStartBeforeAdmission": 1,
+        "TestManagedNFQReleaseKeepsExistingOwnerRefusalsAndCleanup": 1,
+        "TestManagedNFQReleaseHTTPPreviewApplyAndAutoAgree": 1,
+        "TestManagedNFQReleaseChoicePreservesLegacyAndObservedState": 1,
+        "TestManagedNFQReleaseNativeExceptionRequiresOriginalActor": 1,
+        "TestDNSReleaseStatusPreservesOrdinaryDNS": 1,
+        "TestDNSReleaseScopeKeepsDomainRefusalAndExplicitCIDRs": 1,
+        "TestDomainBaselineReadTimingFixedLabelsAndEpoch": 1,
+        "TestDomainBaselineReadTimingOriginalStartAndWait": 1,
+        "TestDomainBaselineReadTimingOverflowSeparateFromExit": 1
+      },
+      "no_skip": true
+    }
+  },
+  "logs": [
+    {
+      "job": 134045435614,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts (35.13s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts (35.21s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts (181.33s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts (49.53s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts (47.13s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts (174.52s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts (174.82s)",
+            "--- PASS: TestPrivateStrategyRestoredPanelBoot (0.14s)"
+          ],
+          "cuts": [
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/before (35.13s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/after (35.21s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/strategy (181.33s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/strategy-crash (49.53s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/strategy-drift (47.13s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/strategy-rollback-files (174.52s)",
+            "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/strategy-rollback-private (174.82s)"
+          ],
+          "markers": [],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045435981,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestNativeConfiguredOld193PairLifecycle (173.72s)"
+          ],
+          "cuts": [],
+          "markers": [],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045436175,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestNativeModernPublicRollback (123.03s)"
+          ],
+          "cuts": [],
+          "markers": [
+            "modern_pair_native_linux_test.go:226: actual_modern_public_pair rollback=true source_live_restored=true candidate_live_observed=true original_post_live_fault=true original_receipt=true draft_bytes_preserved=true all_panels_joined=true same_source_lab_versions=true official_release_provenance=false router_ready=false"
+          ],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045436204,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestNativeConfiguredOld193PairLifecycle (185.14s)"
+          ],
+          "cuts": [],
+          "markers": [],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045436236,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestNativeConfiguredOld193PairLifecycle (149.46s)"
+          ],
+          "cuts": [],
+          "markers": [],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045441691,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestMihomoLiveOriginalFailedCheckSettlementStopRetry (99.18s)"
+          ],
+          "cuts": [],
+          "markers": [
+            "mihomo_live_native_linux_test.go:523: actual_check_settlement_retry cuts=2 original_child_sidecar_tun_preserved=true retired_header_reader=9 all_original_rows_terminal=true",
+            "mihomo_live_native_linux_test.go:525: actual_mihomo_live round=0 stop=7.201801752s closing_retry=false",
+            "mihomo_live_native_linux_test.go:532: actual_mihomo_live round=0 cycle=1m37.274865598s fixture_elapsed=1m38.704506618s restored_physical_baseline=true"
+          ],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045441999,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (239.31s)"
+          ],
+          "cuts": [],
+          "markers": [
+            "mihomo_live_native_linux_test.go:525: actual_mihomo_live round=0 stop=5.809120681s closing_retry=false",
+            "mihomo_live_native_linux_test.go:532: actual_mihomo_live round=0 cycle=1m58.297078548s fixture_elapsed=1m59.970589102s restored_physical_baseline=true",
+            "mihomo_live_native_linux_test.go:525: actual_mihomo_live round=1 stop=5.699125466s closing_retry=true",
+            "mihomo_live_native_linux_test.go:532: actual_mihomo_live round=1 cycle=1m58.86582897s fixture_elapsed=3m58.836457451s restored_physical_baseline=true"
+          ],
+          "failure_markers": []
+        },
+        "preserved4cc_diagnostic_only": {
+          "selected_pass": [
+            "--- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (258.11s)",
+            "--- PASS: TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup (4.26s)",
+            "--- PASS: TestMihomoLiveOriginalReadFingerprintNativeMutation (2.85s)",
+            "--- PASS: TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup (10.47s)",
+            "--- PASS: TestMihomoLiveOriginalReadFingerprintNativeMutation (8.98s)"
+          ],
+          "cuts": [],
+          "markers": [
+            "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=5.851302716s closing_retry=false",
+            "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=2m8.289704902s fixture_elapsed=2m9.735625868s restored_physical_baseline=true",
+            "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=5.970814258s closing_retry=true",
+            "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=2m7.840382628s fixture_elapsed=4m17.576041295s restored_physical_baseline=true"
+          ],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045442197,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (206.34s)"
+          ],
+          "cuts": [],
+          "markers": [
+            "mihomo_live_native_linux_test.go:386: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false",
+            "mihomo_live_native_linux_test.go:412: actual_manual_http_apply committed=true replay_refused=true",
+            "mihomo_live_native_linux_test.go:525: actual_mihomo_live round=0 stop=4.917046206s closing_retry=false",
+            "mihomo_live_native_linux_test.go:532: actual_mihomo_live round=0 cycle=1m42.521966322s fixture_elapsed=1m44.035986514s restored_physical_baseline=true",
+            "mihomo_live_native_linux_test.go:525: actual_mihomo_live round=1 stop=4.869882657s closing_retry=true",
+            "mihomo_live_native_linux_test.go:532: actual_mihomo_live round=1 cycle=1m41.815949027s fixture_elapsed=3m25.851970413s restored_physical_baseline=true"
+          ],
+          "failure_markers": []
+        },
+        "preserved4cc_diagnostic_only": {
+          "selected_pass": [
+            "--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (222.48s)"
+          ],
+          "cuts": [],
+          "markers": [
+            "mihomo_live_native_linux_test.go:382: actual_manual_http_preview original_sources=true general_auto_closed=true stale_and_all_source_refused=true removed_runtime_refused=true service_proof=false",
+            "mihomo_live_native_linux_test.go:408: actual_manual_http_apply committed=true replay_refused=true",
+            "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=4.887540447s closing_retry=false",
+            "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=1m52.913650975s fixture_elapsed=1m54.194733179s restored_physical_baseline=true",
+            "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=5.249362651s closing_retry=true",
+            "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=1m47.809396908s fixture_elapsed=3m42.004166922s restored_physical_baseline=true"
+          ],
+          "failure_markers": []
+        }
+      }
+    },
+    {
+      "job": 134045442372,
+      "arms": {
+        "candidate": {
+          "selected_pass": [
+            "--- PASS: TestMihomoLiveOriginalPostCASServiceFailure (63.72s)"
+          ],
+          "cuts": [],
+          "markers": [
+            "mihomo_live_native_linux_test.go:417: actual_postcas_service_rejection status=503 desired_exact_restored=true state=rolled-back rollback_verified=true original_pending=false"
+          ],
+          "failure_markers": []
+        }
+      }
+    }
+  ],
+  "limits": [
+    "Scope is release-core and Mihomo only; generic CI is monitored independently by root.",
+    "Experimental managed NFQ and strict DNS jobs intentionally skipped, not PASS; previous full-flow failures remain.",
+    "Linux namespace native evidence is not physical NC1812 Apply proof.",
+    "Preserved4cc has different source and HEV; diagnostic only, no isolated code-performance claim.",
+    "Job-log SHA256 is computed locally from API download/readback; GitHub supplies no independent job-log digest.",
+    "Only compact job logs/metadata downloaded; no profile artifacts."
+  ],
+  "successful_jobs": 13
+}

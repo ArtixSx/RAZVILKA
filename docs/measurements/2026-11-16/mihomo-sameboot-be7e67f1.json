@@ -1,0 +1,269 @@
+{
+  "run_id": 43964362768,
+  "head_sha": "be7e67f1c22401bc0c592a19d83b23d9715e75dd",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43964362768",
+  "conclusion": "failure",
+  "parent_and_private": "4/4 PASS",
+  "ack_jobs": "6/10 PASS; 3 actual race deadline refusals, 1 normal pre-consumer fixture failure",
+  "race_failure_cpu": {
+    "completed.json": {
+      "sample_seconds": 106.72,
+      "syscall_flat_seconds": 32.46,
+      "sha256_flat_seconds": 26.92,
+      "tsan_flat_seconds": 18.96
+    },
+    "terminal-transaction": {
+      "sample_seconds": 105.57,
+      "syscall_flat_seconds": 36.31,
+      "sha256_flat_seconds": 25.23,
+      "tsan_flat_seconds": 17.59
+    },
+    "terminal-global": {
+      "sample_seconds": 107.2,
+      "syscall_flat_seconds": 32.52,
+      "sha256_flat_seconds": 27.17,
+      "tsan_flat_seconds": 19.78
+    }
+  },
+  "limits": [
+    "Original 120s actor budget unchanged and shared across initial Run and retained Retry.",
+    "No route claim from standalone HEV diagnostics.",
+    "Different hosted jobs are not same-host baseline/candidate performance samples.",
+    "Inclusive timing rows overlap; do not sum home/source/absence timings.",
+    "Normal terminal-global consumer did not start, so its ACK was not tested.",
+    "No physical router/LAN acceptance."
+  ],
+  "jobs": [
+    {
+      "name": "original-private-set (race)",
+      "conclusion": "success",
+      "databaseId": 133639773733,
+      "actor_ms": [],
+      "native_parent_outcomes": [],
+      "retained_retry_observed": false,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native (normal)",
+      "conclusion": "success",
+      "databaseId": 133639774167,
+      "actor_ms": [
+        41361.959
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "41.36"
+        ]
+      ],
+      "retained_retry_observed": false,
+      "refusal": []
+    },
+    {
+      "name": "original-private-set (normal)",
+      "conclusion": "success",
+      "databaseId": 133639774303,
+      "actor_ms": [],
+      "native_parent_outcomes": [],
+      "retained_retry_observed": false,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native (race)",
+      "conclusion": "success",
+      "databaseId": 133639774315,
+      "actor_ms": [
+        100606.968
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "100.62"
+        ]
+      ],
+      "retained_retry_observed": false,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "conclusion": "success",
+      "databaseId": 133643446452,
+      "actor_ms": [
+        67403.347
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "67.41"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "conclusion": "success",
+      "databaseId": 133643446495,
+      "actor_ms": [
+        36478.329
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "36.48"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "conclusion": "success",
+      "databaseId": 133643446502,
+      "actor_ms": [
+        109320.407
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "109.34"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "conclusion": "failure",
+      "databaseId": 133643446505,
+      "actor_ms": [],
+      "native_parent_outcomes": [],
+      "retained_retry_observed": false,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "conclusion": "failure",
+      "databaseId": 133643446513,
+      "actor_ms": [
+        119992.049
+      ],
+      "native_parent_outcomes": [
+        [
+          "FAIL",
+          "120.00"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": [
+        [
+          "absence-process-kernel",
+          "proxy-firewall-read",
+          "false",
+          "true"
+        ]
+      ]
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "conclusion": "success",
+      "databaseId": 133643446540,
+      "actor_ms": [
+        56546.122
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "56.55"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "conclusion": "success",
+      "databaseId": 133643446556,
+      "actor_ms": [
+        95260.968
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "95.28"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "conclusion": "success",
+      "databaseId": 133643446578,
+      "actor_ms": [
+        53256.027
+      ],
+      "native_parent_outcomes": [
+        [
+          "PASS",
+          "53.26"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": []
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "conclusion": "failure",
+      "databaseId": 133643446674,
+      "actor_ms": [
+        119996.132
+      ],
+      "native_parent_outcomes": [
+        [
+          "FAIL",
+          "120.00"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": [
+        [
+          "absence-source-opening",
+          "",
+          "false",
+          "true"
+        ]
+      ]
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "conclusion": "failure",
+      "databaseId": 133643446861,
+      "actor_ms": [
+        119994.243
+      ],
+      "native_parent_outcomes": [
+        [
+          "FAIL",
+          "120.01"
+        ]
+      ],
+      "retained_retry_observed": true,
+      "refusal": [
+        [
+          "absence-source-opening",
+          "",
+          "false",
+          "true"
+        ]
+      ]
+    }
+  ],
+  "raw_evidence": {
+    "root": "C:\\RAZVILKA-research-20261116\\sameboot-be7e67f1",
+    "verified_files": 136,
+    "manifest_sha256": "b1ce7b5450e3d1ebe0d01abfc3517dfdfef85a00b57df676ffb144c9e6fd6768",
+    "summary_sha256": "1fe94f2a405d632b87612eb2e0a26a722155e1bbc4c2674242773c20d7074611"
+  },
+  "next_action": "Retain original 120s; independently review narrowly classified completed/terminal ACK suffix. Original normal terminal-global fixture EBUSY is before consumer, no ACK acceptance."
+}

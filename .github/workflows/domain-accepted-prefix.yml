@@ -1,0 +1,115 @@
+name: DNS accepted prefix source ABBA and stripped regressions
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/domain-accepted-prefix-20261117']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [abba, direct-deny, canceled-ready]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Joined same-host ABBA with every original outcome retained
+        if: matrix.scenario == 'abba'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 $RUNNER_TEMP/domain-accepted-prefix
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_PREFIX_REPO="$GITHUB_WORKSPACE" \
+            RAZVILKA_DOMAIN_PREFIX_OUTPUT="$RUNNER_TEMP/domain-accepted-prefix/abba" \
+            bash scripts/compare-domain-accepted-prefix.sh
+      - name: Independent stripped direct-deny and canceled-ready regression
+        if: matrix.scenario != 'abba'
+        shell: bash
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 $RUNNER_TEMP/domain-accepted-prefix
+          case "$SCENARIO" in
+            direct-deny)
+              expected_case=TestDomainTCPOriginalNativeDirectForwardDeny
+              export RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE=1 ;;
+            canceled-ready)
+              expected_case=TestDomainTCPOriginalNativeCanceledReadyRetirement
+              export RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1
+              export RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1
+              export RAZVILKA_DOMAIN_CANCELED_CHILD=1 RAZVILKA_DOMAIN_CANCELED_READY=1 ;;
+            *) exit 2 ;;
+          esac
+          sudo --preserve-env=RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE,RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \
+            env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_BUILD_MODE=production-strip \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$RUNNER_TEMP/domain-accepted-prefix" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee $RUNNER_TEMP/domain-accepted-prefix/native.log
+          grep -F -- "--- PASS: $expected_case " $RUNNER_TEMP/domain-accepted-prefix/native.log
+          if [ "$SCENARIO" = direct-deny ]; then grep -F 'ACTUAL_DIRECT_FORWARD_DENY_ZERO_SYN:' $RUNNER_TEMP/domain-accepted-prefix/native.log; fi
+          if grep -F -- '--- SKIP:' $RUNNER_TEMP/domain-accepted-prefix/native.log; then exit 1; fi
+          grep -Fx 'child_exit_status=0' $RUNNER_TEMP/domain-accepted-prefix/status.txt
+          grep -Fx "native_case=$expected_case" $RUNNER_TEMP/domain-accepted-prefix/status.txt
+          grep -Fx 'publication_budget_seconds=12' $RUNNER_TEMP/domain-accepted-prefix/status.txt
+          grep -Fx 'diagnostic_only=false' $RUNNER_TEMP/domain-accepted-prefix/status.txt
+          grep -F 'github.com/ArtixSx/razvilka/internal/' $RUNNER_TEMP/domain-accepted-prefix/cpu-cumulative.txt
+          python3 -c 'import json,sys; b=json.load(open(sys.argv[1])); assert b["build_mode"]=="production-strip" and 0<b["bytes"]<=64<<20' "$RUNNER_TEMP/domain-accepted-prefix/binary.json"
+      - name: Hand bounded public evidence back to the runner even after failure
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo python3 - "$RUNNER_TEMP" "$(id -u)" "$(id -g)" <<'PY'
+          import os,pathlib,stat,sys
+          parent=pathlib.Path(sys.argv[1]); out=parent/'domain-accepted-prefix'
+          if not parent.is_absolute() or parent!=parent.resolve():raise SystemExit('canonical runner temp required')
+          if not out.exists():raise SystemExit(0)
+          if out.is_symlink() or out!=out.resolve() or not out.is_dir():raise SystemExit('foreign evidence root')
+          entries=[out,*out.rglob('*')]
+          if len(entries)>128:raise SystemExit('evidence entry bound')
+          total=0
+          for p in entries:
+              s=p.lstat()
+              if not (stat.S_ISDIR(s.st_mode) or stat.S_ISREG(s.st_mode)):raise SystemExit('foreign evidence entry')
+              if stat.S_ISREG(s.st_mode):
+                  if s.st_nlink!=1:raise SystemExit('linked evidence file')
+                  total+=s.st_size
+          if total>64<<20:raise SystemExit('evidence byte bound')
+          uid,gid=int(sys.argv[2]),int(sys.argv[3])
+          if uid<=0 or gid<=0:raise SystemExit('nonroot runner identity required')
+          for p in entries:os.chown(p,uid,gid,follow_symlinks=False)
+          PY
+      - name: Preserve original result including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-accepted-prefix-${{ matrix.scenario }}-${{ github.sha }}
+          path: ${{ runner.temp }}/domain-accepted-prefix/
+          if-no-files-found: error
+          retention-days: 14

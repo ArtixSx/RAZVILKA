@@ -1,0 +1,115 @@
+{
+  "revision": "bcc7fd8d95a039b5bf928b95a959a93c7c8b4139",
+  "run_id": 43972077940,
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "name": "original-private-set (normal)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133666545349
+    },
+    {
+      "name": "original-parent-native (normal)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133666545655
+    },
+    {
+      "name": "original-parent-native (race)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133666545742
+    },
+    {
+      "name": "original-private-set (race)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133666545890
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669828959
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669828992
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669829020
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669829066
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669829080
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669829089
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669829131
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669829136
+    },
+    {
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "status": "completed",
+      "conclusion": "failure",
+      "databaseId": 133669829166
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133669829174
+    }
+  ],
+  "original_parent_records": [
+    "original-parent-native (normal)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:43:51.0730402Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (62.54s)",
+    "original-parent-native (race)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:44:56.5328210Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (88.54s)",
+    "original-parent-native-ack-cuts (normal, retirement.json)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:49:05.7516370Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (53.62s)",
+    "original-parent-native-ack-cuts (race, terminal-global)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:51:06.7071765Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (76.46s)",
+    "original-parent-native-ack-cuts (normal, terminal-transaction)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:48:40.0890991Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (59.52s)",
+    "original-parent-native-ack-cuts (normal, runtime-history)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:49:46.0908732Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (62.12s)",
+    "original-parent-native-ack-cuts (normal, completed.json)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:49:51.0670032Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (42.84s)",
+    "original-parent-native-ack-cuts (race, runtime-history)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:50:55.4933232Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (89.62s)",
+    "original-parent-native-ack-cuts (race, terminal-transaction)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:49:48.6117554Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (100.48s)",
+    "original-parent-native-ack-cuts (race, retirement.json)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:52:27.3430661Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (102.67s)",
+    "original-parent-native-ack-cuts (race, completed.json)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:51:31.6277869Z --- FAIL: TestMihomoSameBootCLINativeOriginalParent (71.73s)",
+    "original-parent-native-ack-cuts (normal, terminal-global)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:50:47.1032673Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (63.39s)"
+  ],
+  "failure_class": "race completed.json: fresh absence source refuses proc.cmdline-empty.kthread-flag-false after retained ACK; 71.73s, no cancel or deadline",
+  "raw_root": "C:\\RAZVILKA-research-20261117\\sameboot-bcc7fd8d",
+  "manifest_sha256": "f121b417ecc0d47ac39cb08622b2eadfaa4550f963b9500eecd24db33608ad27",
+  "raw_files": 124,
+  "limits": [
+    "13/14 jobs passed; 9/10 ACK cuts passed; whole matrix remains FAIL.",
+    "Fresh process refusal is not proven to be an ACK vector defect; no check was weakened.",
+    "Comparisons against historical runs are different hosts, not controlled latency speedup evidence.",
+    "No router acceptance."
+  ]
+}

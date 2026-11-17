@@ -4,7 +4,7 @@
   const nodeID = v => typeof v === 'string' && /^node-[a-f0-9]{64}$/.test(v);
   function selection(v) {
     if(v?.version !== 1) return false;
-    return !!v && Number.isSafeInteger(v.revision) && v.revision >= 0 && typeof v.runtime_registered === 'boolean' && typeof v.live_apply_available === 'boolean' && (!v.live_apply_available || v.runtime_registered) && v.live_applied === false && v.service_verified === false && Array.isArray(v.services) && v.services.every(s => /^[a-z0-9][a-z0-9-]{0,63}$/.test(s?.id || '') && typeof s.name === 'string' && typeof s.enabled === 'boolean' && Array.isArray(s.applied_sources) && s.applied_sources.every(x => typeof x === 'string'));
+    return !!v && Number.isSafeInteger(v.revision) && v.revision >= 0 && typeof v.runtime_registered === 'boolean' && (v.manual_node_apply_supported === undefined || typeof v.manual_node_apply_supported === 'boolean' && (!v.manual_node_apply_supported || v.runtime_registered)) && typeof v.live_apply_available === 'boolean' && (!v.live_apply_available || v.runtime_registered) && v.live_applied === false && v.service_verified === false && Array.isArray(v.services) && v.services.every(s => /^[a-z0-9][a-z0-9-]{0,63}$/.test(s?.id || '') && typeof s.name === 'string' && typeof s.enabled === 'boolean' && Array.isArray(s.applied_sources) && s.applied_sources.every(x => typeof x === 'string'));
   }
   function canApply(v, id, service, now = Date.now()) {
     if(v?.version !== 1) return false;
@@ -46,7 +46,7 @@
       sources.value = (value.services[0]?.applied_sources || []).join('\n');
       select.disabled = false; sources.disabled = false;
       preview.disabled = !value.runtime_registered || !value.services.length;
-      status.textContent = !value.runtime_registered ? 'Исходный runtime Mihomo не зарегистрирован.' : !value.live_apply_available ? 'Полный цикл применения ещё не разрешён. Можно просмотреть ограничения; проверка сервиса этим не выполняется.' : 'Выберите сервис и устройства, затем просмотрите план. Автоматической остановки действующего маршрута нет.';
+      status.textContent = !value.runtime_registered ? 'Исходный runtime Mihomo не зарегистрирован.' : !value.manual_node_apply_supported ? 'Сейчас этот маршрут применить нельзя. Можно просмотреть ограничения.' : 'Выберите сервис и устройства, затем просмотрите план. Применение потребует свежей проверки маршрута; просмотр не подтверждает доступность сервиса.';
     } catch (e) { if (valid(ticket,generation)) status.textContent = e.message || 'Каталог сейчас недоступен.'; }
     preview.onclick = async () => {
       if (busy || !inventory) return;

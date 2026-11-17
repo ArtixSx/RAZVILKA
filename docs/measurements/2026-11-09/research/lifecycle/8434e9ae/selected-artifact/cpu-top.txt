@@ -1,0 +1,44 @@
+File: app.test
+Build ID: d5e21d4a5e5e44f0a3b1e6bbefe934c6533f9dbc
+Type: cpu
+Time: 2026-11-09 16:35:15 UTC
+Duration: 19.61s, Total samples = 19.04s (97.10%)
+Showing nodes accounting for 16.04s, 84.24% of 19.04s total
+Dropped 604 nodes (cum <= 0.10s)
+Showing top 35 nodes out of 420
+      flat  flat%   sum%        cum   cum%
+     9.31s 48.90% 48.90%      9.31s 48.90%  internal/runtime/syscall/linux.Syscall6
+     5.25s 27.57% 76.47%      5.25s 27.57%  crypto/internal/fips140/sha256.blockSHANI
+     0.18s  0.95% 77.42%      0.27s  1.42%  runtime.tryDeferToSpanScan
+     0.16s  0.84% 78.26%      0.16s  0.84%  runtime.typePointers.next
+     0.13s  0.68% 78.94%      0.17s  0.89%  strings.Fields
+     0.11s  0.58% 79.52%      0.11s  0.58%  syscall.rawSyscallNoError
+     0.10s  0.53% 80.04%      0.12s  0.63%  reflect.Value.Field
+     0.09s  0.47% 80.51%      0.46s  2.42%  runtime.scanObject
+     0.06s  0.32% 80.83%      0.58s  3.05%  runtime.mallocgc
+     0.05s  0.26% 81.09%      2.04s 10.71%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.05s  0.26% 81.36%      0.26s  1.37%  reflect.deepValueEqual
+     0.05s  0.26% 81.62%      5.96s 31.30%  syscall.Syscall6
+     0.04s  0.21% 81.83%      0.18s  0.95%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+     0.04s  0.21% 82.04%      9.25s 48.58%  syscall.RawSyscall6
+     0.04s  0.21% 82.25%      3.57s 18.75%  syscall.Syscall
+     0.03s  0.16% 82.41%      0.10s  0.53%  encoding/json.(*Decoder).readValue
+     0.03s  0.16% 82.56%      2.60s 13.66%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.03s  0.16% 82.72%      0.19s     1%  runtime.newobject
+     0.02s  0.11% 82.83%      0.15s  0.79%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.02s  0.11% 82.93%      0.27s  1.42%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+     0.02s  0.11% 83.04%      4.52s 23.74%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+     0.02s  0.11% 83.14%      2.90s 15.23%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.11% 83.25%      0.38s  2.00%  golang.org/x/sys/unix.Statx
+     0.02s  0.11% 83.35%      0.41s  2.15%  internal/poll.(*FD).RawControl
+     0.02s  0.11% 83.46%      0.43s  2.26%  internal/syscall/unix.Fstatat
+     0.02s  0.11% 83.56%      0.33s  1.73%  os.(*Root).Lstat
+     0.02s  0.11% 83.67%      0.43s  2.26%  os.(*rawConn).Control
+     0.02s  0.11% 83.77%      0.11s  0.58%  runtime.(*sweepLocked).sweep
+     0.02s  0.11% 83.88%      0.20s  1.05%  runtime.growslice
+     0.02s  0.11% 83.98%      0.24s  1.26%  runtime.scanSpan
+     0.01s 0.053% 84.03%      0.25s  1.31%  github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func7
+     0.01s 0.053% 84.09%      0.11s  0.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForObservation.func1
+     0.01s 0.053% 84.14%      0.18s  0.95%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).current
+     0.01s 0.053% 84.19%      0.16s  0.84%  github.com/ArtixSx/razvilka/internal/dnscontrol.providerByIDFor
+     0.01s 0.053% 84.24%      0.10s  0.53%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints

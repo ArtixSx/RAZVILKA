@@ -237,6 +237,8 @@ func TestNFQWS2HookNDMRestoreNative(t *testing.T) {
 		{name: "post-graph-only", reason: "owned-graph-partial", v4: nfqws2NDMLines(full.Mangle4, "nfqws_pre")},
 		{name: "jumps-missing", reason: "owned-graph-partial", v4: nfqws2NDMLines(full.Mangle4, "-j nfqws_post", "-j nfqws_pre")},
 		{name: "duplicate-post-jump", reason: "owned-jump-duplicate", v4: nfqws2NDMAppend(full.Mangle4, nil, "-A POSTROUTING -j nfqws_post")},
+		{name: "same-count-pre-rule-replaced", reason: "owned-graph-partial", v4: nfqws2HookSameCountLoss(t, full.Mangle4, "nfqws_pre")},
+		{name: "same-count-post-rule-replaced", reason: "owned-graph-partial", v4: nfqws2HookSameCountLoss(t, full.Mangle4, "nfqws_post")},
 		{name: "foreign-rule-on-owned-queue", reason: "foreign-rule-references-owned-queue", v4: nfqws2NDMAppend(lost, nil, "-A FORWARD -p tcp -j NFQUEUE --queue-num 300")},
 		{name: "foreign-same-name-chain", reason: "owned-chain-body-differs", v4: nfqws2NDMAppend(lost, []string{":nfqws_pre - [0:0]"}, "-A nfqws_pre -j RETURN")},
 		{name: "terminal-before-insertion", reason: "prerouting-terminal-before-hook", v4: nfqws2NDMAppend(lost, nil, "-A PREROUTING -j ACCEPT")},

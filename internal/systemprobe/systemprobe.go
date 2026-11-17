@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/installpath"
 )
 
 type WANProfile struct {
@@ -46,6 +48,10 @@ func Probe() Snapshot {
 // ProbeContext is a local capability observation; it neither changes routes nor
 // probes a remote endpoint. Its commands share the collector's deadline.
 func ProbeContext(ctx context.Context) Snapshot {
+	return probeContextWithOpkg(ctx, installpath.EntwareOpkg())
+}
+
+func probeContextWithOpkg(ctx context.Context, opkg string) Snapshot {
 	s := Snapshot{Architecture: runtime.GOARCH}
 	if h, err := os.Hostname(); err == nil {
 		s.Hostname = h
@@ -55,7 +61,7 @@ func ProbeContext(ctx context.Context) Snapshot {
 	if st, err := os.Stat("/opt"); err == nil && st.IsDir() {
 		s.OptReady = true
 	}
-	s.Opkg = commandExists("opkg") || fileExists("/opt/bin/opkg")
+	s.Opkg = opkg != ""
 	s.IPCommand = commandExists("ip") || fileExists("/opt/sbin/ip") || fileExists("/opt/bin/ip")
 	s.IPTables = commandExists("iptables") || fileExists("/opt/sbin/iptables")
 	s.IP6Tables = commandExists("ip6tables") || fileExists("/opt/sbin/ip6tables")

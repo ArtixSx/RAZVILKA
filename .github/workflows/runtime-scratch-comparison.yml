@@ -1,0 +1,47 @@
+name: Managed runtime scratch full-read comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/runtime-scratch-*']
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Full fresh verifier, release and clearing in alternating pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/environment.txt
+          race_flag=()
+          if test '${{ matrix.mode }}' = race; then race_flag=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_RUNTIME_SCRATCH_MEASURE=1 \
+            go test "${race_flag[@]}" -count=1 -v -timeout=5m ./internal/components \
+            -run '^TestManagedRuntime(RetainedScratch|PayloadScratch|ScratchFullImagePairs)|^TestManagedNFQWSRuntimeImage' \
+            | tee artifacts/comparison.txt
+          if grep -F -- '--- SKIP:' artifacts/comparison.txt; then exit 1; fi
+          grep -F -- '--- PASS: TestManagedRuntimeScratchFullImagePairs ' artifacts/comparison.txt
+          test "$(grep -c 'nfq_runtime_scratch_pair {' artifacts/comparison.txt)" -eq 16
+      - name: Preserve model timings; not a LAN acceptance result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: runtime-scratch-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

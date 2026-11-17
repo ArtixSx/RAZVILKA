@@ -10,7 +10,7 @@ import (
 
 // One synchronous read of THIS original child. This is not a Start, cleanup,
 // publication or reusable Current grant. Every independent observer still
-// hashes the whole held executable before AND after its actual kernel reads.
+// observes all held executable bytes before AND after its actual kernel reads.
 type xrayDomainTCPFileObservation struct {
 	self           *xrayDomainTCPFileObservation
 	parent         *xrayDomainTCPFileObservation
@@ -29,6 +29,19 @@ func (r *XrayDomainTCPExecutionResource) withFileObservation(ctx context.Context
 	if use == nil {
 		return ErrXrayDomainTCPOriginal
 	}
+	if image := r.borrowFileObservationImage(ctx); image != nil {
+		// Neither use nor its derived file views can access this private image.
+		// The inner observation revokes its views before this defer clears bytes,
+		// including when use panics. Contention never waits or allocates again.
+		defer func() {
+			image.release()
+			result = errors.Join(result, image.contextCurrent(ctx))
+		}()
+		if err := r.filesCurrentForImageRead(ctx, nil, image); err != nil {
+			return err
+		}
+		return r.withFileObservationAfterOpeningImage(ctx, nil, use, image)
+	}
 	if err := r.filesCurrent(ctx); err != nil {
 		return err
 	}
@@ -36,7 +49,14 @@ func (r *XrayDomainTCPExecutionResource) withFileObservation(ctx context.Context
 }
 
 func (r *XrayDomainTCPExecutionResource) withFileObservationAfterOpening(ctx context.Context, opening *xrayDomainTCPFileOpening, use func(*xrayDomainTCPFileObservation) error) (result error) {
+	return r.withFileObservationAfterOpeningImage(ctx, opening, use, nil)
+}
+
+func (r *XrayDomainTCPExecutionResource) withFileObservationAfterOpeningImage(ctx context.Context, opening *xrayDomainTCPFileOpening, use func(*xrayDomainTCPFileObservation) error, image *xrayDomainTCPImageRead) (result error) {
 	if use == nil {
+		return ErrXrayDomainTCPOriginal
+	}
+	if image != nil && (opening != nil || !image.belongsTo(r) || !image.captured() || image.contextCurrent(ctx) != nil) {
 		return ErrXrayDomainTCPOriginal
 	}
 	if opening != nil && opening.consume(ctx, r) != nil {
@@ -57,7 +77,7 @@ func (r *XrayDomainTCPExecutionResource) withFileObservationAfterOpening(ctx con
 	if !v.sameOriginal(ctx, r) {
 		return errors.Join(result, ErrXrayDomainTCPOriginal)
 	}
-	return errors.Join(result, r.filesCurrent(ctx), ctx.Err())
+	return errors.Join(result, r.filesCurrentForImageRead(ctx, nil, image), ctx.Err())
 }
 
 func (v *xrayDomainTCPFileObservation) current(ctx context.Context, r *XrayDomainTCPExecutionResource) error {
@@ -105,7 +125,7 @@ func (o *xrayDomainTCPFileOpening) consume(ctx context.Context, r *XrayDomainTCP
 }
 
 // One read-only Guard, never a COMMON mutation/Start. Complete original source,
-// child/kernel identity and executable SHA bracket all of its nested readers.
+// child/kernel identity and complete executable bytes bracket its nested readers.
 func (r *XrayDomainTCPExecutionResource) withCurrentFileObservation(ctx context.Context, use func(*xrayDomainTCPFileObservation) error) (result error) {
 	if use == nil {
 		return ErrXrayDomainTCPOriginal
@@ -114,13 +134,26 @@ func (r *XrayDomainTCPExecutionResource) withCurrentFileObservation(ctx context.
 	// control and actual child/listener comparisons remain inside that same
 	// file view, retaining their independent metadata/config readbacks without
 	// repeating its full SHA. Native/effect admission never accepts this view.
-	return r.withFileObservation(ctx, func(v *xrayDomainTCPFileObservation) error {
+	return r.withCurrentFileObservationFrom(ctx, nil, use)
+}
+
+// Only the fixed accepted-prefix reader supplies a parent. Its original full
+// byte closing remains outside; BOTH original process bookends still run here.
+func (r *XrayDomainTCPExecutionResource) withCurrentFileObservationFrom(ctx context.Context, parent *xrayDomainTCPFileObservation, use func(*xrayDomainTCPFileObservation) error) error {
+	if use == nil {
+		return ErrXrayDomainTCPOriginal
+	}
+	read := func(v *xrayDomainTCPFileObservation) error {
 		if err := r.currentWithFiles(ctx, v); err != nil {
 			return err
 		}
 		result := use(v)
 		return errors.Join(result, r.currentWithFiles(ctx, v), ctx.Err())
-	})
+	}
+	if parent != nil {
+		return r.withNestedFileObservation(ctx, parent, read)
+	}
+	return r.withFileObservation(ctx, read)
 }
 
 func (v *xrayDomainTCPFileObservation) forOriginalProcessRead(parent, child context.Context, r *XrayDomainTCPExecutionResource) (*xrayDomainTCPFileObservation, func(), error) {

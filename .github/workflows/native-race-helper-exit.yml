@@ -1,0 +1,75 @@
+name: Native race helper exit comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/native-helper-exit-*']
+permissions:
+  contents: read
+jobs:
+  comparison:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Disposable native NFQUEUE fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+      - name: Install the exact reviewed legacy tool bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          # apt may otherwise select amd64v3 with different code bytes. The
+          # approved static version contract is tied to the reviewed binary.
+          managed_packages=$(sudo mktemp -d /tmp/razvilka-managed-packages.XXXXXX)
+          case "$managed_packages" in /tmp/razvilka-managed-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$managed_packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$managed_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$managed_packages/iptables.deb" "$managed_packages/libip4tc2.deb" \
+            "$managed_packages/libip6tc2.deb" "$managed_packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+      - name: Actual race detector remains active
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          go test -race -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
+            -run '^TestNFQWSManagedHelper(EnvironmentNativeRaceOptIn|RaceExitCodePreserved)$' | tee artifacts/race-contract.txt
+      - name: Same-host original and fixed exit delay, unchanged packet and cleanup gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          result=0
+          for mode in original exit-sleep-zero; do
+            option=''
+            if [ "$mode" = exit-sleep-zero ]; then option=0; fi
+            status=0
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              RAZVILKA_MANAGED_PROBE_BUILD_MODE=race RAZVILKA_MANAGED_PROBE_CASE_SET=helper-exit \
+              RAZVILKA_NATIVE_RACE_HELPER_EXIT="$option" \
+              sh scripts/test-managed-probe-native.sh 2>&1 | tee "artifacts/$mode.log" || status=$?
+            printf 'mode=%s original_exit=%s diagnostic_only=true\n' "$mode" "$status" | tee -a artifacts/outcomes.txt
+            if grep -F -- '--- SKIP:' "artifacts/$mode.log"; then result=1; fi
+            if [ "$mode" = exit-sleep-zero ]; then
+              if [ "$status" != 0 ]; then result=1; fi
+              for name in TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup; do
+                if ! grep -F -- "--- PASS: $name " "artifacts/$mode.log"; then result=1; fi
+              done
+            fi
+          done
+          # This is an experiment result, not full managed LAN acceptance.
+          # The original failure remains in outcomes and its unmodified log.
+          exit "$result"
+      - name: Preserve both original outcomes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-race-helper-exit-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

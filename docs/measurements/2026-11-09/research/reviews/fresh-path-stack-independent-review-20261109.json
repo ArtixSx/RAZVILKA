@@ -1,0 +1,27 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; integration CI pending",
+  "base_sha": "6df3d753761cf0ff6de3fb34799e596bee2ca3c2",
+  "files": [
+    {
+      "sha256": "34BDCC74A1B5E14C5DA8FE7D253A6A93A4333002CB85E1A3D67E569FCA80B2FD",
+      "path": "internal/startuptools/path_stat_linux.go"
+    },
+    {
+      "sha256": "3FD49969B4E36F76AFB519FA97B4F5EFF7BD1BA19C9A3863C7E1F26FA4EC558A",
+      "path": "internal/startuptools/path_stat_linux_test.go"
+    }
+  ],
+  "findings": [
+    "Production promotes exact already-measured stack_candidate; original pool implementation retained in benchmark only.",
+    "Same zero-initialized4096-byte path argument and fresh Stat_t, syscall6 fstatat AT_FDCWD/AT_SYMLINK_NOFOLLOW on each call; no cached source result.",
+    "Go1.26 syscall_linux.go92-98 uintptrkeepalive/nosplit checked; unsafe pointer conversions remain direct call arguments.",
+    "Nil/foreign expected metadata, NUL/overlong original Lstat fallback, errno/EINTR behavior and sameReviewedStat unchanged."
+  ],
+  "limitations": [
+    "No local Go build/test executed.",
+    "Existing actual path mutation, errno and concurrency tests must pass normal/race on new SHA; amd64/arm64 builds required.",
+    "Measured candidate microbenchmark is not full route timing proof; normal gain neutral, race pool-allocation regression motivates change."
+  ],
+  "source_commit": "5cb860f030f6ace16800de454277f597d3245e57"
+}

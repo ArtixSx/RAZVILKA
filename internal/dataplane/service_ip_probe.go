@@ -106,7 +106,9 @@ func socksHTTPGetPinnedObservedTLS(ctx context.Context, rawURL, address string, 
 			if err := current(); err != nil {
 				return nil, err
 			}
+			observeDial := probecheck.BeginSOCKSConnect(transportCtx)
 			conn, err := contextDialer.DialContext(dialCtx, "tcp", net.JoinHostPort(pinned.String(), "443"))
+			observeDial(err)
 			if closingErr := current(); closingErr != nil {
 				if conn != nil {
 					err = errors.Join(err, conn.Close())
@@ -140,7 +142,7 @@ func socksHTTPGetPinnedObservedTLS(ctx context.Context, rawURL, address string, 
 		selected.ProbeURL = rawURL
 		client = probecheck.RecordingClient(client, selected, chain)
 	}
-	response, err := client.Do(request)
+	response, err := probecheck.TimingClient(requestCtx, client).Do(request)
 	if err != nil {
 		cleanup()
 		// Preserve cancellation and TLS errors without including query values.

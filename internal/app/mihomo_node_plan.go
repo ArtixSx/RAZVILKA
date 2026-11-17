@@ -58,7 +58,7 @@ func mihomoNodePublicService(service catalog.Service) error {
 	return err
 }
 
-func (a *App) mihomoNodeEngineFact(ctx context.Context) (dataplane.Engine, error) {
+func (a *App) mihomoNodeEngineFact(ctx context.Context, routes []dataplane.Route) (dataplane.Engine, error) {
 	if a.Components == nil || a.Dataplane == nil || !a.Dataplane.MihomoLiveRuntimeRegistered() {
 		return dataplane.Engine{}, errMihomoNodeScope
 	}
@@ -68,7 +68,18 @@ func (a *App) mihomoNodeEngineFact(ctx context.Context) (dataplane.Engine, error
 	}
 	for _, view := range views {
 		if view.ID == "mihomo" && view.Installed && view.InstalledVersion == "1.19.33" && view.InstalledVersionSource == "receipt" {
-			return dataplane.Engine{ID: "mihomo", Installed: true, Configured: true, Activatable: a.Dataplane.Capable("mihomo"), Canary: a.Dataplane.CanaryCapable("mihomo")}, nil
+			supported := false
+			if value := ctx.Value(mihomoNodePlanningKey{}); value != nil {
+				ticket, ok := value.(*mihomoNodePlanningTicket)
+				if !ok {
+					return dataplane.Engine{}, dataplane.ErrReviewChanged
+				}
+				if err := ticket.current(ctx, a, routes); err != nil {
+					return dataplane.Engine{}, err
+				}
+				supported = true
+			}
+			return dataplane.Engine{ID: "mihomo", Installed: true, Configured: true, Activatable: supported, Canary: supported}, nil
 		}
 	}
 	return dataplane.Engine{}, errMihomoNodeScope

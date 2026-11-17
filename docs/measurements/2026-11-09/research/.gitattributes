@@ -1,0 +1,6 @@
+# Retain raw measurement bytes (including CRLF and log whitespace) and SHA256.
+# This directory's generated artifacts must not be formatted as source code.
+*.csv -text -whitespace
+*.log -text -whitespace
+*.txt -text -whitespace
+*.json -text -whitespace

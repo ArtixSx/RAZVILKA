@@ -1,0 +1,42 @@
+{
+  "reviewer": "verification",
+  "head_sha": "0f0439020d10e1bbb15a8310be360517bf45581f",
+  "push_run": 42630488148,
+  "push_job": 129205372001,
+  "push_conclusion": "success",
+  "pr_run": 42630498206,
+  "pr_job": 129205408803,
+  "pr_conclusion": "success",
+  "log": "C:/RAZVILKA-research-20261109/lifecycle-0f043902/generic-push-ci.log",
+  "log_sha256": "00274910C8D3F4F6FD80ABEA3E5712AEF24D9DA362A85788E6A04421A5E7FEE9",
+  "actual_nonroot_permission": "PASS 0.02s; root focused permission skip expected after actual nonroot proof",
+  "normal_seconds": {
+    "netidentity": 2.189,
+    "app": 117.517,
+    "dataplane": 191.921
+  },
+  "race_seconds": {
+    "netidentity": 3.501,
+    "app": 286.867,
+    "dataplane": 475.985
+  },
+  "other_checks": "focused critical checks, UI scripts, modeled Entware and linux amd64/arm64/mips/mipsle builds/checksums passed",
+  "limitations": [
+    "Generic CI is not native router/LAN acceptance.",
+    "Native mount namespace tests intentionally skip in generic suite; evaluated in dedicated lifecycle jobs.",
+    "New local commits after this exact SHA are not covered.",
+    "Package elapsed times vary across runners and are not paired performance evidence."
+  ],
+  "pr_log": "C:/RAZVILKA-research-20261109/lifecycle-0f043902/generic-pr-ci.log",
+  "pr_log_sha256": "D801D45C9C8A06029B062F60919E40E40A118E2BE009D693912169534023BE8B",
+  "pr_normal_seconds": {
+    "netidentity": 2.278,
+    "dataplane": 210.621,
+    "app": 138.158
+  },
+  "pr_race_seconds": {
+    "netidentity": 3.601,
+    "dataplane": 576.914,
+    "app": 419.135
+  }
+}

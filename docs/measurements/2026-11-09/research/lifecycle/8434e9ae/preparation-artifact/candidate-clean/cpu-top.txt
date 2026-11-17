@@ -1,0 +1,44 @@
+File: app.test
+Build ID: d5e21d4a5e5e44f0a3b1e6bbefe934c6533f9dbc
+Type: cpu
+Time: 2026-11-09 16:34:36 UTC
+Duration: 15.95s, Total samples = 15.10s (94.66%)
+Showing nodes accounting for 12.10s, 80.13% of 15.10s total
+Dropped 611 nodes (cum <= 0.08s)
+Showing top 35 nodes out of 466
+      flat  flat%   sum%        cum   cum%
+     5.27s 34.90% 34.90%      5.27s 34.90%  crypto/internal/fips140/sha256.blockSHANI
+     5.10s 33.77% 68.68%      5.10s 33.77%  internal/runtime/syscall/linux.Syscall6
+     0.26s  1.72% 70.40%      0.36s  2.38%  runtime.tryDeferToSpanScan
+     0.19s  1.26% 71.66%      0.19s  1.26%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.18s  1.19% 72.85%      0.28s  1.85%  strings.Fields
+     0.14s  0.93% 73.77%      0.46s  3.05%  runtime.scanObject
+     0.12s  0.79% 74.57%      0.12s  0.79%  runtime.rtsigprocmask
+     0.08s  0.53% 75.10%      0.08s  0.53%  runtime.memclrNoHeapPointers
+     0.08s  0.53% 75.63%      0.08s  0.53%  runtime.nextFreeFast (inline)
+     0.06s   0.4% 76.03%      0.19s  1.26%  runtime.exitsyscall
+     0.06s   0.4% 76.42%      0.74s  4.90%  runtime.mallocgc
+     0.06s   0.4% 76.82%      0.10s  0.66%  runtime.scanblock
+     0.05s  0.33% 77.15%      0.14s  0.93%  encoding/json.(*Decoder).readValue
+     0.04s  0.26% 77.42%      0.13s  0.86%  runtime.reentersyscall
+     0.04s  0.26% 77.68%      0.09s   0.6%  runtime.scanObjectsSmall
+     0.04s  0.26% 77.95%      5.03s 33.31%  syscall.RawSyscall6
+     0.03s   0.2% 78.15%      0.14s  0.93%  runtime.(*mcentral).cacheSpan
+     0.03s   0.2% 78.34%      0.36s  2.38%  runtime.mallocgcSmallScanNoHeader
+     0.02s  0.13% 78.48%      0.09s   0.6%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.02s  0.13% 78.61%      0.16s  1.06%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+     0.02s  0.13% 78.74%      0.22s  1.46%  github.com/ArtixSx/razvilka/internal/netidentity.holdNetPair
+     0.02s  0.13% 78.87%      0.31s  2.05%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+     0.02s  0.13% 79.01%      1.36s  9.01%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.13% 79.14%      0.15s  0.99%  os.(*File).Stat
+     0.02s  0.13% 79.27%      0.23s  1.52%  os.(*File).readdir
+     0.02s  0.13% 79.40%      0.08s  0.53%  runtime.(*spanSet).pop
+     0.02s  0.13% 79.54%      0.21s  1.39%  runtime.mallocgcSmallNoscan
+     0.02s  0.13% 79.67%      0.23s  1.52%  runtime.scanSpan
+     0.01s 0.066% 79.74%      0.11s  0.73%  encoding/json.(*decodeState).array
+     0.01s 0.066% 79.80%      0.21s  1.39%  encoding/json.(*decodeState).value
+     0.01s 0.066% 79.87%      0.52s  3.44%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineKernelInspector).read
+     0.01s 0.066% 79.93%      0.12s  0.79%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).current
+     0.01s 0.066% 80.00%      0.12s  0.79%  github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSExclusions).targets
+     0.01s 0.066% 80.07%      0.78s  5.17%  github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSResolver).admission
+     0.01s 0.066% 80.13%      0.81s  5.36%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).readFile

@@ -1,0 +1,5 @@
+=== RUN   TestProcMountIDNativeMeasurement
+    observe_mount_id_measurement_linux_test.go:37: netidentity same held proc FD mount ID samples=1000 fdinfo=9.36382ms statx=1.117535ms forced-ENOSYS-fdinfo=8.951169ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim
+--- PASS: TestProcMountIDNativeMeasurement (0.02s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/netidentity	0.022s

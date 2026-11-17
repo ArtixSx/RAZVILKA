@@ -6,8 +6,9 @@ import (
 )
 
 // This is format negotiation, not absence evidence. A failed iproute2 JSON
-// dump can flush its opening '[' only after the exact ENOENT diagnostic; the
-// native IPv4/IPv6 fixture observes this on a genuinely unused table. Every
+// dump can flush only its opening '[' alongside the exact ENOENT diagnostic.
+// CombinedOutput can place it last; separate stdout/stderr capture places it
+// first. The native IPv4/IPv6 fixture observes this on an unused table. Every
 // caller must independently confirm the complete table through the same
 // original command owner. A successful malformed JSON dump never enters here.
 func wgMissingTableDiagnostic(data []byte, family int, jsonOutput bool) bool {
@@ -32,6 +33,9 @@ func wgMissingTableDiagnostic(data []byte, family int, jsonOutput bool) bool {
 		return true
 	}
 	if strings.HasPrefix(message, "[") && strings.HasSuffix(message, "]") && exact(strings.TrimSpace(message[1:len(message)-1])) {
+		return true
+	}
+	if strings.HasPrefix(message, "[\n") && exact(strings.TrimSpace(message[2:])) {
 		return true
 	}
 	return strings.HasSuffix(message, "\n[") && exact(strings.TrimSpace(strings.TrimSuffix(message, "\n[")))

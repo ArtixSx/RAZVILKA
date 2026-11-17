@@ -1,0 +1,32 @@
+{
+  "commit": "befedef597eb392d40623f64032c0da19df45663",
+  "run_id": 43913993782,
+  "result": "PASS",
+  "limits": [
+    "Private Linux network/PID/mount namespaces; actual stock package and queues",
+    "Keenetic WAN/policy/health and firmware rewrite modeled",
+    "Not physical router acceptance; iptables1.8.11 differs from router1.4.21"
+  ],
+  "modes": {
+    "normal": {
+      "outer_elapsed_s": 5.35,
+      "equal_count_replacements": "both refused without commands or table changes",
+      "files": {
+        "classifier.txt": "60fb46652a75b33023afc247d5dcf966d753ff85e9352dae0669aa8a0ff415db",
+        "environment.txt": "8bb1ac203a8387ddc7bf8565d392fc905454943cbeaca126cbdec1b180e66fc3",
+        "native.txt": "ccaecf6ec6b35da9b3a37121900f31e87bc4803a122dc548cd16456869964e74",
+        "tool-provenance.txt": "62b9d3a5c4dfc24458b6e244888613a04e29a664ba42427a3d09a73034df90fa"
+      }
+    },
+    "race": {
+      "outer_elapsed_s": 8.52,
+      "equal_count_replacements": "both refused without commands or table changes",
+      "files": {
+        "classifier.txt": "c3f8aa7138a0c41249967622a4d2aca159fb0594c8f4e6c19f4b49b490a8fe71",
+        "environment.txt": "8bb1ac203a8387ddc7bf8565d392fc905454943cbeaca126cbdec1b180e66fc3",
+        "native.txt": "f5133c466d9b4717b9293bf3fb182f77a71996c973bc9d47577336ae6d0fbc91",
+        "tool-provenance.txt": "62b9d3a5c4dfc24458b6e244888613a04e29a664ba42427a3d09a73034df90fa"
+      }
+    }
+  }
+}

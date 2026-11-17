@@ -1,0 +1,94 @@
+{
+  "run": 43959183853,
+  "sha": "e0a5eb157211bab29c451307d9862a50e5a2035a",
+  "overall": "PASS",
+  "decision": "REJECT production promotion: normal no gain; race small/noisy; no full-route budget closure",
+  "negative_contracts": "normal/race PASS",
+  "measurement": {
+    "race": {
+      "duplicate-clear": {
+        "samples_ms_per_full_call": [
+          2.3852498125,
+          3.47833625,
+          2.76850025,
+          2.406156
+        ],
+        "mean_ms": 2.759560578125,
+        "median_ms": 2.587328125
+      },
+      "single-clear": {
+        "samples_ms_per_full_call": [
+          2.3922834375,
+          2.6234628125,
+          2.4493764375,
+          2.422538
+        ],
+        "mean_ms": 2.471915171875,
+        "median_ms": 2.4359572187499996
+      }
+    },
+    "normal": {
+      "duplicate-clear": {
+        "samples_ms_per_full_call": [
+          0.6694423125,
+          0.6608675,
+          0.6524760625,
+          0.6767803125
+        ],
+        "mean_ms": 0.664891546875,
+        "median_ms": 0.66515490625
+      },
+      "single-clear": {
+        "samples_ms_per_full_call": [
+          0.6794270625,
+          0.6539141875,
+          0.6829455625,
+          0.6594065625
+        ],
+        "mean_ms": 0.66892334375,
+        "median_ms": 0.6694168125
+      }
+    }
+  },
+  "comparison_limit": "both functions contain the new scratchOwned field/assignment; isolates duplicate clear, not exact historical allocation",
+  "payload": "modeled ARM64 sized485957 bytes",
+  "full_route_proven": false,
+  "evidence_directory": "C:/RAZVILKA-research-20261116/runtime-clear-e0a5eb15",
+  "files": [
+    {
+      "sha256": "25b5cfa8fcc8d4bc66ec77a04ccd893681fad5245a2e86d41adcd268e228b523",
+      "bytes": 61771,
+      "path": "all.log"
+    },
+    {
+      "sha256": "2d5e3d27d473421b242629f5c1e82cf3931c44e7875a6cfa041f65dcc78e719d",
+      "bytes": 2036,
+      "path": "status.json"
+    },
+    {
+      "sha256": "bea066569ccf7d2b44ea96ad7bf52532d256487ec7113ec595bc3c6baa27a58b",
+      "bytes": 1479,
+      "path": "artifacts\\component-source-comparison-e0a5eb157211bab29c451307d9862a50e5a2035a\\normal-samples.json"
+    },
+    {
+      "sha256": "b75c0cf03afb23d94e3f1dc8b60d16ff030375655bfaab6c7c29122839a9542f",
+      "bytes": 3747,
+      "path": "artifacts\\component-source-comparison-e0a5eb157211bab29c451307d9862a50e5a2035a\\normal.log"
+    },
+    {
+      "sha256": "19a47726d371dbea69b9144c393f638ad3d9071a710fdbd39d2bd888316d2ecb",
+      "bytes": 3525,
+      "path": "artifacts\\component-source-comparison-e0a5eb157211bab29c451307d9862a50e5a2035a\\platform.txt"
+    },
+    {
+      "sha256": "2279cb59d200b8b8b31b172ced4437190ce0736c5c154d33ba64ecb72e8fe21c",
+      "bytes": 1479,
+      "path": "artifacts\\component-source-comparison-e0a5eb157211bab29c451307d9862a50e5a2035a\\race-samples.json"
+    },
+    {
+      "sha256": "b76bdb2c6bc712a4e9cfd45444807019ee0b27ebeec3be0af10805e6905defca",
+      "bytes": 3583,
+      "path": "artifacts\\component-source-comparison-e0a5eb157211bab29c451307d9862a50e5a2035a\\race.log"
+    }
+  ]
+}

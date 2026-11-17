@@ -1,0 +1,104 @@
+{
+  "run": 42564585936,
+  "job": 128988212435,
+  "artifact": 13651321670,
+  "candidate": "d5fd9774dc8598a11da152f6ee34ef7f3ec2a3a7",
+  "baseline": "c4399c948a5f65cf413c879b2b746f1bf80eefaa",
+  "baseline_overlay_sha256": "faf3160cc9b0173c2e66074a6e9fd9cbd870dcfa12fc780fd642fb8d91bc143f",
+  "diagnostic_publication_seconds": 30,
+  "diagnostic_client_seconds": 10,
+  "same_runner": true,
+  "baseline_refusal_reproduced": true,
+  "candidate_cleanup_accepted": false,
+  "rows": [
+    {
+      "sample": "baseline-clean",
+      "outcome": "revision=baseline cut=clean exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": true,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "partial_ack_assertion_passed": false,
+      "test_elapsed_s": 69.08,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:999: original failed ready generation retirement domain restore original source/capture: original synthetic TCP capture/transition consumer is unavailable"
+      ],
+      "log_sha256": "c50f6f6313a50295acf5dc679b7d5b85760a0652f34b2ef022826d5616898419"
+    },
+    {
+      "sample": "candidate-capture-transaction",
+      "outcome": "revision=candidate cut=capture-transaction exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": false,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "partial_ack_assertion_passed": true,
+      "test_elapsed_s": 100.77,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:1002: same original failed retirement ACK retry dataplane transaction journal is unavailable: original domain Xray TCP owner is unavailable or changed"
+      ],
+      "log_sha256": "11da30a996a4040fc8199d3c92ebc4fb94068faf94c9dbb354841fc3bb3081b5"
+    },
+    {
+      "sample": "candidate-clean",
+      "outcome": "revision=candidate cut=clean exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": true,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "partial_ack_assertion_passed": false,
+      "test_elapsed_s": 90.81,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:999: original failed ready generation retirement dataplane transaction journal is unavailable: original domain Xray TCP owner is unavailable or changed"
+      ],
+      "log_sha256": "eca42d13fb2977cc7b32b8c2a866c2afe2f120e0bf7dc5b8a69ffd8d70575896"
+    },
+    {
+      "sample": "candidate-standby-transaction",
+      "outcome": "revision=candidate cut=standby-transaction exit=1 diagnostic_budget=30",
+      "status": [
+        "child_exit_status=1",
+        "publication_budget_seconds=30",
+        "profile_span=original_Run_through_join",
+        "diagnostic_only=30",
+        "native_case=TestDomainTCPOriginalNativeFailedPreparationRetirement"
+      ],
+      "cut_reached": true,
+      "cleanup_refused": false,
+      "cleanup_complete": false,
+      "passed": false,
+      "skipped": false,
+      "partial_ack_assertion_passed": true,
+      "test_elapsed_s": 96.96,
+      "failure": [
+        "domain_tcp_original_native_linux_test.go:1002: same original failed retirement ACK retry dataplane transaction journal is unavailable: original domain Xray TCP owner is unavailable or changed"
+      ],
+      "log_sha256": "fcc4f4f660cfcc67abb0cb48dcc520913c75d4df35c55ec6afa6534af1e52b98"
+    }
+  ],
+  "limitation": "Candidate reaches later failure than baseline; elapsed values are different failed terminal paths, not acceleration evidence. Both transaction cuts passed the exact injected ACK assertion before failing same-owner retry. No native cleanup acceptance."
+}

@@ -161,7 +161,7 @@ func (r *mihomoLiveResource) cleanupLive(ctx context.Context, cleanup *operation
 	// across partial settlement ACKs; destroying them would strand the SAME
 	// strict retry owner. No Stop/absence acknowledgment is issued here.
 	if transitErr != nil {
-		return errors.Join(journalErr, transitErr)
+		return errors.Join(mihomoLiveStopAt("close-row", journalErr), mihomoLiveStopAt("transit-settlement", transitErr))
 	}
 	var policyErr error
 	// Remove only actual owned selectors/forwarding before joining children.
@@ -177,20 +177,20 @@ func (r *mihomoLiveResource) cleanupLive(ctx context.Context, cleanup *operation
 	}
 	// Each independently held native owner gets its own actual fresh cleanup,
 	// even when a journal publication or another original cleanup failed.
-	nativeErr := errors.Join(r.cleanupSidecarNative(ctx, cleanup), r.cleanupNative(ctx, cleanup))
-	if err := errors.Join(journalErr, transitErr, policyErr, nativeErr); err != nil {
+	nativeErr := errors.Join(mihomoLiveStopAt("sidecar-native", r.cleanupSidecarNative(ctx, cleanup)), mihomoLiveStopAt("engine-native", r.cleanupNative(ctx, cleanup)))
+	if err := errors.Join(mihomoLiveStopAt("close-row", journalErr), transitErr, mihomoLiveStopAt("persistent-policy", policyErr), nativeErr); err != nil {
 		return err
 	}
 	if err := observeMihomoInactiveOriginal(ctx, r.adapter.provider, nil, r); err != nil {
-		return err
+		return mihomoLiveStopAt("process-absence", err)
 	}
 	if err := r.removeCompiledMetadata(ctx, cleanup); err != nil {
-		return err
+		return mihomoLiveStopAt("compiled-remove", err)
 	}
 	if err := r.observeLiveInactive(ctx, cleanup); err != nil {
-		return err
+		return mihomoLiveStopAt("full-absence", err)
 	}
-	return r.recordPhase(ctx, "removed", nil)
+	return mihomoLiveStopAt("removed-row", r.recordPhase(ctx, "removed", nil))
 }
 
 // Terminal publication owns these leases after native retirement. No caller

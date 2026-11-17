@@ -228,7 +228,7 @@ func TestNetworkPolicyChecksScopedProxyUnknownProofRefusesWithoutEffects(t *test
 	for _, fault := range []string{"receipt", "lock", "generation", "process", "extra-row", "lost-row", "foreign-table"} {
 		t.Run(fault, func(t *testing.T) {
 			checks, ctx, p, f, root, _ := networkPolicyScopedProxyInventoryFixture(t)
-			originalRead := checks.read
+			originalRead := checks.readSource
 			switch fault {
 			case "receipt":
 				if err := os.Remove(filepath.Join(root, policyAdditionFile)); err != nil {
@@ -244,8 +244,8 @@ func TestNetworkPolicyChecksScopedProxyUnknownProofRefusesWithoutEffects(t *test
 			case "process":
 				delete(f.processes.running, "xray-tun")
 			default:
-				checks.read = func(c context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
-					image, err := originalRead(c, identity)
+				checks.readSource = networkPolicyInventoryCallback(func(c context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+					image, err := originalRead.readInventory(c, identity)
 					if err != nil {
 						return image, err
 					}
@@ -263,7 +263,7 @@ func TestNetworkPolicyChecksScopedProxyUnknownProofRefusesWithoutEffects(t *test
 						}
 					}
 					return image, nil
-				}
+				})
 			}
 			runner := f.a.Runner.(*networkPolicyInventoryTestRunner)
 			runner.calls = nil
@@ -286,12 +286,12 @@ func TestNetworkPolicyChecksFinalCaptureRejectsInPlaceDependencyAndReceiptChange
 	for _, fault := range []string{"gate-runner", "proxy-runner", "process-controller", "receipt-replace-same-bytes", "receipt-change", "lock-replace-same-bytes"} {
 		t.Run(fault, func(t *testing.T) {
 			checks, ctx, p, f, root, _ := networkPolicyScopedProxyInventoryFixture(t)
-			read := checks.read
+			read := checks.readSource
 			reads := 0
 			runner := f.a.Runner.(*networkPolicyInventoryTestRunner)
 			runner.calls = nil
-			checks.read = func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
-				image, err := read(ctx, identity)
+			checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+				image, err := read.readInventory(ctx, identity)
 				reads++
 				if err != nil || reads != 2 {
 					return image, err
@@ -324,7 +324,7 @@ func TestNetworkPolicyChecksFinalCaptureRejectsInPlaceDependencyAndReceiptChange
 					}
 				}
 				return image, nil
-			}
+			})
 			if err := checks.ConsumerCheck(ctx, p.LAN); err == nil || reads != 2 {
 				t.Fatal("final capture mutation accepted", fault, err, reads)
 			}

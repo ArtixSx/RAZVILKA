@@ -1,0 +1,24 @@
+{
+  "files": {
+    "modern-pair-workflow-review-20261109.json": {
+      "bytes": 1173,
+      "sha256": "b11c44a79caf1763050dea87ae0fc19245f22f19ffec2b8926e52ceba7b6e784"
+    },
+    "modern-public-pair-independent-review-20261109.json": {
+      "bytes": 4915,
+      "sha256": "429197a57ccbf384c0042d45e345a14150c7f76b5141017953a6dfbb501d69e4"
+    },
+    "physical-cancel-independent-review-20261109.json": {
+      "bytes": 929,
+      "sha256": "a06a5b317b16e08c201db4f9e0176dc0eb5eb516012e4609cd03bb3b77dbaf07"
+    },
+    "physical-ledger-gates-review-20261109.json": {
+      "bytes": 791,
+      "sha256": "99dd54c8db5f398e2c2b6de4d81ba7f9835d21b17e7f56c764bf5ac27c6e5713"
+    },
+    "synthetic-ledger-decoder-review-20261109.json": {
+      "bytes": 1248,
+      "sha256": "1cb5a3f9d2a1446cc110c1f41729feb55932bf1f1d8c1fb38df61cbca4c958a0"
+    }
+  }
+}

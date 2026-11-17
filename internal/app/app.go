@@ -1563,7 +1563,11 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	} else if id == "nfqws2" && action == "install" {
 		result, err = a.installInitialNFQWS(ctx)
 	} else if id == "hev-socks5-tunnel" {
-		result, err = a.installHEV(ctx)
+		if action == "update" {
+			result, err = a.updateHEV(ctx)
+		} else {
+			result, err = a.installHEV(ctx)
+		}
 	} else if id == "mihomo" {
 		if action == "update" {
 			result, err = a.updateMihomo(ctx)
@@ -3591,12 +3595,8 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.Dataplane != nil {
-		if committed, exists, committedErr := a.Dataplane.Committed(); committedErr == nil && exists && committed.State == "committed" && committed.Digest == transaction.Digest && committed.Revision == transaction.Revision {
-			transaction.State = committed.State
-			transaction.ObservedEvidence = committed.ObservedEvidence
-			transaction.EvidenceNote = committed.EvidenceNote
-			transaction.RouteEvidence = append([]dataplane.RouteEvidence(nil), committed.RouteEvidence...)
-		}
+		committed, exists, committedErr := a.Dataplane.Committed()
+		transaction = reuseCommittedPlanEvidence(transaction, committed, exists, committedErr)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":      cfg.SafeMode,
@@ -3607,6 +3607,18 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		"review":         review.review,
 		"change_summary": a.changeSummary(cfg, scope, transaction),
 	})
+}
+
+// Keep the evidence decision independent of inventory discovery: the digest
+// still binds every original input, including current host and engine facts.
+func reuseCommittedPlanEvidence(transaction, committed dataplane.Plan, exists bool, committedErr error) dataplane.Plan {
+	if committedErr == nil && exists && committed.State == "committed" && committed.Digest == transaction.Digest && committed.Revision == transaction.Revision {
+		transaction.State = committed.State
+		transaction.ObservedEvidence = committed.ObservedEvidence
+		transaction.EvidenceNote = committed.EvidenceNote
+		transaction.RouteEvidence = append([]dataplane.RouteEvidence(nil), committed.RouteEvidence...)
+	}
+	return transaction
 }
 
 func (a *App) dataplaneStatus(w http.ResponseWriter, r *http.Request) {
@@ -4157,7 +4169,7 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: configured, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
 	}
 	if nodeScopedEngines["mihomo"] {
-		fact, err := a.mihomoNodeEngineFact(ctx)
+		fact, err := a.mihomoNodeEngineFact(ctx, routes)
 		if err != nil {
 			return dataplane.Plan{}, err
 		}

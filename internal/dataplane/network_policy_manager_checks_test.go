@@ -149,7 +149,7 @@ func TestNetworkPolicyChecksRejectLateRegistryRootIdentityAndCloseChanges(t *tes
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			calls := 0
-			checks.read = func(_ context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+			checks.readSource = networkPolicyInventoryCallback(func(_ context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
 				calls++
 				image := networkPolicyInventoryTestImage(identity, nil)
 				if calls == 2 {
@@ -176,7 +176,7 @@ func TestNetworkPolicyChecksRejectLateRegistryRootIdentityAndCloseChanges(t *tes
 					}
 				}
 				return image, nil
-			}
+			})
 			if err := checks.InventoryCheck(ctx, checks.network, p.LAN); err == nil || calls != 2 || len(model.calls) != 0 {
 				t.Fatal("late mutation accepted or observation wrote effects", fault, err, calls)
 			}

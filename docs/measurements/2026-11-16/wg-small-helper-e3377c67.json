@@ -1,0 +1,50 @@
+{
+  "run": 44039785005,
+  "head": "e3377c673e17962a30615e99a82eec916691dad8",
+  "outcome": "PASS",
+  "modes": [
+    {
+      "mode": "normal",
+      "helper_mode": "ordinary-stripped",
+      "outcomes_seconds": {
+        "TestWGInactivityFixtureImageRefusals": 0.0,
+        "TestWGInactivitySmallHelperABI": 0.02,
+        "TestWGInactivityReadHeldChildDiagnostics": 0.17,
+        "TestNativeWGKernelLinkOriginalHeldSource": 0.1
+      },
+      "archive_sha256": "113bf2c6a3182fe80aaaf211f9916a12daff148ab65a1488b87a728331bfbaf2",
+      "raw": {
+        "native.log": "ccbd5bdf8e64ef322ccee64a15c22dc6b99415b0cbb355e8274775bf3979bda3",
+        "provenance.txt": "f9ec3ef51cd147ba1ddb9f6e93451ab554168d5ef86c17b575b747924d706222",
+        "status.txt": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+      }
+    },
+    {
+      "mode": "race",
+      "helper_mode": "ordinary-stripped",
+      "outcomes_seconds": {
+        "TestWGInactivityFixtureImageRefusals": 0.0,
+        "TestWGInactivitySmallHelperABI": 0.05,
+        "TestWGInactivityReadHeldChildDiagnostics": 0.53,
+        "TestNativeWGKernelLinkOriginalHeldSource": 0.15
+      },
+      "archive_sha256": "eef160971031a161ea921f6d668b47544bdb49286878d819d4f5ec50efbb6f5d",
+      "raw": {
+        "native.log": "45d962acad2aa51a16d771db81ba86e9374aa3f3ae5af1044143d0642bf9d738",
+        "provenance.txt": "eec77f790f582dc94fbec91a58bd30d67888aca0fdfd500093c7d22baced09ff",
+        "status.txt": "ed163d69a09ddc0ffcbdf126a42d5745a93449fa7a39354788e948b7ac795c04"
+      }
+    }
+  ],
+  "limits": [
+    "Parent race is set by reviewed matrix command; ordinary helper models external CLI, with no GORACE adjustment.",
+    "Tests exercise diagnostic/metadata bytes and original held-file producer/kernel reader; not complete WG factory/native service or fullApply acceptance."
+  ],
+  "job_log_sha256": {
+    "normal": "a808753b6a7a1f16ddd748be853e28e3ac1fadb0dd4c08bd287e7c86bb561f47",
+    "race": "4b0e7e561c121c2651334003cc07b0097a96264cfdc61f9957c62688071b86f6"
+  },
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44039785005",
+  "helper_bytes": 1700002,
+  "startup_limit_bytes": 16777216
+}

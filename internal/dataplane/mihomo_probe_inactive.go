@@ -31,7 +31,11 @@ func (a *MihomoProbeAdapter) VerifyRuntimeInactive(parent context.Context) error
 	if err != nil {
 		return errors.Join(ErrRuntimeInactivity, err)
 	}
-	if err := observeMihomoProbeInactive(ctx, a.provider, replacement); err != nil {
+	hevReplacement, err := a.hevReplacementObservation(ctx)
+	if err != nil {
+		return errors.Join(ErrRuntimeInactivity, err)
+	}
+	if err := observeMihomoProbeInactiveWithHEV(ctx, a.provider, replacement, hevReplacement); err != nil {
 		return errors.Join(ErrRuntimeInactivity, err)
 	}
 	a.mu.Lock()

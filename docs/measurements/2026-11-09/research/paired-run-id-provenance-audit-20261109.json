@@ -1,0 +1,76 @@
+{
+  "source": "GitHub Actions workflow run listing by exact head SHA, corroborated by full candidate/environment.txt SHA; one matching run per listed SHA",
+  "corrections": [
+    {
+      "directory": "docs/measurements/2026-11-09/research/ci-344912c1",
+      "old_run_id": 42634845740,
+      "confirmed_run_id": 42660394084,
+      "head_sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+      "workflow": "Research probe comparison",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42660394084",
+      "conclusion": "success",
+      "candidate_environment_sha_confirmed": true,
+      "change": "metadata only; metrics and raw inputs unchanged"
+    },
+    {
+      "directory": "docs/measurements/2026-11-09/research/ci-35797378",
+      "old_run_id": 42634845740,
+      "confirmed_run_id": 42649330423,
+      "head_sha": "357973787e20f6a1bd7cad8841e290e15e6603d4",
+      "workflow": "Research probe comparison",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42649330423",
+      "conclusion": "success",
+      "candidate_environment_sha_confirmed": true,
+      "change": "metadata only; metrics and raw inputs unchanged"
+    },
+    {
+      "directory": "docs/measurements/2026-11-09/research/ci-3b27bd6e",
+      "old_run_id": 42634845740,
+      "confirmed_run_id": 42651543033,
+      "head_sha": "3b27bd6ecd1696431887d28d2444a8944f25cce4",
+      "workflow": "Research probe comparison",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42651543033",
+      "conclusion": "success",
+      "candidate_environment_sha_confirmed": true,
+      "change": "metadata only; metrics and raw inputs unchanged"
+    },
+    {
+      "directory": "docs/measurements/2026-11-09/research/ci-4cc9f869",
+      "old_run_id": 42634845740,
+      "confirmed_run_id": 42642213693,
+      "head_sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+      "workflow": "Research probe comparison",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42642213693",
+      "conclusion": "success",
+      "candidate_environment_sha_confirmed": true,
+      "change": "metadata only; metrics and raw inputs unchanged"
+    },
+    {
+      "directory": "docs/measurements/2026-11-09/research/ci-60e0d4ba",
+      "old_run_id": 42634845740,
+      "confirmed_run_id": 42646788153,
+      "head_sha": "60e0d4ba5daca6c3c9276af15475768680da7c28",
+      "workflow": "Research probe comparison",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42646788153",
+      "conclusion": "success",
+      "candidate_environment_sha_confirmed": true,
+      "change": "metadata only; metrics and raw inputs unchanged"
+    },
+    {
+      "directory": "docs/measurements/2026-11-09/research/ci-8434e9ae",
+      "old_run_id": 42634845740,
+      "confirmed_run_id": 42655695626,
+      "head_sha": "8434e9ae2183ef926a123b1fe4217bc0114d214a",
+      "workflow": "Research probe comparison",
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42655695626",
+      "conclusion": "success",
+      "candidate_environment_sha_confirmed": true,
+      "change": "metadata only; metrics and raw inputs unchanged"
+    }
+  ],
+  "unchanged_original_id": {
+    "directory": "ci-6df3d753",
+    "run_id": 42634845740
+  },
+  "verification": "Only run_id and analyzer constant changed; full JSON comparison retained every metric/raw hash; 122 manifest entries verified against staged Git bytes."
+}

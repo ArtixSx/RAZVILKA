@@ -1,0 +1,72 @@
+{
+  "files": [
+    {
+      "path": "internal/dataplane/nfqws2_active_execution.go",
+      "sha256": "1256c64cf009674a766e68cc799fb7498904392d84bbb2f698d7cbb87cfbe5ab"
+    },
+    {
+      "path": "internal/dataplane/nfqws_scoped_owner.go",
+      "sha256": "e5042216a6ee007d48424e016dfa3c0934116b54cb3ce42b758d7b6bb273c9ab"
+    },
+    {
+      "path": "internal/dataplane/nfqws_scoped_readback.go",
+      "sha256": "b4776e5d25d0948b0d577b51e4de31bba9f8b408ac274d6d91148e97b09588ac"
+    },
+    {
+      "path": "internal/dataplane/policy_effect_receipt.go",
+      "sha256": "a1d77790e23547b21fe690fee18df213b2f89ff81a3cce276f55928cdbfe2f60"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_active_partial_recovery.go",
+      "sha256": "4769f43a4c58dc67f3991df78660cc249588e774c1f41fbe9e819183441e23fa"
+    },
+    {
+      "path": "internal/dataplane/policy_effect_nfqws_recovery.go",
+      "sha256": "1db6f3d9907530570a042abece31034dbe84f30985cf3c91e1485984eba0e619"
+    },
+    {
+      "path": "internal/dataplane/policy_effect_nfqws_recovery_test.go",
+      "sha256": "c75c5c26c15833202df6fda28900256c20977939434a7d44a26fc07b618f98b1"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_active_partial_recovery_fixture_linux.go",
+      "sha256": "76514e62aa800fd9e559f62f6789753a0024e7175e2f0c1dae607b9d7e8efd79"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_active_partial_recovery_fixture_other.go",
+      "sha256": "481c904c80f987350a361aad0c884356176e6d1283796a71a484f0e1b48773c7"
+    },
+    {
+      "path": "internal/app/strategy_managed_probe_lan_native_linux_test.go",
+      "sha256": "4249d3aa190af3b48b819643458129b8756a6e0c477b9f295119eb0d720ca2e3"
+    }
+  ],
+  "constraints": [
+    "Original writer and actual retained published FD retained before Sync and old-FD close.",
+    "Never-entered-Run witness revoked before all runCommand paths.",
+    "Original Stop/sole Wait + empty queue + two fresh complete inventories before intent-only settlement.",
+    "Same-session strict unknown-gated ACK-prefix cleanup; never-issued target receives no Delete grant.",
+    "Ambiguous publication without returned FD, entered Run, lost ACK, crash without original custodian remain fenced.",
+    "Ephemeral atomic reader scope drains before close; Inspect parses immutable authenticated publication, not mutable writer document.",
+    "Panel-only callback unregisters at successful terminal close; no request-timeout custody destruction.",
+    "Native fixture injects only real intent/post-sync failures and requires recovery followed by fresh complete Apply/LAN/Stop."
+  ],
+  "pending": [
+    "Generic/model/race execution",
+    "Native intent and settlement-sync modes with actual recovered markers, no skip, full fresh Apply/LAN/Stop",
+    "Physical router/LAN acceptance",
+    "Run non-root TestNFQWSUnpublished to execute actual permission-error case; root run intentionally skips only that case."
+  ],
+  "reviewer": "independent-verification",
+  "decision": "source reviewed and approved for CI after pre-publication regression fix; execution acceptance pending",
+  "base_head": "15bb410869f539e1f9c5467a41c13f2404fa2bd6",
+  "local_validation": "git diff --check PASS; no local Go build per storage constraint",
+  "resolved_regression": "Canceled/prewrite failure with no attempted rename and no new publication now proves the exact prior retained FD/image and restores only private planned/checksum state, preserving ordinary strict ACK-prefix cleanup. Changed prior inode or attempted rename remains fenced.",
+  "additional_tests": [
+    "Prewrite and cancellation before actual write preserve existing known-prefix cleanup.",
+    "Non-root Linux actual EACCES before rename; checks observed prewrite stage and exact permission cause.",
+    "Same-byte replaced original inode cannot authorize release.",
+    "Foreign Xray/WireGuard publication fences preserved."
+  ],
+  "source_frozen_after_gofmt": true
+}

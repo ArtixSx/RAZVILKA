@@ -1,0 +1,56 @@
+name: Netidentity readFile metadata experiment
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/netidentity-metadata-experiment-20261116']
+permissions:
+  contents: read
+jobs:
+  measurement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Measure fresh full leaf without changing production
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/platform.txt
+          flags=()
+          if [ '${{ matrix.mode }}' = race ]; then flags=(-race); fi
+          go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/netidentity \
+            -run '^TestReadFileMetadataNative' 2>&1 | tee artifacts/metadata.log
+          for test in SourceParity ResultBounds PairedMeasurement; do
+            grep -F -- "--- PASS: TestReadFileMetadataNative$test " artifacts/metadata.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/metadata.log; then exit 1; fi
+          python3 - <<'PY'
+          import json,pathlib
+          text=pathlib.Path('artifacts/metadata.log').read_text()
+          rows=[json.loads(l.split('READFILE_METADATA_PAIR ',1)[1]) for l in text.splitlines() if 'READFILE_METADATA_PAIR ' in l]
+          assert len(rows)==16 and len({r['payload_sha256'] for r in rows})==1
+          for pair in range(8):
+              group=[r for r in rows if r['pair']==pair]
+              assert [r['variant'] for r in group]==(['original','combined'] if pair%2==0 else ['combined','original'])
+              for r in group:
+                  assert r['samples']==512 and r['bytes_per_read']>0 and r['wall_ns']>0 and r['thread_cpu_ns']>0
+                  assert r['fast_calls']==(512 if r['variant']=='combined' else 0) and r['fallback_calls']==0
+          pathlib.Path('artifacts/samples.json').write_text(json.dumps(rows,indent=2)+'\n')
+          PY
+      - name: Preserve experiment and refusal results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: netidentity-metadata-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/

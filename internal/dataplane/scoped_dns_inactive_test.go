@@ -44,6 +44,7 @@ func newScopedDNSInactiveFixture(t *testing.T) *scopedDNSInactiveFixture {
 	proc := t.TempDir()
 	f := &scopedDNSInactiveFixture{a: a, m: m, in: in}
 	f.proof = scopedDNSInactiveProof{procRoot: proc, netRoot: filepath.Join(proc, "net"), selfPID: 101}
+	f.proof.procPass = modelInactiveProcFactory(func(path string) (string, error) { return f.proof.readlink(path) })
 	f.proof.sameExecutable = func(string, string) (bool, error) { return false, nil }
 	f.proof.readlink = func(path string) (string, error) {
 		if strings.Contains(path, string(filepath.Separator)+"102"+string(filepath.Separator)) {
@@ -78,7 +79,7 @@ func (f *scopedDNSInactiveFixture) process(t *testing.T, pid int, command string
 	for i := range fields {
 		fields[i] = "0"
 	}
-	fields[0], fields[19] = "S", "17"
+	fields[0], fields[17], fields[19] = "S", "1", "17"
 	writeDNSInactiveFixture(t, filepath.Join(root, "stat"), []byte(fmt.Sprintf("%d (%s) %s", pid, command, strings.Join(fields, " "))))
 	writeDNSInactiveFixture(t, filepath.Join(root, "cmdline"), []byte(command+"\x00"))
 }
@@ -476,6 +477,7 @@ func TestScopedDNSInactiveStrictImagesAndIncarnations(t *testing.T) {
 				writeDNSInactiveFixture(t, filepath.Join(f.m.StateRoot, "transactions", e.PlanID, "execution.json"), changed)
 			case "renamed-controller":
 				f.process(t, 102, "other")
+				f.proof.procPass = modelInactiveProcFactory(func(path string) (string, error) { return f.proof.readlink(path) })
 				f.proof.sameExecutable = func(string, string) (bool, error) { return true, nil }
 			case "exe-drift":
 				f.process(t, 102, "other")
@@ -492,6 +494,7 @@ func TestScopedDNSInactiveStrictImagesAndIncarnations(t *testing.T) {
 				}
 			case "argv-drift":
 				f.process(t, 102, "other")
+				f.proof.procPass = modelInactiveProcFactory(func(path string) (string, error) { return f.proof.readlink(path) })
 				f.proof.sameExecutable = func(string, string) (bool, error) {
 					writeDNSInactiveFixture(t, filepath.Join(f.proof.procRoot, "102", "cmdline"), []byte("changed\x00"))
 					return false, nil

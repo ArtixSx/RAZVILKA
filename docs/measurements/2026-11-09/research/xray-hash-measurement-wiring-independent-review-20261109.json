@@ -1,0 +1,10 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved measurement wiring",
+  "file": ".github/workflows/research-lifecycle.yml",
+  "sha256": "31BA975B23D3F6EDE2DAB42211197AF028842A4E9569D891DF620C805AEB7DCB",
+  "finding": "Selected scenario after strict operation runs actual pinned Xray wholehash measurement only: normal/race both explicitPASS/noSKIP, normal pairedbench count3. Existing route clocks/results unchanged, artifacts separated. No production optimization inferred.",
+  "limits": [
+    "Native results pending."
+  ]
+}

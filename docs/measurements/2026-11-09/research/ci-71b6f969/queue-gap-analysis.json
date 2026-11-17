@@ -1,0 +1,108 @@
+{
+  "basis": "reconstructed UTC event gaps, not a new monotonic stage measurement",
+  "quantile": "nearest-rank, repeated N12 only",
+  "revisions": {
+    "baseline": {
+      "single": {
+        "post_to_first_check_ms": {
+          "n": 12,
+          "p50": 252.78699999999998,
+          "p95": 264.64
+        },
+        "inter_check_gap_ms": {
+          "n": 0
+        },
+        "last_check_to_readback_ms": {
+          "n": 12,
+          "p50": 89.964,
+          "p95": 91.562
+        }
+      },
+      "selected-batch": {
+        "post_to_first_check_ms": {
+          "n": 12,
+          "p50": 377.666,
+          "p95": 393.171
+        },
+        "inter_check_gap_ms": {
+          "n": 12,
+          "p50": 1325.577,
+          "p95": 1334.969
+        },
+        "last_check_to_readback_ms": {
+          "n": 12,
+          "p50": 92.836,
+          "p95": 94.886
+        }
+      },
+      "all-vless": {
+        "post_to_first_check_ms": {
+          "n": 12,
+          "p50": 383.29,
+          "p95": 397.851
+        },
+        "inter_check_gap_ms": {
+          "n": 12,
+          "p50": 1332.424,
+          "p95": 1339.542
+        },
+        "last_check_to_readback_ms": {
+          "n": 12,
+          "p50": 94.919,
+          "p95": 95.91
+        }
+      }
+    },
+    "candidate": {
+      "single": {
+        "post_to_first_check_ms": {
+          "n": 12,
+          "p50": 248.434,
+          "p95": 261.392
+        },
+        "inter_check_gap_ms": {
+          "n": 0
+        },
+        "last_check_to_readback_ms": {
+          "n": 12,
+          "p50": 89.995,
+          "p95": 92.129
+        }
+      },
+      "selected-batch": {
+        "post_to_first_check_ms": {
+          "n": 12,
+          "p50": 371.856,
+          "p95": 387.336
+        },
+        "inter_check_gap_ms": {
+          "n": 12,
+          "p50": 1321.741,
+          "p95": 1331.4950000000001
+        },
+        "last_check_to_readback_ms": {
+          "n": 12,
+          "p50": 93.314,
+          "p95": 95.579
+        }
+      },
+      "all-vless": {
+        "post_to_first_check_ms": {
+          "n": 12,
+          "p50": 375.409,
+          "p95": 388.64700000000005
+        },
+        "inter_check_gap_ms": {
+          "n": 12,
+          "p50": 1325.669,
+          "p95": 1333.036
+        },
+        "last_check_to_readback_ms": {
+          "n": 12,
+          "p50": 94.977,
+          "p95": 97.32000000000001
+        }
+      }
+    }
+  }
+}

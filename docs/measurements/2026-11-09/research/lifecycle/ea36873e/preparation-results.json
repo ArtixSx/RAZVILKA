@@ -1,0 +1,409 @@
+{
+  "baseline-clean": {
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "13.87269054s"
+      },
+      "process-current": {
+        "calls": 482,
+        "bytes": 0,
+        "elapsed": "11.617210615s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.838873229s"
+      },
+      "whole-executable-hash": {
+        "calls": 219,
+        "bytes": 8010451914,
+        "elapsed": "5.844783233s"
+      },
+      "observed_executable_io": {
+        "calls": 219,
+        "bytes": 8010451914
+      }
+    },
+    "outcome": "--- FAIL: TestDomainTCPOriginalNativeFailedPreparationRetirement (96.04s)"
+  },
+  "candidate-capture-transaction": {
+    "first_answer": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "185.589987ms"
+      },
+      "executable-image-capture": {
+        "calls": 47,
+        "bytes": 1719138082,
+        "elapsed": "1.303557993s"
+      },
+      "executable-image-compare": {
+        "calls": 47,
+        "bytes": 1719138082,
+        "elapsed": "276.574151ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.401744ms"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "5.924110359s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.125313236s"
+      },
+      "whole-executable-hash": {
+        "calls": 32,
+        "bytes": 1170476992,
+        "elapsed": "859.924053ms"
+      },
+      "observed_executable_io": {
+        "calls": 126,
+        "bytes": 4608753156
+      }
+    },
+    "before_stop": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "185.589987ms"
+      },
+      "executable-image-capture": {
+        "calls": 49,
+        "bytes": 1792292894,
+        "elapsed": "1.359042893s"
+      },
+      "executable-image-compare": {
+        "calls": 49,
+        "bytes": 1792292894,
+        "elapsed": "287.562891ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.401744ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.23662905s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.125313236s"
+      },
+      "whole-executable-hash": {
+        "calls": 34,
+        "bytes": 1243631804,
+        "elapsed": "912.978341ms"
+      },
+      "observed_executable_io": {
+        "calls": 132,
+        "bytes": 4828217592
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "185.589987ms"
+      },
+      "executable-image-capture": {
+        "calls": 50,
+        "bytes": 1828870300,
+        "elapsed": "1.386429783s"
+      },
+      "executable-image-compare": {
+        "calls": 50,
+        "bytes": 1828870300,
+        "elapsed": "292.562053ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.401744ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.23662905s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.125313236s"
+      },
+      "whole-executable-hash": {
+        "calls": 37,
+        "bytes": 1353364022,
+        "elapsed": "992.611458ms"
+      },
+      "observed_executable_io": {
+        "calls": 137,
+        "bytes": 5011104622
+      }
+    },
+    "outcome": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (106.56s)"
+  },
+  "candidate-clean": {
+    "first_answer": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "186.258509ms"
+      },
+      "executable-image-capture": {
+        "calls": 47,
+        "bytes": 1719138082,
+        "elapsed": "1.308562166s"
+      },
+      "executable-image-compare": {
+        "calls": 47,
+        "bytes": 1719138082,
+        "elapsed": "277.5806ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.878829ms"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "5.970991406s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.172907696s"
+      },
+      "whole-executable-hash": {
+        "calls": 32,
+        "bytes": 1170476992,
+        "elapsed": "862.6536ms"
+      },
+      "observed_executable_io": {
+        "calls": 126,
+        "bytes": 4608753156
+      }
+    },
+    "before_stop": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "186.258509ms"
+      },
+      "executable-image-capture": {
+        "calls": 49,
+        "bytes": 1792292894,
+        "elapsed": "1.364944387s"
+      },
+      "executable-image-compare": {
+        "calls": 49,
+        "bytes": 1792292894,
+        "elapsed": "289.349136ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.878829ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.303904s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.172907696s"
+      },
+      "whole-executable-hash": {
+        "calls": 34,
+        "bytes": 1243631804,
+        "elapsed": "916.624819ms"
+      },
+      "observed_executable_io": {
+        "calls": 132,
+        "bytes": 4828217592
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "186.258509ms"
+      },
+      "executable-image-capture": {
+        "calls": 50,
+        "bytes": 1828870300,
+        "elapsed": "1.392620695s"
+      },
+      "executable-image-compare": {
+        "calls": 50,
+        "bytes": 1828870300,
+        "elapsed": "294.71933ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.878829ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.303904s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.172907696s"
+      },
+      "whole-executable-hash": {
+        "calls": 37,
+        "bytes": 1353364022,
+        "elapsed": "996.644017ms"
+      },
+      "observed_executable_io": {
+        "calls": 137,
+        "bytes": 5011104622
+      }
+    },
+    "outcome": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (100.34s)"
+  },
+  "candidate-standby-transaction": {
+    "first_answer": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "185.761907ms"
+      },
+      "executable-image-capture": {
+        "calls": 47,
+        "bytes": 1719138082,
+        "elapsed": "1.30704537s"
+      },
+      "executable-image-compare": {
+        "calls": 47,
+        "bytes": 1719138082,
+        "elapsed": "277.945452ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.481651ms"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "5.914362594s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.132418138s"
+      },
+      "whole-executable-hash": {
+        "calls": 32,
+        "bytes": 1170476992,
+        "elapsed": "861.058321ms"
+      },
+      "observed_executable_io": {
+        "calls": 126,
+        "bytes": 4608753156
+      }
+    },
+    "before_stop": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "185.761907ms"
+      },
+      "executable-image-capture": {
+        "calls": 49,
+        "bytes": 1792292894,
+        "elapsed": "1.364341658s"
+      },
+      "executable-image-compare": {
+        "calls": 49,
+        "bytes": 1792292894,
+        "elapsed": "289.800334ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.481651ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.239157544s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.132418138s"
+      },
+      "whole-executable-hash": {
+        "calls": 34,
+        "bytes": 1243631804,
+        "elapsed": "915.571778ms"
+      },
+      "observed_executable_io": {
+        "calls": 132,
+        "bytes": 4828217592
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 7,
+        "bytes": 256041842,
+        "elapsed": "185.761907ms"
+      },
+      "executable-image-capture": {
+        "calls": 50,
+        "bytes": 1828870300,
+        "elapsed": "1.391989632s"
+      },
+      "executable-image-compare": {
+        "calls": 50,
+        "bytes": 1828870300,
+        "elapsed": "295.062553ms"
+      },
+      "executable-image-storage": {
+        "calls": 1,
+        "bytes": 36577406,
+        "elapsed": "18.481651ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.239157544s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.132418138s"
+      },
+      "whole-executable-hash": {
+        "calls": 37,
+        "bytes": 1353364022,
+        "elapsed": "994.877688ms"
+      },
+      "observed_executable_io": {
+        "calls": 137,
+        "bytes": 5011104622
+      }
+    },
+    "outcome": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (100.12s)"
+  }
+}

@@ -1,0 +1,1118 @@
+{
+  "revision": "e526a66149b8fdcfeb9ddab87eef596835721b5a",
+  "run_id": 43967605929,
+  "evidence_root": "C:\\RAZVILKA-research-20261117\\nfq-read-e526a661",
+  "modes": {
+    "production": {
+      "workflow_report_comparison_valid": true,
+      "all_samples_pass": true,
+      "source_verified_exact_git_archive": true,
+      "changed_files": [
+        "internal/strategylab/selected_candidate_runtime_observation.go"
+      ],
+      "post_population_source_unchanged": true,
+      "provenance": {
+        "candidate_commit": "e526a66149b8fdcfeb9ddab87eef596835721b5a",
+        "mode": "production",
+        "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+        "kernel": "7.0.0-1019-azure",
+        "go": "go version go1.26.5 linux/amd64",
+        "cgroup_cpu_max": "unavailable",
+        "tools_sha256": {
+          "/usr/sbin/xtables-legacy-multi": "da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac",
+          "/usr/bin/ip": "adb31e532301a786b696787319e996da3d731724dc79e636b4c115300d66d1b8"
+        },
+        "harness_sha256": {
+          "scripts/compare-nfq-runtime-read.sh": "02b27087b04261f7c3f0a33f6f5b1ed017cce99b758f657d63af8c77f6db41e0",
+          "scripts/test-managed-probe-native.sh": "9f9b07f2a5531755e6903b0150777ad1e5d11db10c9e34a30177f4e2a0c6321b",
+          "scripts/fetch-native-fixture.sh": "3a950661005be2ce6b8e5e8629a832ba6b175e9d73b4727c5479f09016e2bb39"
+        },
+        "native_GOMAXPROCS": 2,
+        "limits": [
+          "Same host per mode, fresh namespace/process per sample; host page cache is warm.",
+          "Production and race jobs run on distinct hosts; do not pool latency.",
+          "Compilation/setup and supervisor wall time are not Execute latency.",
+          "Baseline assertion failures remain censored failures, never PASS or successful timings.",
+          "Only candidate complete original service and cleanup PASS qualifies.",
+          "Two samples per arm are a bounded diagnostic, not statistical significance or router acceptance."
+        ]
+      },
+      "samples": [
+        {
+          "sample": 1,
+          "side": "baseline",
+          "outcome": "pass",
+          "native_exit": 0,
+          "execute_ns": 7500655193,
+          "censored": false,
+          "frames": [
+            0,
+            0,
+            0
+          ],
+          "member_reads": 13260,
+          "member_bytes": 1084270200,
+          "allocated_bytes": 590964000,
+          "allocated_objects": 4149622,
+          "tool_check_calls": 382,
+          "tool_check_inclusive_ns": 3208407260,
+          "stages": {
+            "capture-current": {
+              "started": 6,
+              "completed": 6,
+              "wall_ns": 1352740704
+            },
+            "cleanup-current": {
+              "started": 75,
+              "completed": 75,
+              "wall_ns": 861071390
+            },
+            "counter": {
+              "started": 3,
+              "completed": 3,
+              "wall_ns": 1450866624
+            },
+            "current": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 3722679285
+            },
+            "environment": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 236056725
+            },
+            "epoch-source-runtime": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 1647932704
+            },
+            "owners": {
+              "started": 228,
+              "completed": 228,
+              "wall_ns": 2684163579
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 2086526492
+            },
+            "policy-readback": {
+              "started": 23,
+              "completed": 23,
+              "wall_ns": 2636335366
+            },
+            "policy-remove": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 1706273842
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 0,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "911078e0ac50fe2ad6a7fbcec37e59f4b81b297455892b0f74537ae43d159c66"
+        },
+        {
+          "sample": 2,
+          "side": "candidate",
+          "outcome": "pass",
+          "native_exit": 0,
+          "execute_ns": 7906903944,
+          "censored": false,
+          "frames": [
+            320,
+            320,
+            0
+          ],
+          "member_reads": 9420,
+          "member_bytes": 770273400,
+          "allocated_bytes": 673323928,
+          "allocated_objects": 4567516,
+          "tool_check_calls": 382,
+          "tool_check_inclusive_ns": 3181932217,
+          "stages": {
+            "capture-current": {
+              "started": 6,
+              "completed": 6,
+              "wall_ns": 1392662870
+            },
+            "cleanup-current": {
+              "started": 75,
+              "completed": 75,
+              "wall_ns": 863745179
+            },
+            "counter": {
+              "started": 3,
+              "completed": 3,
+              "wall_ns": 1489770234
+            },
+            "current": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 3825464351
+            },
+            "environment": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 229900554
+            },
+            "epoch-source-runtime": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 1782419504
+            },
+            "owners": {
+              "started": 228,
+              "completed": 228,
+              "wall_ns": 2661620241
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 2102444446
+            },
+            "policy-readback": {
+              "started": 23,
+              "completed": 23,
+              "wall_ns": 2694260519
+            },
+            "policy-remove": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 1706526410
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 0,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "d2bb59178aee07163d202abba31b5acd76b093f64379b1a73e523d4c17b2bacf"
+        },
+        {
+          "sample": 3,
+          "side": "candidate",
+          "outcome": "pass",
+          "native_exit": 0,
+          "execute_ns": 7698083414,
+          "censored": false,
+          "frames": [
+            320,
+            320,
+            0
+          ],
+          "member_reads": 9420,
+          "member_bytes": 770273400,
+          "allocated_bytes": 673214576,
+          "allocated_objects": 4567501,
+          "tool_check_calls": 382,
+          "tool_check_inclusive_ns": 3222254214,
+          "stages": {
+            "capture-current": {
+              "started": 6,
+              "completed": 6,
+              "wall_ns": 1404211048
+            },
+            "cleanup-current": {
+              "started": 75,
+              "completed": 75,
+              "wall_ns": 883803380
+            },
+            "counter": {
+              "started": 3,
+              "completed": 3,
+              "wall_ns": 1502398561
+            },
+            "current": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 3858063985
+            },
+            "environment": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 232201602
+            },
+            "epoch-source-runtime": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 1802128703
+            },
+            "owners": {
+              "started": 228,
+              "completed": 228,
+              "wall_ns": 2692200348
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 2143847977
+            },
+            "policy-readback": {
+              "started": 23,
+              "completed": 23,
+              "wall_ns": 2731600628
+            },
+            "policy-remove": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 1737375333
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 0,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "01c06216f7ee613a357a86ab4c5177ebf56b1062f2fa0a2660209d0c5c170c7a"
+        },
+        {
+          "sample": 4,
+          "side": "baseline",
+          "outcome": "pass",
+          "native_exit": 0,
+          "execute_ns": 7703787841,
+          "censored": false,
+          "frames": [
+            0,
+            0,
+            0
+          ],
+          "member_reads": 13260,
+          "member_bytes": 1084270200,
+          "allocated_bytes": 591181984,
+          "allocated_objects": 4149655,
+          "tool_check_calls": 382,
+          "tool_check_inclusive_ns": 3213876943,
+          "stages": {
+            "capture-current": {
+              "started": 6,
+              "completed": 6,
+              "wall_ns": 1342275901
+            },
+            "cleanup-current": {
+              "started": 75,
+              "completed": 75,
+              "wall_ns": 878696936
+            },
+            "counter": {
+              "started": 3,
+              "completed": 3,
+              "wall_ns": 1440294080
+            },
+            "current": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 3669867267
+            },
+            "environment": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 229947706
+            },
+            "epoch-source-runtime": {
+              "started": 153,
+              "completed": 153,
+              "wall_ns": 1618208972
+            },
+            "owners": {
+              "started": 228,
+              "completed": 228,
+              "wall_ns": 2685214594
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 2225776705
+            },
+            "policy-readback": {
+              "started": 23,
+              "completed": 23,
+              "wall_ns": 2618298468
+            },
+            "policy-remove": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 1744522025
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 0,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "be9efb3b325bc574fc618f7f98649046b78d3bfcbce3842bca8754f166ba7d1e"
+        }
+      ],
+      "metrics": {
+        "execute_ns": {
+          "baseline_values": [
+            7500655193,
+            7703787841
+          ],
+          "candidate_values": [
+            7906903944,
+            7698083414
+          ],
+          "baseline_median": 7602221517.0,
+          "candidate_median": 7802493679.0,
+          "candidate_change_percent": 2.6343899812989457,
+          "censored": false
+        },
+        "member_reads": {
+          "baseline_values": [
+            13260,
+            13260
+          ],
+          "candidate_values": [
+            9420,
+            9420
+          ],
+          "baseline_median": 13260.0,
+          "candidate_median": 9420.0,
+          "candidate_change_percent": -28.959276018099544,
+          "censored": false
+        },
+        "member_bytes": {
+          "baseline_values": [
+            1084270200,
+            1084270200
+          ],
+          "candidate_values": [
+            770273400,
+            770273400
+          ],
+          "baseline_median": 1084270200.0,
+          "candidate_median": 770273400.0,
+          "candidate_change_percent": -28.959276018099544,
+          "censored": false
+        },
+        "allocated_bytes": {
+          "baseline_values": [
+            590964000,
+            591181984
+          ],
+          "candidate_values": [
+            673323928,
+            673214576
+          ],
+          "baseline_median": 591072992.0,
+          "candidate_median": 673269252.0,
+          "candidate_change_percent": 13.90627910808011,
+          "censored": false
+        },
+        "allocated_objects": {
+          "baseline_values": [
+            4149622,
+            4149655
+          ],
+          "candidate_values": [
+            4567516,
+            4567501
+          ],
+          "baseline_median": 4149638.5,
+          "candidate_median": 4567508.5,
+          "candidate_change_percent": 10.070033811378988,
+          "censored": false
+        },
+        "tool_check_calls": {
+          "baseline_values": [
+            382,
+            382
+          ],
+          "candidate_values": [
+            382,
+            382
+          ],
+          "baseline_median": 382.0,
+          "candidate_median": 382.0,
+          "candidate_change_percent": 0.0,
+          "censored": false
+        },
+        "tool_check_inclusive_ns": {
+          "baseline_values": [
+            3208407260,
+            3213876943
+          ],
+          "candidate_values": [
+            3181932217,
+            3222254214
+          ],
+          "baseline_median": 3211142101.5,
+          "candidate_median": 3202093215.5,
+          "candidate_change_percent": -0.28179649837897225,
+          "censored": false
+        }
+      },
+      "inclusive_stage_medians": {
+        "capture-current": {
+          "baseline_median_ns": 1347508302.5,
+          "candidate_median_ns": 1398436959.0
+        },
+        "cleanup-current": {
+          "baseline_median_ns": 869884163.0,
+          "candidate_median_ns": 873774279.5
+        },
+        "counter": {
+          "baseline_median_ns": 1445580352.0,
+          "candidate_median_ns": 1496084397.5
+        },
+        "current": {
+          "baseline_median_ns": 3696273276.0,
+          "candidate_median_ns": 3841764168.0
+        },
+        "environment": {
+          "baseline_median_ns": 233002215.5,
+          "candidate_median_ns": 231051078.0
+        },
+        "epoch-source-runtime": {
+          "baseline_median_ns": 1633070838.0,
+          "candidate_median_ns": 1792274103.5
+        },
+        "owners": {
+          "baseline_median_ns": 2684689086.5,
+          "candidate_median_ns": 2676910294.5
+        },
+        "policy-apply": {
+          "baseline_median_ns": 2156151598.5,
+          "candidate_median_ns": 2123146211.5
+        },
+        "policy-readback": {
+          "baseline_median_ns": 2627316917.0,
+          "candidate_median_ns": 2712930573.5
+        },
+        "policy-remove": {
+          "baseline_median_ns": 1725397933.5,
+          "candidate_median_ns": 1721950871.5
+        }
+      },
+      "comparison_json_sha256": "0fa10b5f70297421fa7ad5bd0e2734afed25ba11c2d5705232ec16892b2a1124",
+      "verified_evidence_files": 47,
+      "workflow_job_conclusion": "success"
+    },
+    "race": {
+      "workflow_report_comparison_valid": false,
+      "all_samples_pass": false,
+      "source_verified_exact_git_archive": true,
+      "changed_files": [
+        "internal/strategylab/selected_candidate_runtime_observation.go"
+      ],
+      "post_population_source_unchanged": true,
+      "provenance": {
+        "candidate_commit": "e526a66149b8fdcfeb9ddab87eef596835721b5a",
+        "mode": "race",
+        "cpu_model": "AMD EPYC 7763 64-Core Processor",
+        "kernel": "7.0.0-1019-azure",
+        "go": "go version go1.26.5 linux/amd64",
+        "cgroup_cpu_max": "unavailable",
+        "tools_sha256": {
+          "/usr/sbin/xtables-legacy-multi": "da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac",
+          "/usr/bin/ip": "adb31e532301a786b696787319e996da3d731724dc79e636b4c115300d66d1b8"
+        },
+        "harness_sha256": {
+          "scripts/compare-nfq-runtime-read.sh": "02b27087b04261f7c3f0a33f6f5b1ed017cce99b758f657d63af8c77f6db41e0",
+          "scripts/test-managed-probe-native.sh": "9f9b07f2a5531755e6903b0150777ad1e5d11db10c9e34a30177f4e2a0c6321b",
+          "scripts/fetch-native-fixture.sh": "3a950661005be2ce6b8e5e8629a832ba6b175e9d73b4727c5479f09016e2bb39"
+        },
+        "native_GOMAXPROCS": 2,
+        "limits": [
+          "Same host per mode, fresh namespace/process per sample; host page cache is warm.",
+          "Production and race jobs run on distinct hosts; do not pool latency.",
+          "Compilation/setup and supervisor wall time are not Execute latency.",
+          "Baseline assertion failures remain censored failures, never PASS or successful timings.",
+          "Only candidate complete original service and cleanup PASS qualifies.",
+          "Two samples per arm are a bounded diagnostic, not statistical significance or router acceptance."
+        ]
+      },
+      "samples": [
+        {
+          "sample": 1,
+          "side": "baseline",
+          "outcome": "fail",
+          "native_exit": 1,
+          "execute_ns": 15056149389,
+          "censored": true,
+          "frames": [
+            0,
+            0,
+            0
+          ],
+          "member_reads": 10596,
+          "member_bytes": 866434920,
+          "allocated_bytes": 802397616,
+          "allocated_objects": 2898955,
+          "tool_check_calls": 190,
+          "tool_check_inclusive_ns": 3378214875,
+          "stages": {
+            "capture-current": {
+              "started": 3,
+              "completed": 3,
+              "wall_ns": 2056935836
+            },
+            "cleanup-current": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 43854717
+            },
+            "counter": {
+              "started": 2,
+              "completed": 2,
+              "wall_ns": 2118202610
+            },
+            "current": {
+              "started": 123,
+              "completed": 123,
+              "wall_ns": 10473871749
+            },
+            "environment": {
+              "started": 122,
+              "completed": 122,
+              "wall_ns": 960784193
+            },
+            "epoch-source-runtime": {
+              "started": 122,
+              "completed": 122,
+              "wall_ns": 6575148439
+            },
+            "owners": {
+              "started": 124,
+              "completed": 124,
+              "wall_ns": 2954911704
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 6608413965
+            },
+            "policy-readback": {
+              "started": 13,
+              "completed": 13,
+              "wall_ns": 5907507774
+            },
+            "policy-remove": {
+              "started": 0,
+              "completed": 0,
+              "wall_ns": 0
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "085df036422797b5c57cdc480fa6ee03cea8f6f4ff0ae9b4fbb9185c090ba1f3"
+        },
+        {
+          "sample": 2,
+          "side": "candidate",
+          "outcome": "fail",
+          "native_exit": 1,
+          "execute_ns": 15052778457,
+          "censored": true,
+          "frames": [
+            233,
+            233,
+            0
+          ],
+          "member_reads": 6852,
+          "member_bytes": 560288040,
+          "allocated_bytes": 852471848,
+          "allocated_objects": 2986892,
+          "tool_check_calls": 171,
+          "tool_check_inclusive_ns": 3231530308,
+          "stages": {
+            "capture-current": {
+              "started": 2,
+              "completed": 2,
+              "wall_ns": 1042378821
+            },
+            "cleanup-current": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 43587718
+            },
+            "counter": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 1103239071
+            },
+            "current": {
+              "started": 112,
+              "completed": 112,
+              "wall_ns": 10708711507
+            },
+            "environment": {
+              "started": 111,
+              "completed": 111,
+              "wall_ns": 863987100
+            },
+            "epoch-source-runtime": {
+              "started": 111,
+              "completed": 111,
+              "wall_ns": 7006972933
+            },
+            "owners": {
+              "started": 113,
+              "completed": 113,
+              "wall_ns": 2857506533
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 7010151785
+            },
+            "policy-readback": {
+              "started": 12,
+              "completed": 12,
+              "wall_ns": 5494566689
+            },
+            "policy-remove": {
+              "started": 0,
+              "completed": 0,
+              "wall_ns": 0
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "bc530eae69a1191ab1e4a07be4d62bb693e695218f72db424c23c354faa509da"
+        },
+        {
+          "sample": 3,
+          "side": "candidate",
+          "outcome": "fail",
+          "native_exit": 1,
+          "execute_ns": 15055235966,
+          "censored": true,
+          "frames": [
+            234,
+            233,
+            1
+          ],
+          "member_reads": 6864,
+          "member_bytes": 561269280,
+          "allocated_bytes": 846887112,
+          "allocated_objects": 2985219,
+          "tool_check_calls": 171,
+          "tool_check_inclusive_ns": 3220576461,
+          "stages": {
+            "capture-current": {
+              "started": 2,
+              "completed": 2,
+              "wall_ns": 1043397100
+            },
+            "cleanup-current": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 44449795
+            },
+            "counter": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 1102138412
+            },
+            "current": {
+              "started": 112,
+              "completed": 112,
+              "wall_ns": 10746861752
+            },
+            "environment": {
+              "started": 111,
+              "completed": 111,
+              "wall_ns": 868856062
+            },
+            "epoch-source-runtime": {
+              "started": 111,
+              "completed": 111,
+              "wall_ns": 7046609078
+            },
+            "owners": {
+              "started": 113,
+              "completed": 113,
+              "wall_ns": 2852324612
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 7077214095
+            },
+            "policy-readback": {
+              "started": 12,
+              "completed": 12,
+              "wall_ns": 5534707335
+            },
+            "policy-remove": {
+              "started": 0,
+              "completed": 0,
+              "wall_ns": 0
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "53b5cd0bc060653b6853b41633e24c93a6d4f25dc2ee8a112eadb37b11abd42b"
+        },
+        {
+          "sample": 4,
+          "side": "baseline",
+          "outcome": "fail",
+          "native_exit": 1,
+          "execute_ns": 15053240322,
+          "censored": true,
+          "frames": [
+            0,
+            0,
+            0
+          ],
+          "member_reads": 10512,
+          "member_bytes": 859566240,
+          "allocated_bytes": 798207760,
+          "allocated_objects": 2876844,
+          "tool_check_calls": 189,
+          "tool_check_inclusive_ns": 3448245454,
+          "stages": {
+            "capture-current": {
+              "started": 3,
+              "completed": 3,
+              "wall_ns": 1895804266
+            },
+            "cleanup-current": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 43554803
+            },
+            "counter": {
+              "started": 2,
+              "completed": 2,
+              "wall_ns": 1954240209
+            },
+            "current": {
+              "started": 122,
+              "completed": 122,
+              "wall_ns": 10562539314
+            },
+            "environment": {
+              "started": 121,
+              "completed": 121,
+              "wall_ns": 978504213
+            },
+            "epoch-source-runtime": {
+              "started": 121,
+              "completed": 121,
+              "wall_ns": 6559886200
+            },
+            "owners": {
+              "started": 123,
+              "completed": 123,
+              "wall_ns": 3040275860
+            },
+            "policy-apply": {
+              "started": 1,
+              "completed": 1,
+              "wall_ns": 6573843803
+            },
+            "policy-readback": {
+              "started": 13,
+              "completed": 13,
+              "wall_ns": 5857516465
+            },
+            "policy-remove": {
+              "started": 0,
+              "completed": 0,
+              "wall_ns": 0
+            }
+          },
+          "supervisor": {
+            "subreaper": true,
+            "initial_exit_status": 1,
+            "adopted_children_reaped": 0,
+            "descendants_absent": true,
+            "forced_cleanup": false,
+            "no_overlap_boundary": true,
+            "original_cleanup_success": "not inferred from descendant absence"
+          },
+          "raw_log_sha256": "94bebd22ac627b97dd3152cb5db0bd3b15515c8f3e87cd17781a2bfea3c709d1"
+        }
+      ],
+      "metrics": {
+        "execute_ns": {
+          "baseline_values": [
+            15056149389,
+            15053240322
+          ],
+          "candidate_values": [
+            15052778457,
+            15055235966
+          ],
+          "baseline_median": 15054694855.5,
+          "candidate_median": 15054007211.5,
+          "censored": true
+        },
+        "member_reads": {
+          "baseline_values": [
+            10596,
+            10512
+          ],
+          "candidate_values": [
+            6852,
+            6864
+          ],
+          "baseline_median": 10554.0,
+          "candidate_median": 6858.0,
+          "censored": true
+        },
+        "member_bytes": {
+          "baseline_values": [
+            866434920,
+            859566240
+          ],
+          "candidate_values": [
+            560288040,
+            561269280
+          ],
+          "baseline_median": 863000580.0,
+          "candidate_median": 560778660.0,
+          "censored": true
+        },
+        "allocated_bytes": {
+          "baseline_values": [
+            802397616,
+            798207760
+          ],
+          "candidate_values": [
+            852471848,
+            846887112
+          ],
+          "baseline_median": 800302688.0,
+          "candidate_median": 849679480.0,
+          "censored": true
+        },
+        "allocated_objects": {
+          "baseline_values": [
+            2898955,
+            2876844
+          ],
+          "candidate_values": [
+            2986892,
+            2985219
+          ],
+          "baseline_median": 2887899.5,
+          "candidate_median": 2986055.5,
+          "censored": true
+        },
+        "tool_check_calls": {
+          "baseline_values": [
+            190,
+            189
+          ],
+          "candidate_values": [
+            171,
+            171
+          ],
+          "baseline_median": 189.5,
+          "candidate_median": 171.0,
+          "censored": true
+        },
+        "tool_check_inclusive_ns": {
+          "baseline_values": [
+            3378214875,
+            3448245454
+          ],
+          "candidate_values": [
+            3231530308,
+            3220576461
+          ],
+          "baseline_median": 3413230164.5,
+          "candidate_median": 3226053384.5,
+          "censored": true
+        }
+      },
+      "inclusive_stage_medians": {
+        "capture-current": {
+          "baseline_median_ns": 1976370051.0,
+          "candidate_median_ns": 1042887960.5
+        },
+        "cleanup-current": {
+          "baseline_median_ns": 43704760.0,
+          "candidate_median_ns": 44018756.5
+        },
+        "counter": {
+          "baseline_median_ns": 2036221409.5,
+          "candidate_median_ns": 1102688741.5
+        },
+        "current": {
+          "baseline_median_ns": 10518205531.5,
+          "candidate_median_ns": 10727786629.5
+        },
+        "environment": {
+          "baseline_median_ns": 969644203.0,
+          "candidate_median_ns": 866421581.0
+        },
+        "epoch-source-runtime": {
+          "baseline_median_ns": 6567517319.5,
+          "candidate_median_ns": 7026791005.5
+        },
+        "owners": {
+          "baseline_median_ns": 2997593782.0,
+          "candidate_median_ns": 2854915572.5
+        },
+        "policy-apply": {
+          "baseline_median_ns": 6591128884.0,
+          "candidate_median_ns": 7043682940.0
+        },
+        "policy-readback": {
+          "baseline_median_ns": 5882512119.5,
+          "candidate_median_ns": 5514637012.0
+        },
+        "policy-remove": {
+          "baseline_median_ns": 0.0,
+          "candidate_median_ns": 0.0
+        }
+      },
+      "comparison_json_sha256": "9d905d10e982bfbee4075b15d8c354df368deda8436b022b3fb3b090df8d5982",
+      "verified_evidence_files": 47,
+      "workflow_job_conclusion": "failure"
+    }
+  },
+  "limits": [
+    "Two samples per arm; no significance or p95 claim.",
+    "Production and race use different runners, never pooled.",
+    "Baseline is same current source with only private wrapper replaced by original full Check body; not historical repository.",
+    "Inclusive nested stages cannot be added to estimate Execute.",
+    "Original 14-second service actor and cleanup unchanged; not full LAN Apply/router acceptance.",
+    "Failed samples retained as censored outcomes; no failed-latency speed claim."
+  ],
+  "run_status": "completed",
+  "run_conclusion": "failure",
+  "decision": "Do not promote runtime frame: no production wall-time benefit, all race samples failed original acceptance.",
+  "production_conclusion": "All four service/cleanup samples passed. Execute median +2.6344%, payload bytes -28.9593%; no measured acceleration.",
+  "race_conclusion": "All four samples failed; elapsed is censored by original deadline and settlement. Candidate closure counter readback exceeded deadline and retained unknown ownership. No successful-route latency comparison.",
+  "race_failure_profile": {
+    "candidate_sample_2": {
+      "original_boundary": "probe counter closing capture / full readback / fresh network identity unavailable / deadline exceeded",
+      "counter_samples_completed": 1,
+      "policy_remove_started": 0,
+      "retained_scope": true,
+      "cpu_total_seconds": 13.86,
+      "cpu_flat_seconds": {
+        "tsan_MemoryAccessRangeT": 2.68,
+        "linux_Syscall6": 2.52,
+        "racecall": 1.63,
+        "tsan_read": 1.54,
+        "sha256_blockSHANI": 1.17
+      },
+      "near_deadline_stack": "toolObservationImage.read -> heldReview.unchangedWithImageRead -> observationBytesWithImage -> Provider.WithCurrent"
+    },
+    "candidate_sample_3": {
+      "original_boundary": "probe counter closing capture / full readback / deadline exceeded",
+      "frame_begun_completed_error": [
+        234,
+        233,
+        1
+      ],
+      "counter_samples_completed": 1,
+      "policy_remove_started": 0,
+      "retained_scope": true,
+      "cpu_total_seconds": 13.83
+    }
+  },
+  "separate_full_managed_evidence": {
+    "revision": "93463d857645a942c635c18cdbf7231261573c19",
+    "run_id": 43963544043,
+    "job_id": 133636919857,
+    "mode": "production",
+    "result": "failure",
+    "first_manual_test_seconds": 40.31,
+    "first_manual_boundary": "lan-preflight-inventory-nfq-consumer-open DEADLINE_EXCEEDED",
+    "execution_state": "rolled-back",
+    "rollback_verified": true,
+    "independent_failed_apply_cleanup_closed": true,
+    "full_apply_pass": false,
+    "first_manual_tool_check_calls": 1785,
+    "first_manual_tool_check_wall_ns": 10521848725,
+    "first_manual_metadata_traversals": 11104,
+    "first_manual_version_children": [
+      564,
+      564,
+      2124
+    ],
+    "first_manual_member_reads": 7368,
+    "first_manual_member_bytes": 602481360,
+    "first_manual_cpu_seconds": 32.12,
+    "first_manual_cpu_flat_syscall_seconds": 18.57,
+    "first_manual_cpu_flat_sha_seconds": 7.36,
+    "first_manual_cpu_cumulative_metadata_seconds": 10.47,
+    "whole_inventory_frames": {
+      "eligible": 17,
+      "entered": 17,
+      "completed": 16,
+      "error": 1
+    },
+    "limits": [
+      "Different runner and whole Apply population: not before/after latency evidence.",
+      "Profile includes Apply plus rollback, not isolated 18-second preparation.",
+      "Runtime canary frame does not address this separate full-LAN preflight population."
+    ]
+  },
+  "root_evidence": {
+    "production-job.log": {
+      "bytes": 165163,
+      "sha256": "17afd17cdb11b0fa022fc8f165d15e8d4cfba7b73a7e56fddc0de9c0b0e12f69"
+    },
+    "race-job.log": {
+      "bytes": 278855,
+      "sha256": "665f88394f7c0a9c165ddb6293afe20ba0ebad6688ccebe65c3e42c557fe2be6"
+    },
+    "status-final.json": {
+      "bytes": 6019,
+      "sha256": "bbfa6b9504ab52805e3855675bac43927991d97f39c8a5cf33222c06d89520af"
+    },
+    "managed-934-production-job.log": {
+      "bytes": 820435,
+      "sha256": "fa2a525cba0c0a77857661a9ef848bc1616850e5ee05c274c82b1b466afc5c62"
+    },
+    "managed-934-manual-first.log": {
+      "bytes": 39218,
+      "sha256": "3ae4aca1fdbef99e98c6e4886708820aaf07eb6759301af909c6aaff7d7540df"
+    },
+    "analyze.py": {
+      "bytes": 6627,
+      "sha256": "46bbbf91cea73a786cff3cb53de2c8175a7b294b5b16bc4b44286423e27eae4f"
+    }
+  }
+}

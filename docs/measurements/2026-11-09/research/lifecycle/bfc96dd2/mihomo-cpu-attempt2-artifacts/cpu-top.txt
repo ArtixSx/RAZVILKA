@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 4086c6894de5a18d28fbdf4ecc5019284cadc1ca
+Type: cpu
+Time: 2026-11-09 05:56:42 UTC
+Duration: 279.06s, Total samples = 357170ms (127.99%)
+Showing nodes accounting for 349410ms, 97.83% of 357170ms total
+Dropped 1248 nodes (cum <= 1785.85ms)
+Showing top 35 nodes out of 189
+      flat  flat%   sum%        cum   cum%
+  288980ms 80.91% 80.91%   288980ms 80.91%  crypto/internal/fips140/sha256.blockSHANI
+   59120ms 16.55% 97.46%    59120ms 16.55%  internal/runtime/syscall/linux.Syscall6
+     180ms  0.05% 97.51%   227270ms 63.63%  io.copyBuffer
+     160ms 0.045% 97.56%    59120ms 16.55%  syscall.RawSyscall6
+     110ms 0.031% 97.59%    37480ms 10.49%  os.(*File).ReadAt
+     110ms 0.031% 97.62%    43120ms 12.07%  syscall.Syscall6
+      80ms 0.022% 97.64%    35600ms  9.97%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+      80ms 0.022% 97.66%    26300ms  7.36%  io.(*SectionReader).Read
+      60ms 0.017% 97.68%    37210ms 10.42%  syscall.pread
+      50ms 0.014% 97.69%   289060ms 80.93%  crypto/internal/fips140/sha256.(*Digest).Write
+      40ms 0.011% 97.70%    13070ms  3.66%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+      40ms 0.011% 97.72%     2130ms   0.6%  golang.org/x/sys/unix.read
+      40ms 0.011% 97.73%    37250ms 10.43%  syscall.Pread (inline)
+      40ms 0.011% 97.74%    16600ms  4.65%  syscall.Syscall
+      30ms 0.0084% 97.75%   289010ms 80.92%  crypto/internal/fips140/sha256.block
+      30ms 0.0084% 97.75%    10750ms  3.01%  io.(*LimitedReader).Read
+      30ms 0.0084% 97.76%    11700ms  3.28%  syscall.read
+      20ms 0.0056% 97.77%    97540ms 27.31%  github.com/ArtixSx/razvilka/internal/components.originHash
+      20ms 0.0056% 97.77%     1810ms  0.51%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).mountID
+      20ms 0.0056% 97.78%     2190ms  0.61%  github.com/ArtixSx/razvilka/internal/dataplane.xraySelectedTCPReadBoundedFD
+      20ms 0.0056% 97.79%    98080ms 27.46%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+      20ms 0.0056% 97.79%    10410ms  2.91%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+      20ms 0.0056% 97.80%    37270ms 10.43%  internal/poll.ignoringEINTR2[go.shape.int] (inline)
+      20ms 0.0056% 97.80%    37360ms 10.46%  os.(*File).pread (inline)
+      20ms 0.0056% 97.81%    11720ms  3.28%  syscall.Read (inline)
+      10ms 0.0028% 97.81%     1850ms  0.52%  github.com/ArtixSx/razvilka/internal/components.(*mihomoLiveNativeLinux).currentModeCompared
+      10ms 0.0028% 97.81%    39200ms 10.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*mihomoLiveResource).currentBeforeStart
+      10ms 0.0028% 97.82%     3720ms  1.04%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+      10ms 0.0028% 97.82%    37340ms 10.45%  internal/poll.(*FD).Pread
+      10ms 0.0028% 97.82%    10310ms  2.89%  internal/poll.(*FD).Read
+      10ms 0.0028% 97.82%    10320ms  2.89%  os.(*File).Read
+      10ms 0.0028% 97.83%     2300ms  0.64%  syscall.fstatat
+         0     0% 97.83%   129460ms 36.25%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+         0     0% 97.83%   129460ms 36.25%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+         0     0% 97.83%    12030ms  3.37%  github.com/ArtixSx/razvilka/internal/app.(*App).executeMihomoServiceRuntime

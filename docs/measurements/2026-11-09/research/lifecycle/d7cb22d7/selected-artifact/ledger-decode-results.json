@@ -1,0 +1,327 @@
+{
+  "sha": "d7cb22d729367c85311a77804ab71b9613eba952",
+  "run_id": 42689671622,
+  "job_id": 129405764228,
+  "architecture": "linux/amd64",
+  "claim": "modeled decoder allocation reduction only; no whole-route improvement claim",
+  "modes": {
+    "normal": {
+      "raw_sha256": "af687639db18a9ee917dfb1eeab1b8972ecc24084ac3e6c04b986da4c4807b53",
+      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "tests_pass": {
+        "TestSyntheticDNSLedgerDecoderParity": 3,
+        "TestSyntheticDNSLedgerDecoderOwnedReadIndependence": 3
+      },
+      "samples": {
+        "1": {
+          "before-string-copy": [
+            {
+              "ns_op": 13185,
+              "bytes_op": 4448,
+              "allocs_op": 37
+            },
+            {
+              "ns_op": 13742,
+              "bytes_op": 4448,
+              "allocs_op": 37
+            },
+            {
+              "ns_op": 13396,
+              "bytes_op": 4448,
+              "allocs_op": 37
+            }
+          ],
+          "candidate-byte-reader": [
+            {
+              "ns_op": 12846,
+              "bytes_op": 3696,
+              "allocs_op": 36
+            },
+            {
+              "ns_op": 13217,
+              "bytes_op": 3696,
+              "allocs_op": 36
+            },
+            {
+              "ns_op": 12734,
+              "bytes_op": 3696,
+              "allocs_op": 36
+            }
+          ]
+        },
+        "16": {
+          "before-string-copy": [
+            {
+              "ns_op": 171822,
+              "bytes_op": 61432,
+              "allocs_op": 304
+            },
+            {
+              "ns_op": 170248,
+              "bytes_op": 61432,
+              "allocs_op": 304
+            },
+            {
+              "ns_op": 171963,
+              "bytes_op": 61432,
+              "allocs_op": 304
+            }
+          ],
+          "candidate-byte-reader": [
+            {
+              "ns_op": 170344,
+              "bytes_op": 50568,
+              "allocs_op": 303
+            },
+            {
+              "ns_op": 169002,
+              "bytes_op": 50568,
+              "allocs_op": 303
+            },
+            {
+              "ns_op": 165806,
+              "bytes_op": 50568,
+              "allocs_op": 303
+            }
+          ]
+        },
+        "256": {
+          "before-string-copy": [
+            {
+              "ns_op": 2671427,
+              "bytes_op": 1037306,
+              "allocs_op": 4400
+            },
+            {
+              "ns_op": 2711866,
+              "bytes_op": 1037308,
+              "allocs_op": 4400
+            },
+            {
+              "ns_op": 2670129,
+              "bytes_op": 1037307,
+              "allocs_op": 4400
+            }
+          ],
+          "candidate-byte-reader": [
+            {
+              "ns_op": 2666589,
+              "bytes_op": 857099,
+              "allocs_op": 4399
+            },
+            {
+              "ns_op": 2680268,
+              "bytes_op": 857102,
+              "allocs_op": 4399
+            },
+            {
+              "ns_op": 2697399,
+              "bytes_op": 857104,
+              "allocs_op": 4399
+            }
+          ]
+        }
+      },
+      "summary": {
+        "1": {
+          "before_median": {
+            "ns_op": 13396,
+            "bytes_op": 4448,
+            "allocs_op": 37
+          },
+          "after_median": {
+            "ns_op": 12846,
+            "bytes_op": 3696,
+            "allocs_op": 36
+          },
+          "ns_change_percent": -4.105703194983579
+        },
+        "16": {
+          "before_median": {
+            "ns_op": 171822,
+            "bytes_op": 61432,
+            "allocs_op": 304
+          },
+          "after_median": {
+            "ns_op": 169002,
+            "bytes_op": 50568,
+            "allocs_op": 303
+          },
+          "ns_change_percent": -1.6412333694171832
+        },
+        "256": {
+          "before_median": {
+            "ns_op": 2671427,
+            "bytes_op": 1037307,
+            "allocs_op": 4400
+          },
+          "after_median": {
+            "ns_op": 2680268,
+            "bytes_op": 857102,
+            "allocs_op": 4399
+          },
+          "ns_change_percent": 0.3309467187387005
+        }
+      }
+    },
+    "race": {
+      "raw_sha256": "0ae4afc8c3eb7aca00d5778efb57055bd6080eed50b52a3bb09390239a39730d",
+      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "tests_pass": {
+        "TestSyntheticDNSLedgerDecoderParity": 3,
+        "TestSyntheticDNSLedgerDecoderOwnedReadIndependence": 3
+      },
+      "samples": {
+        "1": {
+          "before-string-copy": [
+            {
+              "ns_op": 120636,
+              "bytes_op": 4496,
+              "allocs_op": 37
+            },
+            {
+              "ns_op": 122213,
+              "bytes_op": 4496,
+              "allocs_op": 37
+            },
+            {
+              "ns_op": 123580,
+              "bytes_op": 4496,
+              "allocs_op": 37
+            }
+          ],
+          "candidate-byte-reader": [
+            {
+              "ns_op": 126364,
+              "bytes_op": 3744,
+              "allocs_op": 36
+            },
+            {
+              "ns_op": 120862,
+              "bytes_op": 3744,
+              "allocs_op": 36
+            },
+            {
+              "ns_op": 123449,
+              "bytes_op": 3744,
+              "allocs_op": 36
+            }
+          ]
+        },
+        "16": {
+          "before-string-copy": [
+            {
+              "ns_op": 1654699,
+              "bytes_op": 62088,
+              "allocs_op": 304
+            },
+            {
+              "ns_op": 1688828,
+              "bytes_op": 62088,
+              "allocs_op": 304
+            },
+            {
+              "ns_op": 1665465,
+              "bytes_op": 62088,
+              "allocs_op": 304
+            }
+          ],
+          "candidate-byte-reader": [
+            {
+              "ns_op": 1662912,
+              "bytes_op": 51224,
+              "allocs_op": 303
+            },
+            {
+              "ns_op": 1678640,
+              "bytes_op": 51224,
+              "allocs_op": 303
+            },
+            {
+              "ns_op": 1672891,
+              "bytes_op": 51224,
+              "allocs_op": 303
+            }
+          ]
+        },
+        "256": {
+          "before-string-copy": [
+            {
+              "ns_op": 28077447,
+              "bytes_op": 1047560,
+              "allocs_op": 4400
+            },
+            {
+              "ns_op": 27644057,
+              "bytes_op": 1047560,
+              "allocs_op": 4400
+            },
+            {
+              "ns_op": 27767008,
+              "bytes_op": 1047560,
+              "allocs_op": 4400
+            }
+          ],
+          "candidate-byte-reader": [
+            {
+              "ns_op": 26976030,
+              "bytes_op": 867352,
+              "allocs_op": 4399
+            },
+            {
+              "ns_op": 27207592,
+              "bytes_op": 867352,
+              "allocs_op": 4399
+            },
+            {
+              "ns_op": 26896389,
+              "bytes_op": 867352,
+              "allocs_op": 4399
+            }
+          ]
+        }
+      },
+      "summary": {
+        "1": {
+          "before_median": {
+            "ns_op": 122213,
+            "bytes_op": 4496,
+            "allocs_op": 37
+          },
+          "after_median": {
+            "ns_op": 123449,
+            "bytes_op": 3744,
+            "allocs_op": 36
+          },
+          "ns_change_percent": 1.0113490381546963
+        },
+        "16": {
+          "before_median": {
+            "ns_op": 1665465,
+            "bytes_op": 62088,
+            "allocs_op": 304
+          },
+          "after_median": {
+            "ns_op": 1672891,
+            "bytes_op": 51224,
+            "allocs_op": 303
+          },
+          "ns_change_percent": 0.445881480547472
+        },
+        "256": {
+          "before_median": {
+            "ns_op": 27767008,
+            "bytes_op": 1047560,
+            "allocs_op": 4400
+          },
+          "after_median": {
+            "ns_op": 26976030,
+            "bytes_op": 867352,
+            "allocs_op": 4399
+          },
+          "ns_change_percent": -2.8486252461914496
+        }
+      }
+    }
+  }
+}

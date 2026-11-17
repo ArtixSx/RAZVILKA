@@ -1,0 +1,17 @@
+{
+  "sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "run": 42660394031,
+  "job": 129310090053,
+  "conclusion": "success",
+  "gates": [
+    "actual candidate reader7 and preserved reader5 metadata; legacy missing reader refused",
+    "race strategylab/privatebackup/privaterestore",
+    "focused race pair/retention/history/fence suites",
+    "isolated restored panel TestPrivateStrategyRestoredPanelBoot PASS0.13s"
+  ],
+  "limitations": [
+    "not configured old193 public update/restore acceptance",
+    "not router power-loss acceptance"
+  ],
+  "raw_sha256": "0bfc6f329a40332d0220c2f0fd1cd9e2897457aef9df0d3f1d0aca12cbbdb2e4"
+}

@@ -99,7 +99,7 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	}
 	p.provider = provider
 	stage = "startup-tools"
-	tools, err := startuptools.AcquireReviewedStockNC1812ManagedList(panel, provider)
+	tools, err := startuptools.AcquireReviewedNC1812ManagedList(panel, provider)
 	if err != nil {
 		return nil, err
 	}

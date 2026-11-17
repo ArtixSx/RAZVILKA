@@ -107,7 +107,7 @@ func TestAutonomyApplyRefusedBeforeStageReturnsSwitch(t *testing.T) {
 	if !blocked || len(r.Switches) != 0 {
 		t.Fatalf("capability refusal kept the switch: %v %+v", blocked, r)
 	}
-	requireTerminalCapabilityMessage(t, r, "NFQWS2")
+	requireTerminalCapabilityMessage(t, r, "Xray или WireGuard")
 
 	r = reserved()
 	state, message, blocked = autonomyRouteDependency(errAutonomyPlanNotReady, &r)

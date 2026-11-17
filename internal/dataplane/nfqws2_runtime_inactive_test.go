@@ -70,6 +70,7 @@ func newNFQWS2InactiveFixture(t *testing.T) *nfqws2InactiveFixture {
 			return "sk Eth Pid Groups Rmem Wmem Dump Locks Drops Inode\n", nil
 		},
 	}
+	f.proof.procPass = modelInactiveProcFactory(func(path string) (string, error) { return f.proof.readlink(path) })
 	r := &NFQWSRuntimeInactiveSource{adapter: a, startup: *a, inventory: inventory, frozen: *inventory, provider: provider, identity: identity.value, platform: f.proof}
 	r.self = r
 	f.source = r
@@ -90,7 +91,7 @@ func (f *nfqws2InactiveFixture) process(t *testing.T, pid int, name string, stat
 	for i := range fields {
 		fields[i] = "0"
 	}
-	fields[0], fields[6], fields[19] = string(state), fmt.Sprint(flags), "123"
+	fields[0], fields[6], fields[17], fields[19] = string(state), fmt.Sprint(flags), "1", "123"
 	if err := os.WriteFile(filepath.Join(path, "stat"), []byte(fmt.Sprintf("%d (%s) %s\n", pid, name, strings.Join(fields, " "))), 0600); err != nil {
 		t.Fatal(err)
 	}

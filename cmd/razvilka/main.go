@@ -165,6 +165,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	flag.Bool("check-component-update-state", false, "check retained component journal and receipt readability without startup")
 	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
 	flag.Bool("self-update-read-version", false, "standalone immutable self update journal reader capability")
+	flag.Bool("self-update-offline-restore-read-version", false, "standalone immutable offline pair restore reader capability")
 	flag.Bool("check-self-update-state", false, "standalone read-only retained self update check at fixed production roots")
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
@@ -1643,8 +1644,11 @@ type preflightReport struct {
 }
 
 func preflight(configPath, catalogPath, sourcesPath, communityPath string, migrate bool) (preflightReport, error) {
-	_, configReport, err := config.Inspect(configPath)
+	cfg, configReport, err := config.Inspect(configPath)
 	if err != nil {
+		return preflightReport{}, fmt.Errorf("config preflight: %w", err)
+	}
+	if err := config.CheckManagedNFQReleaseUpdate(cfg); err != nil {
 		return preflightReport{}, fmt.Errorf("config preflight: %w", err)
 	}
 	cat, err := catalog.Load(catalogPath)
