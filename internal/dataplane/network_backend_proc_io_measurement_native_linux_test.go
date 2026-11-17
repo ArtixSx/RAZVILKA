@@ -80,7 +80,16 @@ func backendProcSourceParity(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if backendProcSHA([]byte(backendProcFunctionBody(t, helper, "backendInventoryReadProcBounded"))) != "d6f950084625a39f1cd0dd737c06b8f985b7a2e58a612ccb130c00e7cc3615af" {
+	// The measured read loop, byte bounds and error/cancellation behavior are
+	// unchanged. Normalize only the independently tested scratch-storage lease;
+	// the historical algorithm digest stays fixed instead of accepting a new one.
+	helperBody := backendProcFunctionBody(t, helper, "backendInventoryReadProcBounded")
+	pooledScratch := "block := backendInventoryProcScratch.Get().(*[4096]byte)\n\tdefer func() {\n\t\tclear(block[:])\n\t\tbackendInventoryProcScratch.Put(block)\n\t}()"
+	if strings.Count(helperBody, pooledScratch) != 1 {
+		t.Fatal("bounded reader scratch lease changed")
+	}
+	helperBody = strings.Replace(helperBody, pooledScratch, "var block [4096]byte", 1)
+	if backendProcSHA([]byte(helperBody)) != "d6f950084625a39f1cd0dd737c06b8f985b7a2e58a612ccb130c00e7cc3615af" {
 		t.Fatal("measured bounded reader contract changed")
 	}
 

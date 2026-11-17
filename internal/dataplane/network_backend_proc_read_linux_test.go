@@ -6,9 +6,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"golang.org/x/sys/unix"
 	"os"
+	"sync"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestBackendInventoryProcReadRefusals(t *testing.T) { checkBackendInventoryProcReadRefusals(t) }
@@ -126,5 +128,76 @@ func TestBackendInventoryProcReadInvalidEntryDoesNotRead(t *testing.T) {
 	}
 	if got, err := backendInventoryReadProcBounded(context.Background(), 4096, nil); got != nil || err == nil {
 		t.Fatal("nil reader accepted")
+	}
+}
+
+func TestBackendInventoryProcReadScratchIsolation(t *testing.T) {
+	var workers sync.WaitGroup
+	for worker := 0; worker < 12; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for iteration := 0; iteration < 20; iteration++ {
+				wanted := bytes.Repeat([]byte{byte(worker + 1)}, 137+iteration)
+				calls := 0
+				got, err := backendInventoryReadProcBounded(context.Background(), 4096, func(p []byte) (int, error) {
+					calls++
+					if calls == 1 {
+						if !bytes.Equal(p, make([]byte, len(p))) {
+							t.Error("previous invocation's proc bytes exposed")
+						}
+						return copy(p, wanted), nil
+					}
+					return 0, nil
+				})
+				if err != nil || !bytes.Equal(got, wanted) {
+					t.Errorf("concurrent detached read: %v", err)
+					return
+				}
+				// A failed following read must neither expose old scratch bytes
+				// nor corrupt the previous caller's still-retained result.
+				failed, err := backendInventoryReadProcBounded(context.Background(), 4096, func(p []byte) (int, error) {
+					if !bytes.Equal(p, make([]byte, len(p))) {
+						t.Error("scratch was not cleared after successful return")
+					}
+					for i := range p {
+						p[i] = 0xff
+					}
+					return 0, unix.EIO
+				})
+				if failed != nil || !errors.Is(err, unix.EIO) || !bytes.Equal(got, wanted) {
+					t.Error("failure or retained result changed")
+					return
+				}
+			}
+		}()
+	}
+	workers.Wait()
+}
+
+func TestBackendInventoryProcReadScratchNested(t *testing.T) {
+	calls := 0
+	wanted := []byte("outer proc result remains owned until copied")
+	got, err := backendInventoryReadProcBounded(context.Background(), 4096, func(p []byte) (int, error) {
+		calls++
+		if calls != 1 {
+			return 0, nil
+		}
+		n := copy(p, wanted)
+		innerCalls := 0
+		inner, innerErr := backendInventoryReadProcBounded(context.Background(), 4096, func(q []byte) (int, error) {
+			innerCalls++
+			if innerCalls != 1 {
+				return 0, nil
+			}
+			return copy(q, "independent nested read"), nil
+		})
+		if innerErr != nil || string(inner) != "independent nested read" || !bytes.Equal(p[:n], wanted) {
+			t.Fatal("nested read borrowed still-live scratch", innerErr)
+		}
+		return n, nil
+	})
+	if err != nil || !bytes.Equal(got, wanted) {
+		t.Fatal("outer result changed", err)
 	}
 }
