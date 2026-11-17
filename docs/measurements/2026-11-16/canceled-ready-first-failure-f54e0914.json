@@ -1,0 +1,97 @@
+{
+  "revision": "f54e091482effc536d38124066e219e4970b4493",
+  "case": "TestDomainTCPOriginalNativeCanceledReadyRetirement",
+  "result": "FAIL_BEFORE_CANCELLATION_WITNESS",
+  "publication_budget_seconds": 12,
+  "raw_directory": "C:\\RAZVILKA-research-20261117\\integrated-f54e0914\\raw\\14318271975",
+  "raw_sha256": {
+    "native.log": "efc5742cb5523a26d7362aa72265923b6680c3405eb59f9446645646e7353f12",
+    "cpu-cumulative.txt": "13e85220592b8d433ac783e45641d6218f97f4020f965a4ede7066e890f79df0",
+    "cpu-top.txt": "13b05b58f5371a3b90389ed12c154098479728305c17a97d69105119958d0e99",
+    "status.txt": "34c74a8d0a96e2a07cd15bf9259ae1823ac98f7b456fc61bfff3e41dbbe3a90e",
+    "binary.json": "a3cd1f2f5e2f3cd6c9d4f32098696d34d8f2127327d1e92cb51782bafd1c89cd"
+  },
+  "source_sha256": {
+    "internal/app/domain_tcp_coexistence_native_linux_test.go": "2d2e214dadfe4b4e7f5d2562c8c4839332fcd087997d49d2a7a38b147e862071",
+    "internal/app/domain_tcp_original_native_linux_test.go": "7aece259839789b21fc84da3bc029c886808d55ed5c0f94d718f2f03bdc093c3",
+    "internal/dataplane/domain_tcp_original_coordinator.go": "342466606aa448f838f31994ce5e313fd2ff9057ab98eb000aa04d5ae9e4c096",
+    "internal/dataplane/domain_tcp_capture_execution_effects.go": "b80c574a6221a07d6b4bc91a53acbe648bebc50a56b7abe11985566d279a83f1",
+    "internal/dataplane/domain_tcp_capture_guard.go": "4dd12caf0e220a3315212a85047a44d801fe2545e1e79acf9a85722587e345fa",
+    "internal/dataplane/policy_effect_receipt.go": "62efe2cb878a254e999c9d9d44d886851fa9e4eb41a022bd27d6b05c3400cfbc",
+    "internal/dataplane/domain_tcp_preadd_observation.go": "7be82b5200c2e4b95546e05b8732eb8036996c6a7fbbdfde2ac878d97a27ccfa",
+    "internal/dataplane/domain_tcp_preparation_comparison.go": "c22d7b8e57e2d4616959d6516971252c4d29541ca75c13674ab1708ff28fcf5f"
+  },
+  "first_return": {
+    "function": "runDomainOriginalSuccessor",
+    "error": "actual child/listener cancellation witness unavailable",
+    "sequence": [
+      "owner.Run goroutine started",
+      "original publication deadline established",
+      "CurrentSyntheticMapping refuses before publicationOpen without full mapping comparison",
+      "100ms done/context poll",
+      "deadline branch returns witness unavailable",
+      "deferred stopRun then original done join",
+      "outer test fails because cancelRequested remained false"
+    ],
+    "limits": "The deferred joined Run errors are not independent proof of a Stop defect. A concurrent Run failure in the poll interval cannot be excluded from aggregate logs."
+  },
+  "joined_errors": [
+    "capture preparation / policy addition unknown",
+    "original Xray owner unavailable",
+    "synthetic baseline unavailable",
+    "context canceled",
+    "trusted startup tools: LIFETIME",
+    "execution journal policy addition unknown"
+  ],
+  "gen2": {
+    "capture_prepare_ns": 7347911279,
+    "capture_add_guard_count": 22,
+    "capture_add_guard_ns": 3977680310,
+    "standby_prepare_ns": 2556997946,
+    "standby_add_guard_count": 13,
+    "preadd_completed": 11,
+    "preadd_command_boundary": 11,
+    "process_current_count": 244,
+    "process_current_ns": 2554975349,
+    "initial_kernel_seen": false,
+    "initial_mapping_compare_seen": false
+  },
+  "count_interpretation": {
+    "standby": "13 = initial guard + 3 guards per 4 effects",
+    "capture": "22 = initial guard + 3 guards per 7 effects",
+    "precommand": "11 complete original read sequences and 11 command boundaries cover all 4+7 intended command entries, NOT 11 successful Start/Wait/ACKs",
+    "unknown_cut": [
+      "last original runCommand return",
+      "following add fault/save/ACK",
+      "post-Add comparePreparation closing",
+      "resource phase persistence"
+    ]
+  },
+  "profile": {
+    "span": "original GEN2 Run through join, includes cleanup",
+    "duration_seconds": 18.43,
+    "cpu_seconds": 15.95,
+    "syscall_flat_seconds": 9.46,
+    "provider_cumulative_seconds": 11.3,
+    "capture_resource_read_cumulative_seconds": 5.45,
+    "capture_retire_cumulative_seconds": 4.92,
+    "caveat": "Cumulative/nested times cannot be summed; full profile cannot attribute all cost to forward preparation."
+  },
+  "implementation_assessment": {
+    "semantic_fix": "NOT_JUSTIFIED_FROM_THIS_SAMPLE",
+    "rejected": [
+      "Reduce or bypass CurrentSyntheticMapping readiness",
+      "Treat missing witness as Stop defect",
+      "Merge whole presence/guard and drop baseline kernel/receipt samples",
+      "Extend deadline",
+      "Claim post-kernel prepared-read branch can accelerate preparation before kernel exists"
+    ],
+    "next_bounded_candidate": "Native-only fixed stage/outcome decomposition of original capture prepare: apply-original-effects, post-add-comparison, phase-persist; optionally actual command return/ACK inside already fixed domain producer. Evaluate existing returned error only, preserve call order, cancellation, full reads and all deadlines. This is diagnosis, not a performance fix.",
+    "files_for_future_authorization": [
+      "internal/dataplane/domain_tcp_capture_execution_effects.go",
+      "native-only closed measurement hook and focused tests"
+    ],
+    "independent_review": "Lifecycle read-only reviewer found no already-proven safe removable preparation check; no production edits recommended."
+  },
+  "repo_edits": false
+}

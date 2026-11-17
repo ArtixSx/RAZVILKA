@@ -1,0 +1,162 @@
+{
+  "revision": "f54e091482effc536d38124066e219e4970b4493",
+  "observed_utc": "2026-11-17T10:37:52.254382+00:00",
+  "scope": "Final GitHub run/job conclusions; native raw evidence remains separate; not router acceptance",
+  "runs": [
+    {
+      "id": 44061043012,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043012",
+      "conclusion": "success",
+      "raw_sha256": "b26a40a98db6ced7b91a5230531ab1e0a3e2a22c3777fc61cb53bc80a6a47f69",
+      "jobs": [
+        {
+          "name": "test",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043012/job/133962690144"
+        }
+      ]
+    },
+    {
+      "id": 44061053510,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061053510",
+      "conclusion": "success",
+      "raw_sha256": "2c4d5e8431561d8178de6c4e8bba5b7344bce0babd9895d091d67e504e06e88e",
+      "jobs": [
+        {
+          "name": "test",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061053510/job/133962728397"
+        }
+      ]
+    },
+    {
+      "id": 44061043128,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128",
+      "conclusion": "failure",
+      "raw_sha256": "65d6ba1ecd7d52df895282d0c4172f25d838616ff8a349ee463d29559a5fc9cf",
+      "jobs": [
+        {
+          "name": "strategy-pair",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692229"
+        },
+        {
+          "name": "Modern public update and known rollback (isolated lab)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692641"
+        },
+        {
+          "name": "DNS preparation recovery pair (diagnostic 30s)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692688"
+        },
+        {
+          "name": "Startup loader closure (normal)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692698"
+        },
+        {
+          "name": "Managed scope all (race)",
+          "conclusion": "failure",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692707"
+        },
+        {
+          "name": "Domain native strict / direct-deny",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692719"
+        },
+        {
+          "name": "Configured old193 public paired restore / history",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692746"
+        },
+        {
+          "name": "Startup loader closure (race)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692748"
+        },
+        {
+          "name": "Managed scope all (production)",
+          "conclusion": "failure",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692785"
+        },
+        {
+          "name": "Domain native strict / selected",
+          "conclusion": "failure",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692788"
+        },
+        {
+          "name": "Configured old193 public paired restore / draft",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692845"
+        },
+        {
+          "name": "Exact iptables 1.8.11 / production",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692886"
+        },
+        {
+          "name": "Exact iptables 1.8.11 / race",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692908"
+        },
+        {
+          "name": "Domain native strict / canceled-ready",
+          "conclusion": "failure",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962692945"
+        },
+        {
+          "name": "Configured old193 public paired restore / empty",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043128/job/133962693148"
+        }
+      ]
+    },
+    {
+      "id": 44061043098,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098",
+      "conclusion": "success",
+      "raw_sha256": "2a40b453c1c1f7daa68a4ad32a66e1c9b1141ef91b29b54aea5c5fa65bb5970b",
+      "jobs": [
+        {
+          "name": "live-native (lifecycle)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962690421"
+        },
+        {
+          "name": "live-native (check-settlement)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962690954"
+        },
+        {
+          "name": "live-native (manual-http)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962690960"
+        },
+        {
+          "name": "live-native (postcas-failure)",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043098/job/133962691051"
+        }
+      ]
+    },
+    {
+      "id": 44061043360,
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043360",
+      "conclusion": "success",
+      "raw_sha256": "00c57874e48025a0281eecee359799509ad178bb5ac399370b78120d7dc8e477",
+      "jobs": [
+        {
+          "name": "mihomo-handler-native",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043360/job/133962691301"
+        },
+        {
+          "name": "paired-native",
+          "conclusion": "success",
+          "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44061043360/job/133962691881"
+        }
+      ]
+    }
+  ]
+}

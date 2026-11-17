@@ -1,0 +1,58 @@
+{
+  "head_sha": "6b0b246a15193ecc64f6c4c707b79846fdfd9ce9",
+  "run_id": 44065917683,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/44065917683",
+  "strict_jobs_terminal": true,
+  "overall_status_at_snapshot": "completed",
+  "native_forward_gate": {
+    "normal_and_race_in_each_strict_job": true,
+    "exact_new_tests_per_mode": 3,
+    "skip": false
+  },
+  "selected": {
+    "https_returned": true,
+    "mismatch_returned": false,
+    "client_budget_seconds": 4,
+    "case": "FAIL",
+    "test_elapsed_seconds": 23.33,
+    "first_unfinished_stage_at_client_abort": "direct-current-post",
+    "post_dial_forward_checks_reached": false,
+    "request_2_pre_dial_ms": {
+      "guard": 389.1472,
+      "decision": 283.86195,
+      "compare": 0.000939
+    },
+    "context_remaining_before_guard_seconds": 82.534073287,
+    "context_is_client_budget": false
+  },
+  "direct_deny": {
+    "case": "PASS",
+    "elapsed_seconds": 22.36,
+    "positive_same_fd_observer": true,
+    "forward_drop_output_accept_zero_target_syn": true,
+    "policy_restored_observer_joined": true
+  },
+  "canceled_ready": {
+    "case": "FAIL",
+    "elapsed_seconds": 21.62,
+    "first_failure": "initial DNS publication unavailable within original12s",
+    "gen2_reached": false,
+    "not_same_as_prior_f54_gen2_witness_failure": true
+  },
+  "fixture": {
+    "build_mode": "debug",
+    "bytes": 59255163,
+    "sha256": "da5ef791465008d94c921c67c32758ef71f465f16bb724e061cb84c02a122b35",
+    "not_stripped_abba": true
+  },
+  "limits": [
+    "Cumulative snapshot includes request1 rows; request2 isolated by ordinal.",
+    "Remaining server context was positive; client timeout does not prove server context deadline expiry.",
+    "No full routing acceptance or speed claim from selected success alone."
+  ],
+  "raw_manifest_sha256": "6e57965b277ac02430f951ff3b65d3a96fca88d01b6248c3498ccfe2b8ef17a5",
+  "overall_conclusion": "failure",
+  "historical_recovery_30s_job": "success, distinct diagnostic population",
+  "verified_api_zip_count": 6,
+  "verified_extracted_report_count": 125
+}

@@ -1503,3 +1503,32 @@ syscall.RUSAGE_THREAD; production reader не менялся. [Отчёт](measu
 Generic platform/root skips явно сохранены в
 [отчёте](measurements/2026-11-16/identity-contract-00fcfec3.json); они не считаются
 native проверками. Это не результат physical router/LAN и не закрытие strict DNS.
+
+## 17.11.2026 — раздельные границы DNS и managed Apply
+
+`6b0b246a` добавляет native-only request-local Guard/decision/compare до и после
+dial:32 accepted carriers, максимум8 записей на carrier, фиксированные labels,
+без адресов/имён/FlowID. Snapshot отделяет начатое от завершённого, возвращает
+копию и не принимает completion старого поколения. Context budget здесь
+серверный, не4с клиента. Независимое review устранило вызовы интерфейсов под
+mutex измерителя; normal/race проверки stale completion, concurrency и bounds
+прошли в actual run44065917683. Ordinary build — no-op, исходные callbacks,
+порядок ошибок, dial/relay и cleanup сохранены.
+
+В [actual6b](measurements/2026-11-16/domain-forward-6b0b246a.json) mismatch
+останавливается до post-dial check, внутри direct-current-post. Guard389,147мс
+и baseline decision283,862мс относятся к pre-dial конкретного request2;
+сравнение решения занимает0,939мкс. Прямой TCP connect измерен микросекундами.
+Это уточнение места исчерпания client4с, не доказательство доли всей задержки
+и не ускорение относительно f54 на другом runner. Direct-deny прошёл;
+canceled-ready не прошёл первую публикацию12с, поэтому GEN2 там не исследован.
+Воспроизведение: research-lifecycle.yml focus=domain на6b0b246a; исходный debug
+fixture, original12/4с, профили и ошибки сохранены.
+
+`1bd49fc8` аналогично разделяет managed policy effects/guard/complete-readback,
+negative-before/negative-after/positive-after counter и prepared-owner read.
+Сохраняет исходные короткие замыкания и ошибки; cause означает последнюю
+достигнутую ветку, не точное сравнение внутри составного условия. Native-only
+до5 интервалов на вызов, invocation ordinal не равен identity операции.
+Independent review, Windows regression/vet и Linux compile PASS; actual run
+44066476354 focus=managed сохраняет исходные budgets, ACK/ECHILD и wrong-source.

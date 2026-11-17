@@ -2,7 +2,60 @@
 
 <a id="current-release-checkpoint"></a>
 
+## Ограниченный RC — решение 17.11.2026
+
+Владелец отложил экспериментальный DNS-обход и подтвердил подготовку
+ограниченного выпуска. Исследование DNS остановлено; ordinary DNS и resolver
+redirect не исключаются. Experimental DomainPolicy/SyntheticDNS не создаются
+рабочим app/cmd; существующий отказ доменных proxy-маршрутов сохраняется.
+`4cb5a147` явно показывает эту границу в API и панели. Два новых теста
+проверяют обычный DNS/draft и отсутствие скрытой замены mixed domain/CIDR
+scope; адресные Go tests и 41 scoped DNS UI check PASS. Независимое ревью APPROVE.
+
+`3a9af67b`: исправлена классификация просроченного cleanup (Busy sentinel
+сохранён, причина DEADLINE_EXCEEDED), добавлено ограниченное совместное чтение
+хвоста counter format/parse/closing. Открывающая capture и фактическая команда
+не объединены; исходные deadlines и свежие закрывающие проверки сохранены.
+Независимое ревью APPROVE, адресные Windows tests PASS. Полный native сценарий
+ещё обязателен; ускорение и устранение NFQWS2 timeout не заявляются.
+`c8a9c383`: отдельно сохранена native диагностика стоимости дочерних чтений
+для отложенного DNS; ordinary Cmd.Run и scoped sole Wait сохранены.
+
+Actual managed run44066476354 завершён FAILURE в обоих режимах. DNS a2ce:
+24 диагностических unit PASS, direct-deny PASS; mismatch4с и первая публикация
+12с FAIL. Последняя подготовка/ACK без ошибок, Stop defect не подтверждён.
+Эти отказы не переименованы в успешные проверки после изменения состава RC.
+
+Критерии выпуска: согласованный состав API/AUTO/UI, generic/native checks
+точной итоговой ревизии, затем router/LAN приёмка. До неё релиз не принят,
+GitHub не пересоздаётся, существующий роутер не меняется. Исторические
+контрольные точки ниже сохраняют происхождение результатов.
+
 ## Текущая сверка: 17.11.2026, кандидат `f54e0914`
+
+Финальные conclusions этой ревизии: push CI44061043012 и PR CI44061053510 —
+SUCCESS; Mihomo44061043098 — SUCCESS, все четыре jobs; probe44061043360 —
+SUCCESS. Lifecycle44061043128 — FAILURE, 11/15 jobs PASS: два strict DNS
+(selected/mismatch и canceled-ready) и managed production/race остаются FAIL.
+StrategyLab pair, modern rollback и legacy empty/draft/history прошли.
+[Финальные статусы точного SHA](measurements/2026-11-16/integrated-f54e0914-final.json).
+Срез 10:11 UTC ниже сохранён как исторический; он больше не означает ожидание CI.
+
+Следующие `6b0b246a` и `1bd49fc8` добавляют только native диагностику причин
+отказов: request-local DNS pre/post-dial Guard/decision/compare и NFQ Apply,
+counter roles, prepared-owner read. Ordinary build использует no-op;
+исходные deadlines, порядок проверок и ошибки не изменены. Это не исправление
+сетевых сценариев. Независимое source review и адресные Windows/Linux compile
+проверки прошли. Actual DNS44065917683 завершён FAILURE: все три новых
+normal/race contracts PASS/noSKIP, direct-deny PASS; selected HTTPS успешен,
+но mismatch4с остановился внутри direct-current-post, до post-dial Guard.
+Request2 pre-dial: Guard389,147мс, baseline decision283,862мс, сравнение0,939мкс.
+Остаток server context более81с не является остатком client4с.
+Canceled-ready в этом запуске не прошёл ПЕРВУЮ публикацию12с; GEN2 не достигнут.
+Это иной отказ, чем f54 witness. [Точные результаты](measurements/2026-11-16/domain-forward-6b0b246a.json),
+[разбор первого отказа f54](measurements/2026-11-16/canceled-ready-first-failure-f54e0914.json).
+Managed44066476354 пока учитывается отдельно; ни один диагностический маркер
+не даёт допуска маршруту и не заменяет успешный полный сценарий.
 
 Релиз ещё не принят. На `9971aa1bdb4f4daf3afd65b85ebe7e1cdae4156c` полный
 [push CI44049645961](https://github.com/ArtixSx/RAZVILKA/actions/runs/44049645961)
