@@ -29,6 +29,7 @@ on:
       - 'work/domain-accepted-prefix-*'
       - 'work/domain-alloc-profile-*'
       - 'work/domain-provider-catalog-*'
+      - 'work/proc-scratch-*'
   pull_request:
 
 permissions:
