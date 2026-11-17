@@ -46,7 +46,13 @@ func (e *nfqwsProbeExecution) counterMeasured(ctx context.Context, measurement *
 	if err != nil || len(out) > 16<<10 {
 		return 0, fmt.Errorf("probe counter command: %w", errors.Join(ErrNFQWSScopedOwner, err))
 	}
+	// The admitted command remains outside the optional pure suffix scope.
+	// Format timing includes its opening; closing timing includes its closing.
 	measurement.begin("format")
+	return e.counterSuffix(ctx, out, chain, measurement)
+}
+
+func (e *nfqwsProbeExecution) counterSuffixBody(ctx context.Context, out []byte, chain string, measurement *nfqwsBoundaryMeasurement) (uint64, error) {
 	protocol, protocolErr := e.counterProtocol(ctx)
 	if protocolErr != nil {
 		return 0, fmt.Errorf("probe counter original tool format: %w", protocolErr)

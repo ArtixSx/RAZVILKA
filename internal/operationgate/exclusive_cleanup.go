@@ -48,6 +48,11 @@ func (r *ExclusiveCleanupReview) WithCurrent(ctx context.Context, use func() err
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if ok {
+			// The wall deadline can expire before the context timer delivers
+			// Err. Preserve the refusal sentinel without reporting contention.
+			return errors.Join(ErrBusy, context.DeadlineExceeded)
+		}
 		return ErrBusy
 	}
 	o := r.owner
