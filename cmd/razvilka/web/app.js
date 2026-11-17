@@ -3380,6 +3380,10 @@ function dnsProviderConfigMarkup(provider, dns) {
 
 function renderDNS() {
   const dns = state.dns || {};
+  const bypassStatus = $('#dnsExperimentalBypassStatus');
+  if (bypassStatus && dns.experimental_bypass?.available === false && dns.experimental_bypass.reason) {
+    bypassStatus.textContent = dns.experimental_bypass.reason;
+  }
   const selectedID = dns.draft?.profile_id || 'automatic';
   const appliedID = dns.applied?.profile_id || 'automatic';
   $('#dnsProfiles').innerHTML = (dns.profiles || []).map((profile) => {
