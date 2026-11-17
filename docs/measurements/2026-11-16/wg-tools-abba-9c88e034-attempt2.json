@@ -1,0 +1,168 @@
+{
+  "run": 43979666415,
+  "attempt": 2,
+  "workflow_revision": "9c88e0347b223b2587451af90614bce06f487c05",
+  "source_revision": "63d5c98891d0dc11044976a79e805137fe6a25fb",
+  "raw_files_verified": 51,
+  "result": "production4/4 fullApply FAIL, verified rollback; race4 NOT_RUN because prerequisite gate HASH_INPUT",
+  "samples": [
+    {
+      "variant": "baseline",
+      "sample": 1,
+      "wg_ns": [
+        2698100282,
+        2699035921,
+        2703803276,
+        2708421579
+      ],
+      "tests": [
+        [
+          "PASS",
+          "TestManagedProbeFailedCleanupTerminalVector",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestNativeFixturePhysicalSourceCopiesRefuse",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.06"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "40.07"
+        ]
+      ],
+      "safe_next_sample": true,
+      "cleanup_verified": true,
+      "pprof_build_ids": [
+        "aae797c486f69229ffde39130e9eac0968fcdbdb"
+      ],
+      "binary_bytes": 44122377
+    },
+    {
+      "variant": "candidate",
+      "sample": 2,
+      "wg_ns": [
+        2739598172,
+        2812730747,
+        2737259719,
+        2689648759
+      ],
+      "tests": [
+        [
+          "PASS",
+          "TestManagedProbeFailedCleanupTerminalVector",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestNativeFixturePhysicalSourceCopiesRefuse",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "1.63"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "40.02"
+        ]
+      ],
+      "safe_next_sample": true,
+      "cleanup_verified": true,
+      "pprof_build_ids": [
+        "1bcb532cd48c6460ac744aeabaa32c8b52c9d44c"
+      ],
+      "binary_bytes": 44138761
+    },
+    {
+      "variant": "candidate",
+      "sample": 3,
+      "wg_ns": [
+        2675878273,
+        2688496020,
+        2672743263,
+        2680185530
+      ],
+      "tests": [
+        [
+          "PASS",
+          "TestManagedProbeFailedCleanupTerminalVector",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestNativeFixturePhysicalSourceCopiesRefuse",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.14"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "40.03"
+        ]
+      ],
+      "safe_next_sample": true,
+      "cleanup_verified": true,
+      "pprof_build_ids": [
+        "1bcb532cd48c6460ac744aeabaa32c8b52c9d44c"
+      ],
+      "binary_bytes": 44138761
+    },
+    {
+      "variant": "baseline",
+      "sample": 4,
+      "wg_ns": [
+        2666970286,
+        2653174401,
+        2673394251,
+        2655514120
+      ],
+      "tests": [
+        [
+          "PASS",
+          "TestManagedProbeFailedCleanupTerminalVector",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestNativeFixturePhysicalSourceCopiesRefuse",
+          "0.00"
+        ],
+        [
+          "PASS",
+          "TestManagedStrategyProbeNativeLANPhysical",
+          "2.16"
+        ],
+        [
+          "FAIL",
+          "TestManagedStrategyProbeNativeLANManualApply",
+          "39.45"
+        ]
+      ],
+      "safe_next_sample": true,
+      "cleanup_verified": true,
+      "pprof_build_ids": [
+        "aae797c486f69229ffde39130e9eac0968fcdbdb"
+      ],
+      "binary_bytes": 44122377
+    }
+  ],
+  "limits": [
+    "Original attempt1 GC fatal remains open; no memory fatal in this repeat.",
+    "Failure latency is not successful Apply latency; no speed claim.",
+    "Race prerequisite uses default debug go-test linking and refused its test executable under unchanged64MiB image bound; check stripped gate build separately.",
+    "Source/prod candidate tests are not router acceptance."
+  ]
+}

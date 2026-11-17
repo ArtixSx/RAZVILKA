@@ -1,25 +1,24 @@
 # Сборки и поддержка запуска
 
-Актуальный код `133b89c3`; полный CI `9c88e034`43979666531 PASS;
-новый44031025183 выполняется, его результат отдельно.
-[Единая актуальная матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
-StrategyLab7cuts и лабораторный Mihomo LAN проходят. bcc ACK9/10,
-focused ac6 parent/private/completed6/6 PASS; прежний отказ пустого cmdline
-не воспроизведён и не оправдывает ослабления проверки процессов.
-DNS source-only ABBA: выбранный HTTPS4/4 PASS, полный mixed4/4 FAIL на mismatch4с;
-три последовательные prefix стадии1031.14→708.98мс, это не полное время маршрута.
-Managed NFQWS2 full Apply ещё не принят; WG43979666415 прошёл metadata prerequisite,
-затем первый baseline Apply отказал и после подтверждённого rollback произошёл
-GC fatal. Причина не установлена: diagnostics44031025392 не повторили memory crash,
-но все3 fullApply FAIL при подтверждённом rollback. Исходный ABBA повторяется
-один раз для ранее не выполненных candidate arms; прежний FAIL сохранён. Роутер read-only проверен,
-две согласованные копии /opt, startup-config и firmware сохранены;69 файлов
-независимо сверены.40 ELF совпали с пакетами; UID1001 защищённых каталогов
-и отсутствие ip-full препятствуют ordinary admission. Новый профиль после переустановки
-Entware пока не допущен. Установок RAZVILKA на устройстве не выполнялось.
+Актуальный код `b6d15c1b`, стенд `a6dece77`; полный CI133b SUCCESS,
+CI38a ещё выполняется. [Единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+На38a Mihomo LAN, StrategyLab, modern rollback, legacy empty/draft/history,
+probe comparison и exact xtables normal/race PASS; strict DNS и managed NFQWS2 FAIL.
+DNS d88 source-only ABBA уменьшил sampled allocations2465,18→1978,18МиБ,
+но все4 selected4с FAIL. Это подтверждение экономии памяти, не готовности DNS.
+NFQ c200 удалил scope308, не действовавший в actual Apply; все прежние проверки
+и полезный7419 сохранены. b6d переиспользует очищаемый proc scratch, native
+fullApply/race измерения ожидаются. Единичный GC crash не воспроизведён,
+его причина не установлена; неуспешные Apply и rollback результаты сохранены.
+
+Приватный backup роутера69files проверен. В изолированном Linux совпали925
+элементов namespace/types,578file payloads и263link targets, но strict restore
+INCOMPLETE из-за symlink0755. Новый ext4 drill отдельно; это не router acceptance.
+Требуются UID0 у /opt,/opt/etc,/opt/etc/init.d, ip-full и свежий outside-/opt/NDM
+профиль.40ELF совпали с пакетами; новый Entware профиль ещё не допущен.
+Установок RAZVILKA и изменений живого роутера не выполнялось.
 Generic CI, native fixture, public asset delivery и router/LAN acceptance
-не заменяют друг друга и не расширяют допуск платформ.
-Старые таблицы ниже — история отдельных сценариев.
+не заменяют друг друга. Старые таблицы ниже — история отдельных сценариев.
 
 Последняя сверка: `fc5bcc6c`, 16.11.2026. Платформенный допуск не расширен.
 Bound offline restore и modern public rollback прошли Linux-проверки; обычный

@@ -28,15 +28,27 @@ SHA256 `2dafa2c116693ea7646e3861e19a2a778bd570bb4afd922ef69f85ebecb65897`.
 Проверка конфигураций обнаружила только одну пустую строку различия.
 Секреты и содержимое конфигураций в репозиторий/CI не передавались.
 
-Это согласованное чтение, не атомарный снимок и не подтверждение восстановления.
-Подготовлен offline Linux verifier и отдельный стенд без сети; выполнение
-восстановления, ACL/xattrs/capabilities и физический путь возврата пока отдельно.
+Это согласованное чтение, не атомарный снимок. В новой diskless VM без NIC,
+общих папок и исполнения backup payload выполнены10synthetic проверок PASS.
+Все925 namespace/types,578regular payload SHA/size и263literal link targets
+совпали. Strict restore остался INCOMPLETE: обычный Linux chmod не воспроизвёл
+symlink0755; последующая metadata проверка не объявлена успешной.
+[Результаты и16проверенных rawfiles](measurements/2026-11-16/router-offline-restore-20261117.json).
+Исходные архивы не нормализованы. Для отдельного ext4 drill подготовлены
+новый128МиБ RAM-образ, signed e2fsprogs, проверяемая правка только numeric
+symlink inode на отключённой ФС, e2fsck и неизменённый verifier. До выполнения
+synthetic negatives и exact925 эта процедура не считается проверенным restore.
+ACL/xattrs/capabilities, NDMS import, firmware recovery и физический возврат
+проверяются отдельно; basic tar их не подтвердил.
+
 Все40 ELF совпали с закреплёнными пакетами, включая26 дополнительных расширений;
-проверены loader/alternatives20links. Однако /opt и4 защищённых каталога имеют
-UID1001, отсутствуют ip-full и /opt/etc/iproute2. Startup ownership guard остаётся.
-Нужны свежие outside-/opt loader и NDM custody, проверяемое исправление владельцев,
-установка ip-full и независимый допуск нового профиля. Старые pins не заменяются.
-Во время сбора этой копии установки и настройки роутера не менялись.
+проверены loader/alternatives20links. Минимальный существующий protected ancestry
+требует UID0 для /opt,/opt/etc,/opt/etc/init.d; их текущие UID1001, GID1001 и0755
+зафиксированы. Подготовлен обратимый план смены только UID с проверкой mount/inode
+и обратным порядком rollback; он не выполнен. PATH и NDM hook каталоги проверяются
+отдельно. ip-full и /opt/etc/iproute2 отсутствуют. Startup ownership guard сохранён.
+Нужны fresh outside-/opt loader и NDM custody, ip-full и независимый допуск
+нового профиля; старые pins не заменяются. Установок и изменений роутера нет.
 
 ### Изменение стенда 16.11.2026
 

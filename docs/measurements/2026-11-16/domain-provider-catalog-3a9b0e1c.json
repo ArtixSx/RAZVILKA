@@ -1,0 +1,1096 @@
+{
+  "run": 44035522831,
+  "workflow_head": "3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9",
+  "source_head": "d88fd384201674d65e61a73d6830096f66921bd7",
+  "raw_source_hashes_verified": true,
+  "only_source_difference": [
+    "internal/dnscontrol/dnscontrol.go"
+  ],
+  "samples": [
+    {
+      "sample": 1,
+      "variant": "baseline",
+      "pass": false,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (24.08s)"
+      ],
+      "exact_sampled_allocation_totals": {
+        "alloc_objects": 15671791,
+        "alloc_bytes": 2607288709,
+        "inuse_objects": 72120,
+        "inuse_bytes": 49830972
+      },
+      "selected_stage_deltas": {
+        "accepted-flow-guard": {
+          "calls": 2,
+          "bytes": 0,
+          "ms": 1281.244154
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1149.068906
+        },
+        "accepted-lookup-outer-tool-read": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1147.606694
+        },
+        "accepted-stage/admit/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 527.560846
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 519.354723
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 94.363924
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "baseline-forwarding-identity-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-ip-forward-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-closing-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-current-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-open-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-programs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 1.929576
+        },
+        "baseline-forwarding-provider-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 11.562986
+        },
+        "baseline-forwarding-qdiscs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 1.160872
+        },
+        "executable-image-capture": {
+          "calls": 6,
+          "bytes": 219464436,
+          "ms": 121.7168
+        },
+        "executable-image-compare": {
+          "calls": 5,
+          "bytes": 182887030,
+          "ms": 17.220806
+        },
+        "kernel-observe": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 2468.195585
+        },
+        "kernel-observe-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-compare": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3176.476336
+        },
+        "mapping-compare-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-closing": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-read": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3042.863342
+        },
+        "mapping-outer-tool-read": {
+          "calls": 4,
+          "bytes": 0,
+          "ms": 2175.205582
+        },
+        "process-current": {
+          "calls": 196,
+          "bytes": 0,
+          "ms": 1760.352625
+        }
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "alloc_profile_valid": true
+    },
+    {
+      "sample": 2,
+      "variant": "candidate",
+      "pass": false,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.73s)"
+      ],
+      "exact_sampled_allocation_totals": {
+        "alloc_objects": 14642811,
+        "alloc_bytes": 2090131452,
+        "inuse_objects": 41906,
+        "inuse_bytes": 50234469
+      },
+      "selected_stage_deltas": {
+        "accepted-flow-guard": {
+          "calls": 2,
+          "bytes": 0,
+          "ms": 1312.83614
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1110.204517
+        },
+        "accepted-lookup-outer-tool-read": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1108.758757
+        },
+        "accepted-stage/admit/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 513.451722
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 519.190234
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 90.822856
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "baseline-forwarding-identity-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-ip-forward-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-closing-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-current-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-open-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-programs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 1.998781
+        },
+        "baseline-forwarding-provider-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 11.578012
+        },
+        "baseline-forwarding-qdiscs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 1.20423
+        },
+        "executable-image-capture": {
+          "calls": 6,
+          "bytes": 219464436,
+          "ms": 122.911917
+        },
+        "executable-image-compare": {
+          "calls": 5,
+          "bytes": 182887030,
+          "ms": 17.214026
+        },
+        "kernel-observe": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 2443.980146
+        },
+        "kernel-observe-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-compare": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3142.753892
+        },
+        "mapping-compare-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-closing": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-read": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3010.70287
+        },
+        "mapping-outer-tool-read": {
+          "calls": 4,
+          "bytes": 0,
+          "ms": 2122.275324
+        },
+        "process-current": {
+          "calls": 198,
+          "bytes": 0,
+          "ms": 1755.44416
+        }
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "alloc_profile_valid": true
+    },
+    {
+      "sample": 3,
+      "variant": "candidate",
+      "pass": false,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.95s)"
+      ],
+      "exact_sampled_allocation_totals": {
+        "alloc_objects": 13938792,
+        "alloc_bytes": 2058417267,
+        "inuse_objects": 17855,
+        "inuse_bytes": 51421303
+      },
+      "selected_stage_deltas": {
+        "accepted-flow-guard": {
+          "calls": 2,
+          "bytes": 0,
+          "ms": 1346.960409
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1133.213486
+        },
+        "accepted-lookup-outer-tool-read": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1131.74426
+        },
+        "accepted-stage/admit/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 544.638417
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 547.043035
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 95.653879
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "baseline-forwarding-identity-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-ip-forward-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-closing-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-current-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-open-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-programs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 2.025886
+        },
+        "baseline-forwarding-provider-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 12.020361
+        },
+        "baseline-forwarding-qdiscs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 1.47757
+        },
+        "executable-image-capture": {
+          "calls": 6,
+          "bytes": 219464436,
+          "ms": 122.806723
+        },
+        "executable-image-compare": {
+          "calls": 5,
+          "bytes": 182887030,
+          "ms": 17.452696
+        },
+        "kernel-observe": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 2540.638595
+        },
+        "kernel-observe-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-compare": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3259.915572
+        },
+        "mapping-compare-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-closing": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-read": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3125.270016
+        },
+        "mapping-outer-tool-read": {
+          "calls": 4,
+          "bytes": 0,
+          "ms": 2203.333626
+        },
+        "process-current": {
+          "calls": 191,
+          "bytes": 0,
+          "ms": 1729.551344
+        }
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "alloc_profile_valid": true
+    },
+    {
+      "sample": 4,
+      "variant": "baseline",
+      "pass": false,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (23.85s)"
+      ],
+      "exact_sampled_allocation_totals": {
+        "alloc_objects": 15182415,
+        "alloc_bytes": 2562559411,
+        "inuse_objects": 7287,
+        "inuse_bytes": 48771402
+      },
+      "selected_stage_deltas": {
+        "accepted-flow-guard": {
+          "calls": 2,
+          "bytes": 0,
+          "ms": 1342.788661
+        },
+        "accepted-flow-lookup": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1153.747187
+        },
+        "accepted-lookup-outer-tool-read": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 1152.259265
+        },
+        "accepted-stage/admit/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 534.887413
+        },
+        "accepted-stage/admit/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/admit/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 536.566137
+        },
+        "accepted-stage/baseline/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/baseline/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/completed": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 94.708227
+        },
+        "accepted-stage/initial-current/returned-nil": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "accepted-stage/initial-current/started": {
+          "calls": 1,
+          "bytes": 0,
+          "ms": 0.0
+        },
+        "baseline-forwarding-identity-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-ip-forward-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-closing-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-network-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-current-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-proc-open-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 0
+        },
+        "baseline-forwarding-programs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 1.983877
+        },
+        "baseline-forwarding-provider-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 11.716216
+        },
+        "baseline-forwarding-qdiscs-completed": {
+          "calls": 13,
+          "bytes": 0,
+          "ms": 1.6677
+        },
+        "executable-image-capture": {
+          "calls": 6,
+          "bytes": 219464436,
+          "ms": 122.106825
+        },
+        "executable-image-compare": {
+          "calls": 5,
+          "bytes": 182887030,
+          "ms": 17.431419
+        },
+        "kernel-observe": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 2530.858884
+        },
+        "kernel-observe-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-compare": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3257.293748
+        },
+        "mapping-compare-success": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-closing": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 0
+        },
+        "mapping-original-tool-read": {
+          "calls": 6,
+          "bytes": 0,
+          "ms": 3123.057511
+        },
+        "mapping-outer-tool-read": {
+          "calls": 4,
+          "bytes": 0,
+          "ms": 2204.301929
+        },
+        "process-current": {
+          "calls": 191,
+          "bytes": 0,
+          "ms": 1747.323304
+        }
+      },
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "alloc_profile_valid": true
+    }
+  ],
+  "limits": [
+    "No failure is censored; any failed arm keeps comparison failure.",
+    "Original12s publication and4s client unchanged.",
+    "Both use production-strip test ELF, not shipped cmd/razvilka.",
+    "Two samples per side do not establish statistical speedup; counters overlap and exclude fixture-only lookup from client delta.",
+    "Allocation snapshots are cumulative process samples including setup and possible GC-cycle lag, with no forced GC/rate change; not an exact Run-only interval.",
+    "Actual canceled-ready is a separate gate, not inferred from selected.",
+    "Fresh process/topology per sample; host pagecache warm."
+  ],
+  "allocation_means_mib": {
+    "baseline": 2465.1756858825684,
+    "candidate": 1978.1821818351746
+  },
+  "root_manifest_files_verified": 86,
+  "result": "FAIL: selected service 4s deadline in all four arms; mismatch and opaque not reached. Cumulative process allocations reduced; successful route latency is not established.",
+  "raw_manifest": {
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\provider-catalog-normal.log": {
+      "bytes": 1567,
+      "sha256": "95017b8d69f1d3c3cf29d269ce43f7d5815fb03820f0efd3f9f80028f2c9565c"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\provider-catalog-race.log": {
+      "bytes": 1567,
+      "sha256": "d9b92d23f0d949c6bfab2e3986cf2c0fdec2e44ccd8a87c03542651a45871918"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\baseline-source-manifest.json": {
+      "bytes": 1038370,
+      "sha256": "8c5a202f6027eb4f7076b109397a7130bc84b6ef8b123d46c2c8e95f40f83583"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\candidate-source-manifest.json": {
+      "bytes": 1038370,
+      "sha256": "361583352c83c42b637f51c87a12ddef21e2072c9bb2163318b925e9d5d5a5d4"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\comparison.json": {
+      "bytes": 78846,
+      "sha256": "aaf86e83f13291cf1120c4747aae9f17eb82dfa7014dd1ea51e07eb21f666986"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\source-revision.txt": {
+      "bytes": 41,
+      "sha256": "5d2e6ce7b7a143d53235a244f69994c09227b11ea179e459e83a0daf32a249f2"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\variant-proof.json": {
+      "bytes": 504,
+      "sha256": "df7469078c7adc12981ab538cffbfb0700b11ba3afd285168a83f2dae400cf67"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\allocs-analysis-status.txt": {
+      "bytes": 66,
+      "sha256": "8fde5ac6da969a050f4c08e49b7867bf2a3dfa6548ce9b59602453ba5d8f99d5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\allocs-objects.txt": {
+      "bytes": 3107,
+      "sha256": "cfd9b455af910f409687ba90e3f42916cdf6fca6a4814e0a7ebedcbccf382df4"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\allocs-processes.txt": {
+      "bytes": 6311,
+      "sha256": "7c52077ee51250307a7214a7f75e0d1582bb0a45e55501c6b5e34c7f97bd11ef"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\allocs-space.txt": {
+      "bytes": 3378,
+      "sha256": "c5b999fe2e03b9fb00da3d9aeca23869423dbdab9bcadacadddc80ed83451e54"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\binary.json": {
+      "bytes": 733,
+      "sha256": "6428477ff30f2d2ee55a954efd006c85035e5038a153dc8b9d8eba416ada2011"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\cpu-cumulative.txt": {
+      "bytes": 5111,
+      "sha256": "3ea87118141b19979b31c00188a717be534c577aeda2e54ebb613b687aaebe8b"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\cpu-top.txt": {
+      "bytes": 3243,
+      "sha256": "83d587513a14ef0a6163bc4e6659ea2570069dd5a2151c466460b3e1e3119188"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\log-capture.json": {
+      "bytes": 293,
+      "sha256": "3fc8d3856d05f6edaa179550987bbaa3a0bc1eb94d130c36563845dc63b25b76"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\native.log": {
+      "bytes": 22596,
+      "sha256": "9e669deb196b833689ccaecfc8e7765d62fc49dcb981b235f1428a4358215307"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\original-run.allocs.pprof": {
+      "bytes": 144442,
+      "sha256": "c8934b24319d91b3a168423015c1f04f06fc2235a3a2649cb0e398145652720d"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\original-run.cpu.pprof": {
+      "bytes": 91852,
+      "sha256": "e50dff0e0786758991b8d5fadfa1625658b814312022e203e9429c47c021f9e9"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\status.txt": {
+      "bytes": 182,
+      "sha256": "dd07be5c1633b6e3d3ea075634618325a9131ea50eb9d9a1ca85b7ddb4536fa5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\01-baseline\\supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\allocs-analysis-status.txt": {
+      "bytes": 66,
+      "sha256": "8fde5ac6da969a050f4c08e49b7867bf2a3dfa6548ce9b59602453ba5d8f99d5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\allocs-objects.txt": {
+      "bytes": 2943,
+      "sha256": "3cb9abfce60f833eeaec8e96fb8ce3df2c807b4f7f8d48de106e3ab0a5ab0642"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\allocs-processes.txt": {
+      "bytes": 5850,
+      "sha256": "467a79e153da0b1af2376c134347b01181964f898a8c966efc83dae03c7fb685"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\allocs-space.txt": {
+      "bytes": 3357,
+      "sha256": "fe6c26e1a6a36c3e656c55e20a0868910e779d31874b5d1944f943bf7fbfe5e4"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\binary.json": {
+      "bytes": 733,
+      "sha256": "7a8fbbb3c34b45e46a4f83d2f58cc12031afcd9f28c76775a045384df7fa498d"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\cpu-cumulative.txt": {
+      "bytes": 5111,
+      "sha256": "4a98bc8ed1236b0b83162e432692ee31b84b11907b19f4876b44e52c391e112b"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\cpu-top.txt": {
+      "bytes": 3261,
+      "sha256": "46ea486c6c3252cbcaceceea26d60efc2c1afff6e22cf83976c0d50148a6b517"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\log-capture.json": {
+      "bytes": 293,
+      "sha256": "deedb399b11c9082b7be6d2288771e2944453a61787a41e3cd862615a701a1e3"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\native.log": {
+      "bytes": 22415,
+      "sha256": "38c4036092bcb1aacb9e7b485004237aa134ea4319bcee59c743f4f84dd8edc8"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\original-run.allocs.pprof": {
+      "bytes": 127367,
+      "sha256": "775503f6480436711bbc2e29cfcefb6eee720791f2ffe5b5be5cd0b1f282dbef"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\original-run.cpu.pprof": {
+      "bytes": 88944,
+      "sha256": "ae4f390c2b902002b9fbe25c7c796f6ec139a5b4dd5cf8003cef44ae8c40a1e5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\status.txt": {
+      "bytes": 182,
+      "sha256": "dd07be5c1633b6e3d3ea075634618325a9131ea50eb9d9a1ca85b7ddb4536fa5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\02-candidate\\supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\allocs-analysis-status.txt": {
+      "bytes": 66,
+      "sha256": "8fde5ac6da969a050f4c08e49b7867bf2a3dfa6548ce9b59602453ba5d8f99d5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\allocs-objects.txt": {
+      "bytes": 3005,
+      "sha256": "e339758f37d900cd169466aed2e02feea67d367eab203268c595ec071bc5e1f2"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\allocs-processes.txt": {
+      "bytes": 5303,
+      "sha256": "015b9160d22f23e6d33abcb01a73c5f407ea32fd0b2d668f489e8600e3ec5401"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\allocs-space.txt": {
+      "bytes": 3456,
+      "sha256": "3ef07efbd39b9add5fce597ca88342e2f72b31d06ec3dcc5e292cbf70e104ce5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\binary.json": {
+      "bytes": 733,
+      "sha256": "63486dd4c25d7adf7efd1af2ec57a13c8846fc05f38ee9cc31c6133a6c4b6228"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\cpu-cumulative.txt": {
+      "bytes": 5055,
+      "sha256": "410bedfb6abd45ca58a4f924204c36e30178f44a36797e9109ad7f8740ba5be6"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\cpu-top.txt": {
+      "bytes": 3329,
+      "sha256": "ae85d5afa85fe43908939795d37d811a2d876ef0c0101e14c036ab9712f7aa67"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\log-capture.json": {
+      "bytes": 293,
+      "sha256": "f2c0d0c595b7e1bdb9ce1fded3740b5adc70ef8bff5d66f565cd5d680ab95d18"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\native.log": {
+      "bytes": 22390,
+      "sha256": "b597353f1e47f421014c8a59431fce4a85b6b820cacef505be4c8c355749ff1c"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\original-run.allocs.pprof": {
+      "bytes": 127281,
+      "sha256": "7c47a340e24232a55e00c7fdd495ce1fe0ccd671e4ade4b4869716eca47685b9"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\original-run.cpu.pprof": {
+      "bytes": 90415,
+      "sha256": "0eab1ef1576cc8bd5550cde6fa2db395b737e9c35ae8c516a06979af42baf120"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\status.txt": {
+      "bytes": 182,
+      "sha256": "dd07be5c1633b6e3d3ea075634618325a9131ea50eb9d9a1ca85b7ddb4536fa5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\03-candidate\\supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\allocs-analysis-status.txt": {
+      "bytes": 66,
+      "sha256": "8fde5ac6da969a050f4c08e49b7867bf2a3dfa6548ce9b59602453ba5d8f99d5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\allocs-objects.txt": {
+      "bytes": 3027,
+      "sha256": "c80c0f820435f7069bc44122e84b4436c6b0946abfa6831c810e682568eac4ac"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\allocs-processes.txt": {
+      "bytes": 5677,
+      "sha256": "a2ea19e8ea8cb84e4db364b1daa8e55dd8b4daa175d0999ae6c908e6352c79c2"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\allocs-space.txt": {
+      "bytes": 3447,
+      "sha256": "c16395acea470d324a0c0cadaf168e4806f50aa7c6e311834ea9245015353e87"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\binary.json": {
+      "bytes": 733,
+      "sha256": "d6e2f15bea201e1ca92b683d1bccec62123e4a8f7378d62da649580feadd444d"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\cpu-cumulative.txt": {
+      "bytes": 5055,
+      "sha256": "a3b80a6ef76e966ca0f3157d9fab29d0674a59f3666aac8db7f1c19856e673e4"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\cpu-top.txt": {
+      "bytes": 3230,
+      "sha256": "7a3874db15173fb50113a451d8e8e709e6f36d3c4cf892c6213e38bb31cf608f"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\log-capture.json": {
+      "bytes": 293,
+      "sha256": "a15b73d2ea9774c02b72f752b941ab06cde16fc8065e1a23a504adf413bed4f5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\native.log": {
+      "bytes": 22126,
+      "sha256": "142e0ff05240a026644252cc74b646b93236f6118a8e3ab0604fe3df044d7645"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\original-run.allocs.pprof": {
+      "bytes": 144164,
+      "sha256": "3d0381b698500aced2aa2f8798588954ec65ca221ecf6be108193af0aa018051"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\original-run.cpu.pprof": {
+      "bytes": 93251,
+      "sha256": "7f5a21b3a4e592dd9f43798cd95f402ad4f3178a771d330a2ee54dc77ae4e11a"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\status.txt": {
+      "bytes": 182,
+      "sha256": "dd07be5c1633b6e3d3ea075634618325a9131ea50eb9d9a1ca85b7ddb4536fa5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\04-baseline\\supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-clean\\exit-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-clean\\log-capture.json": {
+      "bytes": 285,
+      "sha256": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-clean\\log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-clean\\native.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-clean\\supervisor.json": {
+      "bytes": 226,
+      "sha256": "e4fb57d71ca65d3e5c3a3970da30c9b77a94870c67ba483d290880816eb7ef46"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-failure\\exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-failure\\log-capture.json": {
+      "bytes": 285,
+      "sha256": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-failure\\log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-failure\\native.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-failure\\supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-orphan\\exit-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-orphan\\log-capture.json": {
+      "bytes": 285,
+      "sha256": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-orphan\\log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-orphan\\native.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "artifacts\\domain-provider-catalog-3a9b0e1c5b1186f4fff812f084cbe6751d2a72b9\\domain-provider-catalog\\abba\\control-orphan\\supervisor.json": {
+      "bytes": 226,
+      "sha256": "d92d6dd58687ee276d477f97f6c9887b3b3722a74ff553547486bee593815455"
+    }
+  }
+}

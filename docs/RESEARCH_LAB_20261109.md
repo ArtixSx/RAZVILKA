@@ -1262,3 +1262,41 @@ sudo env PATH="$PATH" GOTOOLCHAIN=local python3 scripts/wg-tools-comparison/diag
 ```
 
 Native, generic CI и физический router/LAN остаются разными уровнями приёмки.
+
+
+### 17.11: каталог DNS, отказ неиспользуемой WG оптимизации и offline restore
+
+Полный CI133b89c3 SUCCESS. На38a native StrategyLab/modern rollback/legacy history,
+Mihomo LAN и probe comparison проходят; strict DNS и full NFQWS2 Apply ещё FAIL.
+
+Allocation profile исходного DNS38a: providerByIDFor629,72МиБ/0,33CPUс.
+d88fd384 строит только постоянные code-only шаблоны один раз и возвращает
+независимую копию выбранного провайдера; текущие NextDNS/custom settings
+применяются заново. No DNS/config/evidence cache. Пять parity/mutation/concurrency/
+freshness тестов normal/race PASS. На Windows lookup known13,464→0,339мкс,
+46112→832B/op; это leaf-only fixed-order сравнение.
+Source-only full ABBA44035522831 (workflow3a9, source d88, единственная разница
+— dnscontrol.go38a/d88) подтверждает sampled allocations2465,18→1978,18МиБ,
+но selected4с FAIL4/4 до mismatch/opaque; latencygain не установлен.
+Оба ELF44,151,049B; raw SHA и завершение всех потомков проверены. Cumulative
+profile включает setup и возможный GC lag, без forcedGC/изменения sampling.
+[Полные границы](measurements/2026-11-16/domain-provider-catalog-3a9b0e1c.json).
+Команда: `RAZVILKA_DOMAIN_CATALOG_REPO=<checkout> RAZVILKA_DOMAIN_CATALOG_OUTPUT=<new-private-output> RAZVILKA_XRAY_NATIVE=<pinned-fixture> bash scripts/compare-domain-provider-catalog.sh`.
+
+Повтор original WG ABBA9c88 attempt2:4productionApply FAIL,4rollback PASS;
+race prerequisite HASH_INPUT,4arms NOT_RUN. Optional scope308 не действовал
+при обязательной cleanup-session настоящего Apply; он удалён c200, исходные
+current/metadata checks сохранены. Не расширяем scope ради активации оптимизации.
+Full Apply allocation profile показывает backendInventoryReadProcBounded389МиБ
+из2077МиБ. b6d15c1b переиспользует только очищаемый4096B scratch через sync.Pool:
+данные результата независимы, чтения/EOF/EINTR/limit+1/cancel/FD ownership
+не изменены. Normal Windows model concurrency/refusals PASS, Linux compile
+PASS, independent source review APPROVE; original fullApply normal/race ABBA
+на a6dece77 ожидается. sync.Pool может сбрасываться GC и хранить несколько
+буферов; это не обещание фиксированных4КиБ общей памяти.
+Команда: `python3 scripts/wg-tools-comparison/compare-proc-scratch.py <checkout> <new-output>`.
+
+Offline router backup в отдельной diskless VM:10synthetic PASS,925content/targets
+совпали, strict metadata INCOMPLETE из-за реальных symlink0755. Не меняем
+исходный manifest на777. Reviewed ext4 drill отдельно; original verifier
+и raw failed result сохраняются. Роутер не изменён. [Данные](measurements/2026-11-16/router-offline-restore-20261117.json).

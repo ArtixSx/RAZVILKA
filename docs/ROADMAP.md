@@ -2,25 +2,24 @@
 
 ## Текущая очередь завершения — 17.11.2026
 
-Одна рабочая ветка, общие файлы и интеграция — Root. Более старые очереди ниже
-сохраняют происхождение решений; приоритет имеет эта таблица.
+Одна рабочая ветка; общие документы, workflow и интеграция — Root.
+Более старые очереди ниже сохраняют происхождение решений; приоритет у этой таблицы.
 
 | Приоритет | Владелец | Рабочий сценарий / доказательство | Следующее действие и условие завершения |
 | --- | --- | --- | --- |
-| P0 DNS | catalog_network_analysis; lifecycle review; Root integration | accepted-prefix293: source-only ABBA selected HTTPS4/4 PASS, prefix1031.14→708.98мс; полный mixed4/4 FAIL mismatch4с | Найти измеримый leaf IO/allocation cost; сохранить original12/4с и все fresh observations. Закрыть mismatch/unknown/cancel/retirement полным сценарием; префикс не равен readiness |
-| P0 Mihomo | Root; lifecycle review | db0 full actual LAN PASS4/4; bcc parent/private4/4, ACK9/10; ac6 focused parent/completed6/6 PASS | Причина прежнего bcc empty-cmdline refusal не воспроизведена, guard сохранён; итоговые ACK cuts и router/LAN на точном кандидате, original120с |
-| P0 NFQWS2 | Root diagnostics; lifecycle independent review | Recovery cuts PASS;63d5 metadata gate PASS.9c88 baseline fullApply FAIL, rollback verified, затем GC fatal | Exact-source diagnostics44031025392: no memory reproduction,3 fullApply FAIL, cleanup PASS; один исходный ABBA repeat выполняется для candidate arms. Установить и исправить причину crash и стоимость fullApply; original budgets, scope/ownership/freshness сохранены |
-| P0 update/restore | Root; product/lifecycle review | `492e813b` bound retry normal/race, plan-only cut, actual public history и modern rollback PASS | 8ab strategy-pair упёрся в общий10мин лимит7cuts, panel SKIPPED. ba5ffd02: отдельные запуски при прежних case5мин/helper4мин/job20мин; независимое review PASS, exact43934930569 PASS: compatibility, normal/race checks, все7 cuts и восстановленная панель. Историческая reader4 normal/race PASS на9da; аппаратные прерывания отдельно |
-| P1 панель/API/AUTO | Root | Новое меню и21 страницы,118 Node commands и Chromium desktop/mobile PASS | Полный backend flow на принятом LAN-профиле после P0; неизвестное состояние не превращать в availability |
-| P1 роутер | product backup/restore; Root profile после P0 | SSH trust подтверждён;69 backupfiles hashes verified, одинаковые /opt copies +startup-config+firmware.40 ELF совпали с пакетами | Offline Linux restore, свежая outside-/opt/NDM custody; UID1001 protected ancestry и missing ip-full исправить проверяемым откатом, затем independent new-profile review. До этого ordinary admission сохраняет отказ; установка кандидата отдельно |
-| P1 GitHub | Root; network backup verification | 51 tags/14 releases/140 assets сохранены и проверены; README подготовлен | После готовности: финальный refs/local backup, перенос CI на pinned source archives, delete_repo OAuth scope, пересоздание и сверка нового репозитория |
-| P2 новые платформы | Root после выпуска | Сборки не равны готовности маршрута | Конкретные MIPS/MIPSel/OpenWrt устройства и профили; отсутствие оборудования блокирует только их аппаратную приёмку |
+| P0 DNS | catalog_network_analysis; lifecycle review | d88 catalog: full ABBA allocation −19,75%, normal/race5контрактов PASS; full mixed4/4 FAIL selected4с | Оптимизировать подтверждённую стоимость свежих proc observations без пропуска проверок. Закрыть selected/mismatch/opaque/deny/cancel при original12/4с; microbench и память не равны readiness |
+| P0 NFQWS2 | Root; lifecycle review | Recovery normal/race PASS; repeat4Apply FAIL, rollback4PASS. c200 убрал неиспользуемую оптимизацию308, сохранил7419 и guards | b6d scratch pool проходит original fullApply source ABBA normal/race; затем оставшаяся стоимость inventory. Причина единичного GC crash открыта; normal/checkptr/race diagnostics не воспроизвели |
+| P0 Mihomo | Root; lifecycle review | db0 fullLAN4/4 PASS, ac6 parent/completed6/6 PASS;38a actualLAN SUCCESS | Итоговые ACK cuts при120с и router/LAN. bcc empty-cmdline отказ не воспроизведён, guard сохранён |
+| P0 update/restore | Root; product/lifecycle review | ba5 все7cuts+restored panel PASS;38a strategy-pair/modern rollback/legacy history PASS | Итоговая точная ревизия и аппаратные прерывания; произвольный downgrade не допускается |
+| P1 роутер | product backup/restore; Root profile |69backupfiles verified; offline10synthetic PASS,925content/targets совпали | Strict metadata restore INCOMPLETE; выполнить reviewed isolated ext4 drill. Далее fresh outside-/opt/NDM, обратимое UID исправление3каталогов и ip-full, independent profile review. До software acceptance live install не делать |
+| P1 панель/API/AUTO | Root после P0 |13разделов/21страница,118 Node и Chromium PASS | Полный backend flow на принятом LAN-профиле; unknown не выдавать за availability |
+| P1 GitHub | Root после router acceptance |51tags/14releases/140assets сохранены | Финальный refs/local backup; scope delete_repo, пересоздание и публичная доставка assets. Старую локальную работу сохранить |
+| P2 платформы | Root после выпуска | Сборки отдельно от готовности маршрута | Физические MIPS/MIPSel/OpenWrt устройства и отдельные профили; отсутствие оборудования блокирует только аппаратную приёмку |
 
-Неуспешные программные тесты не являются внешним блокером. Внешние препятствия
-для следующей операции указаны отдельно: `delete_repo` отсутствует в OAuth;
-физический power-loss и иные модели требуют отдельного стенда. Статусы и точные
-run IDs: [текущая контрольная точка](CURRENT_STATUS_RU.md#current-release-checkpoint).
-
+Неуспешный программный сценарий — оставшаяся реализация, а не внешний блокер.
+Конкретные внешние условия: OAuth delete_repo для удаления GitHub, выделенный
+LAN-клиент и согласованные условия физических power-loss/reboot испытаний.
+Точные runs и ссылки: [единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 
 Приёмка кандидата 0.20.0 продолжается. Состав и ограничения описаны в
 [примечаниях к выпуску](releases/0.20.0.md); результаты проверок и оставшиеся
