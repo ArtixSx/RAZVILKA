@@ -1,0 +1,257 @@
+{
+  "schema": 1,
+  "run_id": "44059135497",
+  "revision": "00fcfec348ec2f7063f9e786545fe996f50ac7b2",
+  "workflow": "SUCCESS all3jobs",
+  "namespace_generic_4_per_mode": "PASS",
+  "rollback_stop_both_cuts_normal_race": "PASS",
+  "live_tls": "100/100 service+cleanup complete, noownedrunning",
+  "offline_retry_historical_reader": "PASS normal/race",
+  "files": {
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/baseline-current-race.txt": {
+      "sha256": "a84dbe390b761b52287140688acef972ba434c25413f71e667e290b0bd962651",
+      "top_level_passes": 35,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/baseline-current.txt": {
+      "sha256": "76b7db7bbb3a7ec5315ac95636dd0e3412b971590f36764af748ecf00a5234a0",
+      "top_level_passes": 35,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/bpf-abi-race.txt": {
+      "sha256": "52027d0efc1267eeeaf9aa9632e7bbe68337efda6ad2d35505a434da06cd7e7a",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/bpf-abi.txt": {
+      "sha256": "9b869968a4616ae65402e460c325bd572429fb5e83aaa6f855154a396d6888c2",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/capacity-parity.txt": {
+      "sha256": "673abf0454ce42789c5abc25f35c81ad09d7d1ae8d2e516974efbb2935efdfdb",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/closed-diagnostics-normal.txt": {
+      "sha256": "620f98ebbf44e6e8741d4f0ba626c2c02703e610b7040905ad0cd957ff9ebbd6",
+      "top_level_passes": 140,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/closed-diagnostics-race.txt": {
+      "sha256": "c9c11cc50f2ec7899c06cd877a9ebd2fdbed3138ed0a41164381d452af71be71",
+      "top_level_passes": 140,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/committed-evidence-race.txt": {
+      "sha256": "0cfa2a67d3331cfd43b956a14457dc26b919a1b256251bb4b9454a4a11c81af5",
+      "top_level_passes": 100,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/committed-evidence.txt": {
+      "sha256": "9adcd6152b89a6f077a680e9e7ff1a14b2a5aebc316050846f96248a81633222",
+      "top_level_passes": 100,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/environment.txt": {
+      "sha256": "85c1fd6421c180fe7fec620308688514739d9a5f7ec296bc28c0dca816a6bcf2",
+      "top_level_passes": 0,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/identity-race.txt": {
+      "sha256": "812daa85a9331c206c3967fae3e30e482b1dcfd67d9d8b660af21d848cd04b4b",
+      "top_level_passes": 37,
+      "skip_names": [
+        "TestNativeReviewedStockImageFilesystem",
+        "TestNativeReviewedStockImmutableImageReadBudget",
+        "TestImmutableHeldImageSkipsOnlyRedundantContentReads",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/replacement",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/symlink",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/mode",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/owner",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/size",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/mtime",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-type",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-readonly",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-tuple",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-error",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/closing-fs",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/closing-content",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/closed",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/canceled",
+        "TestMutableAndUnknownImageContentStillRequiresFullHash/writable-squash-model",
+        "TestMutableAndUnknownImageContentStillRequiresFullHash/readonly-tmpfs",
+        "TestMutableAndUnknownImageContentStillRequiresFullHash/unknown",
+        "TestProcMountIDNativeClosingRejectsSameInodeBind",
+        "TestNativeNetworkIdentityProcThreadAndClosing",
+        "TestNativeReviewedStockNC1812FactoryAndScope",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/immutable",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/writable",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/command-error",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/mutation-between-commands",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/filesystem-drift",
+        "TestNativeReviewedStockSanitizedStages"
+      ]
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/identity.txt": {
+      "sha256": "89aa698630d950f7313167d69c5387205da625824cd96757479ec7e1f5140c26",
+      "top_level_passes": 37,
+      "skip_names": [
+        "TestNativeReviewedStockImageFilesystem",
+        "TestNativeReviewedStockImmutableImageReadBudget",
+        "TestImmutableHeldImageSkipsOnlyRedundantContentReads",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/replacement",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/symlink",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/mode",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/owner",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/size",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/mtime",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-type",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-readonly",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-tuple",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/fs-error",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/closing-fs",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/closing-content",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/closed",
+        "TestImmutableHeldImageRefusesMetadataPathAndFilesystemChanges/canceled",
+        "TestMutableAndUnknownImageContentStillRequiresFullHash/writable-squash-model",
+        "TestMutableAndUnknownImageContentStillRequiresFullHash/readonly-tmpfs",
+        "TestMutableAndUnknownImageContentStillRequiresFullHash/unknown",
+        "TestProcMountIDNativeClosingRejectsSameInodeBind",
+        "TestNativeNetworkIdentityProcThreadAndClosing",
+        "TestNativeReviewedStockNC1812FactoryAndScope",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/immutable",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/writable",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/command-error",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/mutation-between-commands",
+        "TestPairedBuildSessionChecksEveryCommandAndCloses/filesystem-drift",
+        "TestNativeReviewedStockSanitizedStages"
+      ]
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/listener-image-race.txt": {
+      "sha256": "96a454fed159c48c3137758966fa27c9c2e381105985eb0fbae735446dce8ece",
+      "top_level_passes": 16,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/listener-image.txt": {
+      "sha256": "a65ce7023dbc4ec9f8b85bae1261e274be1026ec473d00709d9f55bc3d8d6a01",
+      "top_level_passes": 16,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/mihomo-self-image-race.txt": {
+      "sha256": "eaac38bf2d362ec751cd2d1d2c342aeca431d13835d3b7832f0ec70a0bd21247",
+      "top_level_passes": 4,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/mihomo-self-image.txt": {
+      "sha256": "efdcd1d572e07cf04434633a541d6b153af4f5d432b59b9bf60285589d971a41",
+      "top_level_passes": 4,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/mount-calculation.txt": {
+      "sha256": "6bb7a5fa79491f1e6bb2a44664e346b2817959761bddd42e619b6fc057fa3a13",
+      "top_level_passes": 0,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/nfq-inventory-counters-normal.txt": {
+      "sha256": "b6c147edf41929f73a6646c13fb8f231dd2c033bc02629ab066b1b8a8146bd81",
+      "top_level_passes": 2,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/nfq-inventory-counters-race.txt": {
+      "sha256": "2895119b9b6cba6edf9c252317b829aa75ea042572a4bc8f70dd9c7990f2422f",
+      "top_level_passes": 2,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/nfq-issued-normal.txt": {
+      "sha256": "a9a8b4e8f55e2b0d066df63893282996d51057e384d3db59531be8c85bf7d878",
+      "top_level_passes": 29,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/nfq-issued-race.txt": {
+      "sha256": "dd141d6025a47bc06032a0683d5ffb43d1034a52561b774a4cd18a2665cb7a25",
+      "top_level_passes": 29,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/parser-calculation.txt": {
+      "sha256": "72205df51fac2bef5868d46a40461cb144c23b8772dbf7a41d66ae3af3e43866",
+      "top_level_passes": 0,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/rollback-stop-normal.txt": {
+      "sha256": "fc81dc188c50c88acc1df7df4964eeb272f57bdc1b85c6736a7b2e7bff8be69a",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/rollback-stop-race.txt": {
+      "sha256": "88efbbcfe7bc145792de16e8b3986b544910c7a0db0869f7eb104280f743d16b",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/sameboot-current-race.txt": {
+      "sha256": "b80c1bcb36de7a8fc7242159f02bc46c25209c7e388b37d621c5006ba7679f88",
+      "top_level_passes": 4,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/sameboot-current.txt": {
+      "sha256": "9b4b77afbc9f3ebb62fe1e28c5c797345c76ef5c9279c8ad469634cbde9b3912",
+      "top_level_passes": 4,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/self-image-stages-normal.txt": {
+      "sha256": "51c832b0b47778e822061c7f4b447ac3b5b4ad03a2534a4de51efb23bdc3cfc3",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/self-image-stages-race.txt": {
+      "sha256": "a9bfdefd762ab4b31331ac1de98ecfdef6b2980a5ef3fe6f1ab2b3b497b29626",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/sidecar-normal.txt": {
+      "sha256": "97f82242e9f8ed6b7b65bea8b6cd7d3a5aaefc6a720508343128fe36b6c9b6f2",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/update-snapshot-race.txt": {
+      "sha256": "f918eb02bafc2511d6bbad4696acb196ff542a244158093c7978372e0a33f24f",
+      "top_level_passes": 2,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/update-snapshot.txt": {
+      "sha256": "472d21a2949777f570088f5b6e74fa683d4d0ef32ae4075f3cd038c68518896f",
+      "top_level_passes": 2,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/version-measurement-normal.txt": {
+      "sha256": "161d5c4684300557d8cb7f92d7b66907d5f6ec43225ec490358056ba35642571",
+      "top_level_passes": 2,
+      "skip_names": []
+    },
+    "identity-contract-00fcfec348ec2f7063f9e786545fe996f50ac7b2/version-measurement-race.txt": {
+      "sha256": "52592b0710642d341f4f1a4402dbe0af8d3c0666757028e3bc50446e852e6738",
+      "top_level_passes": 2,
+      "skip_names": []
+    },
+    "live-tls-repetition-00fcfec348ec2f7063f9e786545fe996f50ac7b2/native.log": {
+      "sha256": "2722e607bac30f8691f9968262098f0aea84b0fef20ab19673be73e3c83a7398",
+      "top_level_passes": 1,
+      "skip_names": []
+    },
+    "offline-retry-00fcfec348ec2f7063f9e786545fe996f50ac7b2/normal.txt": {
+      "sha256": "c5b6660f615117c0f14403b9380f17de0a0dccb6c654c83095ff13a469e2526e",
+      "top_level_passes": 18,
+      "skip_names": []
+    },
+    "offline-retry-00fcfec348ec2f7063f9e786545fe996f50ac7b2/race.txt": {
+      "sha256": "7187a6407228fea690d9636187f4e319cf32142030c41bbd8502de6eed622823",
+      "top_level_passes": 18,
+      "skip_names": []
+    }
+  },
+  "limits": [
+    "Generic identity package includes explicit platform/root/fixture SKIPs listed verbatim; not promoted to native/stock/router proof.",
+    "Dedicated namespace native7tests normal/race checked separately in namespace-reader-00fcfec3 and corrected namespace-reader-f54e0914.",
+    "No fullLAN/DNS acceptance claim."
+  ]
+}

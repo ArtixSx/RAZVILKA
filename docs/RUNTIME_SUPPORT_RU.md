@@ -6,7 +6,10 @@ StrategyLab/modern/legacy rollback PASS. Исторический4cc manual от
 показывают сокращение конкретной работы, но все fullApply/mixed DNS arms FAIL.
 Полный managed d1 normal/race FAIL; общий CI d1 SUCCESS. Namespace00fc actual
 leaf normal/race PASS, экономия−3840Б/вызов; selector измерения исправленe612.
-Это не full DNS proof; итоговый CI более новогоHEAD требуется отдельно.
+Исправленный namespace измеритель f54e0914: по7 PASS normal/race, без SKIP;
+парная медиана wall −0,947/−0,958 мкс и память −3840Б при +1 allocation.
+Identity regression00fc: все3 jobs PASS, включая100/100 live TLS с cleanup.
+Это не full DNS proof; generic CI и сетевые сценарии f54e учитываются отдельно.
 Это не готовность router/LAN и не разрешение установки.
 [Единая актуальная матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 

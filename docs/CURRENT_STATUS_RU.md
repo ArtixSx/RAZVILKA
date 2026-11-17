@@ -2,7 +2,7 @@
 
 <a id="current-release-checkpoint"></a>
 
-## Текущая сверка: 17.11.2026, кандидат `00fcfec3` + measurement fix `e6122870`
+## Текущая сверка: 17.11.2026, кандидат `f54e0914`
 
 Релиз ещё не принят. На `9971aa1bdb4f4daf3afd65b85ebe7e1cdae4156c` полный
 [push CI44049645961](https://github.com/ArtixSx/RAZVILKA/actions/runs/44049645961)
@@ -26,7 +26,29 @@ paired wall примерно−1,01мкс normal/−1,66мкс race. [Прове
 Первоначальное поле thread CPU ошибочно измеряло RUSAGE_CHILDREN и признано
 недействительным; исходные данные сохранены. Вe612 исправлен selector на
 RUSAGE_THREAD. Wall/processCPU/alloc подтверждены отдельно; это не исправление
-DNS4с и не полный новый CI. Итоговый CI верхнегоHEAD требуется отдельно.
+DNS4с и не полный новый CI.
+
+Исправленный измеритель на точном `f54e0914` прошёл
+[44061086488](https://github.com/ArtixSx/RAZVILKA/actions/runs/44061086488):
+normal/race по 7 PASS, без SKIP, по 16 строк измерений. Независимое ревью APPROVE.
+Парная медиана экономии wall — 0,947/0,958 мкс, thread CPU — 0,855/0,830 мкс;
+память −3840 Б при +1 allocation. Это восемь пар на режим с разбросом, только
+чтение namespace; полный DNS этим не подтверждён.
+[Измерения](measurements/2026-11-16/namespace-reader-f54e0914.json),
+[независимое ревью](measurements/2026-11-16/namespace-reader-f54e0914-review.json).
+Отдельный [identity regression 44059135497](https://github.com/ArtixSx/RAZVILKA/actions/runs/44059135497)
+на `00fcfec3` завершился SUCCESS, все три jobs: 100/100 live TLS с cleanup,
+оба rollback cuts normal/race и historical reader retry.
+[Отчёт с явными platform/root skips](measurements/2026-11-16/identity-contract-00fcfec3.json).
+Срез CI `f54e0914` на 17.11.2026 10:11 UTC: push44061043012 и PR44061053510
+ещё выполняются; probe44061043360 — SUCCESS. Lifecycle44061043128 и
+Mihomo44061043098 ещё выполняются. Среди завершённых lifecycle jobs:
+direct-deny PASS24,15с с positive sameFD/zeroSYN/restored-policy/join,
+selected HTTPS успешен, затем mismatch4с FAIL23,17с; canceled-ready FAIL36,63с
+без GEN2 child/listener witness. Current Mihomo manual PASS267,25с не означает
+успех незавершённого comparison job. DNS здесь использует исходный debug
+бинарник59 238 855Б; его latency нельзя напрямую сравнивать со stripped ABBA.
+[Срез проверок и raw hashes](measurements/2026-11-16/integrated-f54e0914.json).
 
 Текущие Entware package closure503 и public selection497 уже входят в этот
 кандидат; прежние pins и shortcuts сохранены. Их normal/race проверки прошли,

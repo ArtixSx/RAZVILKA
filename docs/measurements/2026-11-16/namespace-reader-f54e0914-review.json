@@ -1,0 +1,66 @@
+{
+  "verdict": "APPROVE corrected actual leaf evidence",
+  "revision": "f54e091482effc536d38124066e219e4970b4493",
+  "run": 44061086488,
+  "analysis_sha256": "d5e3dc4972466d2463933d7e1435adcb3fb7ea059b850ebd2cebd232a380673c",
+  "checks": [
+    "API ZIP size/digest and exact source run success",
+    "all4 raw file SHA/bytes",
+    "actual git source has both named THREAD selectors and reviewed hash",
+    "7 exactPASS/noSKIP each mode",
+    "16 ordered512-call rows each mode; all actual threadCPU nonzero",
+    "all five quantitative paired medians and lower-pair counts independently recomputed"
+  ],
+  "results": {
+    "normal": {
+      "wall_ns": {
+        "paired_median_delta": -947.369140625,
+        "fixed_lower_pairs": 6
+      },
+      "thread_cpu_ns": {
+        "paired_median_delta": -855.46875,
+        "fixed_lower_pairs": 5
+      },
+      "process_cpu_ns": {
+        "paired_median_delta": -1554.6875,
+        "fixed_lower_pairs": 5
+      },
+      "allocated_bytes": {
+        "paired_median_delta": -3840.0,
+        "fixed_lower_pairs": 8
+      },
+      "allocations": {
+        "paired_median_delta": 1.0,
+        "fixed_lower_pairs": 0
+      }
+    },
+    "race": {
+      "wall_ns": {
+        "paired_median_delta": -957.791015625,
+        "fixed_lower_pairs": 5
+      },
+      "thread_cpu_ns": {
+        "paired_median_delta": -830.078125,
+        "fixed_lower_pairs": 5
+      },
+      "process_cpu_ns": {
+        "paired_median_delta": -1009.765625,
+        "fixed_lower_pairs": 4
+      },
+      "allocated_bytes": {
+        "paired_median_delta": -3840.0,
+        "fixed_lower_pairs": 8
+      },
+      "allocations": {
+        "paired_median_delta": 1.0,
+        "fixed_lower_pairs": 0
+      }
+    }
+  },
+  "limits": [
+    "Leaf only; no full Provider/DNS/route readiness or wall improvement claim",
+    "Wall/CPU noisy with only8pairs; compare within eachmode",
+    "Net bytes decrease3840B but allocation count increases1",
+    "Earlier00fc threadCPU staysinvalid; do not combine acrossruns"
+  ]
+}

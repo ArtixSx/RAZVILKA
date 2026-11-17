@@ -19,7 +19,7 @@
 Неуспешный программный сценарий — оставшаяся реализация, а не внешний блокер.
 Конкретные внешние условия: OAuth delete_repo для удаления GitHub, выделенный
 LAN-клиент и согласованные условия физических power-loss/reboot испытаний.
-На997 оба genericCI SUCCESS; текущие Mihomo4сценария, probe comparison, StrategyLab/modern/legacy PASS. Исторический Mihomo4cc manual отдельно FAIL. StrictDNS и managed остаются FAIL. d1 native полныйmanaged FAIL, общийCI SUCCESS. Namespace00fc actual leaf normal/race PASS (−3840Б/вызов, +1 allocation), не DNS4с proof; thread CPU field признано invalid и selector исправленe612. Новый итоговыйCI отдельно. [Единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+На997 оба genericCI SUCCESS; текущие Mihomo4сценария, probe comparison, StrategyLab/modern/legacy PASS. Исторический Mihomo4cc manual отдельно FAIL. StrictDNS и managed остаются FAIL. d1 native полныйmanaged FAIL, общийCI SUCCESS. Исправленный namespace измеритель f54e normal/race PASS (−3840Б/вызов, +1 allocation; парная медиана wall −0,947/−0,958 мкс), не DNS4с proof. Старое ошибочное thread CPU поле00fc остаётся invalid. Identity regression00fc — все3 jobs PASS; остальные проверки f54e учитываются отдельно. [Единая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 
 Приёмка кандидата 0.20.0 продолжается. Состав и ограничения описаны в
 [примечаниях к выпуску](releases/0.20.0.md); результаты проверок и оставшиеся

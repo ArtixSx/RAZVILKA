@@ -1485,3 +1485,21 @@ syscall.RUSAGE_THREAD; production reader не менялся. [Отчёт](measu
 Полный generic CI44053143961 завершился SUCCESS дляd1e44b1d, до namespace изменения.
 [Точная ревизия и raw log SHA](measurements/2026-11-16/ci-d1e44b1d.json). Это не закрывает
 последующие изменения или strict full managed/DNS отказы.
+
+Повторный actual run [44061086488](https://github.com/ArtixSx/RAZVILKA/actions/runs/44061086488)
+на f54e091482effc536d38124066e219e4970b4493 завершён: по7 PASS/noSKIP,
+16 ordered rows (8 пар по512 calls) normal/race. RUSAGE_THREAD действительно
+использован, все значения ненулевые; API ZIP digest, четыре raw SHA и пересчёт
+пяти метрик проверены независимым reviewer. Парная медиана wall delta
+−947,369/−957,791ns, threadCPU −855,469/−830,078ns normal/race. Net bytes
+−3840Б, allocation count +1. Разброс и лишь8пар ограничивают вывод; абсолютные
+значения двух разных hosted runs не сравниваются как эффект изменения.
+[Отчёт](measurements/2026-11-16/namespace-reader-f54e0914.json),
+[review](measurements/2026-11-16/namespace-reader-f54e0914-review.json).
+Воспроизведение: workflow `.github/workflows/namespace-reader.yml` на том же SHA.
+
+Отдельный identity regression44059135497 на00fcfec3 завершился всеми3 jobs PASS:
+100/100 live TLS+cleanup, оба rollback cuts normal/race, historical reader retry.
+Generic platform/root skips явно сохранены в
+[отчёте](measurements/2026-11-16/identity-contract-00fcfec3.json); они не считаются
+native проверками. Это не результат physical router/LAN и не закрытие strict DNS.
