@@ -188,13 +188,15 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 			return count, nil
 		},
 		BeforeDelete: func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending }}
-	if err := applyDomainTCPOriginalEffects(ctx, runtime, r, baseline); err != nil {
+	applyMeasurement := domainTCPMeasurePreparation(r, "apply-effects", -1)
+	if err := applyMeasurement.end(applyDomainTCPOriginalEffects(ctx, runtime, r, baseline)); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
 	// COMMON has returned from all actual mutations. This separate readonly
 	// closing comparison cannot lend its view to any command admission.
-	if err := r.comparePreparation(ctx, baseline, domainPreparationClosing); err != nil {
+	closingMeasurement := domainTCPMeasurePreparation(r, "post-add-comparison", -1)
+	if err := closingMeasurement.end(r.comparePreparation(ctx, baseline, domainPreparationClosing)); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
@@ -208,7 +210,8 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 				return ErrDomainPolicyTCPConsumer
 			}
 			record.Phase = "capture-prepared"
-			return s.persist()
+			measurement := domainTCPMeasurePreparation(r, "phase-persist", -1)
+			return measurement.end(s.persist())
 		}
 	}
 	return ErrDomainPolicyTCPConsumer
@@ -354,41 +357,43 @@ type domainTCPCaptureEffectRunner struct {
 
 func (*domainTCPCaptureEffectRunner) syntheticDNSCommandAdmission() {}
 func (runner *domainTCPCaptureEffectRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	measurement := domainTCPMeasurePreparationCommand(runner, "command-run")
 	if runner == nil || runner.resource == nil {
-		return nil, ErrDomainPolicyTCPConsumer
+		return measurement.bytes(nil, ErrDomainPolicyTCPConsumer)
 	}
 	if err := runner.resource.current(ctx); err != nil {
-		return nil, err
+		return measurement.bytes(nil, err)
 	}
-	return runner.resource.tools.Runner.RunSyntheticDNS(ctx, runner, name, args...)
+	return measurement.bytes(runner.resource.tools.Runner.RunSyntheticDNS(ctx, runner, name, args...))
 }
 func (runner *domainTCPCaptureEffectRunner) WithStart(ctx context.Context, name string, args []string, review string, begin func() error) error {
+	measurement := domainTCPMeasurePreparationCommand(runner, "start-admission")
 	if runner == nil || runner.resource == nil || begin == nil {
-		return ErrDomainPolicyTCPConsumer
+		return measurement.end(ErrDomainPolicyTCPConsumer)
 	}
 	r := runner.resource
 	if err := r.local(ctx); err != nil {
-		return err
+		return measurement.end(err)
 	}
 	if name != r.tools.IPTables || review != r.tools.ReviewSHA256 {
-		return ErrDomainPolicyTCPConsumer
+		return measurement.end(ErrDomainPolicyTCPConsumer)
 	}
 	invocation, err := observePolicyEffectCommandInvocation(ctx, r.effects, r.root, name, args)
 	cleanup := ctx.Value(domainTCPCaptureCleanupKey{}) == r
 	if err != nil || invocation == nil || invocation.cleanup != cleanup {
-		return ErrDomainPolicyTCPConsumer
+		return measurement.end(ErrDomainPolicyTCPConsumer)
 	}
 	wanted := r.effects.Effects[invocation.index].Add
 	if cleanup {
 		wanted = r.effects.Effects[invocation.index].Delete
 	}
 	if !reflect.DeepEqual(args, wanted) {
-		return ErrDomainPolicyTCPConsumer
+		return measurement.end(ErrDomainPolicyTCPConsumer)
 	}
 	s := r.process.scope
 	s.startMu.RLock()
 	defer s.startMu.RUnlock()
-	return invocation.withStart(ctx, func() error {
+	return measurement.end(invocation.withStart(ctx, func() error {
 		if err := r.registered(ctx); err != nil {
 			return err
 		}
@@ -399,5 +404,5 @@ func (runner *domainTCPCaptureEffectRunner) WithStart(ctx context.Context, name 
 			err = r.process.material.control.WithStart(ctx, begin)
 		}
 		return errors.Join(err, r.registered(ctx))
-	})
+	}))
 }

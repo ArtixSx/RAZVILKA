@@ -116,6 +116,10 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 		t.Logf("successor original Run/join observations %+v; overlapping durations, not default12 performance", stopMetrics())
 	}()
 	runCtx, stopRun := context.WithCancel(ctx)
+	stopPreparation := dataplane.StartDomainTCPNativePreparationMeasurement(runCtx)
+	defer func() {
+		t.Logf("successor preparation after original join attempt joined=%t (parent context budget; incomplete is not success): %+v", joined, stopPreparation())
+	}()
 	done := make(chan error, 1)
 	go func() { done <- owner.Run(runCtx, resource) }()
 	defer func() {
@@ -185,6 +189,7 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			case <-time.After(100 * time.Millisecond):
 			}
 			if time.Now().After(deadline) {
+				t.Logf("successor preparation before witness-timeout return and stopRun (context deadline is not publication budget): %+v", dataplane.DomainTCPNativePreparationMeasurementSnapshot())
 				return errors.New("actual child/listener cancellation witness unavailable")
 			}
 		}

@@ -323,12 +323,15 @@ jobs:
             race_flag=()
             if [ "$mode" = race ]; then race_flag=(-race); fi
             go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/dataplane \
-              -run '^TestDomainNativeAcceptedStages|^TestDomainNativeForwardMeasurement' -count=1 -v | tee "artifacts/domain/accepted-stages-$mode.log"
+              -run '^TestDomainNativeAcceptedStages|^TestDomainNativeForwardMeasurement|^TestDomainPreparationMeasurementNative' -count=1 -v | tee "artifacts/domain/accepted-stages-$mode.log"
             for case_name in AreClosedAndIncomplete CannotFinishInLaterMeasurement; do
               grep -F -- "--- PASS: TestDomainNativeAcceptedStages$case_name " "artifacts/domain/accepted-stages-$mode.log"
             done
             for case_name in SeparatesRequestsAndIncomplete ClosedBoundedAndGenerationSafe ConcurrentSnapshots; do
               grep -F -- "--- PASS: TestDomainNativeForwardMeasurement$case_name " "artifacts/domain/accepted-stages-$mode.log"
+            done
+            for case_name in SourceParity Lifecycle Bounds WriterAndCommand; do
+              grep -F -- "--- PASS: TestDomainPreparationMeasurementNative$case_name " "artifacts/domain/accepted-stages-$mode.log"
             done
             if grep -F -- '--- SKIP:' "artifacts/domain/accepted-stages-$mode.log"; then exit 1; fi
           done

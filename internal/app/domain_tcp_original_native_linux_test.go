@@ -539,9 +539,14 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		stopToolMetrics := startuptools.StartDomainNativeToolMeasurement()
 		defer func() {
 			t.Logf("actual Run through join observation counts: domain=%+v actual_tool_starts=%+v; overlapping cumulative durations, not wall speed", stopDomainMetrics(), stopToolMetrics())
+			t.Logf("actual forward checks after original join attempt joined=%t: %+v", joined, dataplane.DomainTCPNativeForwardMeasurementSnapshot())
 			t.Logf("completed tool gate timing: %+v; select wait and inclusive held durations overlap domain stages, native attribution overhead included, not readiness", startuptools.DomainNativeToolTimingSnapshot())
 		}()
 		runCtx, stopRun := context.WithCancel(original)
+		stopPreparation := dataplane.StartDomainTCPNativePreparationMeasurement(runCtx)
+		defer func() {
+			t.Logf("actual preparation after original join attempt joined=%t (parent context budget; incomplete is not success): %+v", joined, stopPreparation())
+		}()
 		runDone := make(chan error, 1)
 		go func() { runDone <- owner.Run(runCtx, resource) }()
 		defer func() {
@@ -609,6 +614,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		}
 		if !strings.HasPrefix(published.Answer, "198.") {
 			t.Logf("actual before DNS failure cleanup completed-counter snapshot (in-flight checks excluded; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
+			t.Logf("actual preparation before DNS failure cleanup (parent context budget is not publication budget): %+v", dataplane.DomainTCPNativePreparationMeasurementSnapshot())
 			domainOriginalPublicationDiagnostics(t, manager.StateRoot)
 			return errors.New("actual DNS publication did not become available")
 		}

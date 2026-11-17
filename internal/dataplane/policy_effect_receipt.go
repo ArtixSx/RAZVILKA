@@ -168,7 +168,15 @@ type policyEffectSession struct {
 	nfqRecovery         *nfqwsPolicyRecovery
 }
 
-func (s *policyEffectSession) save(ctx context.Context) (result error) {
+func (s *policyEffectSession) save(ctx context.Context) error {
+	measurement := domainTCPMeasurePreparationSave(s)
+	return measurement.end(s.saveOriginal(ctx))
+}
+
+// The unchanged writer body retains its own final close-error join. The outer
+// native diagnostic completes only after this body returns; panic/Goexit leave
+// an incomplete row and propagate through every original cleanup defer.
+func (s *policyEffectSession) saveOriginal(ctx context.Context) (result error) {
 	if s.nfqRecovery != nil {
 		return s.nfqRecovery.save(ctx, s)
 	}
