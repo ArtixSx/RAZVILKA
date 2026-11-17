@@ -1644,8 +1644,11 @@ type preflightReport struct {
 }
 
 func preflight(configPath, catalogPath, sourcesPath, communityPath string, migrate bool) (preflightReport, error) {
-	_, configReport, err := config.Inspect(configPath)
+	cfg, configReport, err := config.Inspect(configPath)
 	if err != nil {
+		return preflightReport{}, fmt.Errorf("config preflight: %w", err)
+	}
+	if err := config.CheckManagedNFQReleaseUpdate(cfg); err != nil {
 		return preflightReport{}, fmt.Errorf("config preflight: %w", err)
 	}
 	cat, err := catalog.Load(catalogPath)

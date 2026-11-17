@@ -308,6 +308,9 @@ func (r *ManagedNFQWSListRuntime) startReviewed(ctx context.Context, serviceID, 
 	if r.closed || r.active != nil || r.pending != nil || r.panel.Err() != nil {
 		return result, dataplane.ErrNFQWSScopedOwner
 	}
+	if !managedNFQExperimentalRuntime(r) {
+		return result, managedNFQReleaseRefusal(serviceID)
+	}
 	phase = "admission"
 	c, release, err := r.app.privateExclusiveOperation(ctx)
 	if err != nil {

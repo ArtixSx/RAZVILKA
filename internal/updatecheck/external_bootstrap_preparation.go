@@ -178,7 +178,7 @@ func (p *externalBootstrapPreparation) preflight(ctx context.Context) error {
 	if err != nil || version != "0.20.0\n" {
 		return externalBootstrapFailure("candidate-version", err)
 	}
-	if _, _, err := config.Inspect(p.record.Deployment.Paths["config"]); err != nil {
+	if err := inspectExternalBootstrapSourceConfig(p.record.Deployment.Paths["config"]); err != nil {
 		return externalBootstrapFailure("source-config", err)
 	}
 	if err := inspectExternalBootstrapCatalogs(bundle); err != nil {
@@ -204,6 +204,14 @@ func (p *externalBootstrapPreparation) preflight(ctx context.Context) error {
 		return externalBootstrapFailure("preparation-owner", err)
 	}
 	return nil
+}
+
+func inspectExternalBootstrapSourceConfig(path string) error {
+	cfg, _, err := config.Inspect(path)
+	if err != nil {
+		return err
+	}
+	return config.CheckManagedNFQReleaseUpdate(cfg)
 }
 
 func inspectExternalBootstrapCatalogs(bundle string) error {

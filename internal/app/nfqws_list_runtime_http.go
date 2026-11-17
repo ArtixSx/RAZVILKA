@@ -81,6 +81,11 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 		response["runtime_state"] = "stopped"
 	}
 	if err != nil {
+		var refusal *capabilityRefusal
+		if errors.As(err, &refusal) {
+			writeCapabilityRefusal(w, refusal)
+			return
+		}
 		logManagedNFQRuntimeFailure(input.Action, err)
 		status, code := http.StatusConflict, "MANAGED_NFQWS_RUNTIME_REFUSED"
 		if errors.Is(err, operationgate.ErrBusy) {

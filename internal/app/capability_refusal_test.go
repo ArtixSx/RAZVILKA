@@ -134,19 +134,19 @@ func TestListModeCapabilityRefusalsAreTypedBeforeAnyLane(t *testing.T) {
 	// the same typed refusal instead of HTTP 500 text.
 	setCapabilityServices(t, a, map[string]string{"chat": "auto"})
 	got = requireCapabilityRefusal(t, a, server, "NETWORK_POLICY_EXECUTOR_REQUIRED", "")
-	if !strings.Contains(got.Resolution, "NFQWS2") {
+	if !strings.Contains(got.Resolution, "Xray") {
 		t.Fatalf("list-mode refusal names no supported path: %+v", got)
 	}
 }
 
-// One CIDR-only service with a direct neighbour passes the pre-flight; the
-// managed lane still applies its own original-owner refusal.
+// One CIDR-only service with a direct neighbour passes the shape pre-flight;
+// the managed lane reports its explicit release limit before acquisition.
 func TestListModeCapabilityPreflightLeavesLaneRefusalsToLanes(t *testing.T) {
 	a, server := listModeCapabilityFixture(t)
 	setCapabilityServices(t, a, map[string]string{"chat": "nfqws2", "video": "direct"})
 	before := a.Store.Get()
 	status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL)
-	if status != http.StatusConflict || strings.Contains(string(data), "capability_refusal") || !strings.Contains(string(data), "NETWORK_POLICY_EXECUTOR_REQUIRED") {
+	if status != http.StatusConflict || !strings.Contains(string(data), "capability_refusal") || !strings.Contains(string(data), capabilityManagedNFQDeferred) {
 		t.Fatalf("pre-flight replaced the managed lane refusal: %d %s", status, data)
 	}
 	if !reflect.DeepEqual(a.Store.Get(), before) {

@@ -1,5 +1,5 @@
 name: Research lifecycle acceptance
-run-name: Research lifecycle / ${{ inputs.focus || 'all' }}${{ inputs.managed_manual_only && ' (manual diagnostic only)' || '' }} / ${{ github.sha }}
+run-name: Research lifecycle / ${{ inputs.focus || 'release-core' }}${{ inputs.managed_manual_only && ' (manual diagnostic only)' || '' }} / ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -41,7 +41,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: research-lifecycle-${{ github.ref }}-${{ inputs.focus || 'all' }}
+  group: research-lifecycle-${{ github.ref }}-${{ inputs.focus || 'release-core' }}
   cancel-in-progress: true
 env:
   GOTOOLCHAIN: local
@@ -90,6 +90,18 @@ jobs:
             test "$(grep -Ec "^--- PASS: $name \([0-9.]+s\)$" artifacts/startup-loader/read-timing-contracts.log)" = 1
           done
           if grep -F -- '--- SKIP:' artifacts/startup-loader/read-timing-contracts.log; then exit 1; fi
+      - name: Limited RC admission and retained DNS contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          race_flag=()
+          if [ "${{ matrix.mode }}" = race ]; then race_flag=(-race); fi
+          go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 ./internal/app \
+            -run '^(TestManagedNFQRelease|TestDNSRelease)' -v | tee artifacts/startup-loader/release-scope.log
+          for name in TestManagedNFQReleaseRefusesNewStartBeforeAdmission TestManagedNFQReleaseKeepsExistingOwnerRefusalsAndCleanup TestManagedNFQReleaseHTTPPreviewApplyAndAutoAgree TestManagedNFQReleaseChoicePreservesLegacyAndObservedState TestManagedNFQReleaseNativeExceptionRequiresOriginalActor TestDNSReleaseStatusPreservesOrdinaryDNS TestDNSReleaseScopeKeepsDomainRefusalAndExplicitCIDRs; do
+            test "$(grep -Ec "^--- PASS: $name \([0-9.]+s\)$" artifacts/startup-loader/release-scope.log)" = 1
+          done
+          if grep -F -- '--- SKIP:' artifacts/startup-loader/release-scope.log; then exit 1; fi
       - name: Preserve loader closure outcomes
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -296,7 +308,9 @@ jobs:
           path: artifacts/classic-save-pinned/native.log
           if-no-files-found: error
   domain-native:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'domain' }}
+    # Deferred experimental transport is absent from the limited RC. Keep its
+    # positive research scenarios available explicitly; refusal tests run above.
+    if: ${{ inputs.focus == 'all' || inputs.focus == 'domain' }}
     name: Domain native strict / ${{ matrix.scenario }}
     runs-on: ${{ inputs.domain_runner || 'ubuntu-24.04' }}
     timeout-minutes: 15
@@ -548,7 +562,9 @@ jobs:
           if-no-files-found: error
 
   managed-probe-native:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'managed' || inputs.focus == 'managed-recovery' }}
+    # Production new Apply is disabled. Explicit research runs retain every
+    # original deadline and full positive scenario through the private fixture.
+    if: ${{ inputs.focus == 'all' || inputs.focus == 'managed' || inputs.focus == 'managed-recovery' }}
     name: Managed scope ${{ inputs.focus || 'all' }} (${{ matrix.build-mode }})
     runs-on: ubuntu-26.04
     timeout-minutes: 15
@@ -803,7 +819,7 @@ jobs:
           path: artifacts/managed
           if-no-files-found: warn
   domain-preparation-pair:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'domain' }}
+    if: ${{ inputs.focus == 'all' || inputs.focus == 'domain' }}
     name: DNS preparation recovery pair (diagnostic 30s)
     runs-on: ${{ inputs.domain_runner || 'ubuntu-24.04' }}
     timeout-minutes: 25

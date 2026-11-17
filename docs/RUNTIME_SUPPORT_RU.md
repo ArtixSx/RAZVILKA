@@ -6,6 +6,11 @@ DNS сохраняется; новый Apply должен быть закрыт 
 Managed NFQWS2 и router/LAN пока не приняты. Фактические проверки точной
 итоговой сборки обязательны; прежние результаты не переносятся автоматически.
 
+Actual ARM64 preflight `999a8826`: production provider и identity-opening PASS,
+base Acquire REFUSED; helper завершён и его временные файлы очищены. Это
+аппаратный отказ допуска инструментов, не LAN acceptance.
+[Подробности](ROUTER_ACCEPTANCE_RU.md).
+
 Финальный f54e0914: оба generic CI, все4 Mihomo jobs и probe SUCCESS;
 lifecycle11/15 PASS, два strict DNS и managed normal/race FAIL.
 Более новые6b0/1bd содержат диагностические стадии, не новый платформенный

@@ -47,8 +47,8 @@ func writeCapabilityRefusal(w http.ResponseWriter, refusal *capabilityRefusal) {
 // detector and journal read of the builder.
 func legacyExecutorRefusal(config.Config) *capabilityRefusal {
 	return &capabilityRefusal{Code: capabilityExecutorRequired, Title: "Недоступно в режиме «Домашняя сеть»",
-		Message:    "В режиме «Домашняя сеть» применяется только один сервис с IP-диапазонами (CIDR) через NFQWS2, узел Xray или WireGuard/AmneziaWG; этот выбор так не применяется.",
-		Resolution: "Оставьте один такой сервис и выберите для него NFQWS2, узел Xray или WireGuard. Чтобы выключить обход, используйте общий переключатель проекта."}
+		Message:    "В режиме «Домашняя сеть» применяется только один сервис с IP-диапазонами (CIDR) через узел Xray или WireGuard/AmneziaWG; этот выбор так не применяется.",
+		Resolution: "Оставьте один такой сервис и выберите для него узел Xray или WireGuard. Чтобы выключить обход, используйте общий переключатель проекта."}
 }
 
 func platformProfileRefusal() *capabilityRefusal {

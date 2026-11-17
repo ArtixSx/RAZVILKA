@@ -1,0 +1,66 @@
+{
+  "revision": "999a8826b245c9516c612d4a8f9f48fb149962a6",
+  "helper_sha256": "a2abf4c5aeea9d2fc36ec9c83827a4f06c32bba80937edbcb60f7d73438b051e",
+  "status": "PREFLIGHT_REFUSED",
+  "mode": "base",
+  "rows": [
+    {
+      "canceled": false,
+      "code": "PASS",
+      "deadline": false,
+      "missing": false,
+      "permission": false,
+      "stage": "provider",
+      "startup_stages": [],
+      "unsupported": false
+    },
+    {
+      "canceled": false,
+      "code": "PASS",
+      "deadline": false,
+      "missing": false,
+      "permission": false,
+      "stage": "identity-opening",
+      "startup_stages": [],
+      "unsupported": false
+    },
+    {
+      "canceled": false,
+      "code": "REFUSED",
+      "deadline": false,
+      "missing": false,
+      "permission": false,
+      "stage": "acquire-base",
+      "startup_stages": [
+        "NC1812_SELECTION_PATH",
+        "PATH_OWNER_OPT_UID"
+      ],
+      "unsupported": false
+    },
+    {
+      "canceled": false,
+      "code": "REFUSED",
+      "deadline": false,
+      "missing": false,
+      "permission": false,
+      "stage": "read-only-preflight-base",
+      "startup_stages": [
+        "NC1812_SELECTION_PATH",
+        "PATH_OWNER_OPT_UID"
+      ],
+      "unsupported": false
+    }
+  ],
+  "helper_completion_observed": true,
+  "cleanup_complete": true,
+  "router_configuration_changed": false,
+  "application_installed": false,
+  "lan_acceptance": false,
+  "private_evidence": "C:/RAZVILKA-backups/router-release-preflight-20261117-1528",
+  "limits": [
+    "Base acquisition refused at NC1812_SELECTION_PATH / PATH_OWNER_OPT_UID: /opt is not root-owned. No ownership repair performed.",
+    "Earlier shell namespace gaps are not a production identity failure: actual provider and identity-opening passed.",
+    "Historical UID1001 ancestors and missing ip-full remain prerequisites to verify; no ownership repair performed.",
+    "Two earlier upload attempts left empty diagnostic directories; their metadata was retained, no broad deletion performed."
+  ]
+}

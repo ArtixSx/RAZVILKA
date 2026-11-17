@@ -86,7 +86,10 @@ jobs:
           # Internal delivery logs, research notes and lab diagnostics stay in
           # Git only: they describe the owner's test network and devices and
           # are not needed to install or run RAZVILKA on a router.
-          rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/scripts/diagnostics"
+          rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/docs/measurements" "$STAGE/scripts/diagnostics"
+          # Raw native logs/profiles remain available at the exact source SHA;
+          # they are not runtime files and fail the private-file guard below.
+          printf 'Native measurements and raw evidence: https://github.com/%s/tree/%s/docs/measurements\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" > "$STAGE/docs/MEASUREMENTS_SOURCE.md"
           test -x "$STAGE/scripts/install-entware.sh"
           test -x "$STAGE/scripts/upgrade-entware.sh"
           test -x "$STAGE/scripts/rollback-entware.sh"
@@ -105,7 +108,7 @@ jobs:
           const root = path.resolve(process.argv[2]);
           const privateDirectories = new Set(['.hil', '.git', '.ssh', '__pycache__', 'nodes-private', 'native-enrollment', 'configs/local']);
           const privateName = /(?:\.(?:private|secret)(?:\.|$)|\.(?:token|key|pem|p12|pfx|log|pid|bak|pyc)$|^\.env(?:\.|$)|^admin\.credentials\.json$|^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$))/i;
-          const internalMaterial = /^(?:docs\/(?:delivery|research|implementation)-|scripts\/diagnostics(?:\/|$))/i;
+          const internalMaterial = /^(?:docs\/(?:(?:delivery|research|implementation)-|measurements(?:\/|$))|scripts\/diagnostics(?:\/|$))/i;
           function visit(directory) {
             for (const item of fs.readdirSync(directory, {withFileTypes: true})) {
               const filename = path.join(directory, item.name);

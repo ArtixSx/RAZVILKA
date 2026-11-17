@@ -1,0 +1,377 @@
+{
+  "run_id": 44078047590,
+  "head_sha": "999a8826b245c9516c612d4a8f9f48fb149962a6",
+  "modes": {
+    "production": {
+      "log": "C:\\RAZVILKA-research-20261117\\managed-999a8826\\production-job.log",
+      "bytes": 1454419,
+      "sha256": "64e09da76c7fb1f9ec1e6661107cea07c9464a83c1a79f050d3021c70af5be44",
+      "contract_counts": {
+        "TestNFQWSProbeCounterParserRejectsForeignQueueAndRows": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixOriginalErrorsAndFallback": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixFrozenAssociations": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixOnceClosingAndMisuse": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixJoinsObserverAbort": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixParentCancelAndContext": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixDeadlineAndClosingAssociation": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixContextInitializationJoins": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestExclusiveCleanupExpiredDeadlineBeforeContextDelivery": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestExclusiveCleanupLiveBusyAndCallerErrorsUnchanged": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestManagedNFQRuntimeDiagnosticExpiredCleanupBeforeContextDelivery": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        }
+      },
+      "gate_no_skip": true,
+      "outcomes": [
+        "--- PASS: TestManagedStrategyProbeNativeConsumer (9.84s)",
+        "--- PASS: TestManagedStrategyProbeNativeConsumerInitialWaitCleanup (13.16s)",
+        "--- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (18.16s)",
+        "--- PASS: TestManagedStrategyProbeNativeAppHTTP (34.53s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingSource (10.10s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingRuntime (10.08s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingControl (10.36s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingEnvironment (10.16s)",
+        "--- PASS: TestManagedStrategyProbeNativeAppHTTP (34.53s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.15s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (71.23s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.08s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (37.05s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.08s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (71.08s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.80s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (22.47s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.82s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (36.28s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.22s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreLedgerRecovery (29.92s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreLedgerRecovery (29.92s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.83s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreparedActiveRecovery (25.90s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreparedActiveRecovery (25.90s)"
+      ],
+      "refusals": [
+        {
+          "line": 4391,
+          "text": "2026/11/17 12:01:56 Managed NFQ runtime apply refused at native-apply (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 4974,
+          "text": "2026/11/17 12:02:40 Managed NFQ runtime apply refused at native-apply (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 5557,
+          "text": "2026/11/17 12:03:23 Managed NFQ runtime apply refused at native-apply (NATIVE_OWNER_REFUSED)"
+        },
+        {
+          "line": 5876,
+          "text": "2026/11/17 12:03:57 Managed NFQ runtime apply refused at native-apply (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 6253,
+          "text": "2026/11/17 12:04:26 Managed NFQ runtime apply refused at native-apply (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 6818,
+          "text": "2026/11/17 12:05:09 Managed NFQ runtime apply refused at native-apply (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 7301,
+          "text": "2026/11/17 12:05:44 Managed NFQ runtime apply refused at native-apply (NATIVE_OWNER_REFUSED)"
+        },
+        {
+          "line": 7741,
+          "text": "2026/11/17 12:06:16 Managed NFQ runtime apply refused at native-apply (NATIVE_OWNER_REFUSED)"
+        }
+      ],
+      "cleanup_evidence": [
+        {
+          "line": 4408,
+          "text": "strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+        },
+        {
+          "line": 4990,
+          "text": "strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+        },
+        {
+          "line": 5893,
+          "text": "strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+        },
+        {
+          "line": 7031,
+          "text": "\u001b[36;1mgrep -F 'actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false' artifacts/managed/preledger.log\u001b[0m"
+        },
+        {
+          "line": 7302,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        },
+        {
+          "line": 7501,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        },
+        {
+          "line": 7511,
+          "text": "\u001b[36;1mgrep -F 'actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false' artifacts/managed/prepared-active.log\u001b[0m"
+        },
+        {
+          "line": 7742,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        },
+        {
+          "line": 7939,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        }
+      ],
+      "failed_boundaries": [
+        {
+          "line": 4199,
+          "text": "actual_nfq_boundary id=16 kind=policy-apply role=unspecified total_ns=12712028643 outcome=deadline ctx=deadline finite=true opening_remaining_ns=12710419687 closing_remaining_ns=-1609788 cause=none records=2 overflow=false stage=prepare:returned-nil:30768:12710388258 stage=effects:deadline:12711995411:-1607393"
+        },
+        {
+          "line": 4773,
+          "text": "actual_nfq_boundary id=127 kind=owner-read role=unspecified total_ns=39381211 outcome=deadline ctx=deadline finite=true opening_remaining_ns=38487934 closing_remaining_ns=-895863 cause=none records=4 overflow=false stage=admission:returned-nil:26490:38460863 stage=receipt-opening:returned-nil:572343:37888209 stage=verify-opening:returned-nil:1705739:36182120 stage=queue:deadline:37073945:-892186"
+        },
+        {
+          "line": 4774,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=12784551003 outcome=deadline ctx=deadline finite=true opening_remaining_ns=12783133672 closing_remaining_ns=-1421017 cause=none records=2 overflow=false stage=prepare:returned-nil:20288:12783112833 stage=effects:deadline:12784528992:-1416439"
+        },
+        {
+          "line": 5357,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=12700496235 outcome=refused ctx=returned-nil finite=true opening_remaining_ns=12813827493 closing_remaining_ns=113330987 cause=none records=2 overflow=false stage=prepare:returned-nil:20729:12813806193 stage=effects:refused:12700473443:113332340"
+        },
+        {
+          "line": 5684,
+          "text": "actual_nfq_boundary id=186 kind=policy-apply role=unspecified total_ns=12673520800 outcome=deadline ctx=deadline finite=true opening_remaining_ns=12672489349 closing_remaining_ns=-1031973 cause=none records=2 overflow=false stage=prepare:returned-nil:23294:12672465474 stage=effects:deadline:12673495444:-1030220"
+        },
+        {
+          "line": 6242,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=12710804878 outcome=deadline ctx=deadline finite=true opening_remaining_ns=12708726471 closing_remaining_ns=-2080281 cause=none records=2 overflow=false stage=prepare:returned-nil:20979:12708704860 stage=effects:deadline:12710781344:-2076734"
+        },
+        {
+          "line": 6626,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=12620484167 outcome=deadline ctx=deadline finite=true opening_remaining_ns=12617308156 closing_remaining_ns=-3180360 cause=none records=2 overflow=false stage=prepare:returned-nil:23705:12617283389 stage=effects:deadline:12620457587:-3174509"
+        },
+        {
+          "line": 7105,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=4248591566 outcome=refused ctx=returned-nil finite=true opening_remaining_ns=12723655570 closing_remaining_ns=8475063424 cause=none records=2 overflow=false stage=prepare:returned-nil:24265:12723630173 stage=effects:refused:4248564385:8475064896"
+        },
+        {
+          "line": 7545,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=207539389 outcome=refused ctx=returned-nil finite=true opening_remaining_ns=12700329185 closing_remaining_ns=12492789475 cause=none records=2 overflow=false stage=prepare:returned-nil:72035:12700255627 stage=effects:refused:207464027:12492791129"
+        }
+      ]
+    },
+    "race": {
+      "log": "C:\\RAZVILKA-research-20261117\\managed-999a8826\\race-job.log",
+      "bytes": 805248,
+      "sha256": "86f58b64fcbec25ffcf4c5e4f54f20184663e092b83ee61e510d6ee7baae6e3d",
+      "contract_counts": {
+        "TestNFQWSProbeCounterParserRejectsForeignQueueAndRows": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixOriginalErrorsAndFallback": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixFrozenAssociations": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixOnceClosingAndMisuse": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixJoinsObserverAbort": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixParentCancelAndContext": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixDeadlineAndClosingAssociation": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestNFQWSProbeCounterSuffixContextInitializationJoins": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestExclusiveCleanupExpiredDeadlineBeforeContextDelivery": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestExclusiveCleanupLiveBusyAndCallerErrorsUnchanged": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        },
+        "TestManagedNFQRuntimeDiagnosticExpiredCleanupBeforeContextDelivery": {
+          "run": 1,
+          "pass_including_grep_echo": 2
+        }
+      },
+      "gate_no_skip": true,
+      "outcomes": [
+        "--- FAIL: TestManagedStrategyProbeNativeConsumer (19.48s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.68s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (22.19s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.23s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (60.46s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.08s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (60.86s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.19s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (61.14s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.98s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreLedgerRecovery (59.52s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreLedgerRecovery (59.52s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.02s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreparedActiveRecovery (53.18s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPreparedActiveRecovery (53.18s)"
+      ],
+      "refusals": [
+        {
+          "line": 2352,
+          "text": "2026/11/17 12:02:28 Managed NFQ runtime strategy-probe-execute refused at runtime-operation (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 2845,
+          "text": "2026/11/17 12:03:38 Managed NFQ runtime apply refused at lan-preflight-inventory-consumer-close (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 3362,
+          "text": "2026/11/17 12:04:49 Managed NFQ runtime apply refused at lan-preflight-inventory-consumer-close (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 3838,
+          "text": "2026/11/17 12:06:00 Managed NFQ runtime apply refused at lan-preflight-inventory-consumer-close (DEADLINE_EXCEEDED)"
+        },
+        {
+          "line": 4319,
+          "text": "2026/11/17 12:07:08 Managed NFQ runtime apply refused at native-apply (NATIVE_OWNER_REFUSED)"
+        },
+        {
+          "line": 4761,
+          "text": "2026/11/17 12:08:12 Managed NFQ runtime apply refused at native-apply (NATIVE_OWNER_REFUSED)"
+        }
+      ],
+      "cleanup_evidence": [
+        {
+          "line": 2861,
+          "text": "strategy_managed_probe_lan_native_linux_test.go:163: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+        },
+        {
+          "line": 4049,
+          "text": "\u001b[36;1mgrep -F 'actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false' artifacts/managed/preledger.log\u001b[0m"
+        },
+        {
+          "line": 4320,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        },
+        {
+          "line": 4521,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        },
+        {
+          "line": 4531,
+          "text": "\u001b[36;1mgrep -F 'actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false' artifacts/managed/prepared-active.log\u001b[0m"
+        },
+        {
+          "line": 4762,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        },
+        {
+          "line": 4961,
+          "text": "strategy_managed_probe_native_linux_test.go:546: actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false"
+        }
+      ],
+      "failed_boundaries": [
+        {
+          "line": 2104,
+          "text": "actual_nfq_boundary id=3 kind=counter role=negative-after total_ns=740618889 outcome=deadline ctx=deadline finite=true opening_remaining_ns=739240235 closing_remaining_ns=-1378834 cause=none records=1 overflow=false stage=capture-opening:deadline:740611475:-1373163"
+        },
+        {
+          "line": 2351,
+          "text": "actual_nfq_boundary id=3 kind=counter role=negative-after total_ns=244822405 outcome=refused ctx=deadline finite=true opening_remaining_ns=243677820 closing_remaining_ns=-1147280 cause=none records=1 overflow=false stage=capture-opening:refused:244813558:-1138013"
+        },
+        {
+          "line": 2648,
+          "text": "actual_nfq_boundary id=63 kind=owner-read role=unspecified total_ns=73587084 outcome=refused ctx=returned-nil finite=true opening_remaining_ns=73140772 closing_remaining_ns=-457342 cause=none records=4 overflow=false stage=admission:returned-nil:53610:73085228 stage=receipt-opening:returned-nil:2930536:70153079 stage=verify-opening:returned-nil:2628541:67522454 stage=queue:refused:67962574:-442084"
+        },
+        {
+          "line": 2649,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=9731963246 outcome=deadline ctx=returned-nil finite=true opening_remaining_ns=9729132509 closing_remaining_ns=-2846497 cause=none records=2 overflow=false stage=prepare:returned-nil:221233:9728909232 stage=effects:deadline:9731735039:-2827271"
+        },
+        {
+          "line": 3165,
+          "text": "actual_nfq_boundary id=63 kind=owner-read role=unspecified total_ns=100938019 outcome=deadline ctx=deadline finite=true opening_remaining_ns=99967131 closing_remaining_ns=-972491 cause=none records=4 overflow=false stage=admission:returned-nil:42479:99922728 stage=receipt-opening:returned-nil:2858429:97062726 stage=verify-opening:returned-nil:2670639:94390024 stage=queue:deadline:95354209:-966190"
+        },
+        {
+          "line": 3166,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=9609453319 outcome=deadline ctx=deadline finite=true opening_remaining_ns=9606669384 closing_remaining_ns=-2788283 cause=none records=2 overflow=false stage=prepare:returned-nil:215332:9606452048 stage=effects:deadline:9609230142:-2779577"
+        },
+        {
+          "line": 3642,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=9667805130 outcome=deadline ctx=returned-nil finite=true opening_remaining_ns=9665503783 closing_remaining_ns=-2312197 cause=none records=2 overflow=false stage=prepare:returned-nil:216694:9665285084 stage=effects:deadline:9667581492:-2298041"
+        },
+        {
+          "line": 4123,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=6922638316 outcome=refused ctx=returned-nil finite=true opening_remaining_ns=9835456338 closing_remaining_ns=2912817862 cause=none records=2 overflow=false stage=prepare:returned-nil:199453:9835254802 stage=effects:refused:6922431871:2912821449"
+        },
+        {
+          "line": 4565,
+          "text": "actual_nfq_boundary id=4 kind=policy-apply role=unspecified total_ns=560821929 outcome=refused ctx=returned-nil finite=true opening_remaining_ns=9819967888 closing_remaining_ns=9259144787 cause=none records=2 overflow=false stage=prepare:returned-nil:207006:9819758928 stage=effects:refused:560606556:9259150869"
+        }
+      ]
+    }
+  },
+  "limits": [
+    "No full managed acceptance in either mode.",
+    "Recovery-only PASS is separate from positive Apply.",
+    "Job log SHA is local readback integrity; no independent GitHub digest supplied for job logs.",
+    "Only compact job logs fetched; no artifact/profile ZIP.",
+    "Each contract PASS appears twice: original go test output and mandatory grep echo; RUN once."
+  ],
+  "summary": {
+    "production": {
+      "core": "PASS",
+      "fullLAN": "FAIL71.23s; native-apply/prepared.policy-apply deadline;33.204s Apply+rollback; independent cleanup PASS",
+      "manual": "FAIL37.05s; native-apply/prepared.policy-apply deadline;33.468s Apply+rollback; independent cleanup PASS"
+    },
+    "race": {
+      "core": "FAIL19.48s; negative-after counter capture-opening deadline",
+      "fullLAN": "FAIL22.19s; own negative-after counter capture-opening deadline before Apply",
+      "manual": "FAIL60.46s; lan-preflight-inventory-consumer-close deadline; independent cleanup PASS"
+    }
+  }
+}

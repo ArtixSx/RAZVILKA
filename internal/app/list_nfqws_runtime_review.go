@@ -190,6 +190,9 @@ func (r *ManagedNFQWSListRuntime) review(ctx context.Context, serviceID, protoco
 		}
 		return plan, review, dataplane.ErrNFQWSScopedOwner
 	}
+	if !managedNFQExperimentalRuntime(r) {
+		return plan, review, managedNFQReleaseRefusal(serviceID)
+	}
 	c, release, err := r.app.privateExclusiveOperation(ctx)
 	if err != nil {
 		return plan, review, err
@@ -278,6 +281,10 @@ func (a *App) managedNFQPlanHTTP(w http.ResponseWriter, r *http.Request, cfg con
 	if !handles {
 		return false
 	}
+	if refusal := a.managedNFQNewApplyRefusal(serviceID); refusal != nil {
+		writeCapabilityRefusal(w, refusal)
+		return true
+	}
 	if err != nil {
 		writeManagedNFQRuntimeError(w, http.StatusConflict, "NETWORK_POLICY_EXECUTOR_REQUIRED")
 		return true
@@ -290,6 +297,11 @@ func (a *App) managedNFQPlanHTTP(w http.ResponseWriter, r *http.Request, cfg con
 	}
 	plan, review, err := runtime.review(ctx, serviceID, protocol, family, scope)
 	if err != nil {
+		var refusal *capabilityRefusal
+		if errors.As(err, &refusal) {
+			writeCapabilityRefusal(w, refusal)
+			return true
+		}
 		logManagedNFQRuntimeFailure("plan", err)
 		writeManagedNFQRuntimeError(w, http.StatusConflict, "MANAGED_NFQWS_REVIEW_REFUSED")
 		return true
@@ -307,6 +319,10 @@ func (a *App) managedNFQApplyHTTP(w http.ResponseWriter, r *http.Request, cfg co
 	if !handles {
 		return false
 	}
+	if refusal := a.managedNFQNewApplyRefusal(serviceID); refusal != nil {
+		writeCapabilityRefusal(w, refusal)
+		return true
+	}
 	if err != nil || request.Revision == nil {
 		writeManagedNFQRuntimeError(w, http.StatusConflict, "MANAGED_NFQWS_REVIEW_REQUIRED")
 		return true
@@ -320,6 +336,11 @@ func (a *App) managedNFQApplyHTTP(w http.ResponseWriter, r *http.Request, cfg co
 	review := applyReview{Revision: *request.Revision, Digest: request.Digest}
 	execution, err := runtime.startReviewed(ctx, serviceID, protocol, family, scope, &review)
 	if err != nil {
+		var refusal *capabilityRefusal
+		if errors.As(err, &refusal) {
+			writeCapabilityRefusal(w, refusal)
+			return true
+		}
 		logManagedNFQRuntimeFailure("apply", err)
 		if errors.Is(err, dataplane.ErrReviewChanged) {
 			// The same sentinel can surface after actual effects. Keep the
