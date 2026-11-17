@@ -179,21 +179,29 @@ func (p *DomainPolicy) HandleTCP(ctx context.Context, conn net.Conn, flow Domain
 
 func (p *DomainPolicy) forwardTCP(ctx context.Context, conn net.Conn, flow DomainPolicyTCPFlow, question DomainPolicyFlow, decision DomainPolicyDecision, prefix []byte, runtime DomainPolicyTCPRuntime, dial func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision) (net.Conn, error)) error {
 	// A fresh decision at the real dial boundary closes expiry/identity gaps.
-	check := func() error {
+	check := func(boundary string) error {
+		finishGuard := domainTCPMeasureForwardStage(ctx, boundary, "guard")
 		scope, err := runtime.Guard(ctx, flow)
-		if err = errors.Join(err, ctx.Err()); err != nil {
-			return err
-		}
-		current, err := p.decideTCPWithBaseline(ctx, flow, question, scope, runtime)
+		err = errors.Join(err, ctx.Err())
+		finishGuard(err)
 		if err != nil {
 			return err
 		}
+		finishDecision := domainTCPMeasureForwardStage(ctx, boundary, "decision")
+		current, err := p.decideTCPWithBaseline(ctx, flow, question, scope, runtime)
+		finishDecision(err)
+		if err != nil {
+			return err
+		}
+		finishCompare := domainTCPMeasureForwardStage(ctx, boundary, "compare")
 		if current.Generation != decision.Generation || current.Kind != decision.Kind || current.Route != decision.Route || current.ServiceID != decision.ServiceID || current.Reason != decision.Reason {
+			finishCompare(ErrDomainPolicy)
 			return ErrDomainPolicy
 		}
+		finishCompare(nil)
 		return nil
 	}
-	if err := check(); err != nil {
+	if err := check("pre-dial"); err != nil {
 		return err
 	}
 	outbound, err := dial(ctx, flow, decision)
@@ -207,7 +215,7 @@ func (p *DomainPolicy) forwardTCP(ctx context.Context, conn net.Conn, flow Domai
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close(); _ = outbound.Close() })
 	defer stop()
 	finishPostDial := domainTCPMeasureAcceptedStage(ctx, "post-dial-check")
-	postDialErr := check()
+	postDialErr := check("post-dial")
 	finishPostDial(postDialErr)
 	if err := postDialErr; err != nil {
 		return err

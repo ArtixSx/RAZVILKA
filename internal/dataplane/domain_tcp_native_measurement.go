@@ -108,9 +108,14 @@ func domainTCPNativeHashBucket() string {
 
 var domainTCPNativeMetrics struct {
 	sync.Mutex
-	active     bool
-	generation uint64
-	values     map[string]DomainTCPNativeMetric
+	active         bool
+	generation     uint64
+	values         map[string]DomainTCPNativeMetric
+	forwardStart   time.Time
+	forwardIDs     map[*domainAcceptedTCP]int
+	forwardCounts  map[int]int
+	forwardRows    []DomainTCPNativeForwardStage
+	forwardDropped int
 }
 
 // CI-only observation, never a scope, source or effect admission.
@@ -123,6 +128,11 @@ func StartDomainTCPNativeMeasurement() func() map[string]DomainTCPNativeMetric {
 	domainTCPNativeMetrics.active = true
 	domainTCPNativeMetrics.generation++
 	domainTCPNativeMetrics.values = make(map[string]DomainTCPNativeMetric)
+	domainTCPNativeMetrics.forwardStart = time.Now()
+	domainTCPNativeMetrics.forwardIDs = make(map[*domainAcceptedTCP]int)
+	domainTCPNativeMetrics.forwardCounts = make(map[int]int)
+	domainTCPNativeMetrics.forwardRows = nil
+	domainTCPNativeMetrics.forwardDropped = 0
 	domainTCPNativeMetrics.Unlock()
 	var once sync.Once
 	var result map[string]DomainTCPNativeMetric
@@ -131,6 +141,8 @@ func StartDomainTCPNativeMeasurement() func() map[string]DomainTCPNativeMetric {
 			domainTCPNativeMetrics.Lock()
 			defer domainTCPNativeMetrics.Unlock()
 			domainTCPNativeMetrics.active = false
+			domainTCPNativeMetrics.forwardIDs = nil // Release diagnostic references to accepted flows.
+			domainTCPNativeMetrics.forwardCounts = nil
 			result = domainTCPNativeMetrics.values
 		})
 		out := make(map[string]DomainTCPNativeMetric, len(result))

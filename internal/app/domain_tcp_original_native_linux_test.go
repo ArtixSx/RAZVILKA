@@ -635,6 +635,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				returned := false
 				defer func() {
 					t.Logf("actual selected request boundary returned=%t (before outer cleanup/mismatch/opaque, including Fatal/Goexit; missing stage is not proof): %+v", returned, dataplane.DomainTCPNativeMeasurementSnapshot())
+					t.Logf("actual selected request forward checks (request ordinals; context budget is not client4s; incomplete is not proof): %+v", dataplane.DomainTCPNativeForwardMeasurementSnapshot())
 				}()
 				result := peers.clientRequest(t, original, "selected", published.Answer)
 				returned = true
@@ -647,6 +648,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				returned := false
 				defer func() {
 					t.Logf("actual mismatch request boundary returned=%t (before outer cleanup/opaque, including Fatal/Goexit; missing stage is not proof): %+v", returned, dataplane.DomainTCPNativeMeasurementSnapshot())
+					t.Logf("actual mismatch request forward checks (request ordinals; context budget is not client4s; incomplete is not proof): %+v", dataplane.DomainTCPNativeForwardMeasurementSnapshot())
 				}()
 				result := peers.clientRequest(t, original, "mismatch", published.Answer)
 				returned = true
