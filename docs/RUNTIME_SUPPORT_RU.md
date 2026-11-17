@@ -6,6 +6,12 @@ DNS сохраняется; новый Apply должен быть закрыт 
 Managed NFQWS2 и router/LAN пока не приняты. Фактические проверки точной
 итоговой сборки обязательны; прежние результаты не переносятся автоматически.
 
+`f324d018`: все 13 включённых native jobs release-core/Mihomo PASS, включая
+парное восстановление и Apply/Stop; экспериментальные DNS/managed исключены.
+Generic PR gate обнаружил гонку синхронизации тестовой отмены. До завершения
+исправленного полного gate и router/LAN ограниченный RC не принят.
+[Результаты native](measurements/2026-11-16/limited-rc-native-f324d018.json).
+
 Actual ARM64 preflight `999a8826`: production provider и identity-opening PASS,
 base Acquire REFUSED; helper завершён и его временные файлы очищены. Это
 аппаратный отказ допуска инструментов, не LAN acceptance.

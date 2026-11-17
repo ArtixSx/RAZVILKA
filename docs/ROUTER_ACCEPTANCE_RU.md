@@ -1,5 +1,23 @@
 # Отдельная аппаратная приёмка RAZVILKA
 
+### Подготовка после отказа startup — 17.11
+
+Read-only dry plan сохранил metadata пяти фиксированных каталогов:
+`/opt`, `/opt/etc`, `/opt/etc/init.d`, `/opt/usr`, `/opt/usr/bin`.
+У всех UID1001, GID1001 и0755; исходные device/inode сохранены приватно в
+`C:/RAZVILKA-backups/router-prerequisite-repair-20261117-1544`.
+План завершён, исходные FD закрыты, временный helper проверен и удалён.
+Подготовлен отдельно проверенный UID-only repair с fingerprint и частичным
+откатом через исходные FD. Он не исполнен; это не startup или LAN acceptance.
+
+Свежая пакетная сверка сохранена в
+`C:/RAZVILKA-backups/ip-full-preinstall-20261117-1553`.
+Pinned opkg/BusyBox и status bookends совпали; libnl-tiny/ip-full не
+зарегистрированы, исходная ссылка `/opt/sbin/ip` ведёт к `/opt/bin/busybox`.
+Проверенные локальные IPK подготовлены. Установки нет. `opkg --noaction`
+сам по себе не запрещает сетевые загрузки; перед его использованием нужен
+проверенный временный config без источников и пустой OPKG_CONF_DIR.
+
 ### Последняя проверка ограниченного RC — 17.11, 15:28
 
 На NC-1812 выполнен одноразовый ARM64 helper обычной сборки без fixture tags
