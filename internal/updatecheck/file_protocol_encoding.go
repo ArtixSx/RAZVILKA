@@ -1,0 +1,42 @@
+package updatecheck
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
+)
+
+// Reader version is a format capability, not production installer readiness.
+const SelfUpdateReadVersion = selfupdatejournal.ReadVersion
+
+// Only the explicit current-owner paired restore command uses this reader.
+// It is not a capability of ordinary startup, installers, or retained fleets.
+const SelfUpdateOfflineRestoreReadVersion = selfupdatejournal.OfflineRetryReadVersion
+const selfUpdateProtocolSchema = 2
+
+var ErrFileProtocol = errors.New("self update file/helper protocol requires matching trusted evidence")
+var ErrStoppedSettlementIneligible = errors.New("self update review has no complete retained reader3 admission; stopped settlement is ineligible")
+
+func decodeFileProtocol(data []byte, out any) error {
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(out); err != nil {
+		return err
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return ErrFileProtocol
+	}
+	canonical, err := json.Marshal(out)
+	if err != nil || !bytes.Equal(data, canonical) {
+		return ErrFileProtocol
+	}
+	return nil
+}
+
+func digestBytes(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }

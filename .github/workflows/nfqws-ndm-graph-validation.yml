@@ -1,0 +1,74 @@
+name: NFQWS2 NDM exact graph validation
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/nfq-ndm-graph-*']
+permissions:
+  contents: read
+jobs:
+  graph:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    # The existing linux70 fixture pins Ubuntu 26.04's exact 1.8.11 ELF.
+    # Ubuntu 24.04 correctly fails MAIN_PIN_V4; do not replace that check.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Prepare pinned stock package and disposable native tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; uname -srvm; } > artifacts/environment.txt
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux busybox-static curl ca-certificates kmod python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          ndm_packages=$(sudo mktemp -d /tmp/razvilka-ndm-packages.XXXXXX)
+          case "$ndm_packages" in /tmp/razvilka-ndm-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$ndm_packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$ndm_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$ndm_packages/iptables.deb" "$ndm_packages/libip4tc2.deb" \
+            "$ndm_packages/libip6tc2.deb" "$ndm_packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py | tee artifacts/tool-provenance.txt
+          # Positive readable queue inventory is required before the first
+          # Apply. Missing kernel support must not be interpreted as empty.
+          sudo modprobe nfnetlink_queue
+          sudo test -r /proc/net/netfilter/nfnetlink_queue
+          echo 'da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac  /usr/sbin/xtables-legacy-multi' | sha256sum --check --strict
+          curl --fail --location --connect-timeout 15 --max-time 180 --retry 2 -o /tmp/nfqws2-1.3.1.ipk https://github.com/nfqws/nfqws2-keenetic/releases/download/v1.3.1/nfqws2-keenetic_1.3.1_all_entware.ipk
+          echo '28af67f8e192c838e007f23517b52b1f8c20d030cef5b971dfc93b7f21a79054  /tmp/nfqws2-1.3.1.ipk' | sha256sum --check --strict
+      - name: Exact graph, equal counters, original restore and refusal boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; iptables-legacy --version; } > artifacts/environment.txt
+          race_option=()
+          if test "${{ matrix.mode }}" = race; then race_option=(-race); fi
+          go test "${race_option[@]}" -count=1 -v ./internal/dataplane -run '^TestNFQWS2HookClassifierMatrix$' | tee artifacts/classifier.txt
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HOOK_NDM_NATIVE=1 RAZVILKA_HOOK_NDM_IPK=/tmp/nfqws2-1.3.1.ipk \
+            go test "${race_option[@]}" -count=1 -v -timeout=10m ./internal/dataplane \
+            -run '^TestNFQWS2HookNDMRestoreNative$' | tee artifacts/native.txt
+          if grep -F -- '--- SKIP:' artifacts/native.txt; then exit 1; fi
+          grep -F -- '--- PASS: TestNFQWS2HookNDMRestoreNative ' artifacts/native.txt
+          for name in same-count-pre-rule-replaced same-count-post-rule-replaced; do
+            grep -F -- "--- PASS: TestNFQWS2HookNDMRestoreNative/$name " artifacts/native.txt
+          done
+      - name: Preserve real results separately from router acceptance
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nfq-ndm-graph-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

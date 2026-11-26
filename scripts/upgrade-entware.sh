@@ -1,0 +1,887 @@
+#!/bin/sh
+set -eu
+umask 077
+
+MODE=dry-run
+FROM_ARTEM=0
+INSTALL_COMPONENTS=0
+for ARG in "$@"; do
+  case "$ARG" in
+    --dry-run) MODE=dry-run ;;
+    --apply) MODE=apply ;;
+    --from-artem-flow) FROM_ARTEM=1 ;;
+	--with-components|--starter-pack) INSTALL_COMPONENTS=1 ;;
+	--without-components) INSTALL_COMPONENTS=0 ;;
+    -h|--help)
+      echo "Usage: $0 [--dry-run|--apply] [--from-artem-flow] [--starter-pack]"
+      echo "Default: install/update only the RAZVILKA UI/control plane."
+      echo "Optional RAZVILKA_ARCH=arm64|amd64|mips|mipsle explicitly selects the target architecture."
+      exit 0
+      ;;
+    *) echo "Unknown option: $ARG" >&2; exit 2 ;;
+  esac
+done
+
+BASE="${RAZVILKA_BASE:-/opt}"
+case "$BASE" in
+  /*) ;;
+  *) echo "RAZVILKA_BASE must be an absolute directory" >&2; exit 1 ;;
+esac
+[ -d "$BASE" ] || { echo "RAZVILKA_BASE is missing: $BASE" >&2; exit 1; }
+BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
+[ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 1; }
+PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
+export PATH
+# Invoke init scripts through this Entware PATH. Their /bin/sh shebang can
+# otherwise dispatch Keenetic's firmware CLI even from an Entware shell.
+APPDIR="$BASE/etc/razvilka"
+CACHEDIR="$BASE/razvilka/cache"
+STATEDIR="$BASE/razvilka/state"
+LOGDIR="$BASE/razvilka/log"
+BINDIR="$BASE/bin"
+INITDIR="$BASE/etc/init.d"
+BACKUPROOT="$STATEDIR/update-backups"
+CURRENT_BACKUP="$STATEDIR/current-backup"
+HERE="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+INIT_SOURCE="$HERE/scripts/S99razvilka"
+ROLLBACK="$HERE/scripts/rollback-entware.sh"
+CATALOG_SOURCE="$HERE/configs/service-catalog.json"
+COMMUNITY_SOURCE="$HERE/configs/community-catalog.json"
+SOURCES_SOURCE="$HERE/configs/sources.json"
+EXAMPLE_CONFIG="$HERE/configs/config.example.json"
+RAZ_INIT="$INITDIR/S99razvilka"
+LEGACY_INIT="$INITDIR/S99artem-flow"
+LEGACY_DISABLED="$INITDIR/S99artem-flow.razvilka-disabled"
+LEGACY_CONTROL=""
+
+require_installation_paths() {
+  # Only the explicit Entware base may be resolved through a link. A linked
+  # destination below it must never redirect installation or snapshot writes.
+  for DIR in "$BASE" "$BINDIR" "$BASE/etc" "$INITDIR" "$APPDIR" "$BASE/razvilka" \
+    "$BASE/razvilka/run" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BACKUPROOT"; do
+    [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || {
+      echo "Unsafe installation directory: $DIR; installation unchanged" >&2; return 1;
+    }
+    case "$DIR" in
+      "$BASE/razvilka"|"$BASE/razvilka/"*)
+        if [ -d "$DIR" ]; then
+          PRIVATE_OWNER="$(LC_ALL=C ls -nd -- "$DIR" | awk '
+            NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+            END { if (NR != 1 || !ok) exit 1 }
+          ')" && [ "$PRIVATE_OWNER" = "$(id -u)" ] || {
+            echo "Unsafe private installation owner or permissions: $DIR; installation unchanged" >&2; return 1;
+          }
+        fi ;;
+    esac
+  done
+  [ ! -L "$CURRENT_BACKUP" ] && { [ ! -e "$CURRENT_BACKUP" ] || [ -f "$CURRENT_BACKUP" ]; } || {
+    echo "Unsafe current backup pointer; installation unchanged" >&2; return 1;
+  }
+}
+require_installation_paths
+
+# The native clean-control admission retains these ancestors and requires a
+# protected installation owner. Refuse before snapshots or replacement, rather
+# than discover a foreign Entware parent after installing a journaled binary.
+# Never repair ownership of shared Entware directories implicitly.
+require_control_ancestors() {
+  for CONTROL_DIR in "$BASE" "$BINDIR" "$BASE/etc" "$APPDIR"; do
+    [ -d "$CONTROL_DIR" ] || continue
+    CONTROL_OWNER="$(LC_ALL=C ls -nd -- "$CONTROL_DIR" | awk '
+      NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+      END { if (NR != 1 || !ok) exit 1 }
+    ')" && [ "$CONTROL_OWNER" = "$(id -u)" ] || {
+      echo "Unsafe control installation owner or permissions: $CONTROL_DIR; installation unchanged" >&2
+      echo "Have the Entware administrator review this directory's ownership and permissions before retrying; shared directories were not changed." >&2
+      return 1
+    }
+  done
+}
+require_control_ancestors
+
+ARCH_RAW="$(uname -m)"
+ARCH_REQUEST="${RAZVILKA_ARCH:-$ARCH_RAW}"
+case "$ARCH_REQUEST" in
+  aarch64|arm64) ARCH=arm64 ;;
+  mips)
+    if [ -n "${RAZVILKA_ARCH:-}" ]; then
+      ARCH=mips
+    else
+      # Linux reports uname=mips for both MIPS32 byte orders. Read the ELF
+      # identity of the running shell, never guess from the kernel name or
+      # execute a candidate binary to discover the architecture.
+      SHELL_IMAGE="/proc/$$/exe"
+      [ -r "$SHELL_IMAGE" ] || SHELL_IMAGE=/bin/sh
+      ELF_HEADER=""
+      # Entware's compact BusyBox od has -b, but not -A, -t or -N. Bound
+      # the read with dd, then inspect six individual octal bytes; do not
+      # interpret a native-width word whose byte order is itself unknown.
+      if command -v dd >/dev/null 2>&1 && command -v od >/dev/null 2>&1; then
+        ELF_HEADER="$(dd if="$SHELL_IMAGE" bs=6 count=1 2>/dev/null | od -b 2>/dev/null)" || ELF_HEADER=""
+      fi
+      if [ -z "$ELF_HEADER" ] && command -v busybox >/dev/null 2>&1; then
+        ELF_HEADER="$(busybox dd if="$SHELL_IMAGE" bs=6 count=1 2>/dev/null | busybox od -b 2>/dev/null)" || ELF_HEADER=""
+      fi
+      # Require the complete bounded dump, including its final byte count.
+      # A short/failed read, script or ELF64 image must not select MIPS32.
+      ELF_HEADER="$(printf '%s\n' "$ELF_HEADER" | awk '
+        NR == 1 && NF == 7 && $1 == "0000000" {header=$2 " " $3 " " $4 " " $5 " " $6 " " $7}
+        NR == 2 && NF == 1 && $1 == "0000006" {complete=1}
+        END {if (NR == 2 && complete) print header}
+      ')"
+      case "$ELF_HEADER" in
+        '177 105 114 106 001 001') ARCH=mipsle ;;
+        '177 105 114 106 001 002') ARCH=mips ;;
+        *)
+          echo "Не удалось определить порядок байтов MIPS. Установка не изменена." >&2
+          echo "Проверьте dd и od. Если архитектура известна, укажите её перед sh:" >&2
+          echo "  RAZVILKA_ARCH=mipsle sh /opt/tmp/razvilka-setup.sh  # Entware mipselsf-k3.4" >&2
+          echo "  RAZVILKA_ARCH=mips sh /opt/tmp/razvilka-setup.sh    # Entware mipssf-k3.4" >&2
+          exit 1 ;;
+      esac
+    fi
+    ;;
+  mipsel|mipsle) ARCH=mipsle ;;
+  x86_64|amd64) ARCH=amd64 ;;
+  *) echo "Unsupported architecture: $ARCH_REQUEST" >&2; exit 1 ;;
+esac
+echo "Архитектура сборки RAZVILKA: $ARCH"
+BIN_SOURCE="$HERE/dist/razvilka-linux-$ARCH"
+
+require_file() {
+  [ -f "$1" ] || { echo "Required file is missing: $1" >&2; exit 1; }
+}
+
+stage() {
+  printf '\n[%s/7] %s\n' "$1" "$2"
+}
+
+require_file "$BIN_SOURCE"
+require_file "$INIT_SOURCE"
+require_file "$ROLLBACK"
+require_file "$CATALOG_SOURCE"
+require_file "$COMMUNITY_SOURCE"
+require_file "$SOURCES_SOURCE"
+require_file "$EXAMPLE_CONFIG"
+[ -r "$BIN_SOURCE" ] || { echo "Candidate binary is not readable: $BIN_SOURCE" >&2; exit 1; }
+[ -r "$INIT_SOURCE" ] || { echo "Init script is not readable: $INIT_SOURCE" >&2; exit 1; }
+[ -r "$ROLLBACK" ] || { echo "Rollback script is not readable: $ROLLBACK" >&2; exit 1; }
+command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 1; }
+[ -x "$BASE/sbin/start-stop-daemon" ] || { echo "$BASE/sbin/start-stop-daemon is required" >&2; exit 1; }
+
+CHECKSUM_FILE="$HERE/dist/SHA256SUMS"
+[ -f "$CHECKSUM_FILE" ] && [ -r "$CHECKSUM_FILE" ] && [ ! -L "$CHECKSUM_FILE" ] || {
+  echo "A regular readable release checksum manifest is required; installation unchanged" >&2; exit 1;
+}
+# Accept the release-relative and legacy bare names, plus sha256sum's optional
+# binary marker. Do not select the first match: duplicates or malformed entries
+# for this candidate make the manifest ambiguous, even if one digest is valid.
+EXPECTED="$(awk -v name="razvilka-linux-$ARCH" '
+  {
+    sub(/\r$/, "")
+    mentioned = 0
+    for (i = 1; i <= NF; i++) {
+      candidate = $i
+      sub(/^\*/, "", candidate)
+      if (candidate == name || candidate == "dist/" name) mentioned = 1
+    }
+    if (!mentioned) next
+    count++
+    candidate = $2
+    sub(/^\*/, "", candidate)
+    if (NF != 2 || (candidate != name && candidate != "dist/" name) ||
+        length($1) != 64 || $1 !~ /^[0-9a-fA-F]+$/) invalid = 1
+    digest = tolower($1)
+  }
+  END {
+    if (count != 1 || invalid) exit 1
+    print digest
+  }
+' "$CHECKSUM_FILE")" || {
+  echo "Release manifest must contain exactly one valid SHA256 entry for the candidate; installation unchanged" >&2; exit 1;
+}
+ACTUAL="$(sha256sum "$BIN_SOURCE" | awk '{print $1}')"
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "Candidate checksum mismatch: expected $EXPECTED, got $ACTUAL" >&2
+  exit 1
+fi
+# Windows and some NAS unpackers discard Unix executable bits. Normalizing the
+# extracted candidate is safe after its checksum has been verified and avoids a
+# manual chmod step; the live binary is still installed atomically with 0755.
+if [ ! -x "$BIN_SOURCE" ]; then
+  chmod 755 "$BIN_SOURCE" || { echo "Cannot make candidate binary executable: $BIN_SOURCE" >&2; exit 1; }
+  echo "Archive mode normalized for candidate binary: $BIN_SOURCE"
+fi
+
+LEGACY_RUNNING_DETECTED=0
+if [ -x "$LEGACY_INIT" ]; then
+  LEGACY_CONTROL="$LEGACY_INIT"
+elif [ -x "$LEGACY_DISABLED" ]; then
+  # A previously interrupted or manually reverted handover can leave the
+  # legacy process alive while its init already has the disabled suffix.
+  # Keep that state reversible and use the existing script as the controller.
+  LEGACY_CONTROL="$LEGACY_DISABLED"
+fi
+if [ -n "$LEGACY_CONTROL" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof artem-flow 2>/dev/null || true)" ]; then
+  LEGACY_RUNNING_DETECTED=1
+fi
+if [ "$LEGACY_RUNNING_DETECTED" -eq 1 ] && [ "$FROM_ARTEM" -ne 1 ]; then
+  echo "ARTEM Flow is running; repeat with --from-artem-flow to authorize a reversible handover" >&2
+  exit 1
+fi
+
+CONFIG_SOURCE="$APPDIR/config.json"
+CONFIG_ORIGIN=razvilka
+if [ ! -f "$CONFIG_SOURCE" ]; then
+  if [ "$FROM_ARTEM" -eq 1 ] && [ -f "$BASE/etc/artem-flow/config.json" ]; then
+    CONFIG_SOURCE="$BASE/etc/artem-flow/config.json"
+    CONFIG_ORIGIN=artem-flow
+  else
+    CONFIG_SOURCE="$EXAMPLE_CONFIG"
+    CONFIG_ORIGIN=example
+  fi
+fi
+
+probe_self_update_metadata() (
+  # These exact metadata entrypoints are read-only, including under Stop.
+  # Unsupported flags need the old Go ABI, never a guessed empty response.
+  case "$2" in -self-update-read-version|-self-update-schema|-check-self-update-state|-component-update-schema|-check-component-update-state) ;; *) exit 1 ;; esac
+  [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ] || { echo "Self update metadata binary is unsafe; installation unchanged" >&2; exit 1; }
+  command -v timeout >/dev/null 2>&1 || {
+    echo "Bounded self update metadata probe is unavailable; installation unchanged" >&2
+    echo "Нужна утилита timeout: opkg install coreutils-timeout" >&2; exit 1;
+  }
+  SELF_PROBE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/.razvilka-reader.XXXXXX")" || exit 1
+  trap 'rm -f "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/error" "$SELF_PROBE_DIR/expected"; rmdir "$SELF_PROBE_DIR"' EXIT
+  trap 'exit 1' HUP INT TERM
+  SELF_PROBE_CODE=0
+  (
+    # POSIX -f units are 512 bytes; some shells use 1024. Both are bounded.
+    ulimit -f 128 || exit 125
+    exec timeout -k 1 5 "$1" "$2"
+  ) >"$SELF_PROBE_DIR/output" 2>"$SELF_PROBE_DIR/error" || SELF_PROBE_CODE=$?
+  for SELF_PROBE_FILE in output error; do
+    SELF_PROBE_BYTES="$(wc -c <"$SELF_PROBE_DIR/$SELF_PROBE_FILE")" || exit 1
+    [ "$SELF_PROBE_BYTES" -lt 65536 ] || {
+      echo "Self update metadata exceeds its output limit; installation unchanged" >&2; exit 1;
+    }
+  done
+  if [ "$SELF_PROBE_CODE" -eq 0 ] && [ ! -s "$SELF_PROBE_DIR/error" ]; then
+    case "$2" in
+      -self-update-read-version) SELF_PROBE_VALUES='2 3 4' ;;
+      -self-update-schema) SELF_PROBE_VALUES='0 1 2' ;;
+      -component-update-schema) SELF_PROBE_VALUES='2 3 4' ;;
+      -check-self-update-state|-check-component-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;
+    esac
+    for SELF_PROBE_VALUE in $SELF_PROBE_VALUES; do
+      printf '%s\n' "$SELF_PROBE_VALUE" >"$SELF_PROBE_DIR/expected"
+      if cmp -s "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/expected"; then
+        printf '%s\n' "$SELF_PROBE_VALUE"
+        exit 0
+      fi
+    done
+  fi
+  if [ "$2" != -check-self-update-state ] && [ "$2" != -check-component-update-state ] && [ "$SELF_PROBE_CODE" -eq 2 ] && [ ! -s "$SELF_PROBE_DIR/output" ] &&
+    IFS= read -r SELF_PROBE_FIRST <"$SELF_PROBE_DIR/error" && [ "$SELF_PROBE_FIRST" = "flag provided but not defined: $2" ]; then
+    printf '%s\n' unsupported
+    exit 0
+  fi
+  echo "Self update metadata is unknown or incompatible; installation unchanged" >&2
+  exit 1
+)
+
+require_target_self_update_compatibility() {
+  [ -z "${RAZVILKA_STRATEGY_LAB_STATE:-}" ] || {
+    echo "Custom StrategyLab state path: replacement refused; preserve state; recovery may be required" >&2; return 1;
+  }
+  # No compatible StrategyLab binary/state pair is sealed by this protocol yet.
+  # Repeated at every existing compatibility boundary, including after stop.
+  if [ -e "$STATEDIR/strategy-lab.json" ] || [ -L "$STATEDIR/strategy-lab.json" ]; then
+    echo "StrategyLab replacement refused; preserve StrategyLab state; recovery may be required." >&2
+    return 1
+  fi
+  SELF_TARGET_READER="$(probe_self_update_metadata "$1" -self-update-read-version)" || return 1
+  case "$SELF_TARGET_READER" in
+    unsupported) return 0 ;; # Existing selected-backup/private-state gates still apply.
+    3|4)
+      # Fixed production roots only; no shell backup or public root arguments.
+      probe_self_update_metadata "$1" -check-self-update-state >/dev/null || return 1
+      ;;
+    *) echo "Target controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1 ;;
+  esac
+}
+
+# 0.20 is a clean base: it neither reads nor migrates the <=0.19 layout, whose
+# routes, journals and snapshots live in $BASE/var/lib/razvilka. A 0.19 updater
+# runs this bundle's dry-run before its own apply, so refuse in BOTH modes and
+# before any candidate reads retained state. A controller without the 0.20
+# reader ABI is that old generation even after its state directory was moved.
+refuse_pre020_installation() {
+  echo "Pre-0.20 RAZVILKA installation found; 0.20 installs only on a clean base; installation unchanged" >&2
+  echo "  found: $1" >&2
+  echo "Найдена установка RAZVILKA до 0.20. Версия 0.20 ставится только начисто, без переноса старых данных." >&2
+  echo "Порядок перехода: docs/INSTALL_RU.md, раздел «Переход с 0.19.3 и более ранних версий»." >&2
+  return 1
+}
+
+require_no_pre020_installation() {
+  # Any object at the old state name is evidence; never follow or inspect it.
+  if [ -e "$BASE/var/lib/razvilka" ] || [ -L "$BASE/var/lib/razvilka" ]; then
+    refuse_pre020_installation "$BASE/var/lib/razvilka" || return 1
+  fi
+  if [ -e "$BINDIR/razvilka" ] || [ -L "$BINDIR/razvilka" ]; then
+    # Bounded and read-only; an unidentifiable controller refuses as unknown.
+    PRE020_READER="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-read-version)" || return 1
+    if [ "$PRE020_READER" = unsupported ]; then
+      refuse_pre020_installation "$BINDIR/razvilka" || return 1
+    fi
+  fi
+}
+
+require_legacy_file_protocol_free() {
+  for SELF_PROTOCOL_PATH in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json" "$STATEDIR/self-update-stop"; do
+    if [ -e "$SELF_PROTOCOL_PATH" ] || [ -L "$SELF_PROTOCOL_PATH" ]; then
+      echo "Use matching self update recovery; raw application replacement is unavailable with retained control/file protocol" >&2
+      return 1
+    fi
+  done
+  for SELF_PROTOCOL_DIR in "$STATEDIR/self-update" "$STATEDIR/self-update-files"; do
+    if [ -e "$SELF_PROTOCOL_DIR" ] || [ -L "$SELF_PROTOCOL_DIR" ]; then
+      [ -d "$SELF_PROTOCOL_DIR" ] && [ ! -L "$SELF_PROTOCOL_DIR" ] && [ -r "$SELF_PROTOCOL_DIR" ] && [ -x "$SELF_PROTOCOL_DIR" ] || {
+        echo "Self update protocol directory is unsafe; installation unchanged" >&2; return 1;
+      }
+      SELF_PROTOCOL_CONTENTS="$(LC_ALL=C ls -A "$SELF_PROTOCOL_DIR" 2>/dev/null && printf '|')" || {
+        echo "Self update protocol directory cannot be inspected; installation unchanged" >&2; return 1;
+      }
+      # The sentinel preserves even entries consisting entirely of newlines.
+      [ "$SELF_PROTOCOL_CONTENTS" = '|' ] || {
+        echo "Use matching self update recovery; raw application replacement is unavailable with retained protocol artifacts" >&2
+        return 1
+      }
+    fi
+  done
+  if [ -f "$BINDIR/razvilka" ] && [ -x "$BINDIR/razvilka" ]; then
+    SELF_PROTOCOL_READER="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-read-version)" || return 1
+    [ "$SELF_PROTOCOL_READER" = unsupported ] || {
+      echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1;
+    }
+    SELF_PROTOCOL_SCHEMA="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-schema)" || return 1
+    case "$SELF_PROTOCOL_SCHEMA" in
+      unsupported|0|1) ;;
+      *) echo "This controller requires the journaled self update workflow; raw application replacement is unavailable" >&2; return 1 ;;
+    esac
+  fi
+}
+
+require_node_history_compatibility() {
+  NODE_HISTORY_COMPATIBILITY="$("$1" -check-node-history-state -node-history-config-root "$APPDIR" -node-history-state-root "$STATEDIR" 2>/dev/null)" || {
+    echo "Target binary cannot read all retained node history; installation unchanged" >&2; return 1;
+  }
+  [ "$NODE_HISTORY_COMPATIBILITY" = '{"ok":true}' ] || {
+    echo "Retained node history compatibility not confirmed; installation unchanged" >&2; return 1;
+  }
+}
+
+require_native_enrollment_schema() {
+  # Retain both application handoff and file-phase receipts through downgrade.
+  # Empty directories alone do not opt an installation into this protocol.
+  SELF_UPDATE_REQUIRED=0
+  for SELF_UPDATE_DIR in "$STATEDIR/self-update" "$STATEDIR/self-update-files"; do
+    if [ -e "$SELF_UPDATE_DIR" ] || [ -L "$SELF_UPDATE_DIR" ]; then
+      [ -d "$SELF_UPDATE_DIR" ] && [ ! -L "$SELF_UPDATE_DIR" ] || { echo "Self update directory is unsafe; installation unchanged" >&2; return 1; }
+    fi
+  done
+  for SELF_UPDATE_RECEIPT in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json"; do
+    if [ -e "$SELF_UPDATE_RECEIPT" ] || [ -L "$SELF_UPDATE_RECEIPT" ]; then
+      [ -f "$SELF_UPDATE_RECEIPT" ] && [ ! -L "$SELF_UPDATE_RECEIPT" ] || { echo "Self update receipt is unsafe; installation unchanged" >&2; return 1; }
+      SELF_UPDATE_REQUIRED=1
+    fi
+  done
+  if [ "$SELF_UPDATE_REQUIRED" -eq 1 ]; then
+    SELF_UPDATE_SCHEMA="$("$1" -self-update-schema 2>/dev/null)" || { echo "Target binary cannot preserve self update recovery; installation unchanged" >&2; return 1; }
+    [ "$SELF_UPDATE_SCHEMA" = 2 ] || { echo "Target binary has an incompatible self update schema; installation unchanged" >&2; return 1; }
+  fi
+  # A replacement binary must preserve the component transaction fence.
+  # The journal is deliberately retained outside mutable update snapshots.
+  COMPONENT_JOURNAL="$STATEDIR/components/update-journal/current.json"
+  if [ -e "$COMPONENT_JOURNAL" ] || [ -L "$COMPONENT_JOURNAL" ]; then
+    [ -f "$COMPONENT_JOURNAL" ] && [ ! -L "$COMPONENT_JOURNAL" ] || { echo "Component update journal is unsafe; installation unchanged" >&2; return 1; }
+    # The standalone reader inspects fixed production roots, never a supplied
+    # alternate installation. Its declared version alone is not state proof.
+    COMPONENT_PRODUCTION_BASE="$(CDPATH= cd -- /opt && pwd -P)" || return 1
+    [ "$BASE" = "$COMPONENT_PRODUCTION_BASE" ] || { echo "Retained component state requires the fixed production root; installation unchanged" >&2; return 1; }
+    COMPONENT_SCHEMA="$(probe_self_update_metadata "$1" -component-update-schema)" || { echo "Target binary cannot preserve component update recovery; installation unchanged" >&2; return 1; }
+    case "$COMPONENT_SCHEMA" in 2|3|4) ;; *) echo "Target binary has an incompatible component update schema; installation unchanged" >&2; return 1 ;; esac
+    probe_self_update_metadata "$1" -check-component-update-state >/dev/null || {
+      echo "Target binary cannot read retained component update state; installation unchanged" >&2; return 1;
+    }
+  fi
+	if [ -e "$APPDIR/config.json.automation.json.autonomy.json" ] || [ -L "$APPDIR/config.json.automation.json.autonomy.json" ]; then
+	  AUTONOMY_COMPATIBILITY="$("$1" -check-autonomy-state -config "$APPDIR/config.json" 2>/dev/null)" || {
+	    echo "Target version cannot read the current autonomy state; installation unchanged" >&2; return 1;
+	  }
+	  [ "$AUTONOMY_COMPATIBILITY" = '{"ok":true}' ] || { echo "Autonomy compatibility not confirmed" >&2; return 1; }
+	fi
+  SUBSCRIPTION_REQUIRED=0
+  for SUBSCRIPTION_STATE in "$APPDIR/subscriptions-private/subscriptions.private.json" \
+    "$APPDIR/private-restore-feeds-v1/restore.private.json" \
+    "$APPDIR/private-restore-strategylab-v1/restore.private.json"; do
+    if [ -e "$SUBSCRIPTION_STATE" ] || [ -L "$SUBSCRIPTION_STATE" ]; then
+      [ -f "$SUBSCRIPTION_STATE" ] && [ ! -L "$SUBSCRIPTION_STATE" ] || { echo "Private subscription state is unsafe; installation unchanged" >&2; return 1; }
+      SUBSCRIPTION_REQUIRED=1
+    fi
+  done
+  if [ "$SUBSCRIPTION_REQUIRED" -eq 1 ]; then
+    SUBSCRIPTION_SCHEMA="$("$1" -subscription-schema 2>/dev/null)" || { echo "Target binary cannot preserve private subscriptions; installation unchanged" >&2; return 1; }
+    [ "$SUBSCRIPTION_SCHEMA" = 1 ] || { echo "Target binary has an incompatible subscription schema; installation unchanged" >&2; return 1; }
+  fi
+  NATIVE_REQUIRED=0
+  # Empty journal directories exist on every startup. Only files are evidence
+  # of this protocol; a retained restore journal is conservatively included.
+  for NATIVE_STATE in "$STATEDIR/warp/native-enrollment.private.json" \
+    "$STATEDIR/warp/native-enrollment/current.json" "$STATEDIR/warp/native-enrollment/pending.json" \
+    "$APPDIR/private-restore-native-v1/restore.private.json"; do
+    if [ -e "$NATIVE_STATE" ] || [ -L "$NATIVE_STATE" ]; then
+      [ -f "$NATIVE_STATE" ] && [ ! -L "$NATIVE_STATE" ] || { echo "Native WARP state is unsafe; installation unchanged" >&2; return 1; }
+      NATIVE_REQUIRED=1
+    fi
+  done
+  if [ "$NATIVE_REQUIRED" -eq 1 ]; then
+    NATIVE_SCHEMA="$("$1" -native-enrollment-schema 2>/dev/null)" || {
+      echo "Target binary cannot preserve native WARP registration state; installation unchanged" >&2; return 1;
+    }
+    [ "$NATIVE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible native WARP schema; installation unchanged" >&2; return 1; }
+  fi
+}
+require_no_pre020_installation
+require_target_self_update_compatibility "$BIN_SOURCE"
+require_native_enrollment_schema "$BIN_SOURCE"
+require_node_history_compatibility "$BIN_SOURCE"
+if [ "$MODE" = apply ]; then require_legacy_file_protocol_free; fi
+
+VERSION="$("$BIN_SOURCE" -version)"
+[ -n "$VERSION" ] || { echo "Candidate did not report a version" >&2; exit 1; }
+CHECK_OUTPUT="$("$BIN_SOURCE" -check -config "$CONFIG_SOURCE" -catalog "$CATALOG_SOURCE" -sources "$SOURCES_SOURCE" -community-catalog "$COMMUNITY_SOURCE" -stage "$STATEDIR/staging" -warp-state "$STATEDIR/warp")"
+printf '%s\n' "$CHECK_OUTPUT" | grep -q '"ok": true' || { echo "Candidate preflight did not report success" >&2; exit 1; }
+
+echo "RAZVILKA transactional preflight"
+echo "  mode: $MODE"
+echo "  version: $VERSION"
+echo "  architecture: $ARCH_RAW -> $ARCH"
+echo "  binary_sha256: $ACTUAL"
+echo "  config_origin: $CONFIG_ORIGIN ($CONFIG_SOURCE)"
+echo "  target: $BINDIR/razvilka"
+echo "  init: $RAZ_INIT"
+printf '%s\n' "$CHECK_OUTPUT"
+
+if [ "$MODE" = dry-run ]; then
+  echo "Dry-run complete: no files or services were changed."
+  exit 0
+fi
+
+present() {
+  if [ -e "$1" ]; then printf '1'; else printf '0'; fi
+}
+
+RAZ_WAS_RUNNING=0
+if [ -x "$RAZ_INIT" ] && command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvilka 2>/dev/null || true)" ]; then
+  RAZ_WAS_RUNNING=1
+fi
+
+# Stage 7 must not demand route evidence the running version could not give
+# either. The candidate classifies the previous process (any release): only
+# exit 10, an identified process whose committed routes are not live, relaxes
+# the final check. Busy (75), fenced (76), unreachable or unknown keep it.
+PRIOR_ROUTES_CONFIRMED=1
+if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
+  PRIOR_PID="$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" pid 2>/dev/null || true)"
+  PRIOR_URL="http://$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" lan-ip 2>/dev/null || true):${RAZVILKA_PORT:-8787}/api/v1/status"
+  PRIOR_STATE=1
+  if [ -n "$PRIOR_PID" ]; then
+    "$BIN_SOURCE" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-prior -healthcheck-wait 3m >/dev/null 2>&1 && PRIOR_STATE=0 || PRIOR_STATE=$?
+  fi
+  case "$PRIOR_STATE" in
+    0) ;;
+    10)
+      PRIOR_ROUTES_CONFIRMED=0
+      echo "Маршруты не подтверждены в текущей версии; после обновления будет проверена только работа панели."
+      ;;
+    *) echo "Состояние маршрутов текущей версии не определено (код $PRIOR_STATE); после обновления маршруты будут проверены полностью." ;;
+  esac
+fi
+
+BACKUP=""
+SAFE_TO_RESTART=1
+restart_before_snapshot() {
+  CODE="$1"
+  trap - EXIT HUP INT TERM
+  # A protocol/reader change during target probing must also fence restart.
+  if [ "$SAFE_TO_RESTART" -eq 1 ] && ! require_legacy_file_protocol_free; then
+    SAFE_TO_RESTART=0
+  fi
+  if [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$RAZ_WAS_RUNNING" -eq 1 ] && [ -x "$RAZ_INIT" ]; then
+    RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the previous RAZVILKA process" >&2
+  elif [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ] && [ -n "$LEGACY_CONTROL" ]; then
+    sh "$LEGACY_CONTROL" start >/dev/null 2>&1 || echo "Could not restart the previous ARTEM Flow process" >&2
+  elif [ "$SAFE_TO_RESTART" -ne 1 ]; then
+    echo "Private recovery was interrupted or rejected; service remains stopped for safe inspection" >&2
+  fi
+  if [ -n "$BACKUP" ]; then
+    case "$BACKUP" in "$BACKUPROOT"/*) rm -rf "$BACKUP" ;; esac
+  fi
+  exit "$CODE"
+}
+trap 'restart_before_snapshot $?' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+stage 1 "Останавливаем текущую версию, завершаем восстановление и создаём снимок..."
+if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
+  RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop
+fi
+if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ]; then
+  sh "$LEGACY_CONTROL" stop
+fi
+
+# A registration may have checkpointed while the first check was running.
+# Recheck with the application quiescent, before recovery or any replacement.
+require_target_self_update_compatibility "$BIN_SOURCE"
+require_native_enrollment_schema "$BIN_SOURCE"
+require_node_history_compatibility "$BIN_SOURCE"
+
+require_legacy_file_protocol_free
+require_installation_paths
+require_control_ancestors
+mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BINDIR" "$INITDIR" "$BACKUPROOT"
+
+# The candidate understands the newest journal format. Settle any interrupted
+# private restore while all writers are stopped, before taking a backup or
+# changing a live file. A corrupt or ambiguous journal stops the upgrade.
+SAFE_TO_RESTART=0
+RECOVERY_OUTPUT="$("$BIN_SOURCE" -recover-private-restore \
+  -config "$APPDIR/config.json" \
+  -custom-services "$APPDIR/custom-services.json" \
+  -devices "$APPDIR/devices.json" \
+  -stage "$STATEDIR/staging" \
+  -warp-state "$STATEDIR/warp" \
+  -cloudflare-state "$APPDIR/cloudflare-private")"
+printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || { echo "Private restore recovery did not report success" >&2; false; }
+SAFE_TO_RESTART=1
+
+# Recovery can materialize a retained protocol image before snapshot/copy.
+require_target_self_update_compatibility "$BIN_SOURCE"
+require_legacy_file_protocol_free
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+BACKUP="$BACKUPROOT/$STAMP"
+mkdir "$BACKUP"
+chmod 700 "$BACKUP"
+
+for FILE in "$BINDIR/razvilka" "$RAZ_INIT" "$APPDIR/config.json" "$APPDIR/service-catalog.json" \
+  "$APPDIR/community-catalog.json" "$APPDIR/sources.json" "$APPDIR/source-state.json" \
+  "$APPDIR/admin.token" "$APPDIR/admin.credentials.json" "$APPDIR/custom-services.json" \
+  "$APPDIR/devices.json" "$APPDIR/config.json.automation.json.autonomy.json" "$STATEDIR/dns/state.json" "$LEGACY_INIT" "$LEGACY_DISABLED"; do
+  [ ! -L "$FILE" ] || { echo "Refusing to snapshot symbolic link: $FILE" >&2; false; }
+  [ ! -e "$FILE" ] || [ -f "$FILE" ] || { echo "Snapshot file target has the wrong type: $FILE" >&2; false; }
+done
+
+RAZ_BINARY_PRESENT="$(present "$BINDIR/razvilka")"
+RAZ_INIT_PRESENT="$(present "$RAZ_INIT")"
+CONFIG_PRESENT="$(present "$APPDIR/config.json")"
+CATALOG_PRESENT="$(present "$APPDIR/service-catalog.json")"
+COMMUNITY_PRESENT="$(present "$APPDIR/community-catalog.json")"
+SOURCES_PRESENT="$(present "$APPDIR/sources.json")"
+SOURCE_STATE_PRESENT="$(present "$APPDIR/source-state.json")"
+TOKEN_PRESENT="$(present "$APPDIR/admin.token")"
+CREDENTIALS_PRESENT="$(present "$APPDIR/admin.credentials.json")"
+CUSTOM_SERVICES_PRESENT="$(present "$APPDIR/custom-services.json")"
+DEVICES_PRESENT="$(present "$APPDIR/devices.json")"
+DATAPLANE_STATE_PRESENT="$(present "$STATEDIR/dataplane")"
+DNS_STATE_PRESENT="$(present "$STATEDIR/dns/state.json")"
+AUTONOMY_STATE_PRESENT="$(present "$APPDIR/config.json.automation.json.autonomy.json")"
+STAGING_PRESENT="$(present "$STATEDIR/staging")"
+CLOUDFLARE_PRIVATE_PRESENT="$(present "$APPDIR/cloudflare-private")"
+LEGACY_INIT_PRESENT="$(present "$LEGACY_INIT")"
+LEGACY_DISABLED_PRESENT="$(present "$LEGACY_DISABLED")"
+LEGACY_WAS_RUNNING="$LEGACY_RUNNING_DETECTED"
+
+for DIR in "$STATEDIR/dataplane" "$STATEDIR/staging" "$STATEDIR/dns" "$APPDIR/cloudflare-private"; do
+  [ ! -L "$DIR" ] || { echo "Private or runtime directory is unsafe: $DIR" >&2; false; }
+  [ ! -e "$DIR" ] || [ -d "$DIR" ] || { echo "Private or runtime directory has the wrong type: $DIR" >&2; false; }
+done
+
+# Each update snapshot holds the previous binary and private state (about
+# 50 MB), so keep only the newest ones. The snapshot of this update is always
+# kept; only real directories named by this script are removed.
+prune_update_backups() {
+  KEEP="${RAZVILKA_KEEP_UPDATE_BACKUPS:-5}"
+  case "$KEEP" in ''|*[!0-9]*) KEEP=5 ;; esac
+  [ "$KEEP" -ge 2 ] || KEEP=2
+  PRUNED=0
+  for OLD in $(ls -1 "$BACKUPROOT" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{6}Z-[0-9]+$' | sort -r | tail -n +"$((KEEP + 1))"); do
+    [ "$BACKUPROOT/$OLD" != "$BACKUP" ] || continue
+    [ -d "$BACKUPROOT/$OLD" ] && [ ! -L "$BACKUPROOT/$OLD" ] || continue
+    rm -rf "${BACKUPROOT:?}/$OLD" && PRUNED=$((PRUNED + 1))
+  done
+  [ "$PRUNED" -eq 0 ] || echo "Удалены старые снимки обновлений: $PRUNED (хранятся последние $KEEP)."
+}
+
+backup_file() {
+  SRC="$1"
+  NAME="$2"
+  if [ -f "$SRC" ]; then
+    cp -p "$SRC" "$BACKUP/$NAME"
+  fi
+}
+
+backup_file "$BINDIR/razvilka" razvilka.bin
+if [ "$RAZ_BINARY_PRESENT" -eq 1 ]; then
+  sha256sum "$BACKUP/razvilka.bin" | awk '{printf "%s", $1}' > "$BACKUP/razvilka.sha256"
+  chmod 600 "$BACKUP/razvilka.sha256"
+fi
+backup_file "$RAZ_INIT" S99razvilka
+backup_file "$APPDIR/config.json" config.json
+backup_file "$APPDIR/service-catalog.json" service-catalog.json
+backup_file "$APPDIR/community-catalog.json" community-catalog.json
+backup_file "$APPDIR/sources.json" sources.json
+backup_file "$APPDIR/source-state.json" source-state.json
+backup_file "$APPDIR/admin.token" admin.token
+backup_file "$APPDIR/admin.credentials.json" admin.credentials.json
+backup_file "$APPDIR/custom-services.json" custom-services.json
+backup_file "$APPDIR/devices.json" devices.json
+backup_file "$STATEDIR/dns/state.json" dns-state.json
+backup_file "$APPDIR/config.json.automation.json.autonomy.json" autonomy-state.json
+backup_file "$LEGACY_INIT" S99artem-flow
+backup_file "$LEGACY_DISABLED" S99artem-flow.razvilka-disabled
+
+backup_dir() {
+  PRESENT="$1"
+  SRC="$2"
+  NAME="$3"
+  if [ "$PRESENT" -eq 1 ]; then
+    mkdir "$BACKUP/$NAME"
+    cp -a "$SRC/." "$BACKUP/$NAME/"
+  fi
+}
+backup_dir "$DATAPLANE_STATE_PRESENT" "$STATEDIR/dataplane" dataplane
+backup_dir "$STAGING_PRESENT" "$STATEDIR/staging" staging
+backup_dir "$CLOUDFLARE_PRIVATE_PRESENT" "$APPDIR/cloudflare-private" cloudflare-private
+
+cat >"$BACKUP/manifest.tmp" <<EOF
+PRIVATE_RESTORE_PROTOCOL=1
+RAZ_BINARY_PRESENT=$RAZ_BINARY_PRESENT
+RAZ_INIT_PRESENT=$RAZ_INIT_PRESENT
+CONFIG_PRESENT=$CONFIG_PRESENT
+CATALOG_PRESENT=$CATALOG_PRESENT
+COMMUNITY_PRESENT=$COMMUNITY_PRESENT
+SOURCES_PRESENT=$SOURCES_PRESENT
+SOURCE_STATE_PRESENT=$SOURCE_STATE_PRESENT
+TOKEN_PRESENT=$TOKEN_PRESENT
+CREDENTIALS_PRESENT=$CREDENTIALS_PRESENT
+CUSTOM_SERVICES_PRESENT=$CUSTOM_SERVICES_PRESENT
+DEVICES_PRESENT=$DEVICES_PRESENT
+DATAPLANE_STATE_PRESENT=$DATAPLANE_STATE_PRESENT
+DNS_STATE_PRESENT=$DNS_STATE_PRESENT
+AUTONOMY_STATE_PRESENT=$AUTONOMY_STATE_PRESENT
+STAGING_PRESENT=$STAGING_PRESENT
+CLOUDFLARE_PRIVATE_PRESENT=$CLOUDFLARE_PRIVATE_PRESENT
+LEGACY_INIT_PRESENT=$LEGACY_INIT_PRESENT
+LEGACY_DISABLED_PRESENT=$LEGACY_DISABLED_PRESENT
+LEGACY_WAS_RUNNING=$LEGACY_WAS_RUNNING
+RAZ_WAS_RUNNING=$RAZ_WAS_RUNNING
+EOF
+chmod 600 "$BACKUP/manifest.tmp"
+mv "$BACKUP/manifest.tmp" "$BACKUP/manifest"
+
+rollback_on_error() {
+  CODE="$1"
+  trap - EXIT HUP INT TERM
+  if [ "$CODE" -eq 75 ]; then
+    # A verified live PID reported private restore, not a failed new binary.
+    # Do not interrupt it or roll files back under its journal. This is NOT an
+    # accepted healthy upgrade; the user must check status after restore ends.
+    printf '%s\n' "$BACKUP" >"$CURRENT_BACKUP"
+    chmod 600 "$CURRENT_BACKUP"
+    echo "Upgrade readiness not confirmed: private restore is busy. Process kept; check status later. Snapshot: $BACKUP" >&2
+    exit 75
+  fi
+  echo "Upgrade failed; restoring $BACKUP" >&2
+  sh "$ROLLBACK" "$BACKUP" --auto || echo "Automatic rollback failed; manual intervention required" >&2
+  exit "$CODE"
+}
+trap 'rollback_on_error $?' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+stage 2 "Устанавливаем проверенные файлы с безопасными правами..."
+require_target_self_update_compatibility "$BIN_SOURCE"
+require_legacy_file_protocol_free
+require_installation_paths
+require_control_ancestors
+install_atomic() {
+  SRC="$1"
+  DST="$2"
+  MODE_BITS="$3"
+  TMP="$DST.razvilka-update-$$"
+  cp "$SRC" "$TMP"
+  chmod "$MODE_BITS" "$TMP"
+  mv "$TMP" "$DST"
+}
+
+install_atomic "$BIN_SOURCE" "$BINDIR/razvilka" 755
+install_atomic "$INIT_SOURCE" "$RAZ_INIT" 755
+if [ "$CONFIG_PRESENT" -eq 0 ]; then
+  install_atomic "$CONFIG_SOURCE" "$APPDIR/config.json" 600
+fi
+install_atomic "$CATALOG_SOURCE" "$APPDIR/service-catalog.json" 600
+install_atomic "$COMMUNITY_SOURCE" "$APPDIR/community-catalog.json" 600
+install_atomic "$SOURCES_SOURCE" "$APPDIR/sources.json" 600
+
+# Releases before the private-draft journal created per-engine directories
+# with the process umask (commonly 0755). Current readers intentionally reject
+# those permissions. The backup above retains the original image for rollback;
+# only allowlisted RAZVILKA staging directories are tightened here.
+for DIR in "$STATEDIR/staging" \
+  "$STATEDIR/staging/nfqws2" "$STATEDIR/staging/usque" \
+  "$STATEDIR/staging/warp-wg" "$STATEDIR/staging/sing-box" \
+  "$STATEDIR/staging/xray" "$STATEDIR/staging/amneziawg"; do
+  if [ -e "$DIR" ]; then
+    [ ! -L "$DIR" ] && [ -d "$DIR" ] || { echo "Unsafe engine staging directory: $DIR" >&2; false; }
+    chmod 700 "$DIR"
+  fi
+done
+
+if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_INIT_PRESENT" -eq 1 ]; then
+  [ ! -e "$LEGACY_DISABLED" ] || { echo "Legacy disabled init already exists: $LEGACY_DISABLED" >&2; false; }
+  mv "$LEGACY_INIT" "$LEGACY_DISABLED"
+fi
+
+stage 3 "Проверяем и при необходимости мигрируем конфигурацию..."
+"$BINDIR/razvilka" -migrate-config \
+  -config "$APPDIR/config.json" \
+  -custom-services "$APPDIR/custom-services.json" \
+  -devices "$APPDIR/devices.json" \
+  -stage "$STATEDIR/staging" \
+  -warp-state "$STATEDIR/warp" \
+  -cloudflare-state "$APPDIR/cloudflare-private" \
+  -catalog "$APPDIR/service-catalog.json" \
+  -sources "$APPDIR/sources.json" \
+  -community-catalog "$APPDIR/community-catalog.json" >/dev/null
+
+# Quiesce only RAZVILKA-owned runtime objects before replacing engine
+# binaries. The committed journal is kept, so the new manager can recover the
+# same verified plan after components are updated.
+stage 4 "Сохраняем и отключаем только принадлежащий RAZVILKA dataplane (до 2 минут)..."
+"$BINDIR/razvilka" -deactivate-dataplane \
+  -stage "$STATEDIR/staging" \
+  -backups "$STATEDIR/backups" \
+  -dataplane-state "$STATEDIR/dataplane" >/dev/null
+
+# The base install is UI-only. The optional starter pack is best-effort and
+# runs while managed dataplane is quiescent. Exact GitHub assets are checked
+# against upstream checksums.txt; opkg packages are selected only from the
+# fixed component registry.
+if [ "$INSTALL_COMPONENTS" -eq 1 ]; then
+  echo "Installing recommended bypass components..."
+  COMPONENT_REPORT="$STATEDIR/component-install-$STAMP.json"
+  if "$BINDIR/razvilka" -install-components >"$COMPONENT_REPORT"; then
+    chmod 600 "$COMPONENT_REPORT"
+    echo "Component report: $COMPONENT_REPORT"
+  else
+    chmod 600 "$COMPONENT_REPORT" 2>/dev/null || true
+    echo "Some components could not be installed; RAZVILKA remains installable and the report is at $COMPONENT_REPORT" >&2
+  fi
+  echo "AmneziaWG remains platform-gated because it requires a matching Keenetic kernel/userspace runtime."
+fi
+
+if [ "$INSTALL_COMPONENTS" -eq 0 ]; then
+  echo "Bypass runtimes were not installed automatically; existing components were preserved."
+  echo "Open the 'Обходы' section to install only what you need."
+fi
+
+# Deactivation intentionally removed live objects before component replacement.
+# Restore the exact committed runtime metadata/configs so the new process can
+# reconcile them and prove the previous route before the upgrade is accepted.
+stage 5 "Возвращаем подтверждённое состояние маршрутов для безопасного reconcile..."
+if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
+  mkdir -p "$STATEDIR/dataplane"
+  cp -a "$BACKUP/dataplane/." "$STATEDIR/dataplane/"
+fi
+
+# Only a genuinely new installation creates the independent control epoch.
+# The original guards already refused retained control/file protocol. The
+# native entry admits the actual fixed installed image and protected clean
+# config; RAZVILKA_BASE cannot redirect its authority.
+if [ "$RAZ_BINARY_PRESENT" -eq 0 ] && [ "$CONFIG_PRESENT" -eq 0 ]; then
+  INSTALLED_SHA="$(sha256sum "$BINDIR/razvilka" | awk '{print $1}')"
+  [ "$INSTALLED_SHA" = "$ACTUAL" ] || { echo "CLEAN_INSTALL_CONTROL_IMAGE_CHANGED" >&2; exit 1; }
+  CONTROL_RESULT="$("$BINDIR/razvilka" install-control-initialize "$ACTUAL")" || {
+    echo "CLEAN_INSTALL_CONTROL_REFUSED" >&2; exit 1;
+  }
+  [ "$CONTROL_RESULT" = CLEAN_INSTALL_CONTROL_READY ] || { echo "CLEAN_INSTALL_CONTROL_UNCONFIRMED" >&2; exit 1; }
+  INSTALLED_CLOSING_SHA="$(sha256sum "$BINDIR/razvilka" | awk '{print $1}')"
+  [ "$INSTALLED_CLOSING_SHA" = "$ACTUAL" ] || { echo "CLEAN_INSTALL_CONTROL_IMAGE_CHANGED" >&2; exit 1; }
+fi
+
+stage 6 "Запускаем новую версию и ждём готовности панели..."
+RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" clear-guard
+START_CODE=0
+RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" start || START_CODE=$?
+# S99 keeps the supervised process when readiness is temporarily busy. Let the
+# strict bounded check below inspect that exact PID instead of ending here.
+[ "$START_CODE" -eq 0 ] || [ "$START_CODE" -eq 75 ] || exit "$START_CODE"
+RUNNING_PID="$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" pid)"
+# Exact-node recovery starts after the listener and may own admission for up
+# to eight minutes. Only the bounded strict check can accept its live evidence;
+# an extra one-shot `status` here would prematurely reject pending recovery.
+if [ "${PRIOR_ROUTES_CONFIRMED:-1}" -eq 1 ]; then
+  stage 7 "Проверяем процесс и ждём подтверждённого восстановления маршрутов (до 9 минут)..."
+  ROUTE_EVIDENCE=-healthcheck-require-dataplane
+else
+  stage 7 "Проверяем процесс; маршруты не были подтверждены и до обновления..."
+  ROUTE_EVIDENCE=""
+fi
+"$BINDIR/razvilka" -healthcheck "http://$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" lan-ip):${RAZVILKA_PORT:-8787}/api/v1/status" \
+  -healthcheck-pid "$RUNNING_PID" ${ROUTE_EVIDENCE:+"$ROUTE_EVIDENCE"} -healthcheck-wait 9m >/dev/null
+if [ -z "$ROUTE_EVIDENCE" ]; then
+  echo "Панель обновлена. Маршруты не были подтверждены и до обновления: проверьте подключения и примените сервисы в панели."
+fi
+
+printf '%s\n' "$BACKUP" >"$CURRENT_BACKUP"
+chmod 600 "$CURRENT_BACKUP"
+trap - EXIT HUP INT TERM
+prune_update_backups || echo "Старые снимки обновлений не удалось очистить; обновление завершено." >&2
+
+LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+[ -n "$LAN_IP" ] || LAN_IP="127.0.0.1"
+PANEL_URL="http://$LAN_IP:${RAZVILKA_PORT:-8787}"
+echo ""
+echo "============================================================"
+echo " [OK] RAZVILKA $VERSION установлена и запущена"
+echo " Панель: $PANEL_URL"
+# A clean installation has nothing to return to; print the snapshot only
+# when an existing installation was replaced.
+if [ "$CONFIG_PRESENT" -eq 1 ]; then
+  echo " Снимок для отката: $BACKUP"
+fi
+echo " Обходы включаются только после проверки и вашего подтверждения."
+if [ "$CREDENTIALS_PRESENT" -eq 0 ]; then
+  ADMIN_TOKEN="$(tr -d '\r\n' < "$APPDIR/admin.token")"
+  # The first-login link is the last thing printed so it is easy to find.
+  echo ""
+  echo " ПЕРВЫЙ ВХОД — откройте ссылку в браузере на устройстве"
+  echo " из домашней сети и задайте пароль для admin:"
+  echo ""
+  echo "   $PANEL_URL/#setup=$ADMIN_TOKEN"
+  echo ""
+  echo " Этот же ключ потом служит ключом восстановления пароля."
+  echo " Храните его в менеджере паролей; сменить его можно в панели:"
+  echo " «Настройки» → «Перевыпустить и показать»."
+  echo " RAZVILKA не использует и не хранит SSH-пароль роутера."
+else
+  echo " Существующие логин и пароль UI сохранены."
+  echo " Ключ восстановления скрыт и повторно в консоль не выводится."
+fi
+echo "============================================================"

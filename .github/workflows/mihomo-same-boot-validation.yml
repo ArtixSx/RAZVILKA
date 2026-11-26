@@ -1,0 +1,397 @@
+name: Mihomo same boot original offline ownership validation
+run-name: Mihomo same boot / ${{ inputs.hev_lab && 'separate HEV source lab' || 'default reviewed HEV' }} / ${{ github.sha }}
+
+on:
+  push:
+    branches: [work/mihomo-same-boot-validation-20261102, work/mihomo-same-boot-source-20261102, work/bypass-integration-20261031]
+  workflow_dispatch:
+    inputs:
+      hev_lab:
+        description: 'Historical lab selector; default uses reviewed vendor bytes'
+        type: boolean
+        default: false
+      consumer_profile:
+        description: 'Sample the original consumer without changing its deadline'
+        type: boolean
+        default: false
+      ack_cut:
+        description: 'Focused cut, or the complete original matrix'
+        type: choice
+        default: all
+        options: [all, retirement.json, runtime-history, completed.json, terminal-transaction, terminal-global]
+      mode:
+        description: 'Build selection'
+        type: choice
+        default: all
+        options: [all, normal, race]
+
+permissions:
+  contents: read
+
+jobs:
+  original-private-set:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ inputs.mode && inputs.mode != 'all' && fromJSON(format('["{0}"]', inputs.mode)) || fromJSON('["normal","race"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Actual private leases original files archive retry and sealed Start leaf
+        shell: bash
+        run: |
+          set -euo pipefail
+          race_option=""
+          if test "${{ matrix.mode }}" = race; then race_option="-race"; fi
+          GOTOOLCHAIN=local go test $race_option -count=1 ./internal/dataplane -run '^TestMihomoSameBootRetainedACK' -v | tee /tmp/sameboot-retained-ack.log
+          for name in OriginalPublisherAndSuffix RefusesChangedBindings ModelCannotSkipFreshNativeAdmission ActiveSuffixCannotRebindRecord; do
+            grep -F -- "--- PASS: TestMihomoSameBootRetainedACK$name " /tmp/sameboot-retained-ack.log
+          done
+          if grep -F -- '--- SKIP:' /tmp/sameboot-retained-ack.log; then exit 1; fi
+          GOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore ./internal/dataplane ./internal/startuptools -run '^TestOfflineServiceControlSet|^TestMihomoSameBoot|^TestMihomoColdRuntime|^TestMihomoLiveColdRetirement' -v
+          GOTOOLCHAIN=local go test $race_option -tags razvilka_native_fixture -count=1 ./internal/dataplane -run '^TestMihomoSameBootNativeFailureBoundedAndPrivate$|^TestMihomoSidecarExitDiagnosticWaitPublication$|^TestMihomoSameBootNativeProcFailurePrivateStage$|^TestMihomoSameBootNativeSourceTiming' -v | tee /tmp/sameboot-failure-diagnostic.log
+          grep -F -- '--- PASS: TestMihomoSameBootNativeFailureBoundedAndPrivate ' /tmp/sameboot-failure-diagnostic.log
+          grep -F -- '--- PASS: TestMihomoSidecarExitDiagnosticWaitPublication ' /tmp/sameboot-failure-diagnostic.log
+          grep -F -- '--- PASS: TestMihomoSameBootNativeProcFailurePrivateStage ' /tmp/sameboot-failure-diagnostic.log
+          grep -F -- '--- PASS: TestMihomoSameBootNativeSourceTimingClosedAndLate ' /tmp/sameboot-failure-diagnostic.log
+          grep -F -- '--- PASS: TestMihomoSameBootNativeSourceTimingConcurrent ' /tmp/sameboot-failure-diagnostic.log
+          if grep -F -- '--- SKIP:' /tmp/sameboot-failure-diagnostic.log; then exit 1; fi
+          GOTOOLCHAIN=local go test $race_option -tags razvilka_native_fixture -count=1 ./internal/dataplane -run '^TestInactiveProcTerminalNativeDiagnostic(Vocabulary|ExistingStat|ActualLive)$' -v | tee /tmp/sameboot-terminal-diagnostic.log
+          for name in Vocabulary ExistingStat ActualLive; do
+            grep -F -- "--- PASS: TestInactiveProcTerminalNativeDiagnostic$name " /tmp/sameboot-terminal-diagnostic.log
+          done
+          if grep -F -- '--- SKIP:' /tmp/sameboot-terminal-diagnostic.log; then exit 1; fi
+
+  original-parent-native:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ inputs.mode && inputs.mode != 'all' && fromJSON(format('["{0}"]', inputs.mode)) || fromJSON('["normal","race"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Ordinary private image unmount retains busy and foreign-mount refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sameboot-profile
+          sudo unshare --mount python3 scripts/test-mihomo-same-boot-image.py --native \
+            2>&1 | tee artifacts/sameboot-profile/image-unmount.log
+      - name: Actual owned home keeps opening and closing absence proofs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sameboot-profile
+          flags=()
+          if [ '${{ matrix.mode }}' = race ]; then flags=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test "${flags[@]}" -count=1 -v ./internal/dataplane \
+              -run '^TestMihomoSameBootHomeOwnsAbsenceBookends$' \
+              2>&1 | tee artifacts/sameboot-profile/home-bookends.log
+          grep -F -- '--- PASS: TestMihomoSameBootHomeOwnsAbsenceBookends ' artifacts/sameboot-profile/home-bookends.log
+          if grep -F -- '--- SKIP:' artifacts/sameboot-profile/home-bookends.log; then exit 1; fi
+      - name: Pinned official Xray and disposable namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          # Match approved code bytes; apt's amd64v3 variant is not the
+          # reviewed static-version source and keeps costly real child reads.
+          sameboot_packages=$(sudo mktemp -d /tmp/razvilka-sameboot-packages.XXXXXX)
+          case "$sameboot_packages" in /tmp/razvilka-sameboot-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$sameboot_packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$sameboot_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$sameboot_packages/iptables.deb" "$sameboot_packages/libip4tc2.deb" \
+            "$sameboot_packages/libip6tc2.deb" "$sameboot_packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
+          echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
+          unzip /tmp/xray.zip xray -d /tmp/xray-extracted
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray
+          /usr/local/lib/razvilka-fixtures/xray version
+          # The real local CA fixture uses the compiler's reviewed 26.3.27.
+          # 26.10.31 defaults to a bundled CA pool instead of system roots.
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
+          curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
+          echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
+          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-official
+          curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
+          sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
+      - name: Build reviewed HEV bytes for the selected default or historical lab pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install --no-install-recommends -y make patch
+          mkdir -p artifacts
+          python3 - <<'PYCODE'
+          import json,pathlib,struct
+          data=pathlib.Path('/proc/self/auxv').read_bytes()
+          assert 0 < len(data) <= 4096 and len(data)%16 == 0
+          minimum=next(value for key,value in struct.iter_unpack('<QQ',data) if key==51)
+          assert 0 < minimum <= 1<<20
+          pathlib.Path('artifacts/hev-lab-platform.json').write_text(json.dumps({'at_minsigstksz_bytes':minimum,'official_fixed_stack_bytes':8192,'official_libc_minimum_bytes':max(minimum,1024)+1024,'source_lab':True})+'\n')
+          PYCODE
+          sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
+          echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
+          sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          native_tags=razvilka_native_fixture
+          pin_test=DefaultReleasePins
+          if test '${{ inputs.hev_lab }}' = true; then
+            native_tags=razvilka_native_fixture,razvilka_hev_altstack_lab
+            pin_test=AltstackLabExactPin
+          fi
+          printf 'selected_tags=%s public_download_proven=false\n' "$native_tags" > artifacts/hev-selected-mode.txt
+          race_option=()
+          if test "${{ matrix.mode }}" = race; then race_option=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            go test "${race_option[@]}" -count=1 -v -tags "$native_tags" \
+            ./internal/components -run "^TestHEV(${pin_test}|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$" \
+            | tee artifacts/hev-lab-pin-tests.txt
+          if grep -F -- '--- SKIP:' artifacts/hev-lab-pin-tests.txt; then exit 1; fi
+          for name in "TestHEV$pin_test" TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
+            grep -F -- "--- PASS: $name " artifacts/hev-lab-pin-tests.txt
+          done
+      - name: Preserve exact reviewed source provenance and selected mode
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: |
+            artifacts/hev-selected-mode.txt
+            artifacts/hev-lab-build.txt
+            artifacts/hev-lab-platform.json
+            artifacts/hev-lab-pin-tests.txt
+            artifacts/hev-lab/build-manifest.json
+            artifacts/hev-lab/fault-tests.txt
+            artifacts/hev-lab/bin/hev-patched
+          if-no-files-found: error
+      - name: Actual producer parent death CLI cleanup and updater fences
+        id: original_native
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sameboot-profile
+          sudo modprobe tun
+          race_mode=0
+          if test "${{ matrix.mode }}" = race; then race_mode=1; fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_NATIVE_RACE="$race_mode" \
+            RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE="${{ inputs.consumer_profile && '1' || '0' }}" \
+            RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT="$PWD/artifacts/sameboot-profile" \
+            RAZVILKA_HEV_ALTSTACK_LAB="${{ inputs.hev_lab && '1' || '0' }}" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-same-boot-native.sh
+      - name: Preserve original parent consumer diagnostic
+        if: ${{ !cancelled() && inputs.consumer_profile }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-profile-parent-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/sameboot-profile
+          if-no-files-found: error
+      - name: Diagnose HEV separately on the same failed host
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/hev-after-failure
+          { git rev-parse HEAD; uname -srvm; lscpu; } > artifacts/hev-after-failure/platform.txt
+          # Only AFTER the original acceptance has failed. No traced process
+          # or extra package participates in that original ownership proof.
+          sudo apt-get install --no-install-recommends -y strace
+          test -f /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-official \
+            sh scripts/test-hev-startup-diagnostic-native.sh 2>&1 | tee artifacts/hev-after-failure/closed-diagnostic.txt || status=$?
+          printf 'diagnostic_exit=%s original_failure_preserved=true\n' "$status" > artifacts/hev-after-failure/outcome.txt
+          exit "$status"
+      - name: Preserve separate same-host diagnostic
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-after-failure-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: artifacts/hev-after-failure
+          if-no-files-found: warn
+
+  original-parent-native-ack-cuts:
+    needs: original-parent-native
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ inputs.mode && inputs.mode != 'all' && fromJSON(format('["{0}"]', inputs.mode)) || fromJSON('["normal","race"]') }}
+        ack_cut: ${{ inputs.ack_cut && inputs.ack_cut != 'all' && fromJSON(format('["{0}"]', inputs.ack_cut)) || fromJSON('["retirement.json","runtime-history","completed.json","terminal-transaction","terminal-global"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Pinned official Xray and disposable namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          # Match approved code bytes; apt's amd64v3 variant is not the
+          # reviewed static-version source and keeps costly real child reads.
+          sameboot_packages=$(sudo mktemp -d /tmp/razvilka-sameboot-packages.XXXXXX)
+          case "$sameboot_packages" in /tmp/razvilka-sameboot-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$sameboot_packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$sameboot_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$sameboot_packages/iptables.deb" "$sameboot_packages/libip4tc2.deb" \
+            "$sameboot_packages/libip6tc2.deb" "$sameboot_packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
+          echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
+          unzip /tmp/xray.zip xray -d /tmp/xray-extracted
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray
+          /usr/local/lib/razvilka-fixtures/xray version
+          # The real local CA fixture uses the compiler's reviewed 26.3.27.
+          # 26.10.31 defaults to a bundled CA pool instead of system roots.
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
+          curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
+          echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
+          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-official
+          curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
+          sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
+      - name: Build reviewed HEV bytes for the selected default or historical lab pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install --no-install-recommends -y make patch
+          mkdir -p artifacts
+          python3 - <<'PYCODE'
+          import json,pathlib,struct
+          data=pathlib.Path('/proc/self/auxv').read_bytes()
+          assert 0 < len(data) <= 4096 and len(data)%16 == 0
+          minimum=next(value for key,value in struct.iter_unpack('<QQ',data) if key==51)
+          assert 0 < minimum <= 1<<20
+          pathlib.Path('artifacts/hev-lab-platform.json').write_text(json.dumps({'at_minsigstksz_bytes':minimum,'official_fixed_stack_bytes':8192,'official_libc_minimum_bytes':max(minimum,1024)+1024,'source_lab':True})+'\n')
+          PYCODE
+          sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
+          echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
+          sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          native_tags=razvilka_native_fixture
+          pin_test=DefaultReleasePins
+          if test '${{ inputs.hev_lab }}' = true; then
+            native_tags=razvilka_native_fixture,razvilka_hev_altstack_lab
+            pin_test=AltstackLabExactPin
+          fi
+          printf 'selected_tags=%s public_download_proven=false\n' "$native_tags" > artifacts/hev-selected-mode.txt
+          race_option=()
+          if test "${{ matrix.mode }}" = race; then race_option=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            go test "${race_option[@]}" -count=1 -v -tags "$native_tags" \
+            ./internal/components -run "^TestHEV(${pin_test}|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$" \
+            | tee artifacts/hev-lab-pin-tests.txt
+          if grep -F -- '--- SKIP:' artifacts/hev-lab-pin-tests.txt; then exit 1; fi
+          for name in "TestHEV$pin_test" TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
+            grep -F -- "--- PASS: $name " artifacts/hev-lab-pin-tests.txt
+          done
+      - name: Preserve exact reviewed source provenance and selected mode
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: |
+            artifacts/hev-selected-mode.txt
+            artifacts/hev-lab-build.txt
+            artifacts/hev-lab-platform.json
+            artifacts/hev-lab-pin-tests.txt
+            artifacts/hev-lab/build-manifest.json
+            artifacts/hev-lab/fault-tests.txt
+            artifacts/hev-lab/bin/hev-patched
+          if-no-files-found: error
+      - name: Actual producer parent death CLI cleanup and updater fences
+        id: original_native
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo modprobe tun
+          race_mode=0
+          if test "${{ matrix.mode }}" = race; then race_mode=1; fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_NATIVE_RACE="$race_mode" \
+            RAZVILKA_HEV_ALTSTACK_LAB="${{ inputs.hev_lab && '1' || '0' }}" \
+            RAZVILKA_MIHOMO_SAME_BOOT_ACK_CUT="${{ matrix.ack_cut }}" \
+            RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE="${{ inputs.consumer_profile && '1' || '0' }}" \
+            RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/sameboot-profile" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-same-boot-native.sh
+      - name: Diagnose HEV separately on the same failed host
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/hev-after-failure
+          { git rev-parse HEAD; uname -srvm; lscpu; } > artifacts/hev-after-failure/platform.txt
+          # Only AFTER the original acceptance has failed. No traced process
+          # or extra package participates in that original ownership proof.
+          sudo apt-get install --no-install-recommends -y strace
+          test -f /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-official \
+            sh scripts/test-hev-startup-diagnostic-native.sh 2>&1 | tee artifacts/hev-after-failure/closed-diagnostic.txt || status=$?
+          printf 'diagnostic_exit=%s original_failure_preserved=true\n' "$status" > artifacts/hev-after-failure/outcome.txt
+          exit "$status"
+      - name: Preserve separate same-host diagnostic
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-after-failure-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: artifacts/hev-after-failure
+          if-no-files-found: warn
+      - name: Preserve original consumer diagnostic
+        if: ${{ !cancelled() && inputs.consumer_profile }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-profile-${{ matrix.mode }}-${{ matrix.ack_cut }}-${{ github.sha }}
+          path: artifacts/sameboot-profile
+          if-no-files-found: error

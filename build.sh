@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+cd "$ROOT"
+mkdir -p dist
+VERSION_FILE="$ROOT/VERSION"
+[ -f "$VERSION_FILE" ] || { echo "Missing canonical VERSION file: $VERSION_FILE" >&2; exit 1; }
+PROJECT_VERSION="$(tr -d '\r\n' < "$VERSION_FILE")"
+case "$PROJECT_VERSION" in
+  ''|*[!0-9A-Za-z.+-]*) echo "Invalid canonical version: $PROJECT_VERSION" >&2; exit 1 ;;
+esac
+VERSION="${RAZVILKA_VERSION:-$PROJECT_VERSION}"
+COMMIT="${RAZVILKA_COMMIT:-unknown}"
+BUILD_TIME="${RAZVILKA_BUILD_TIME:-unknown}"
+DIRTY="${RAZVILKA_DIRTY:-unknown}"
+LDFLAGS="-s -w -X github.com/ArtixSx/razvilka/internal/app.Version=$VERSION -X github.com/ArtixSx/razvilka/internal/app.BuildCommit=$COMMIT -X github.com/ArtixSx/razvilka/internal/app.BuildTime=$BUILD_TIME -X github.com/ArtixSx/razvilka/internal/app.BuildDirty=$DIRTY"
+build(){
+  if [ -n "${3:-}" ]; then
+    GOOS=linux GOARCH="$1" GOMIPS="$3" CGO_ENABLED=0 \
+      go build -trimpath -ldflags="$LDFLAGS" -o "dist/razvilka-linux-$2" ./cmd/razvilka
+  else
+    GOOS=linux GOARCH="$1" CGO_ENABLED=0 \
+      go build -trimpath -ldflags="$LDFLAGS" -o "dist/razvilka-linux-$2" ./cmd/razvilka
+  fi
+}
+case "${RAZVILKA_BUILD_TARGETS:-all}" in
+  arm64)
+    build arm64 arm64
+    sha256sum dist/razvilka-linux-arm64 > dist/SHA256SUMS
+    ;;
+  arm64+amd64)
+    # Development verification: ARM64 delivery plus the native Linux fixture.
+    build arm64 arm64
+    build amd64 amd64
+    sha256sum dist/razvilka-linux-arm64 dist/razvilka-linux-amd64 > dist/SHA256SUMS
+    ;;
+  all)
+    build amd64 amd64
+    build arm64 arm64
+    build mips mips softfloat
+    build mipsle mipsle softfloat
+    sha256sum dist/razvilka-linux-amd64 dist/razvilka-linux-arm64 \
+      dist/razvilka-linux-mips dist/razvilka-linux-mipsle > dist/SHA256SUMS
+    ;;
+  *) echo "RAZVILKA_BUILD_TARGETS must be arm64, arm64+amd64 or all" >&2; exit 1 ;;
+esac

@@ -1,0 +1,270 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+
+const read = file => readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+const app = read('cmd/razvilka/web/app.js');
+const source = read('cmd/razvilka/web/project-log.js');
+const html = read('cmd/razvilka/web/index.html');
+const esc = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+const context = vm.createContext({ esc, timeAgo: () => 'сейчас', technicalDetails: value => `<details class="technical-details"><pre>${esc(JSON.stringify(value))}</pre></details>` });
+vm.runInContext(source, context);
+const healthy = { detail_kind: 'project-log', control: { config_revision: 2, runtime_state: 'running', running: true, safe_mode: false, mode: 'auto' }, audit: { available: true, events: [] } };
+const render = value => context.renderProjectLogDetails(value);
+const visible = value => render(value).split('<details class="technical-details">')[0];
+
+let out = visible(healthy);
+assert.match(out, /Обходы включены/);
+assert.match(out, /Автопилот/);
+assert.match(out, /Записанных действий пока нет/);
+assert.doesNotMatch(out, /Операция завершена|Что требует внимания/);
+out = visible({ ...healthy, stop_receipt: { stop_requested: true, authority_revoked: true, stopped_confirmed: false, cleanup_pending: true } });
+assert.match(out, /Остановка запрошена · результат ещё не подтверждён/);
+assert.match(out, /Продолжение обновления заблокировано; очистка маршрутов ещё не подтверждена/);
+assert.doesNotMatch(out, /Обходы включены|Обходы выключены|detail-hero pass/);
+assert.match(visible({ ...healthy, stop_receipt: { stop_requested: true } }), /Обходы включены/, 'incomplete receipt invented revocation');
+assert.match(visible({ ...healthy, control: { ...healthy.control, running: false, runtime_state: 'stopped', safe_mode: true, mode: 'manual' } }), /Обходы выключены[\s\S]*Ручная настройка[\s\S]*применение маршрутов запрещено/);
+assert.match(visible({ ...healthy, control: { ...healthy.control, runtime_state: 'unknown' } }), /Состояние не получено/);
+assert.doesNotMatch(visible({ ...healthy, control: { ...healthy.control, runtime_state: 'unknown' } }), /Обходы включены/);
+out = visible({ ...healthy, control: { ...healthy.control, running: false, runtime_state: 'unknown', runtime_issue: { code: 'TIMEOUT', message: 'Проверка состояния не завершилась вовремя.' } } });
+assert.match(out, /Проверка состояния не завершилась вовремя/);
+assert.doesNotMatch(out, /Обходы включены/);
+out = visible({ ...healthy, control: { runtime_state: 'unknown', runtime_issue: { message: '<script>unsafe()</script>' } } });
+assert.doesNotMatch(out, /<script>/);
+assert.match(out, /&lt;script&gt;/);
+
+out = visible({ ...healthy, load_issues: [{ section: 'engineConfigs', message: 'Настройки не загрузились' }], component_issues: [{ id: 'Sing-box', message: 'Источник пакетов недоступен' }], last_action_error: 'Маршрут не подтверждён' });
+for (const text of ['Есть сообщения, требующие внимания', 'Настройки обходов', 'Настройки не загрузились', 'Обход: Sing-box', 'Источник пакетов недоступен', 'Маршрут не подтверждён']) assert.ok(out.includes(text), text);
+assert.doesNotMatch(out, /Операция завершена|detail-hero pass/);
+
+out = visible({ ...healthy, audit: { available: false, last_error: 'Журнал не читается', events: [{ path: '/api/v1/auth/login', action: 'POST', outcome: 'ok', status_code: 200 }] } });
+assert.match(out, /Журнал не читается/);
+assert.match(out, /Вход в панель/);
+assert.doesNotMatch(out, /Записанных действий пока нет/);
+
+const failed = { timestamp: '2026-09-20T13:01:00Z', path: '/api/v1/components/usque/update', action: 'POST', outcome: 'failed', status_code: 502 };
+const accepted = { timestamp: '2026-09-20T13:02:00Z', path: '/api/v1/node-checks', action: 'POST', outcome: 'ok', status_code: 202, duration_ms: 23 };
+assert.match(context.renderProjectAuditRow(accepted), /Принято в работу/);
+assert.doesNotMatch(context.renderProjectAuditRow(accepted), /audit-row ok|выполнено/);
+assert.match(context.renderProjectAuditRow(failed), /audit-row failed/);
+assert.doesNotMatch(context.renderProjectAuditRow({ ...accepted, actor: '<script>x</script>' }), /<script>/);
+assert.match(visible({ ...healthy, audit: { available: true, memory_only: true, history_complete: false, events: [] } }), /Предыдущую историю пока не удалось прочитать/);
+const logged = { ...healthy, audit: { available: true, events: [failed, accepted] } };
+out = visible(logged);
+assert.match(out, /В последних действиях есть ошибки/);
+assert.match(out, /Обновление: WARP · MASQUE/);
+assert.match(out, /Принято в работу/);
+assert.match(out, /Завершение задачи и её результат проверяются отдельно/);
+assert.ok(out.indexOf('Проверка подключений') < out.indexOf('Обновление: WARP'), 'events must be newest first');
+assert.equal(logged.audit.events[0], failed, 'rendering must not reorder the caller snapshot');
+assert.equal(context.projectLogEventResult({ outcome: 'ok', status_code: 500 }).tone, 'fail', 'HTTP failure wins over a conflicting outcome');
+assert.equal(context.projectLogEventResult({ outcome: 'failed', status_code: 202 }).tone, 'fail', 'failure wins over accepted');
+assert.equal(context.projectLogEventResult({ outcome: 'denied', status_code: 403 }).label, 'Доступ отклонён');
+assert.equal(context.projectLogEventResult({ outcome: 'unknown', status_code: 200 }).label, 'Результат не указан');
+assert.equal(context.projectLogAction({ path: '/api/v1/service-control/runtime' }), 'Включение или остановка обходов');
+assert.equal(context.projectLogAction({ action: 'BOOT_RECOVERY', path: 'dataplane' }), 'Восстановление маршрутов после запуска');
+assert.equal(context.projectLogAction({ action: 'PUT', path: '/api/v1/settings/safe-mode' }), 'Изменение безопасного режима');
+for (const reason of ['journal-changed', 'writer-busy', 'journal-invalid', 'write-unconfirmed', 'storage-unavailable']) {
+  const event = { action: 'SCHEDULE', path: '/runtime/scheduler/' + reason, outcome: 'failed' };
+  assert.equal(context.projectLogAction(event), 'Фоновые проверки остановлены');
+  const result = context.projectLogEventResult(event);
+  assert.equal(result.tone, 'fail');
+  assert.equal(result.label, 'Автоматика остановлена');
+  assert.doesNotMatch(result.detail, /Причина.*не записана/);
+}
+const restoredHooks = { action: 'RESTORE', path: '/runtime/nfqws2', outcome: 'ok', actor: 'router', remote_ip: 'local', duration_ms: 1200 };
+assert.equal(context.projectLogAction(restoredHooks), 'Восстановление правил NFQWS2');
+assert.equal(context.projectLogEventResult(restoredHooks).label, 'Правила восстановлены');
+assert.equal(context.projectLogEventResult(restoredHooks).tone, 'pass');
+assert.match(context.renderProjectAuditRow(restoredHooks), /audit-row ok[\s\S]*Восстановление правил NFQWS2/);
+assert.equal(context.projectLogAction({ action: 'RESTORE', path: '/runtime/forwarding' }), 'Восстановление сетевых настроек', 'forwarding label unchanged');
+for (const reason of ['repeated-loss', 'cleanup-uncertain', 'kernel-other', 'kernel-changed', 'write-failed', 'verify-failed', 'queue-binding', 'timeout']) {
+  const event = { action: 'RESTORE', path: '/runtime/nfqws2/' + reason, outcome: 'failed', actor: 'router' };
+  assert.equal(context.projectLogAction(event), 'Восстановление правил NFQWS2');
+  const result = context.projectLogEventResult(event);
+  assert.equal(result.tone, 'fail');
+  assert.equal(result.label, 'Правила не восстановлены');
+  assert.doesNotMatch(result.detail, /Причина.*не записана|требует проверки\.$/, reason);
+  assert.match(context.renderProjectAuditRow(event), /audit-row failed/);
+}
+for (const odd of [{ action: 'RESTORE', path: '/runtime/nfqws2/constructor', outcome: 'failed' }, { action: 'RESTORE', path: '/runtime/nfqws2/unknown-code', outcome: 'failed' }]) {
+  assert.match(context.projectLogEventResult(odd).detail, /причина требует проверки/, 'unknown reason code must not borrow another text');
+}
+assert.notEqual(context.projectLogAction({ action: 'RESTORE', path: '/runtime/nfqws2/../forwarding' }), 'Восстановление правил NFQWS2');
+assert.notEqual(context.projectLogAction({ action: 'POST', path: '/runtime/nfqws2' }), 'Восстановление правил NFQWS2');
+assert.equal(context.projectLogEventResult({ action: 'RESTORE', path: '/runtime/nfqws2/write-failed', outcome: 'ok' }).tone, 'pass', 'a malformed ok row is not shown as a refusal');
+
+const payload = '<img src=x onerror="alert(1)">';
+out = render({ ...healthy, load_issues: [{ section: payload, message: payload }], component_issues: [{ id: payload, message: payload }], last_action_error: payload, audit: { available: false, last_error: payload, events: [{ path: `/api/v1/components/${payload}/remove`, action: payload, outcome: payload, timestamp: payload, status_code: payload, duration_ms: payload }] } });
+assert.doesNotMatch(out, /<img|<script|class="[^">]*onerror/);
+assert.ok(out.includes('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;'));
+assert.doesNotMatch(out, /Invalid Date|NaN мс/);
+for (const malformed of [null, {}, { load_issues: 'bad', component_issues: [null, 2, []], audit: { events: [null, false, []] } }]) {
+  out = visible(malformed);
+  assert.match(out, /Состояние не получено/);
+  assert.doesNotMatch(out, /Операция завершена/);
+}
+out = visible({ ...healthy, audit: { available: true, events: Array.from({ length: 60 }, (_, i) => ({ ...accepted, timestamp: new Date(100000 + i * 1000).toISOString() })) } });
+assert.equal((out.match(/<article /g) || []).length, 40);
+assert.match(out, /Показаны 40 последних записей/);
+
+out = visible({ ...healthy, jobs: [
+  { id: 1, mode: 'service-stop', state: 'queued', message: 'Ждём очистки' },
+  { id: 2, mode: 'service-resume', state: 'failed', message: 'Настройки изменились', finished_at: '2026-09-23T12:00:00Z' },
+  { id: 3, mode: 'service-check', state: 'completed', message: payload },
+] });
+assert.match(out, /Задания на роутере/);
+assert.match(out, /Остановка проекта/); assert.match(out, /В очереди/);
+assert.match(out, /Включение проекта/); assert.match(out, /Настройки изменились/);
+assert.doesNotMatch(out, /<img|Invalid Date/);
+out = visible({ ...healthy, jobs: Array.from({ length: 64 }, () => ({ mode: 'service-stop', state: 'completed', message: 'done' })) });
+assert.equal((out.match(/<article /g) || []).length, 12, 'job history is bounded');
+
+const latestCheck = { mode: 'service', scope: 'all-vless', state: 'completed', completed: 3, total: 3, passed: 0, failed: 2, inconclusive: 1, skipped: 0, results: [{ verdict: 'FAIL', test_level: 'service', error_code: 'TIMEOUT', message: '<unavailable>' }], uri: 'vless://must-not-be-shown', label: 'private-label' };
+out = visible({ ...healthy, node_job: latestCheck, jobs: [{ mode: 'service-node-check', state: 'completed' }] });
+assert.match(out, /Последняя ручная проверка каталога подключений[\s\S]*Проверка подключения к сервису[\s\S]*Обработано: 3 \/ 3/);
+assert.match(out, /Пройдены: 0 · Отказ: 2 · Не подтверждены: 1/);
+assert.match(out, /Первый отказ этой проверки: Проверка не пройдена · проверка сервиса: &lt;unavailable&gt;/);
+assert.match(out, /не подтверждение, что обход сейчас работает/);
+assert.doesNotMatch(out, /vless:|private-label|<unavailable>|<strong>Задание<\/strong>/);
+assert.doesNotMatch(context.renderProjectNodeCheck(latestCheck, ''), /status-pass/);
+const priorService = context.renderProjectNodeCheck({ mode: 'service-check', state: 'completed', completed: 2, total: 2, result_state: 'not-retained', passed: 0, failed: 0, inconclusive: 0, skipped: 0 }, '');
+assert.ok(priorService.includes('Обработано: 2 / 2'));
+assert.match(priorService, /Разбивка результатов прежней проверки не сохранена/);
+assert.doesNotMatch(priorService, /Пройдены: 0/);
+out = visible({ ...healthy, node_job: { ...latestCheck, earlier_network_completed: 3 } });
+assert.match(out, /Результаты прежнего запуска или сети/);
+assert.match(out, /Первый отказ прежней проверки/);
+assert.doesNotMatch(out, /Первый отказ этой проверки/);
+assert.match(visible({ ...healthy, node_job: null }), /ещё не запускалась/);
+assert.match(visible({ ...healthy, node_job: null }), /Отдельная ручная проверка каталога ещё не запускалась/);
+assert.doesNotMatch(visible({ ...healthy, node_job: null }), /Проверка подключений ещё не запускалась/);
+const automatic = { schema: 1, instance_id: 'a'.repeat(32), revision: 2, observed_at: '2026-10-23T00:00:00Z', data_age_ms: 2000, state: 'available', dataplane: 'not-checked', data: { policy: { enabled: true }, services: { example: { enabled: true } }, runtime: { example: { state: 'searching', message: 'Подбираем следующий маршрут', next_check: '0001-01-01T00:00:00Z', node_id: 'must-not-display-node', uri: 'vless://private' } }, catalog_services: [{ id: 'example', name: 'Мой сервис' }] } };
+out = visible({ ...healthy, autonomy: automatic, node_job: null });
+assert.match(out, /Проверки и подбор Автопилота[\s\S]*Мой сервис[\s\S]*Подбор подключения[\s\S]*Подбираем следующий маршрут/);
+assert.match(out, /Отдельная ручная проверка каталога ещё не запускалась/);
+assert.doesNotMatch(out, /vless:|must-not-display-node|status-pass|Следующая попытка по расписанию/);
+assert.match(out, /не подтверждают текущую доступность/);
+out = visible({ ...healthy, autonomy: { ...automatic, state: 'retained', data_age_ms: 40000 } });
+assert.match(out, /сохранённый снимок; текущее состояние обновляется/);
+assert.match(out, /На момент снимка/);
+for (const invalid of [null, {}, { ...automatic, state: 'expired' }, { ...automatic, data_age_ms: 15000 }, { ...automatic, state: 'retained', data_age_ms: 120000 }, { ...automatic, data: { ...automatic.data, runtime: [] } }]) {
+  out = context.renderProjectAutonomy(invalid, '');
+  assert.match(out, /Свежий снимок Автопилота не получен/);
+  assert.doesNotMatch(out, /Подбор подключения|Подбираем следующий маршрут|Автоматика разрешена/);
+}
+out = context.renderProjectAutonomy({ ...automatic, data: { ...automatic.data, blocked: true, maintenance_message: payload, runtime: { example: { state: 'requires-review', message: payload } }, catalog_services: [{ id: 'example', name: payload }] } }, '');
+assert.match(out, /Автоматика приостановлена[\s\S]*Нужна проверка журнала/);
+assert.doesNotMatch(out, /<img|status-pass/);
+assert.match(out, /&lt;img/);
+assert.match(context.renderProjectAutonomy(automatic, payload), /Состояние Автопилота недоступно: &lt;img/);
+const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => ['service-' + i, { enabled: true }]));
+out = context.renderProjectAutonomy({ ...automatic, data: { ...automatic.data, services: many } }, '');
+assert.equal((out.match(/<article /g) || []).length, 20);
+assert.match(out, /Показаны первые 20 сервисов/);
+out = visible({ ...healthy, node_job_error: '<read failed>' });
+assert.match(out, /&lt;read failed&gt;/);
+assert.doesNotMatch(out, /ещё не запускалась|<read failed>/);
+out = visible({ ...healthy, node_job: { mode: 'tcp', state: 'running', completed: -1, total: '2', results: [null, []] } });
+assert.match(out, /TCP-пинг[\s\S]*Выполняется[\s\S]*Обработано: — \/ —/);
+const slice = (start, end) => {
+  const from = app.indexOf(start), to = app.indexOf(end, from + start.length);
+  assert.ok(from >= 0 && to > from);
+  return app.slice(from, to);
+};
+const nodes = new Map();
+const element = selector => {
+  if (selector === '#details [data-open-strategy-lab]') return null;
+  if (!nodes.has(selector)) nodes.set(selector, { innerHTML: '', textContent: '', classList: { add() {} } });
+  return nodes.get(selector);
+};
+context.$ = element;
+context.renderGenericDetails = () => 'generic';
+vm.runInContext(slice('function showDetails(', 'function showNotice('), context);
+context.showDetails(logged, 'Лог проекта');
+assert.match(element('#details').innerHTML, /Принято в работу/);
+assert.equal(element('.drawer-head h3').textContent, 'Лог проекта');
+assert.match(element('#detailsSubtitle').textContent, /причины ошибок/);
+context.showDetails('ordinary result');
+assert.equal(element('#details').innerHTML, 'generic');
+assert.ok(html.indexOf('/project-log.js?') < html.indexOf('/app.js?'), 'renderer loads before app can call it');
+assert.ok(html.includes('/project-log.js?v=' + read('VERSION').trim()), 'renderer asset must use the current release version');
+
+// Escape on a reused confirmation dialog must never repeat an earlier approval.
+const dialog = Object.assign(new EventTarget(), {
+  returnValue: 'confirm', open: false,
+  showModal() { this.open = true; },
+  closeListener() { this.open = false; this.dispatchEvent(new Event('close')); },
+  close(value = '') { this.returnValue = value; this.closeListener(); }
+});
+const confirmation = vm.createContext({ document: new EventTarget(), $: selector => selector === '#actionDialog' ? dialog : { textContent: '' } });
+vm.runInContext(slice('function askConfirmation(', 'function applyStateText('), confirmation);
+const confirmed = confirmation.askConfirmation('Удаление', 'Проверить', 'Удалить');
+assert.equal(dialog.returnValue, '');
+dialog.returnValue = 'confirm'; dialog.closeListener();
+assert.equal(await confirmed, true);
+const cancelled = confirmation.askConfirmation('Удаление', 'Проверить', 'Удалить');
+assert.equal(dialog.returnValue, '');
+dialog.closeListener(); // Native Escape closes without changing returnValue.
+assert.equal(await cancelled, false);
+
+const auditElements = new Map();
+const auditState = { audit: null, dataLoad: {} }, downloads = [], notices = [];
+const auditContext = vm.createContext({ state: auditState, esc, Date, JSON,
+  $: id => { if (!auditElements.has(id)) auditElements.set(id, { innerHTML: '', disabled: false }); return auditElements.get(id); },
+  renderProjectAuditRow: event => `<p>${esc(event.path)}</p>`,
+  consoleDownload: (...args) => downloads.push(args), showNotice: (...args) => notices.push(args),
+});
+for (const name of ['auditReadState', 'renderAudit']) {
+  const fn = app.match(new RegExp(`function ${name}\\([^]*?\\n}\\n`));
+  assert.ok(fn, name); vm.runInContext(fn[0], auditContext);
+}
+const exportFn = read('cmd/razvilka/web/console.js').match(/function exportConsoleAudit\([^]*?\n}\n/);
+assert.ok(exportFn); vm.runInContext(exportFn[0], auditContext);
+for (const phase of [undefined, 'loading', 'busy', 'error']) {
+  auditState.dataLoad.audit = phase ? { phase, loaded: phase !== 'loading' } : undefined;
+  auditContext.renderAudit(); auditContext.exportConsoleAudit();
+  assert.equal(auditElements.get('#consoleExportAudit').disabled, true);
+  assert.match(auditElements.get('#auditRows').innerHTML, /data-panel-refresh/);
+  assert.doesNotMatch(auditElements.get('#auditRows').innerHTML, /Действий пока нет/);
+  assert.equal(downloads.length, 0, 'unavailable observation exported a fabricated empty journal');
+}
+auditState.audit = { available: false, last_error: '<read failed>', events: [{ path: '/retained' }] };
+auditState.dataLoad.audit = { phase: 'ready', loaded: true };
+auditContext.renderAudit(); auditContext.exportConsoleAudit();
+assert.match(auditElements.get('#auditRows').innerHTML, /&lt;read failed&gt;[^]*\/retained/);
+assert.equal(downloads.length, 0);
+auditState.audit = { available: true, events: [] };
+auditContext.renderAudit(); auditContext.exportConsoleAudit();
+assert.equal(auditElements.get('#consoleExportAudit').disabled, false);
+assert.match(auditElements.get('#auditRows').innerHTML, /Действий пока нет/);
+assert.deepEqual(JSON.parse(downloads[0][1]).events, []);
+auditState.audit.events = [{ path: '/actual' }];
+auditContext.renderAudit(); auditContext.exportConsoleAudit();
+assert.equal(JSON.parse(downloads[1][1]).events[0].path, '/actual');
+console.log('PASS project log: readable issues/events, honest request outcomes, ordering/bounds, escaping, drawer integration, confirmation reuse and valid export');
+
+{
+ let rendered='',rows=[];const target=auditElements.get('#auditRows');
+ Object.defineProperty(target,'innerHTML',{get:()=>rendered,set:value=>{rendered=value;rows=[...value.matchAll(/<p>([^]*?)<\/p>/g)].map(match=>({textContent:match[1],hidden:false}));}});
+ auditContext.$$=selector=>selector==='#auditRows .audit-row'?rows:[];
+ vm.runInContext(read('cmd/razvilka/web/console.js').match(/function consoleFilterAudit\([^]*?\n/)[0],auditContext);
+ auditContext.$('#consoleAuditSearch').value='ошибка';
+ for(const events of [[{path:'ошибка применения'},{path:'успешный запрос'}],[{path:'фоновый запрос'},{path:'ошибка DNS'},{path:'обновление'}]]){
+  auditState.audit={available:true,events};auditContext.renderAudit();
+  assert.equal(rows.filter(row=>!row.hidden).length,1,'refresh restored unfiltered audit rows');assert.match(rows.find(row=>!row.hidden).textContent,/ошибка/);
+ }
+ auditContext.$('#consoleAuditSearch').value='';auditContext.renderAudit();assert.equal(rows.filter(row=>!row.hidden).length,3);
+ console.log('PASS active audit search survives replacement of rows during refresh');
+}
+// A busy control image is retained information, regardless of its previous state.
+for (const prior of [healthy.control, {...healthy.control,runtime_state:'unconfigured',running:false}, {...healthy.control,runtime_state:'stopped',running:false}, null]) {
+  out=visible({...healthy,control:prior,control_read_busy:true});
+  assert.match(out,/Состояние обновляется/);
+  assert.match(out,/Сохранённые данные не подтверждают текущее состояние/);
+  assert.doesNotMatch(out,/Обходы включены|Обходы выключены|Нужна настройка|Применение разрешено после проверки/);
+}
+out=visible({...healthy,control_read_busy:true,stop_receipt:{stop_requested:true,authority_revoked:true,stopped_confirmed:false,cleanup_pending:true}});
+assert.match(out,/Остановка запрошена · результат ещё не подтверждён/,'busy state masked pending cleanup');
+assert.match(visible({...healthy,control_read_busy:false}),/Обходы включены/,'fresh log retained busy presentation');
+console.log('PASS project log distinguishes busy retained control from fresh state and retains Stop receipt');

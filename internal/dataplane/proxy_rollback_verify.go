@@ -1,0 +1,380 @@
+package dataplane
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+)
+
+// VerifyRollback is deliberately read-only. A successful Start/restore command
+// is not enough: processes may already have died, a file may differ, or router
+// hooks may have removed/reordered the restored RPDB/firewall rules.
+func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root string) (bool, error) {
+	return a.verifyRollbackWithInactiveProof(ctx, plan, root, nil)
+}
+
+// Tests may supply the existing private proc/kernel observation model. Public
+// verification always obtains the actual platform source, never a predicate,
+// cached absence, or caller-provided success flag.
+func (a *ProxyTunnelAdapter) verifyRollbackWithInactiveProof(ctx context.Context, plan Plan, root string, inactiveProof *proxyInactiveProof) (bool, error) {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return false, err
+		}
+		return e.verifyRollback(ctx)
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if a.xrayPlanDispatch && !a.xrayOperation {
+		view, frozen, err := a.dispatchXrayPlan(plan, root, true)
+		if err != nil {
+			return false, err
+		}
+		return view.VerifyRollback(ctx, frozen, root)
+	}
+	s, err := readProxySnapshot(root)
+	if err != nil {
+		return false, err
+	}
+	if handled, err := a.verifyUnstagedColdXray(ctx, root, s, inactiveProof); handled {
+		return err == nil, err
+	}
+	a, err = a.xrayPreviousView(s)
+	if err != nil {
+		return false, err
+	}
+	var retirementRuntime xrayRetirementRuntimeWitness
+	if a.isXrayRetirement() {
+		retirementRuntime, err = a.captureXrayRetirementRuntime(ctx, s)
+		if err != nil {
+			return false, err
+		}
+	}
+	if a.isXrayRetirement() {
+		if err := a.verifyXrayRetirementVerificationGrant(ctx, s, root); err != nil {
+			return false, err
+		}
+	}
+	if err := a.checkSnapshotSidecar(s); err != nil {
+		return false, err
+	}
+	if err := a.verifyProxySnapshotRuntimeFiles(s); err != nil {
+		return false, err
+	}
+	if s.ConfigDraft {
+		if err := verifyRestoredFile(s.ConfigPath, s.Config, s.ConfigExisted); err != nil {
+			return false, err
+		}
+	}
+	policy, exists, err := a.loadPolicy()
+	if err != nil {
+		return false, err
+	}
+	if exists != s.PolicyExists || exists && !reflect.DeepEqual(policy, s.Policy) {
+		return false, errors.New("restored proxy policy journal differs from snapshot")
+	}
+	boot, bootErr := a.currentBootIdentity()
+	sameBoot := bootErr == nil && s.BootID != "" && boot == s.BootID
+	if a.Processes.Running(a.engineProcess()) != (sameBoot && s.EngineWasRunning) || a.Processes.Running(a.sidecarProcess()) != (sameBoot && s.SidecarWasRunning) {
+		return false, errors.New("restored proxy processes differ from snapshot")
+	}
+	packageRunning, err := a.packageRuntimeRunning(ctx)
+	if err != nil {
+		return false, err
+	}
+	if packageRunning != (sameBoot && s.PackageWasRunning) {
+		return false, errors.New("restored package runtime differs from snapshot")
+	}
+	// Cold/legacy restoration retains its existing cleanup behavior but cannot
+	// acquire a verified live receipt without exact boot and forwarding authority.
+	if !sameBoot || !s.PolicyExists || !s.PolicyWasActive || !s.EngineWasRunning || !s.SidecarWasRunning || policy.RuleLayout != 2 || policy.Forwarding == nil {
+		// A first Sing-box assignment may restore intentionally absent owned
+		// runtime instead of a live route. Confirm that different outcome only
+		// through the existing independent complete absence observer below.
+		if sameBoot && a.ID() == "sing-box" && !s.PolicyExists && !s.PolicyWasActive && !s.PolicyTracked && s.PolicyBinding == nil &&
+			!s.EngineWasRunning && !s.SidecarWasRunning && !s.PackageWasRunning && !s.RuntimeEngineExists && !s.RuntimeSideExists &&
+			!s.TransportExists && !s.NodeManifestExists && !s.NodeInterfaceExists {
+			return a.verifyColdSingboxRollback(ctx, root, s, inactiveProof)
+		}
+		return false, nil
+	}
+	if err := a.waitForSOCKS(ctx); err != nil {
+		return false, err
+	}
+	if err := a.verifyForwarding(ctx, policy); err != nil {
+		return false, err
+	}
+	if err := verifyPolicyEvidence(ctx, a.Runner, a.ip(), policy); err != nil {
+		return false, err
+	}
+	if err := a.verifyCommittedReceipt(ctx, policy); err != nil {
+		return false, err
+	}
+	staged, err := a.rollbackPolicyState(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil // No complete candidate journal: do not grant a receipt.
+	}
+	if err != nil {
+		return false, err
+	}
+	addition, err := a.readCandidatePolicyReceipt(root, staged)
+	if err != nil || addition.Phase != "restored" && addition.Phase != "prepared" {
+		return false, ErrProxyPolicyUnknown
+	}
+	if err := a.verifyCandidateReceipt(ctx, root, staged, false); err != nil {
+		return false, err
+	}
+	if err := a.verifyCandidateRemoved(ctx, policy, staged); err != nil {
+		return false, err
+	}
+	if a.scopedXray {
+		if err := a.verifyScopedNodeInterface(ctx); err != nil {
+			return false, err
+		}
+		if _, err := a.scopedRuntimeIdentity(); err != nil {
+			return false, err
+		}
+	}
+	// Kernel inspection can take time. A process which exited during readback
+	// must not acquire a live restoration receipt.
+	if !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
+		return false, errors.New("restored proxy process exited during verification")
+	}
+	if err := a.checkXrayTransactionSnapshot(); err != nil {
+		return false, err
+	}
+	if a.isXrayRetirement() {
+		if err := errors.Join(a.verifyXrayRetirementVerificationGrant(ctx, s, root), a.closeXrayRetirementReceipt(s, addition),
+			a.closeXrayRetirementRuntime(ctx, s, retirementRuntime)); err != nil {
+			return false, errors.Join(ErrProxyPolicyUnknown, err)
+		}
+	}
+	// The caller still must verify network epoch, service definition and cause
+	// attribution before any next Apply. A broken old service A can be restored
+	// exactly; that does not make it healthy or give candidate B a bad reputation.
+	return true, ctx.Err()
+}
+
+func (a *ProxyTunnelAdapter) verifyColdSingboxRollback(ctx context.Context, root string, snapshot proxySnapshot, proof *proxyInactiveProof) (bool, error) {
+	staged, err := a.rollbackPolicyState(root)
+	if err != nil {
+		return false, err
+	}
+	receipt, err := a.readCandidatePolicyReceipt(root, staged)
+	if err != nil || (receipt.Phase != "restored" || receipt.Boot != snapshot.BootID) && !proxyColdCandidateNeverActivated(root, receipt) {
+		return false, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	if err := a.verifyColdCandidateReceipt(ctx, root, staged, receipt); err != nil {
+		return false, err
+	}
+	absent := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority}
+	if err := a.verifyCandidateRemoved(ctx, absent, staged); err != nil {
+		return false, err
+	}
+	if proof == nil {
+		actual, err := proxyInactivePlatformProof()
+		if err != nil {
+			return false, errors.Join(ErrProxyRuntimeInactive, err)
+		}
+		proof = &actual
+	}
+	if err := a.verifyRuntimeInactive(ctx, *proof); err != nil {
+		return false, err
+	}
+	// Slow independent inventories cannot turn a changed transaction or boot
+	// into restoration proof. Runtime/config file checks were already made by
+	// VerifyRollback; repeat them after the absence observer's own bookends.
+	current, err := readProxySnapshot(root)
+	if err != nil || !reflect.DeepEqual(current, snapshot) {
+		return false, errors.Join(ErrReviewChanged, err)
+	}
+	currentStaged, err := a.rollbackPolicyState(root)
+	if err != nil || !reflect.DeepEqual(currentStaged, staged) {
+		return false, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	currentReceipt, err := a.readCandidatePolicyReceipt(root, staged)
+	if err != nil || currentReceipt != receipt {
+		return false, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	if err := a.verifyColdCandidateReceipt(ctx, root, staged, currentReceipt); err != nil {
+		return false, err
+	}
+	boot, err := a.currentBootIdentity()
+	if err != nil || boot != snapshot.BootID {
+		return false, errors.Join(ErrReviewChanged, err)
+	}
+	if err := a.verifyProxySnapshotRuntimeFiles(snapshot); err != nil {
+		return false, err
+	}
+	if snapshot.ConfigDraft {
+		if err := verifyRestoredFile(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil {
+			return false, err
+		}
+	}
+	return ctx.Err() == nil, ctx.Err()
+}
+
+// Use the existing receipt decoder/comparison without opening a writer session:
+// missing/unknown cleanup metadata must not create a lock during readback.
+func (a *ProxyTunnelAdapter) verifyColdCandidateReceipt(ctx context.Context, root string, state PolicyState, receipt proxyPolicyReceipt) error {
+	if proxyColdCandidateNeverActivated(root, receipt) {
+		// Stage only: Activate never crossed its durable unknown fence. The
+		// caller still proves complete absence and repeats receipt/boot checks.
+		return ctx.Err()
+	}
+	if receipt.NoAdditions {
+		return a.verifyCandidateReceipt(ctx, root, state, false)
+	}
+	additionRoot := root
+	if receipt.Generation != "" {
+		var err error
+		additionRoot, err = a.policyGenerationRoot(receipt.Generation)
+		if err != nil {
+			return err
+		}
+	}
+	owned, err := ownedfs.Open(additionRoot)
+	if err != nil {
+		return ErrProxyPolicyUnknown
+	}
+	defer owned.Close()
+	lock, err := owned.Stat(policyAdditionLock)
+	marker, markerErr := owned.ReadLimited(policyAdditionLock, int64(len(policyAdditionMarker)+1))
+	if err != nil || !validCloudflareScanLockFile(lock) || markerErr != nil || string(marker) != policyAdditionMarker {
+		return ErrProxyPolicyUnknown
+	}
+	session := policyAdditionSession{root: owned, path: additionRoot, state: state, options: a.additionOptions()}
+	if err := session.load(ctx); err != nil {
+		return errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	status := session.status()
+	if !status.Removed || status.Unknown || receipt.Generation != "" && status.ID != receipt.Generation {
+		return ErrProxyPolicyUnknown
+	}
+	return ctx.Err()
+}
+
+// A pristine prepared receipt is Stage intent, not an addition ACK. Missing
+// metadata after activation never qualifies: beginCandidatePolicy first writes
+// Boot and Phase=unknown durably. Any addition ledger or lock also fences this
+// branch, even if its bytes are malformed or its file is a symlink.
+func proxyColdCandidateNeverActivated(root string, receipt proxyPolicyReceipt) bool {
+	if receipt.Phase != "prepared" || receipt.Boot != "" || receipt.Generation != "" ||
+		receipt.RestorationGeneration != "" || receipt.RetirementSnapshot != "" || receipt.RetirementReceiptID != "" || receipt.NoAdditions {
+		return false
+	}
+	for _, name := range []string{policyAdditionFile, policyAdditionLock} {
+		if _, err := os.Lstat(filepath.Join(root, name)); !errors.Is(err, os.ErrNotExist) {
+			return false
+		}
+	}
+	return true
+}
+
+// Include the candidate's families and coordinates: checking only the restored
+// IPv4 policy would otherwise overlook candidate-only IPv6 selectors/chains.
+// This is inspection only; foreign occupants are never deleted to obtain proof.
+func (a *ProxyTunnelAdapter) verifyCandidateRemoved(ctx context.Context, restored, candidate PolicyState) error {
+	want, err := kernelRulesForPolicy(restored)
+	if err != nil {
+		return err
+	}
+	staged, err := kernelRulesForPolicy(candidate)
+	if err != nil {
+		return err
+	}
+	wanted := map[kernelPolicyRule]bool{}
+	for _, rule := range want {
+		wanted[rule] = true
+	}
+	for _, family := range []int{4, 6} {
+		priorities := map[int]bool{}
+		for _, rules := range [][]kernelPolicyRule{want, staged} {
+			for _, rule := range rules {
+				if rule.family == family {
+					priorities[rule.priority] = true
+				}
+			}
+		}
+		if len(priorities) == 0 {
+			continue
+		}
+		lines, err := readPolicyRules(ctx, a.Runner, a.ip(), family)
+		if err != nil {
+			return err
+		}
+		seen := map[kernelPolicyRule]bool{}
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			priority, ok := policyLinePriority(line)
+			if !ok {
+				return errors.New("unrecognized policy rule after rollback")
+			}
+			if !priorities[priority] {
+				continue
+			}
+			rule, ok := parseKernelPolicyRule(family, line)
+			if !ok || !wanted[rule] || seen[rule] {
+				return errors.New("candidate or foreign policy selector remains after rollback")
+			}
+			seen[rule] = true
+		}
+		for _, rule := range want {
+			if rule.family == family && !seen[rule] {
+				return errors.New("restored policy selector disappeared during verification")
+			}
+		}
+	}
+	for _, table := range proxyFirewallTables(candidate) {
+		retained := false
+		for _, old := range proxyFirewallTables(restored) {
+			if old.v6 == table.v6 && old.table == table.table && old.chain == table.chain {
+				retained = true
+			}
+		}
+		if retained {
+			continue // verifyForwarding checked this exact chain and its attachments.
+		}
+		snapshot, err := a.firewallSnapshot(ctx, table)
+		if err != nil {
+			return err
+		}
+		if snapshot.declared || len(snapshot.own) != 0 || len(snapshot.references) != 0 {
+			return errors.New("candidate forwarding chain remains after rollback")
+		}
+	}
+	return ctx.Err()
+}
+
+func verifyRestoredFile(path string, expected []byte, exists bool) error {
+	info, err := os.Lstat(path)
+	if !exists && errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !exists || !info.Mode().IsRegular() || info.Size() != int64(len(expected)) {
+		return errors.New("restored proxy file does not match snapshot")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, int64(len(expected))+1))
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(data, expected) {
+		return errors.New("restored proxy file contents differ from snapshot")
+	}
+	return nil
+}

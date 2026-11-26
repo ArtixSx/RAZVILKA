@@ -1,0 +1,285 @@
+// Runs against full repository files by default. Local excerpt mode is explicit.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import vm from 'node:vm';
+const app = readFileSync(process.env.RAZVILKA_TEST_APP || new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
+const autonomy = readFileSync(process.env.RAZVILKA_TEST_AUTONOMY || new URL('../cmd/razvilka/web/console-autonomy.js', import.meta.url), 'utf8');
+const heartbeat = readFileSync(process.env.RAZVILKA_TEST_HEARTBEAT || new URL('../cmd/razvilka/web/panel-availability.js', import.meta.url), 'utf8');
+const resourceSource=readFileSync(new URL('../cmd/razvilka/web/resource-exclusions-ui.js',import.meta.url),'utf8');
+const listScopeSource=readFileSync(new URL('../cmd/razvilka/web/list-scope-ui.js',import.meta.url),'utf8');
+const resourceModel=createRequire(import.meta.url)('../cmd/razvilka/web/interface-model.js');
+const extract = name => {const m=app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`)); assert(m, name);return m[0];};
+const flush=()=>new Promise(r=>setImmediate(r));
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
+const results=[];
+async function test(name,fn){let timer;try{await Promise.race([fn(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('test deadline')),4000);})]);results.push({name,status:'passed'});console.log('PASS',name);}catch(e){results.push({name,status:'failed',error:e.message});console.error('FAIL',name,e.stack);}finally{clearTimeout(timer);}}
+const helpers=['panelReadContext','panelReadContextCurrent','invalidatePanelReads','readPanelResource','panelViewKeys','panelViewRequests','refreshPanelView','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','settlePanelReads','refreshAll','refreshAfterMutation','loadPanelSnapshot'];
+const renderNames=['renderStatus','renderSettings','renderSystem','renderMetrics','renderServices','renderOverviewQuickServices','renderOverviewServices','renderReadiness','renderEngines','renderEngineControl','renderComponents','renderWarpManager','renderSources','renderNodes','renderConnections','renderDevices','renderTestLab','renderEngineLab','renderAudit','renderStrategyLab','renderDNS','renderDNSPlan','renderDNSServiceBindings'];
+function fixture(){
+ const els=new Map(),calls=[],renders=[],timers=new Map();let serial=0,handler;
+ const state={currentView:'engineconfig',authenticated:true,status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
+ const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
+ const $=key=>{if(!els.has(key)){const classes=new Set();els.set(key,{hidden:true,value:'',textContent:'',classList:{add(...keys){keys.forEach(k=>classes.add(k));},remove(...keys){keys.forEach(k=>classes.delete(k));},contains:key=>classes.has(key),toggle(key,force){const on=force===undefined?!classes.has(key):!!force;if(on)classes.add(key);else classes.delete(key);return on;}}});}return els.get(key);};
+ const ctx={state,panelLoad,panelReads:{epoch:0,entries:new Map()},$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent(){}},
+ setTimeout(fn,ms){timers.set(++serial,{fn,ms});return serial;},clearTimeout(id){timers.delete(id);},
+ hideAuth(){state.authenticated=true;$('#authScreen').hidden=true;},showAuth(){state.authenticated=false;$('#authScreen').hidden=false;ctx.cancelPanelRefresh();},
+ refreshNodeActivity:async()=>false,scheduleNodeActivity(){},showNotice(){},consoleInitialSetup(){},acceptDeviceList:v=>state.devices=v};
+ for(const n of renderNames)ctx[n]=()=>renders.push(n);
+ ctx.api=async(url,opt={})=>{calls.push({url,opt});return handler(url,opt);};
+ vm.createContext(ctx);vm.runInContext(helpers.map(extract).join('\n'),ctx);
+ const arrays=new Set(['/api/v1/services','/api/v1/engines','/api/v1/engine-configs','/api/v1/components','/api/v1/sources','/api/v1/routes/options']);
+ const normal=url=>url==='/api/v1/auth/status'?{authenticated:true}:url==='/api/v1/status'?{authenticated:true,version:'test',revision:2}:url==='/api/v1/services'?[{id:'telegram'}]:url==='/api/v1/panel/inventory'?{schema:1,dataplane:'not-checked',state:'available',instance_id:'a'.repeat(32),revision:1,data_age_ms:0,max_age_seconds:300,observed_at:new Date().toISOString(),data:{components:[],engines:[],system:{}}}:arrays.has(url)?[]:{};
+ handler=normal;
+ return {ctx,state,panelLoad,calls,renders,timers,$,normal,handler:fn=>handler=fn};
+}
+await test('slow status no longer gates services and engine sections',async()=>{
+ const f=fixture(),slow=deferred();f.handler(url=>url==='/api/v1/status'?slow.promise:f.normal(url));
+ const p=f.ctx.refreshAll();await flush();assert.equal(f.state.services.length,1);assert.equal(f.state.dataLoad.engineConfigs.loaded,true);
+ slow.resolve(f.normal('/api/v1/status'));assert.equal(await p,true);
+});
+for(const status of [409,503,500])await test(`status HTTP ${status} preserves independent sections`,async()=>{
+ const f=fixture();f.state.status={version:'last-good'};
+ f.handler(url=>{if(url==='/api/v1/status')throw Object.assign(new Error('injected failure'),{status,payload:{code:status===409?'RESTORE_OPERATION_BUSY':'BROKEN'}});return f.normal(url);});
+ await f.ctx.refreshAll();assert.equal(f.state.services.length,1);assert.equal(f.state.dataLoad.system.loaded,true);assert.equal(f.state.status.version,'last-good');assert(f.timers.size);
+});
+await test('slow activity cannot block bootstrap and core reads',async()=>{
+ const f=fixture();f.ctx.refreshNodeActivity=()=>new Promise(()=>{});assert.equal(await f.ctx.refreshAll(),true);assert.equal(f.state.services.length,1);
+});
+await test('busy activity is not treated as a global UI read lock',async()=>{
+ const f=fixture();f.ctx.refreshNodeActivity=async()=>true;await f.ctx.refreshAll();assert(f.calls.some(x=>x.url==='/api/v1/services'));
+});
+await test('concurrency remains bounded to four and refresh coalesces',async()=>{
+ const f=fixture(),queue=[];let active=0,max=0;
+ f.handler(url=>{if(url==='/api/v1/auth/status')return f.normal(url);const d=deferred();active++;max=Math.max(max,active);queue.push(()=>{active--;d.resolve(f.normal(url));});return d.promise;});
+ const a=f.ctx.refreshAll(),b=f.ctx.refreshAll();await flush();assert.equal(queue.length,4);
+ while(f.panelLoad.request){while(queue.length)queue.shift()();await flush();}
+ await Promise.all([a,b]);assert.equal(max,4);assert.equal(f.calls.filter(x=>x.url==='/api/v1/auth/status').length,1);
+});
+await test('null service JSON never erases the last valid catalogue',async()=>{
+ const f=fixture();await f.ctx.refreshAll();const prior=f.state.services;f.handler(url=>url==='/api/v1/services'?null:f.normal(url));await f.ctx.refreshAll();assert.equal(f.state.services,prior);assert.equal(f.state.dataLoad.services.phase,'error');
+});
+await test('401 cancels sibling results and opens login',async()=>{
+ const f=fixture(),slow=deferred();f.handler(url=>url==='/api/v1/status'?Promise.reject(Object.assign(new Error('login'),{status:401})):url==='/api/v1/services'?slow.promise:f.normal(url));
+ const p=f.ctx.refreshAll();await flush();slow.resolve([{id:'stale-private'}]);await p;assert.equal(f.$('#authScreen').hidden,false);assert.equal(f.state.services.length,0);assert.equal(f.timers.size,0);
+});
+await test('post-write readback rejects a late pre-write snapshot',async()=>{
+ const f=fixture(),slow=deferred();let committed=false;
+ f.handler(url=>url==='/api/v1/services'?(committed?[{id:'new'}]:slow.promise):f.normal(url));
+ const first=f.ctx.refreshAll();await flush();const oldRead=f.calls.find(call=>call.url==='/api/v1/services'),epoch=f.ctx.panelReads.epoch;
+ assert.equal(oldRead.opt.signal.aborted,false);committed=true;await f.ctx.refreshAfterMutation();
+ assert(f.ctx.panelReads.epoch>epoch,'mutation refresh did not invalidate the shared read epoch');
+ assert.equal(oldRead.opt.signal.aborted,true,'mutation refresh did not abort the old shared transport');
+ slow.resolve([{id:'old'}]);await first;assert.equal(f.state.services[0].id,'new');
+});
+await test('one renderer failure does not suppress completed sibling reads',async()=>{
+ const f=fixture();f.ctx.renderStatus=()=>{throw new Error('status render');};f.ctx.renderInterface=()=>{throw new Error('interface render');};
+ await f.ctx.refreshAll();assert.equal(f.state.dataLoad.services.loaded,true);assert.equal(f.state.dataLoad.engineConfigs.loaded,true);assert(Object.keys(f.state.uiRenderIssues).length);
+});
+await test('failed-only retries do not reload every successful section',async()=>{
+ const f=fixture();await f.ctx.refreshAll();f.handler(url=>{if(url==='/api/v1/services')throw new Error('temporary');return f.normal(url);});await f.ctx.refreshAll();f.calls.length=0;f.handler(f.normal);await f.ctx.refreshAll(true);
+ assert.deepEqual(f.calls.map(x=>x.url),['/api/v1/auth/status','/api/v1/status','/api/v1/services']);
+});
+function inactiveExclusionDTO() {
+ const effective={policy_revision:0,revision:0,clients:{mode:'',new_devices:'',segment_ids:null,device_ids:null,excluded_device_ids:null,excluded_cidrs:null},
+  russian_enabled:false,legacy_russian:{enabled:false,auto_update_allowed:false,revision:0,service_ids:null,broad_tlds:null},manual:[],russian:[],legacy_rules:[],broad_tlds:[],digest:'a'.repeat(64)};
+ return {ok:true,revision:8,policy_revision:0,exclusion_revision:0,applied_revision:8,resource_exclusions:null,effective,applied_effective:structuredClone(effective),
+  russian_enabled:false,russian_auto_update_allowed:false,desired_matches_applied:true,live_applied:false,scope_configured:false,storage_state:'inactive'};
+}
+function exclusionsReadFixture(view='exclusions') {
+ const f=fixture(),root={innerHTML:'',querySelectorAll:()=>[],addEventListener(){}};
+ f.state.currentView=view;f.ctx.window={RazvilkaInterfaceModel:resourceModel};
+ f.ctx.document.getElementById=id=>id==='resourceExclusionsContent'?root:null;
+ f.ctx.document.addEventListener=()=>{};
+ f.ctx.esc=value=>String(value??'');
+ vm.runInContext(resourceSource,f.ctx);
+ vm.runInContext(listScopeSource,f.ctx);
+ f.ctx.renderInterface=()=>f.ctx.renderResourceExclusions();
+ f.ctx.acceptResourceExclusions(inactiveExclusionDTO());
+ f.state.dataLoad.resourceExclusions={loaded:true,phase:'ready'};
+ f.normalResource=url=>url==='/api/v1/networkpolicy/exclusions'?inactiveExclusionDTO():url==='/api/v1/networkpolicy/review'?{revision:8,policy:null,consent:null,live_applied:false}:f.normal(url);
+ return {...f,root};
+}
+for(const view of ['exclusions','devices'])for(const retry of [false,true])await test(`${view} ${retry?'busy retry':'initial refresh'} waits for exclusive status before protected metadata`,async()=>{
+ const f=exclusionsReadFixture(view),status=deferred(),metadata=[];let exclusive=false,collisions=0;
+ if(retry)f.state.dataLoad.resourceExclusions.phase='busy';
+ f.handler(async url=>{
+  if(url==='/api/v1/auth/status')return f.normal(url);
+  if(url==='/api/v1/status'){exclusive=true;try{return await status.promise;}finally{exclusive=false;}}
+  metadata.push(url);
+  if(exclusive){collisions++;throw Object.assign(new Error('own status holds admission'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});}
+  return f.normalResource(url);
+ });
+ const refresh=f.ctx.refreshAll(retry);await flush();
+ assert.equal(metadata.length,0,'protected reads raced the view\'s own exclusive status');
+ status.resolve(f.normal('/api/v1/status'));await refresh;
+ assert.equal(collisions,0);assert(metadata.includes('/api/v1/networkpolicy/exclusions'));
+ assert.equal(f.state.dataLoad.resourceExclusions.phase,'ready');assert.equal(f.ctx.resourceExclusionsCanEdit(),view==='exclusions');
+ f.ctx.renderResourceExclusions();assert.doesNotMatch(f.root.innerHTML,/Новые данные не получены/);
+ assert.doesNotMatch(f.root.innerHTML,/id="resourceExclusionKind"[^>]*disabled/);
+ assert.equal(f.calls.filter(call=>call.opt.method&&call.opt.method!=='GET').length,0);
+});
+await test('a failed scope read keeps successfully read exclusion controls ready',async()=>{
+ const f=exclusionsReadFixture();
+ f.handler(url=>{if(url==='/api/v1/networkpolicy/review')throw Object.assign(new Error('another operation started'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});return f.normalResource(url);});
+ await f.ctx.refreshAll();
+ assert.equal(f.state.dataLoad.networkPolicyReview.phase,'busy');assert.equal(f.state.dataLoad.resourceExclusions.phase,'ready');
+ assert.equal(f.state.dataLoad.services.phase,'ready');assert.equal(f.ctx.resourceExclusionsCanEdit(),true);
+ f.ctx.renderResourceExclusions();assert.doesNotMatch(f.root.innerHTML,/Новые данные не получены/);assert.doesNotMatch(f.root.innerHTML,/id="resourceExclusionKind"[^>]*disabled/);
+});
+await test('ordered editor loading leaves memory-only inventory parallel with status',async()=>{
+ const f=fixture(),status=deferred();f.state.currentView='engines';
+ f.handler(url=>url==='/api/v1/status'?status.promise:f.normal(url));
+ const refresh=f.ctx.refreshAll();await flush();
+ assert(f.calls.some(call=>call.url==='/api/v1/panel/inventory'),'memory-only inventory waited behind status');
+ assert.equal(f.state.dataLoad.inventory.phase,'ready');
+ assert.equal(f.calls.filter(call=>['/api/v1/services','/api/v1/engine-configs'].includes(call.url)).length,0);
+ status.resolve(f.normal('/api/v1/status'));await refresh;
+ assert.equal(f.state.dataLoad.services.phase,'ready');assert.equal(f.state.dataLoad.engineConfigs.phase,'ready');
+});
+await test('leaving exclusions while status is pending cannot start old-view metadata',async()=>{
+ const f=exclusionsReadFixture(),status=deferred();
+ f.handler(url=>url==='/api/v1/status'?status.promise:f.normalResource(url));
+ const refresh=f.ctx.refreshAll();await flush();f.ctx.cancelPanelRefresh();f.state.currentView='settings';
+ status.resolve(f.normal('/api/v1/status'));await refresh;
+ assert.equal(f.calls.filter(call=>call.url==='/api/v1/networkpolicy/exclusions').length,0);
+});
+await test('navigation is local and survives broken optional renderers',async()=>{
+ const f=fixture(),classes=new Map();f.state.engineEditorDirty=true;f.state.engineEditorVersion=42;
+ f.$('#detailsPanel').classList.add('open');
+ f.ctx.document={getElementById:id=>id==='view-settings'?{}:null,dispatchEvent(){}};
+ f.ctx.CustomEvent=CustomEvent;f.ctx.CSS={escape:s=>s};f.ctx.$$=selector=>selector==='.view'?[{id:'view-settings',classList:{toggle:(_key,on)=>classes.set('settings',on)}}]:[];
+ f.ctx.window={matchMedia:()=>({matches:false}),scrollTo(){}};f.ctx.viewMeta={settings:['Настройки','Общие']};f.ctx.renderWorkspaceNavigation=()=>{};
+ for(const name of ['consoleViewChanged','renderStatus','renderInterface','renderInterfaceNavigation'])f.ctx[name]=()=>{throw new Error('injected');};
+ vm.runInContext(extract('setView'),f.ctx);f.ctx.setView('settings');assert.equal(classes.get('settings'),true);assert.equal(f.state.currentView,'settings');assert.equal(f.state.engineEditorDirty,true);assert.equal(f.state.engineEditorVersion,42);assert.equal(f.calls.length,0);assert.equal(f.$('#pageTitle').textContent,'Настройки');
+ assert.equal(f.$('#detailsPanel').classList.contains('open'),false,'navigation must close the previous workspace inspector');
+});
+function confirmationFixture(){
+ const dialog=Object.assign(new EventTarget(),{open:false,returnValue:'',showModal(){this.open=true;},close(value=''){this.returnValue=value;this.open=false;this.dispatchEvent(new Event('close'));}});
+ const document=new EventTarget();const ctx={document,$:s=>s==='#actionDialog'?dialog:{textContent:''}};vm.createContext(ctx);vm.runInContext(extract('askConfirmation'),ctx);return {dialog,document,ask:ctx.askConfirmation};
+}
+await test('double confirmation invocation cannot approve two actions',async()=>{
+ const f=confirmationFixture();const first=f.ask('first','one');const second=f.ask('second','two');assert.equal(await second,false);f.dialog.close('confirm');assert.equal(await first,true);
+});
+await test('Escape never reuses an earlier approval',async()=>{
+ const f=confirmationFixture();let p=f.ask('first','one');f.dialog.close('confirm');assert.equal(await p,true);p=f.ask('second','two');f.dialog.dispatchEvent(new Event('cancel'));f.dialog.close();assert.equal(await p,false);
+});
+await test('logout revokes a pending confirmation and releases it',async()=>{
+ const f=confirmationFixture();const p=f.ask('delete','one');f.document.dispatchEvent(new Event('razvilka:auth-required'));assert.equal(await p,false);assert.equal(f.dialog.open,false);const next=f.ask('new','two');f.dialog.close('confirm');assert.equal(await next,true);
+});
+await test('showModal error fails closed without wedging the next dialog',async()=>{
+ const f=confirmationFixture();f.dialog.showModal=()=>{throw new Error('broken')};assert.equal(await f.ask('x','x'),false);f.dialog.showModal=function(){this.open=true;};const next=f.ask('x','x');f.dialog.close('confirm');assert.equal(await next,true);
+});
+for(const [requested,expected] of [[undefined,20000],[3000,3000],[1,250],[110000,110000],[200000,110000]])await test(`GET deadline ${requested} clamps to ${expected}`,async()=>{
+ let duration,fetchSignal;const ctx={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(_fn,ms){duration=ms;return 1;},clearTimeout(){},fetch:async(_url,opt)=>{fetchSignal=opt.signal;return {ok:true,json:async()=>({ok:true})};}};
+ vm.createContext(ctx);vm.runInContext(extract('api'),ctx);await ctx.api('/api/v1/panel/availability',requested===undefined?{}:{readTimeoutMs:requested});assert.equal(duration,expected);assert(fetchSignal instanceof AbortSignal);
+});
+await test('read deadline also aborts a delayed response body',async()=>{
+ let timer,signal;const ctx={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(fn){timer=fn;return 1;},clearTimeout(){},fetch:async(_url,opt)=>{signal=opt.signal;return {ok:true,json:()=>new Promise((_r,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted'))))};}};
+ vm.createContext(ctx);vm.runInContext(extract('api'),ctx);const pending=ctx.api('/read');await flush();timer();await assert.rejects(pending,e=>e.code==='READ_TIMEOUT');assert(signal.aborted);
+});
+await test('mutations keep caller cancellation and are never automatically replayed',async()=>{
+ let timers=0,calls=0;const caller=new AbortController();const ctx={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(){timers++;},clearTimeout(){},fetch:async(_url,opt)=>{calls++;assert.equal(opt.signal,caller.signal);throw new Error('connection lost');}};
+ vm.createContext(ctx);vm.runInContext(extract('api'),ctx);await assert.rejects(ctx.api('/api/v1/apply',{method:'POST',signal:caller.signal}));assert.equal(calls,1);assert.equal(timers,0);
+});
+const policyMatch=autonomy.match(/function policyConsentRequired\([^]*?\n  }/);assert(policyMatch);
+const pc={};vm.createContext(pc);vm.runInContext(policyMatch[0],pc);const needs=pc.policyConsentRequired;
+const base=()=>({setup_complete:true,revision:2,enabled:true,all_lan:false,default_sources:['192.168.1.2'],source_ids:['trusted'],protocols:['vless','tuic'],preferred_routes:['nfqws2'],inherit_new_services:true,update_channel:'stable',check_seconds:300,reserve_seconds:900,reserve_target:2,candidates_per_round:2,failure_confirm_seconds:30,max_switches_per_hour:4,timezone:'Europe/Warsaw',application:{mode:'check',start:'02:00',end:'04:00',days:[1,2]},components:{mode:'check',start:'02:00',end:'04:00',days:[1,2]}});
+const policyCases=[
+ ['unchanged approved policy',p=>{},false],['check interval',p=>p.check_seconds=600,false],['reserve budget within server bounds',p=>p.reserve_target=3,false],['pause',p=>p.enabled=false,false],['same-permission schedule',p=>p.application.start='03:00',false],['remove a protocol',p=>p.protocols=['vless'],false],['remove a source',p=>p.source_ids=[],false],['disable inheritance',p=>p.inherit_new_services=false,false],['new source',p=>p.source_ids.push('new'),true],['new protocol',p=>p.protocols.push('hysteria2'),true],['new transport',p=>p.preferred_routes.push('usque'),true],['wider scope',p=>{p.all_lan=true;p.default_sources=[]},true],['different device',p=>p.default_sources=['192.168.1.3'],true],['preview updates',p=>p.update_channel='preview',true],['prepare instead of check',p=>p.application.mode='prepare',true],['unknown future update mode',p=>p.application.mode='install',true],['new future permission field',p=>p.allow_remote_script=true,true],['unknown update-window field',p=>p.components.allow_install=true,true]
+];
+for(const [label,edit,expected]of policyCases)await test('policy: '+label,async()=>{const old=base(),next=base();edit(next);const before=JSON.stringify([old,next]);assert.equal(needs(old,next),expected);assert.equal(JSON.stringify([old,next]),before,'classifier mutated policy');});
+await test('policy: first setup and Safe Mode release still require consent',async()=>{const p=base();assert(needs(null,p));assert(needs({...p,setup_complete:false},p));assert(needs(p,p,true));});
+await test('policy: enabling future-service inheritance requires consent',async()=>{const old=base();old.inherit_new_services=false;assert(needs(old,base()));});
+const hb={AbortController,Date};vm.createContext(hb);vm.runInContext(heartbeat,hb);const model=hb.RazvilkaPanelAvailability;
+const snapshot=(busy=false)=>({schema:1,name:'RAZVILKA',panel:'responding',dataplane:'not-checked',admission:{state:busy?'busy':'idle',active:busy?1:0,exclusive:busy,fenced:false}});
+function monitorFixture(){let handler=async()=>snapshot(),serial=0,visible=true;const timers=new Map(),published=[],calls=[],auth=[];const control=model.createController({request:opt=>{calls.push(opt);return handler(opt)},publish:v=>published.push(v),isVisible:()=>visible,setTimeout(fn,ms){timers.set(++serial,{fn,ms});return serial;},clearTimeout:id=>timers.delete(id),now:()=>1000,onAuthRequired:()=>auth.push(true)});return {control,timers,published,calls,auth,handler:fn=>handler=fn,visible:v=>visible=v};}
+await test('availability validates shape and never accepts a route-health claim',async()=>{assert(model.validSnapshot(snapshot()));assert(!model.validSnapshot({...snapshot(),dataplane:'healthy'}));assert(!model.validSnapshot({...snapshot(),admission:{state:'idle',active:1,exclusive:true,fenced:false}}));assert(!model.validSnapshot(null));});
+await test('heartbeat single-flight and busy retry are bounded',async()=>{const f=monitorFixture(),d=deferred();f.handler(()=>d.promise);f.control.start();const a=f.control.refresh(),b=f.control.refresh();assert.equal(a,b);await flush();assert.equal(f.calls.length,1);assert.equal(f.calls[0].readTimeoutMs,3000);d.resolve(snapshot(true));await a;assert.equal([...f.timers.values()][0].ms,5000);});
+await test('heartbeat backoff avoids request storms',async()=>{const f=monitorFixture();f.handler(async()=>{throw new Error('timeout')});f.control.start();const delays=[];for(let i=0;i<7;i++){await f.control.refresh();delays.push([...f.timers.values()][0].ms);}assert.deepEqual(delays,[5000,10000,20000,40000,60000,60000,60000]);assert.equal(f.calls.length,7);});
+await test('stopped heartbeat discards late results and cancels its request',async()=>{const f=monitorFixture(),d=deferred();f.handler(()=>d.promise);f.control.start();const p=f.control.refresh();await flush();f.control.stop();assert(f.calls[0].signal.aborted);d.resolve(snapshot());await p;assert.equal(f.published.length,0);assert.equal(f.timers.size,0);});
+await test('401 stops heartbeat and requests authentication once',async()=>{const f=monitorFixture();f.handler(async()=>{throw Object.assign(new Error('login'),{status:401})});f.control.start();await f.control.refresh();assert.equal(f.auth.length,1);assert.equal(f.timers.size,0);assert.equal(f.published.at(-1),null);});
+await test('404 mixed-version response stops automatic retries',async()=>{const f=monitorFixture();f.handler(async()=>{throw Object.assign(new Error('not found'),{status:404})});f.control.start();await f.control.refresh();assert.equal(f.published.at(-1).kind,'unsupported');assert.equal(f.timers.size,0);await f.control.refresh();assert.equal(f.calls.length,1);});
+await test('old heartbeat response cannot supersede a new session',async()=>{const f=monitorFixture(),old=deferred();f.handler(()=>old.promise);f.control.start();const first=f.control.refresh();await flush();f.control.stop();f.handler(async()=>snapshot(true));f.control.start();await f.control.refresh();old.resolve(snapshot());await first;assert.equal(f.published.length,1);assert.equal(f.published[0].admission.state,'busy');});
+await test('heartbeat descriptions do not fabricate service availability',async()=>{const text=model.describe({kind:'unreachable'});assert.match(text,/не доказывает/);assert.match(model.describe({kind:'responding',admission:{state:'recovery-required'}}),/восстановления журнала/);});
+await test('busy heartbeat names the running operation',async()=>{assert.match(model.describe({kind:'responding',admission:{state:'busy',operation:'проверка подключений'}}),/Сейчас выполняется: проверка подключений\./);assert.match(model.describe({kind:'responding',admission:{state:'busy'}}),/Выполняется операция\./);});
+const progressSnapshot=()=>({...snapshot(true),admission:{...snapshot(true).admission,operation:'автопилот: проверка сервисов и подписок',progress:{
+ id:7,kind:'autonomy',phase:'checking',service_id:'youtube',started_at:'2026-10-31T00:00:00Z',phase_started_at:'2026-10-31T00:01:00Z',deadline_at:'2026-10-31T00:02:00Z',elapsed_seconds:65,phase_seconds:5,remaining_seconds:55,deadline_exceeded:false
+}}});
+await test('autonomy progress names its observed phase and known service without claiming route health',async()=>{
+ const value=progressSnapshot(),services=[{id:'youtube',name:'YouTube'}],before=JSON.stringify([value,services]);
+ const view=model.progressView(value.admission,services);
+ assert.equal(view.activity,'Проверка и применение сервиса · YouTube');
+ assert.equal(view.timing,'Прошло 1 мин 5 с · На этапе 5 с · До лимита 55 с');
+ assert.equal(model.progressView(value.admission,[]).activity,'Проверка и применение сервиса','unknown IDs are not guessed as names');
+ assert.doesNotMatch(model.describe({kind:'responding',admission:value.admission},services),/работает|проверен|завершена/);
+ assert.equal(JSON.stringify([value,services]),before,'presentation changed the observed snapshot');
+});
+await test('known progress phases remain bounded presentation labels',async()=>{
+ for(const phase of ['preparing','maintenance','subscriptions','selecting','activating','checking','reserves','cleanup','update-handoff']){
+  const value=progressSnapshot();value.admission.progress.phase=phase;
+  assert(model.progressView(value.admission),phase);
+ }
+ const value=progressSnapshot();delete value.admission.progress.deadline_at;delete value.admission.progress.remaining_seconds;
+ assert.doesNotMatch(model.progressView(value.admission).timing,/лимита/,'a missing budget must not be invented');
+ delete value.admission.progress.service_id;
+ assert.equal(model.progressView(value.admission,[{name:'unrelated private label'}]).activity,'Проверка и применение сервиса');
+});
+await test('invalid optional progress retains liveness and the generic busy fallback',async()=>{
+ const edits=[p=>p.id=0,p=>p.id=Number.MAX_SAFE_INTEGER+1,p=>p.kind='unknown',p=>p.phase='healthy',p=>p.phase='toString',p=>p.started_at='invalid',p=>p.started_at='123',p=>p.phase_started_at='2026-10-30T23:59:59Z',p=>p.phase_started_at='2026-10-31T00:03:00Z',p=>p.elapsed_seconds=-1,p=>p.elapsed_seconds=604801,p=>p.elapsed_seconds=1.5,p=>p.phase_seconds=66,p=>p.remaining_seconds=-1,p=>p.remaining_seconds='55',p=>p.deadline_at='invalid',p=>p.deadline_at='2026-10-30T23:59:59Z',p=>p.deadline_exceeded='true',p=>p.deadline_exceeded=true,p=>p.service_id='<img src=x>',p=>p.service_id='x'.repeat(129),p=>{delete p.deadline_at;},p=>{delete p.deadline_at;delete p.remaining_seconds;p.deadline_exceeded=true;}];
+ for(const edit of edits){const value=progressSnapshot();edit(value.admission.progress);assert(model.validSnapshot(value),'optional progress rejected panel liveness');assert.equal(model.progressView(value.admission),null);assert.match(model.describe({kind:'responding',admission:value.admission}),/Сейчас выполняется: автопилот/);}
+ for(const progress of [null,[],{},'private raw detail']){const value=progressSnapshot();value.admission.progress=progress;assert(model.validSnapshot(value));assert.equal(model.progressView(value.admission),null);}
+});
+await test('deadline expiry and recovery never make an active operation available',async()=>{
+ const value=progressSnapshot();Object.assign(value.admission.progress,{elapsed_seconds:130,phase_seconds:70,remaining_seconds:0,deadline_exceeded:true});
+ const view=model.progressView(value.admission);assert.equal(view.deadlineExceeded,true);assert.match(view.timing,/Лимит времени истёк; ожидаем завершения и очистки/);
+ assert.match(model.describe({kind:'responding',admission:value.admission}),/остаётся занятой/);
+ assert(model.needsAttention({kind:'responding',admission:value.admission}));
+ value.admission.fenced=true;value.admission.state='recovery-required';
+ assert.equal(model.progressView(value.admission),null);assert.match(model.describe({kind:'responding',admission:value.admission}),/восстановления журнала/);
+ value.admission={...snapshot().admission,progress:value.admission.progress};assert.equal(model.progressView(value.admission),null,'idle cannot retain released holder progress');
+});
+await test('progress heartbeats keep the existing scheduler and announce phases rather than elapsed ticks',async()=>{
+ const f=monitorFixture(),value=progressSnapshot();f.handler(async()=>value);f.control.start();await f.control.refresh();
+ const first=model.describe(f.published.at(-1));assert.equal([...f.timers.values()][0].ms,5000);
+ Object.assign(value.admission.progress,{elapsed_seconds:70,phase_seconds:10,remaining_seconds:50});await f.control.refresh();
+ assert.equal(model.describe(f.published.at(-1)),first,'elapsed counters changed the live announcement');
+ assert.equal(f.calls.length,2);assert(f.calls.every(c=>c.readTimeoutMs===3000&&!c.method));
+ assert.equal(f.published.at(-1).dataplane,'not-checked');assert.equal(f.timers.size,1);
+ f.handler(async()=>snapshot());await f.control.refresh();assert.equal(model.progressView(f.published.at(-1).admission),null);assert.equal([...f.timers.values()][0].ms,15000);
+});
+await test('profile preview renders one scope summary and escapes shared profile text', async () => {
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(['esc','profileScopeLabel','renderProfileServiceChange'].map(extract).join('\n'), ctx);
+  const item = {id:'<img onerror=alert(1)>', action:'change', enabled_before:true, enabled_after:true, route_before:'auto', route_after:'auto',
+    sources_before:['192.0.2.2/32'], sources_after:null, wireguard_profile_revision_before:'old<rev>', wireguard_profile_revision_after:''};
+  const html = ctx.renderProfileServiceChange(item,0);
+  assert.match(html,/192\.0\.2\.2\/32 → по общей политике LAN/);
+  assert.match(html,/old&lt;rev&gt; → без привязки/);
+  assert.match(html,/&lt;img onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(html,/<img|old<rev>/);
+  const added = {...item, action:'add',sources_after:['192.0.2.3/32','<unsafe>']};
+  const summary = ctx.renderProfileServiceChange(added,0);
+  assert.match(summary,/Новый сервис · вкл \/ auto/);
+  assert.match(summary,/адресов: 2/);
+  assert.doesNotMatch(summary,/192\.0\.2\.3|unsafe/);
+});
+
+await test('profile import sends the reviewed revision and disables stale confirmation', async () => {
+  const elements = {'#profilePreview':{}, '#confirmProfileImport':{}};
+  const state = {profileBundle:{name:'fixture'}, profilePreview:{valid:true, draft_revision:0}};
+  let request;
+  const ctx = {state, $: key => elements[key], askConfirmation: async () => true,
+    api: async (url, options) => {request = JSON.parse(options.body); throw {payload:{code:'PROFILE_DRAFT_CHANGED'}};}};
+  vm.createContext(ctx);
+  vm.runInContext(extract('importProfile'), ctx);
+  await ctx.importProfile();
+  assert.equal(request.expected_revision,0);
+  assert.equal(state.profileBundle,null);
+  assert.equal(elements['#confirmProfileImport'].disabled,true);
+  assert.match(elements['#profilePreview'].textContent,/Выберите файл ещё раз/);
+});
+const summary={suite:'ux-stage1',mode:process.env.RAZVILKA_TEST_APP?'audited-source-excerpts-and-new-files':'repository-files',passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,tests:results};
+console.log(JSON.stringify(summary));
+process.exitCode=summary.failed?1:0;

@@ -1,0 +1,44 @@
+name: Read-only native cgroup environment proof
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/domain-cgroup-proof-*']
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-26.04]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Observe exact effective root and ancestor programs without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; uname -srvm; } > artifacts/environment.txt
+          GOTOOLCHAIN=local go build -tags razvilka_cgroup_proof_fixture -o /tmp/razvilka-cgroup-proof scripts/fixtures/domain-cgroup-proof.go
+          sudo timeout 10s /tmp/razvilka-cgroup-proof | tee artifacts/proof.json
+          python3 - <<'PY'
+          import json,pathlib
+          proof=json.loads(pathlib.Path('artifacts/proof.json').read_text())
+          assert proof['schema']==1 and proof['read_only_probe'] is True
+          assert proof['queries'], 'missing actual observations'
+          print('Environment observed only; no admission or relocation grant.')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: cgroup-readonly-${{ matrix.runner }}-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

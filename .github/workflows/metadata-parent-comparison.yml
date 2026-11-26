@@ -1,0 +1,65 @@
+name: Complete tool metadata parent comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/metadata-parent-*']
+permissions:
+  contents: read
+jobs:
+  observation:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [production, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Disposable native fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0 time
+      - name: Install and verify the original reviewed tool bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=$(sudo mktemp -d /tmp/razvilka-tool-image-packages.XXXXXX)
+          case "$packages" in /tmp/razvilka-tool-image-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$packages/iptables.deb" "$packages/libip4tc2.deb" \
+            "$packages/libip6tc2.deb" "$packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+      - name: Actual full metadata observations with all fresh parent bookends
+        shell: bash
+        env:
+          BUILD_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/environment.txt
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="$BUILD_MODE" \
+            RAZVILKA_MANAGED_PROBE_CASE_SET=metadata-parent \
+            sh scripts/test-managed-probe-native.sh 2>&1 | tee artifacts/native.log || status=$?
+          if grep -F -- '--- SKIP:' artifacts/native.log; then status=1; fi
+          for name in TestMetadataParentSourceParity TestMetadataParentOwnedMutations TestMetadataParentActualPairs; do
+            if ! grep -F -- "--- PASS: $name " artifacts/native.log; then status=1; fi
+          done
+          if test "$(grep -c 'metadata_parent_pair sample=' artifacts/native.log)" -ne 12; then status=1; fi
+          if test "$(grep -Ec 'metadata_parent_pair .*mode=parent_fd .*parents=[1-9][0-9]* ' artifacts/native.log)" -ne 6; then status=1; fi
+          exit "$status"
+      - name: Preserve test-only comparison, not a route acceptance
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: metadata-parent-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

@@ -1,0 +1,690 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/evidence"
+)
+
+type siteExclusionFixture struct {
+	adapter                                          *NFQWS2Adapter
+	runner                                           *nfqwsFakeRunner
+	config, user, ipset, exclude, ipsetExclude, root string
+}
+
+// The stock nfqws2-keenetic layout: every list in one directory, the AUTO
+// mode reading exclude.list and the ipset arguments reading ipset_exclude.list.
+func newSiteExclusionFixture(t *testing.T, mode string) siteExclusionFixture {
+	t.Helper()
+	root := t.TempDir()
+	// Laid out as the engine catalog's /opt paths relocated beneath root/live.
+	base := filepath.Join(root, "live", "opt", "etc", "nfqws2")
+	lists := filepath.Join(base, "lists")
+	if err := os.MkdirAll(lists, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f := siteExclusionFixture{runner: &nfqwsFakeRunner{}, root: root, config: filepath.Join(base, "nfqws2.conf"),
+		user: filepath.Join(lists, "user.list"), ipset: filepath.Join(lists, "ipset.list"),
+		exclude: filepath.Join(lists, "exclude.list"), ipsetExclude: filepath.Join(lists, "ipset_exclude.list")}
+	conf := nfqwsHealthMainFixture +
+		"MODE_LIST=\"--hostlist=" + f.user + "\"\n" +
+		"MODE_ALL=\"--hostlist-exclude=" + f.exclude + "\"\n" +
+		"MODE_AUTO=\"$MODE_LIST $MODE_ALL\"\n" +
+		"NFQWS_EXTRA_ARGS=\"" + mode + "\"\n" +
+		"NFQWS_ARGS_IPSET=\"--ipset=" + f.ipset + " --ipset-exclude=" + f.ipsetExclude + "\"\n" +
+		"NFQWS_ARGS_UDP=\"--filter-udp=50000-50099 --filter-l7=discord,stun --lua-desync=fake\"\n" +
+		"NFQWS_ARGS_CUSTOM=\"\"\n"
+	initPath, iptablesSave := filepath.Join(root, "S51nfqws2"), filepath.Join(root, "iptables-save")
+	for path, content := range map[string]string{
+		f.config: conf, f.config + ".run": nfqwsHealthRunningFixture, initPath: "#!/bin/sh\n", iptablesSave: "#!/bin/sh\n", f.user: "manual.example\n", f.ipset: "",
+		f.exclude: "stock.example\n", f.ipsetExclude: "10.0.0.0/8\n",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.adapter = &NFQWS2Adapter{ConfigPath: f.config, InitPath: initPath, UserListPath: f.user, IPSetListPath: f.ipset, IPTablesSave: iptablesSave, Runner: f.runner, HealthProbe: func(context.Context, string) error { return nil }}
+	if err := f.adapter.bindStateRoot(filepath.Join(root, "state")); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func (f siteExclusionFixture) transaction(t *testing.T, name string) string {
+	t.Helper()
+	path := filepath.Join(f.root, name)
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func (f siteExclusionFixture) activate(t *testing.T, plan Plan, transaction string) error {
+	t.Helper()
+	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Snapshot, f.adapter.Stage, f.adapter.Validate, f.adapter.Activate} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func readText(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func siteExclusionPlan() Plan {
+	return Plan{
+		Routes:         []Route{{ServiceName: "YouTube", Resolved: "nfqws2", Domains: []string{"youtube.com"}, ProbeURL: "https://example.com"}},
+		SiteExclusions: &SiteExclusions{Domains: []string{"bank.example"}, CIDRs: []string{"198.51.100.7"}},
+	}
+}
+
+// Excluded names and addresses land in managed blocks of the stock exclude
+// lists beside the owner's own entries; rollback and Stop restore the lists.
+func TestNFQWS2SiteExclusionListsLifecycle(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	original := readText(t, f.config)
+	plan := siteExclusionPlan()
+	transaction := f.transaction(t, "first")
+	if err := f.activate(t, plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	// The package's exclude lists keep only comments: an entry there would make
+	// the owner's profiles that read them require a hostname.
+	exclude, ipsetExclude := readText(t, f.exclude), readText(t, f.ipsetExclude)
+	if !strings.HasPrefix(exclude, "stock.example\n"+managedBegin) || strings.Contains(exclude, "bank.example") {
+		t.Fatalf("exclude.list=%q", exclude)
+	}
+	if !strings.HasPrefix(ipsetExclude, "10.0.0.0/8\n"+managedBegin) || strings.Contains(ipsetExclude, "198.51.100.7") {
+		t.Fatalf("ipset_exclude.list=%q", ipsetExclude)
+	}
+	if config := readText(t, f.config); !strings.Contains(config, "--hostlist-domains=bank.example --new --ipset-ip=198.51.100.7/32") {
+		t.Fatalf("exclusions missing from the configuration block: %q", config)
+	}
+	if strings.Contains(readText(t, f.user), "bank.example") {
+		t.Fatal("an excluded site was selected for bypass")
+	}
+	if config := readText(t, f.config); !strings.HasPrefix(config, original) || !strings.Contains(config, managedBegin) {
+		t.Fatalf("configuration block missing or owner part changed: %q", config)
+	}
+	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Health, f.adapter.Commit, f.adapter.Rollback} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := readText(t, f.exclude); got != "stock.example\n" {
+		t.Fatalf("rollback exclude.list=%q", got)
+	}
+	if got := readText(t, f.ipsetExclude); got != "10.0.0.0/8\n" {
+		t.Fatalf("rollback ipset_exclude.list=%q", got)
+	}
+	if got := readText(t, f.config); got != original {
+		t.Fatalf("rollback config=%q", got)
+	}
+
+	if err := f.activate(t, plan, f.transaction(t, "second")); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Deactivate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := readText(t, f.exclude); got != "stock.example\n" {
+		t.Fatalf("stopped exclude.list=%q", got)
+	}
+	if got := readText(t, f.ipsetExclude); got != "10.0.0.0/8\n" {
+		t.Fatalf("stopped ipset_exclude.list=%q", got)
+	}
+	if got := readText(t, f.config); got != original {
+		t.Fatalf("stopped config=%q", got)
+	}
+}
+
+// The block puts profiles without any action before every profile of the
+// owner: excluded names and addresses land there and pass unchanged, while
+// the owner's profiles, the package's lists and connections without a
+// hostname keep working exactly as before. Empty custom profiles create no
+// empty profile.
+func TestNFQWS2ExclusionsLeadEveryProfile(t *testing.T) {
+	for _, custom := range []string{"", "--filter-udp=1400 --filter-l7=discord --lua-desync=fake --new --filter-tcp=5222 --lua-desync=multisplit"} {
+		f := newSiteExclusionFixture(t, "$MODE_LIST")
+		conf := strings.Replace(readText(t, f.config), `NFQWS_ARGS_CUSTOM=""`, `NFQWS_ARGS_CUSTOM="`+custom+`"`, 1)
+		if err := os.WriteFile(f.config, []byte(conf), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		plan := siteExclusionPlan()
+		plan.SiteExclusions = &SiteExclusions{Domains: []string{"bank.example"}, CIDRs: []string{"198.51.100.7", "2001:db8::/32"}, ServiceDomains: []string{"video.example"}}
+		if err := f.activate(t, plan, f.transaction(t, "tx")); err != nil {
+			t.Fatal(err)
+		}
+		config := readText(t, f.config)
+		leading := "--hostlist-domains=bank.example,video.example --new --ipset-ip=198.51.100.7/32,2001:db8::/32"
+		want := `case "$NFQWS_ARGS_CUSTOM" in "` + leading + `"|"` + leading + ` --new "*) ;; "") NFQWS_ARGS_CUSTOM="` + leading + `" ;; *) NFQWS_ARGS_CUSTOM="` + leading + ` --new $NFQWS_ARGS_CUSTOM" ;; esac`
+		if !strings.HasPrefix(config, conf) || !strings.Contains(config, want) || !strings.Contains(config, nfqws2ExclusionFormat) {
+			t.Fatalf("configuration block:\n%s", config)
+		}
+		if strings.Count(config, "NFQWS_EXTRA_ARGS=") != 1 || strings.Count(config, "NFQWS_ARGS_IPSET=") != 1 || strings.Count(config, "NFQWS_ARGS_UDP=") != 1 {
+			t.Fatal("the owner's profiles were changed")
+		}
+		// What the init's shell actually sees, where a POSIX shell is available.
+		if sh, err := exec.LookPath("sh"); err == nil && runtime.GOOS != "windows" {
+			out, err := exec.Command(sh, "-c", `. "$1"; . "$1"; printf '%s' "$NFQWS_ARGS_CUSTOM"`, "sh", f.config).Output()
+			expected := leading
+			if custom != "" {
+				expected += " --new " + custom
+			}
+			if err != nil || string(out) != expected {
+				t.Fatalf("sourced custom profiles: %v %q", err, out)
+			}
+		}
+	}
+
+	// Nothing to exclude: the owner's configuration stays exactly as it is.
+	g := newSiteExclusionFixture(t, "$MODE_AUTO")
+	original := readText(t, g.config)
+	plan := siteExclusionPlan()
+	plan.SiteExclusions = nil
+	if err := g.activate(t, plan, g.transaction(t, "none")); err != nil {
+		t.Fatal(err)
+	}
+	if got := readText(t, g.config); got != original {
+		t.Fatalf("configuration changed without exclusions: %q", got)
+	}
+
+	// A block of another instance is never taken over.
+	h := newSiteExclusionFixture(t, "$MODE_AUTO")
+	foreign := readText(t, h.config) + managedBegin + "\n# RAZVILKA INSTANCE someone-else\n" + managedEnd + "\n"
+	if err := os.WriteFile(h.config, []byte(foreign), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.activate(t, siteExclusionPlan(), h.transaction(t, "tx")); err == nil || readText(t, h.config) != foreign {
+		t.Fatalf("a foreign configuration block was replaced: %v", err)
+	}
+}
+
+// An interrupted cleanup that already removed only the configuration block is
+// finished by Stop and restored, proven by the lease, by boot reconcile.
+func TestNFQWS2ConfigurationBlockSurvivesInterruptedCleanup(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	original := readText(t, f.config)
+	plan := siteExclusionPlan()
+	transaction := f.transaction(t, "tx")
+	if err := f.activate(t, plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Health, f.adapter.Commit} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	installed := readText(t, f.config)
+	if err := os.WriteFile(f.config, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Reconcile(context.Background(), plan); err != nil {
+		t.Fatal(err)
+	}
+	if got := readText(t, f.config); got != installed {
+		t.Fatalf("reconcile did not restore the proven block: %q", got)
+	}
+	if err := os.WriteFile(f.config, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Deactivate(context.Background()); err != nil {
+		t.Fatal("stop after a partial cleanup:", err)
+	}
+	if got := readText(t, f.config); got != original {
+		t.Fatalf("stopped config=%q", got)
+	}
+}
+
+// An excluded service keeps its route but leaves the selection lists; its
+// catalog names and networks go to the exclude lists instead.
+func TestNFQWS2ExcludedServiceLeavesSelectionLists(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	plan := Plan{Routes: []Route{
+		{ServiceID: "youtube", ServiceName: "YouTube", Resolved: "nfqws2", Domains: []string{"youtube.com"}, ProbeURL: "https://example.com"},
+		{ServiceID: "video", ServiceName: "Видео", Resolved: "nfqws2", Domains: []string{"video.example"}, CIDRs: []string{"192.0.2.0/24"}, ProbeURL: "https://example.com"},
+	}, SiteExclusions: &SiteExclusions{Services: []string{"video"}, ServiceDomains: []string{"video.example"}, ServiceCIDRs: []string{"192.0.2.0/24"}}}
+	if err := f.activate(t, plan, f.transaction(t, "tx")); err != nil {
+		t.Fatal(err)
+	}
+	user, ipset, exclude, ipsetExclude := readText(t, f.user), readText(t, f.ipset), readText(t, f.exclude), readText(t, f.ipsetExclude)
+	if strings.Contains(user, "video.example") || strings.Contains(ipset, "192.0.2.0/24") || !strings.Contains(user, "\nyoutube.com\n") {
+		t.Fatalf("excluded service stayed selected: user=%q ipset=%q", user, ipset)
+	}
+	if strings.Contains(exclude, "video.example") || strings.Contains(ipsetExclude, "192.0.2.0/24") || !strings.Contains(readText(t, f.config), "--hostlist-domains=video.example --new --ipset-ip=192.0.2.0/24") {
+		t.Fatalf("excluded service was not excluded through the configuration: exclude=%q ipset_exclude=%q", exclude, ipsetExclude)
+	}
+	// Only the excluded service on NFQWS2 still writes its exclusions.
+	g := newSiteExclusionFixture(t, "$MODE_AUTO")
+	plan.Routes = plan.Routes[1:]
+	if err := g.activate(t, plan, g.transaction(t, "tx")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(readText(t, g.config), "--hostlist-domains=video.example") {
+		t.Fatal("exclusions were dropped when the excluded service is the adapter's only route")
+	}
+}
+
+// Commit settles a list draft; a later rollback of the same transaction gives
+// the owner's edit back as a draft instead of losing it.
+func TestNFQWS2RollbackAfterCommitRestagesListDraft(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	configs := engineconfig.New(filepath.Join(f.root, "drafts"), filepath.Join(f.root, "backups"))
+	configs.LiveRoot = filepath.Join(f.root, "live")
+	f.adapter.Configs = configs
+	if _, err := configs.Stage("nfqws2", "exclude-list", "stock.example\nowner.example\n"); err != nil {
+		t.Fatal(err)
+	}
+	plan := siteExclusionPlan()
+	plan.EngineDrafts = []string{"nfqws2/exclude-list"}
+	transaction := f.transaction(t, "draft")
+	if err := f.activate(t, plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Health, f.adapter.Commit, f.adapter.Rollback} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := readText(t, f.exclude); got != "stock.example\n" {
+		t.Fatalf("rollback exclude.list=%q", got)
+	}
+	view, err := configs.ReadExpert("nfqws2", "exclude-list")
+	if err != nil || view.Source != "staged" || !strings.Contains(view.Content, "owner.example") {
+		t.Fatalf("the owner's list edit was lost on rollback: %v %q %q", err, view.Source, view.Content)
+	}
+}
+
+// The owner's part of a list edited in the engine editor is applied with the
+// managed block and the draft is settled on commit.
+func TestNFQWS2AppliesEngineListDraftBesideManagedBlock(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	configs := engineconfig.New(filepath.Join(f.root, "drafts"), filepath.Join(f.root, "backups"))
+	configs.LiveRoot = filepath.Join(f.root, "live")
+	f.adapter.Configs = configs
+	if _, err := configs.Stage("nfqws2", "exclude-list", "stock.example\nowner.example\n"); err != nil {
+		t.Fatal(err)
+	}
+	plan := siteExclusionPlan()
+	plan.EngineDrafts = []string{"nfqws2/exclude-list"}
+	transaction := f.transaction(t, "draft")
+	if err := f.activate(t, plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if got := readText(t, f.exclude); !strings.HasPrefix(got, "stock.example\nowner.example\n"+managedBegin) || strings.Contains(got, "bank.example") {
+		t.Fatalf("exclude.list=%q", got)
+	}
+	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Health, f.adapter.Commit} {
+		if err := call(context.Background(), plan, transaction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if view, err := configs.ReadExpert("nfqws2", "exclude-list"); err != nil || view.Source == "staged" {
+		t.Fatalf("applied list draft was not settled: %v %+v", err, view.Source)
+	}
+}
+
+// An address route cannot honour a name exclusion and must never carry an
+// excluded address; NFQWS2 and direct routes are enforced or unaffected.
+func TestBuildBlocksAddressRouteOverExcludedAddress(t *testing.T) {
+	input := Input{Revision: 3, Routes: []Route{
+		{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", CIDRs: []string{"198.51.100.0/24"}},
+		{ServiceID: "video", ServiceName: "Видео", Resolved: "nfqws2", CIDRs: []string{"198.51.100.0/24"}},
+	}, SiteExclusions: &SiteExclusions{CIDRs: []string{"198.51.100.7"}}}
+	plan, err := BuildAt(input, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicts := 0
+	for _, blocker := range plan.Blockers {
+		if blocker.Code == "SITE_EXCLUSION_CONFLICT" {
+			conflicts++
+			if !strings.Contains(blocker.Message, "Telegram") || strings.Contains(blocker.Message, "Видео") {
+				t.Fatalf("wrong conflict: %+v", blocker)
+			}
+		}
+	}
+	if conflicts != 1 || plan.Ready {
+		t.Fatalf("conflict not blocked: %+v", plan.Blockers)
+	}
+	input.SiteExclusions = &SiteExclusions{CIDRs: []string{"192.0.2.7"}, Domains: []string{"bank.example"}}
+	other, err := BuildAt(input, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, blocker := range other.Blockers {
+		if blocker.Code == "SITE_EXCLUSION_CONFLICT" {
+			t.Fatalf("unrelated exclusion blocked: %+v", blocker)
+		}
+	}
+	if other.Digest == plan.Digest {
+		t.Fatal("exclusions are not bound to the reviewed digest")
+	}
+	if _, err := BuildAt(Input{SiteExclusions: &SiteExclusions{Domains: []string{"bad domain"}}}, time.Unix(100, 0).UTC()); err == nil {
+		t.Fatal("invalid excluded domain accepted")
+	}
+}
+
+func TestLegacySiteExclusionsFromSavedList(t *testing.T) {
+	cfg := config.Default()
+	if sites, err := LegacySiteExclusions(cfg); err != nil || sites != nil {
+		t.Fatalf("absent list: %+v %v", sites, err)
+	}
+	cfg.InactiveResourceExclusions = &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{
+		{Kind: "exact", Value: "example.com"}, {Kind: "suffix", Value: "example.com"}, {Kind: "cidr", Value: "203.0.113.0/24"}, {Kind: "service", Value: "video"},
+	}}
+	sites, err := LegacySiteExclusions(cfg)
+	if err != nil || sites == nil || strings.Join(sites.Domains, ",") != "example.com" || strings.Join(sites.CIDRs, ",") != "203.0.113.0/24" || strings.Join(sites.Services, ",") != "video" {
+		t.Fatalf("saved list: %+v %v", sites, err)
+	}
+	// The catalog expansion is frozen per plan and not part of the comparison.
+	expanded := &SiteExclusions{Domains: []string{"example.com", "example.com"}, CIDRs: []string{"203.0.113.0/24"}, Services: []string{"video"}, ServiceDomains: []string{"video.example"}}
+	if !SameSiteExclusions(sites, expanded) || SameSiteExclusions(sites, nil) || SameSiteExclusions(sites, &SiteExclusions{Domains: []string{"example.com"}, CIDRs: []string{"203.0.113.0/24"}}) {
+		t.Fatal("canonical comparison")
+	}
+	// The home-network mode keeps its own policy; this mode reads nothing.
+	cfg.NetworkPolicy = &config.NetworkPolicy{Schema: 1}
+	if sites, err := LegacySiteExclusions(cfg); err != nil || sites != nil {
+		t.Fatalf("list mode leaked into the whole-network plan: %+v %v", sites, err)
+	}
+}
+
+func TestBuildNamesExcludedServiceRoutedThroughProxy(t *testing.T) {
+	plan, err := BuildAt(Input{Revision: 3, Routes: []Route{
+		{ServiceID: "tg", ServiceName: "Telegram", Resolved: "sing-box:node-1", CIDRs: []string{"149.154.160.0/20"}},
+		{ServiceID: "yt", ServiceName: "YouTube", Resolved: "nfqws2", Domains: []string{"youtube.com"}},
+	}, SiteExclusions: &SiteExclusions{Services: []string{"tg", "yt"}, ServiceCIDRs: []string{"149.154.160.0/20"}, ServiceDomains: []string{"youtube.com"}}}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	routed, conflicts := 0, 0
+	for _, blocker := range plan.Blockers {
+		switch blocker.Code {
+		case "SITE_EXCLUSION_SERVICE_ROUTED":
+			routed++
+			if !strings.Contains(blocker.Message, "Telegram") || strings.Contains(blocker.Message, "YouTube") {
+				t.Fatalf("wrong service named: %+v", blocker)
+			}
+		case "SITE_EXCLUSION_CONFLICT":
+			conflicts++
+		}
+	}
+	if routed != 1 || conflicts != 0 || plan.Ready {
+		t.Fatalf("excluded proxy service not refused once with its own reason: %+v", plan.Blockers)
+	}
+}
+
+// An excluded service, or a route whose checked site is excluded, is left
+// alone by NFQWS2: it is neither probed through the bypass nor credited.
+func TestNFQWS2HealthSkipsExcludedRoutes(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	probed := []string{}
+	f.adapter.HealthProbe = func(_ context.Context, url string) error {
+		probed = append(probed, url)
+		if strings.Contains(url, "video.example") || strings.Contains(url, "bank.example") {
+			return errors.New("blocked without the bypass")
+		}
+		return nil
+	}
+	input := Input{Revision: 3, Routes: []Route{
+		{ServiceID: "youtube", ServiceName: "YouTube", Resolved: "nfqws2", Domains: []string{"youtube.com"}, ProbeURL: "https://www.youtube.com/"},
+		{ServiceID: "video", ServiceName: "Видео", Resolved: "nfqws2", Domains: []string{"video.example"}, ProbeURL: "https://video.example/"},
+		{ServiceID: "address", ServiceName: "Address", Resolved: "nfqws2", CIDRs: []string{"203.0.113.0/24"}, ProbeURL: "https://203.0.113.9:444/"},
+		{ServiceID: "v6", ServiceName: "IPv6", Resolved: "nfqws2", CIDRs: []string{"2001:db8:3::/64"}, ProbeURL: "https://[2001:db8:3::1]/"},
+		{ServiceID: "bank", ServiceName: "Банк", Resolved: "nfqws2", Domains: []string{"bank.example"}, ProbeURL: "https://www.bank.example/"},
+	}, SiteExclusions: &SiteExclusions{CIDRs: []string{"203.0.113.9"}, ServiceCIDRs: []string{"2001:db8:3::/64"}, Domains: []string{"bank.example"}, Services: []string{"video"}, ServiceDomains: []string{"video.example"}}}
+	plan, err := BuildAt(input, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction := f.transaction(t, "tx")
+	if err := f.activate(t, plan, transaction); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Health(context.Background(), plan, transaction); err != nil || len(probed) != 1 || probed[0] != "https://www.youtube.com/" {
+		t.Fatalf("excluded routes were probed: %v %v", err, probed)
+	}
+	for _, proof := range plan.RouteEvidence {
+		excluded := proof.ServiceID == "video" || proof.ServiceID == "bank" || proof.ServiceID == "address" || proof.ServiceID == "v6"
+		if excluded != (proof.Required == evidence.None) || excluded && proof.Note != siteExclusionEvidenceNote {
+			t.Fatalf("route evidence for %s: %+v", proof.ServiceID, proof)
+		}
+	}
+}
+
+// The installer's controlled deactivation removes the configuration block
+// too; a same-content transaction rolled back afterwards restores it as the
+// lease records, and rollback verification confirms exactly that.
+func TestNFQWS2RollbackRestoresTheConfigurationBlockTheLeaseRecords(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	plan := siteExclusionPlan()
+	first := f.transaction(t, "first")
+	if err := f.activate(t, plan, first); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Health, f.adapter.Commit} {
+		if err := call(context.Background(), plan, first); err != nil {
+			t.Fatal(err)
+		}
+	}
+	applied := readText(t, f.config)
+	lease, err := os.ReadFile(filepath.Join(f.adapter.StateRoot, nfqws2LeaseFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Deactivate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(readText(t, f.config), managedBegin) {
+		t.Fatal("controlled deactivation kept the configuration block")
+	}
+	if err := os.WriteFile(filepath.Join(f.adapter.StateRoot, nfqws2LeaseFile), lease, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	second := f.transaction(t, "second")
+	if err := f.activate(t, plan, second); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Rollback(context.Background(), plan, second); err != nil {
+		t.Fatal(err)
+	}
+	if got := readText(t, f.config); got != applied {
+		t.Fatalf("rollback config=%q", got)
+	}
+	if confirmed, err := f.adapter.VerifyRollback(context.Background(), plan, second); err != nil || !confirmed {
+		t.Fatalf("restored configuration block not confirmed: %v %v", confirmed, err)
+	}
+	if err := os.WriteFile(f.config, []byte(applied+"EXTRA=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.adapter.VerifyRollback(context.Background(), plan, second); err == nil {
+		t.Fatal("changed configuration accepted by rollback verification")
+	}
+}
+
+// The stock init sources nfqws2.conf more than once per restart, and an owner
+// configuration may not assign NFQWS_ARGS_CUSTOM at all: the leading profiles
+// are still added exactly once.
+func TestNFQWS2ExclusionBlockIsIdempotentWhenSourcedTwice(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs a POSIX shell")
+	}
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	conf := strings.Replace(readText(t, f.config), "NFQWS_ARGS_CUSTOM=\"\"\n", "", 1)
+	if err := os.WriteFile(f.config, []byte(conf), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.activate(t, siteExclusionPlan(), f.transaction(t, "tx")); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(sh, "-c", `. "$1"; . "$1"; . "$1"; printf '%s' "$NFQWS_ARGS_CUSTOM"`, "sh", f.config).Output()
+	if err != nil || string(out) != "--hostlist-domains=bank.example --new --ipset-ip=198.51.100.7/32" {
+		t.Fatalf("profiles after sourcing three times: %v %q", err, out)
+	}
+}
+
+// Legacy source restrictions narrow the clients; they cannot override a
+// destination exclusion or exempt a proxy route from proof of the service.
+func TestLegacyAddressRouteCannotProbeExcludedSite(t *testing.T) {
+	for _, scope := range [][]string{nil, {"192.168.1.20/32"}} {
+		for _, tc := range []struct {
+			host     string
+			conflict bool
+		}{
+			{"sub.example.org", true}, {"notexample.org", false}, {"пример.example.com", true}, {"сосед.example.com", false}, {"203.0.113.7", true}, {"203.0.113.128", false}, {"[2001:db8:2::9]", true}, {"[2001:db8:3::9]", false},
+		} {
+			input := Input{Routes: []Route{{ServiceID: "selected", ServiceName: "Selected", Resolved: "sing-box", Sources: scope, CIDRs: []string{"192.0.2.0/24"}, ProbeURL: "https://" + tc.host + "/"}}, SiteExclusions: &SiteExclusions{Domains: []string{"example.org"}, ServiceDomains: []string{"XN--E1AFMKFD.EXAMPLE.COM."}, CIDRs: []string{"203.0.113.0/25"}, ServiceCIDRs: []string{"2001:db8:2::/64"}}}
+			p, err := BuildAt(input, time.Unix(100, 0))
+			if err != nil {
+				t.Fatal(err)
+			}
+			conflict := false
+			for _, b := range p.Blockers {
+				if b.Code == "SITE_EXCLUSION_CONFLICT" {
+					conflict = true
+				}
+			}
+			if conflict != tc.conflict || len(p.RouteEvidence) != 1 || p.RouteEvidence[0].Required != evidence.Service || SiteExclusionsAffectRoutes(input.SiteExclusions, input.Routes) != tc.conflict {
+				t.Fatalf("probe=%q scope=%v: conflict=%v evidence=%+v", tc.host, scope, conflict, p.RouteEvidence)
+			}
+		}
+	}
+}
+
+func TestManagerExclusionAggregateNeedsAProbedRoute(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		m := New(filepath.Join(t.TempDir(), "dataplane"))
+		if err := m.Register(&fakeAdapter{id: "nfqws2"}); err != nil {
+			t.Fatal(err)
+		}
+		input := Input{
+			Revision:       1,
+			Routes:         []Route{{ServiceID: "outside", Resolved: "nfqws2", ProbeURL: "https://203.0.113.1/"}},
+			SiteExclusions: &SiteExclusions{CIDRs: []string{"203.0.113.1"}},
+			Engines:        []Engine{{ID: "nfqws2", Installed: true, Configured: true, Activatable: true}},
+			Host:           HostState{IPCommand: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "disabled"},
+		}
+		want := evidence.None
+		if mixed {
+			input.Routes = append(input.Routes, Route{ServiceID: "inside", Resolved: "nfqws2", ProbeURL: "https://203.0.113.2/"})
+			want = evidence.Service
+		}
+		plan, err := BuildAt(input, time.Unix(100, 0).UTC())
+		if err != nil || !plan.Ready {
+			t.Fatalf("build: %v %+v", err, plan.Blockers)
+		}
+		if _, err := m.Apply(context.Background(), plan, nil); err != nil {
+			t.Fatal(err)
+		}
+		got, ok, err := m.Committed()
+		if err != nil || !ok || got.ObservedEvidence != want || got.RequiredEvidence != want ||
+			!mixed && (strings.Contains(got.EvidenceNote, "успешно") || strings.Contains(got.Note, "health-checked")) {
+			t.Fatalf("mixed=%v required=%v observed=%v note=%q result=%q err=%v", mixed, got.RequiredEvidence, got.ObservedEvidence, got.EvidenceNote, got.Note, err)
+		}
+	}
+}
+
+func TestLegacyCommittedExcludedProbeCannotReplayButCanStop(t *testing.T) {
+	ctx := context.Background()
+	m := New(filepath.Join(t.TempDir(), "dataplane"))
+	adapter := &fakeAdapter{id: "sing-box"}
+	if err := m.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	// Older versions could commit an unrelated address route with the
+	// excluded domain as its out-of-band health target.
+	old := Plan{SchemaVersion: SchemaVersion, PlanID: "dp-0123456789abcdef", Digest: strings.Repeat("a", 64), State: "committed", Ready: true,
+		Adapters: []string{"sing-box"}, Routes: []Route{{ServiceID: "web", Resolved: "sing-box:node-1", CIDRs: []string{"203.0.113.1/32"}, ProbeURL: "https://old.bank.example/"}},
+		SiteExclusions: &SiteExclusions{Domains: []string{"bank.example"}}}
+	if err := m.Record(old); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range []struct {
+		name string
+		run  func() error
+	}{
+		{"live component", func() error { return m.CheckComponentLive(ctx, old, "sing-box") }},
+		{"node health", func() error { return m.CheckCommittedNodeHealth(ctx, old) }},
+		{"repair", func() error { _, err := m.RestoreCommittedForwarding(ctx, old); return err }},
+		{"candidate", func() error { return m.ProbeCandidate(ctx, old, "sing-box") }},
+		{"apply", func() error { _, err := m.Apply(ctx, old, nil); return err }},
+		{"refresh", func() error { _, err := m.RefreshCommitted(ctx); return err }},
+		{"recover", func() error { _, err := m.Recover(ctx); return err }},
+	} {
+		if err := call.run(); !errors.Is(err, errSiteExclusionConflict) {
+			t.Errorf("%s: %v", call.name, err)
+		}
+	}
+	if len(adapter.calls) != 0 || adapter.refreshed {
+		t.Fatalf("old plan reached runtime: %v", adapter.calls)
+	}
+	if _, err := m.Deactivate(ctx); err != nil || !adapter.deactivated {
+		t.Fatalf("owned stop: %v", err)
+	}
+}
+
+func TestNFQWS2ProbeRefusesRedirectIntoExcludedSite(t *testing.T) {
+	for _, host := range []string{"excluded.example.com", "permitted.example.com", "пример.example.com", "сосед.example.com"} {
+		t.Run(host, func(t *testing.T) {
+			f := newSiteExclusionFixture(t, "$MODE_AUTO")
+			calls := []string{}
+			client := &http.Client{Transport: cloudflareRoundTrip(func(req *http.Request) (*http.Response, error) {
+				hostName := req.URL.Hostname()
+				calls = append(calls, hostName)
+				resp := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Request: req, Body: io.NopCloser(strings.NewReader(""))}
+				if hostName == "example.com" {
+					resp.StatusCode = http.StatusFound
+					resp.Header.Set("Location", "https://"+host+"/page")
+				}
+				return resp, nil
+			})}
+			f.adapter.HealthProbe = func(ctx context.Context, target string) error {
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+				if err != nil {
+					return err
+				}
+				resp, err := serviceProbeClient(client, target).Do(req)
+				if err == nil {
+					resp.Body.Close()
+				}
+				return err
+			}
+			plan, err := BuildAt(Input{Revision: 3, Routes: []Route{{ServiceID: "web", Resolved: "nfqws2", Domains: []string{"example.com"}, ProbeURL: "https://example.com/"}}, SiteExclusions: &SiteExclusions{Domains: []string{"excluded.example.com", "xn--e1afmkfd.example.com"}}}, time.Unix(100, 0).UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tx := f.transaction(t, "tx")
+			if err := f.activate(t, plan, tx); err != nil {
+				t.Fatal(err)
+			}
+			err = f.adapter.Health(context.Background(), plan, tx)
+			if host == "excluded.example.com" || host == "пример.example.com" {
+				if !errors.Is(err, errSiteExclusionConflict) || len(calls) != 1 {
+					t.Fatalf("blocked redirect: %v calls=%v", err, calls)
+				}
+			} else if err != nil || len(calls) != 2 || calls[1] != host {
+				t.Fatalf("allowed redirect: %v calls=%v", err, calls)
+			}
+		})
+	}
+}

@@ -1,0 +1,84 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const source=fs.readFileSync(new URL('../cmd/razvilka/web/console-autonomy.js',import.meta.url),'utf8');
+const extract=name=>{const match=source.match(new RegExp(`  (?:async )?function ${name}\\([^]*?\\n  }`));assert(match,name);return match[0];};
+function fixture(){
+ const elements=new Map(),timers=new Map(),posts=[],notices=[];let next=0;
+ const c={root:{},snapshot:{policy:{enabled:true,setup_complete:true,revision:1}},editingPolicy:{revision:1},presentationFresh:true,authGeneration:0,wizardEdit:0,saving:false,pauseRequest:null,activeTab:'setup',step:0,
+ document:{activeElement:null,createElement:()=>({setAttribute(){},addEventListener(){}})},
+ $:id=>{if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,checked:true,textContent:'',classList:{toggle(){}},appendChild(){},focus(){c.document.activeElement=this;}});return elements.get(id);},$$:()=>[],
+ setTimeout:(fn,ms)=>{timers.set(++next,{fn,ms});return next;},clearTimeout:id=>timers.delete(id),clone:structuredClone,
+ api:async(...args)=>posts.push(args),refresh:async()=>true,render(){c.$('pauseButton').disabled=!!c.pauseRequest;},renderServices(){},renderReview(){},readSources(){},setView(){},validatePolicy:p=>p,policyFromForm:()=>({enabled:true}),policyConsentRequired:()=>false,
+ requireGeneration:g=>{if(g!==c.authGeneration)throw Object.assign(Error('old session'),{name:'AuthGenerationChanged'});},reportError:e=>{if(e.name!=='AuthGenerationChanged')notices.push(e.message);}};
+ vm.createContext(c);vm.runInContext(source.slice(source.indexOf('  let noticeTimer='),source.indexOf('  function formatDate'))+'\n'+['tab','setStep','saveWizard','toggleAutonomyPause'].map(extract).join('\n'),c);
+ return {c,elements,timers,posts,notices};
+}
+for(const changed of [false,true]){
+ const f=fixture();if(changed)f.c.refresh=async()=>{f.c.wizardEdit++;return true;};
+ await f.c.saveWizard({preventDefault(){}});assert.equal(f.c.$('notice').hidden,false);assert.equal(f.c.activeTab,changed?'setup':'overview');assert.equal(f.timers.size,1);const timer=[...f.timers.values()][0];assert.equal(timer.ms,6500);timer.fn();assert.equal(f.c.$('notice').hidden,true);
+}
+{
+ const f=fixture();f.c.document.activeElement=f.c.$('nextStep');f.c.setStep(3);assert.equal(f.c.$('nextStep').hidden,true);assert.equal(f.c.document.activeElement,f.c.$('saveWizard'));
+ f.c.document.activeElement=f.c.$('scopeMode');f.c.setStep(3);assert.equal(f.c.document.activeElement,f.c.$('scopeMode'),'background render must not steal focus');
+}
+{
+ const f=fixture();let done;f.c.api=(...args)=>{f.posts.push(args);return new Promise(resolve=>done=resolve);};
+ const first=f.c.toggleAutonomyPause();await f.c.toggleAutonomyPause();assert.equal(f.posts.length,1);assert.equal(f.c.$('pauseButton').disabled,true);f.c.render();assert.equal(f.c.$('pauseButton').disabled,true);done({});await first;assert.equal(f.c.pauseRequest,null);assert.equal(f.c.$('pauseButton').disabled,false);
+}
+{
+ const f=fixture();let finishOld,finishNew;f.c.api=()=>new Promise(resolve=>{if(!finishOld)finishOld=resolve;else finishNew=resolve;});
+ const old=f.c.toggleAutonomyPause();f.c.authGeneration++;f.c.pauseRequest=null;
+ const current=f.c.toggleAutonomyPause();const owner=f.c.pauseRequest;finishOld({});await old;
+ assert.equal(f.c.pauseRequest,owner);assert.equal(f.c.$('pauseButton').disabled,true);assert.equal(f.c.$('notice').textContent,'');finishNew({});await current;assert.equal(f.c.pauseRequest,null);
+}
+{
+ const f=fixture();f.c.refresh=async()=>false;await f.c.toggleAutonomyPause();assert.match(f.notices[0],/актуальное состояние не получено/);assert.equal(f.c.$('notice').textContent,'');assert.equal(f.c.pauseRequest,null);
+}
+console.log('PASS autonomy controls: save notification survives navigation; review focus; pause single flight, readback and auth ownership');
+
+{
+ const base={setup_complete:false,revision:0,enabled:false,timezone:'UTC',all_lan:false,default_sources:[],source_ids:[],protocols:['vless'],preferred_routes:['nfqws2'],reserve_target:3,candidates_per_round:2,check_seconds:120,reserve_seconds:300,application:{mode:'install',start:'03:00',end:'05:00',days:[0,1,2,3,4,5,6]},components:{mode:'install',start:'03:00',end:'05:00',days:[0,1,2,3,4,5,6]}};
+ const cases=[
+  ['new',{},'now',true],
+  ['new null',{install_missing_components:null},'now',true],
+  ['new explicit refusal',{install_missing_components:false},'off',false],
+  ['new explicit permission',{install_missing_components:true},'now',true],
+  ['saved legacy',{setup_complete:true},'saved-window',undefined],
+  ['saved legacy null',{setup_complete:true,install_missing_components:null},'saved-window',undefined],
+  ['saved refusal',{setup_complete:true,install_missing_components:false},'off',false],
+  ['saved permission',{setup_complete:true,install_missing_components:true},'now',true]
+ ];
+ for(const [name,overrides,choice,permission] of cases){
+  const f=fixture(),policy={...structuredClone(base),...overrides},before=structuredClone(policy),legacyOption={hidden:false};
+  Object.assign(f.c,{snapshot:{policy},dirty:false,dayLabels:[],escapeHTML:String,splitValues:()=>[],renderQuickStart(){},checkedPreferredRoutes:()=>policy.preferred_routes});
+  f.c.$('firstInstall').querySelector=()=>legacyOption;
+  vm.runInContext(['updateMASQUERegistrationConsent','updateWARPRegistrationConsent','policyFromForm','fillWizard'].map(extract).join('\n'),f.c);
+  f.c.fillWizard();
+  assert.equal(f.c.$('firstInstall').value,choice,`${name}: initial component choice`);
+  assert.equal(f.c.$('quickFirstInstall').checked,choice==='now',`${name}: quick and advanced installation choices differ`);
+  assert.equal(f.c.policyFromForm().install_missing_components,permission,`${name}: saved component choice`);
+  assert.equal(legacyOption.hidden,choice!=='saved-window',`${name}: legacy window visibility`);
+  assert.deepEqual(policy,before,`${name}: opening the wizard must not mutate saved consent`);
+  assert.equal(f.posts.length,0,`${name}: opening the wizard must not write a policy`);
+  if(name==='new'){
+   f.c.$('firstInstall').value='off';
+   assert.equal(f.c.policyFromForm().install_missing_components,false,'user can decline the suggested first install');
+  }
+ }
+ console.log('PASS first-install wizard: immediate new setup, preserved explicit choices and legacy window, no write on entry');
+}
+
+{
+ const f=fixture();Object.assign(f.c,{serviceProof:()=>({kind:'off',label:'Не включён'}),serviceName:id=>id,candidateCooldownText:()=>'',formatDate:value=>value,escapeHTML:String,stateLabels:{}});
+ vm.runInContext(['standardScopeLabel','serviceRow'].map(extract).join('\n'),f.c);
+ for(const state of ['applied','healthy']){
+  f.c.snapshot.runtime={discord:{state,message:'Последний результат'}};f.c.snapshot.applied_services={discord:{enabled:true,route:'nfqws2'}};
+  f.c.snapshot.policy.enabled=false;let html=f.c.serviceRow('discord',{enabled:true,all_lan:true},true);assert.match(html,/Автоматика на паузе/);assert.doesNotMatch(html,/Не включён|Доступен · проверено/);
+  f.c.snapshot.policy.enabled=true;html=f.c.serviceRow('discord',{enabled:true,all_lan:true},true);assert.match(html,/Применён · нужна проверка/);assert.doesNotMatch(html,/Не включён/);
+ }
+ const service={enabled:true,all_lan:true};
+ assert.match(f.c.serviceRow('discord',service,true),/Вся обслуживаемая сеть/);
+ f.c.snapshot.network_scope_mode='selected_devices';
+ assert.match(f.c.serviceRow('discord',service,true),/Устройства, разрешённые общей политикой/);
+}

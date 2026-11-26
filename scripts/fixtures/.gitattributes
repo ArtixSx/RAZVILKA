@@ -1,0 +1,2 @@
+# Preserve exact Git patch context and its published SHA256.
+domain-preparation-baseline.patch -text -whitespace

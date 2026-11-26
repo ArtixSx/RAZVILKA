@@ -1,0 +1,228 @@
+package dataplane
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+)
+
+var errWGInactiveUnknown = errors.New("WireGuard runtime inactivity is not confirmed")
+
+// VerifyRuntimeInactive is an observation, never a Stop/recovery operation.
+// The caller must already own the common operation admission. Retained private
+// intent is allowed only with its exact, settled removal receipt; absence of a
+// process or an old successful Deactivate is insufficient.
+func (a *WARPWireGuardAdapter) VerifyRuntimeInactive(ctx context.Context) (result error) {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	measurement := beginWGRuntimeInactiveMeasurement()
+	completed := false
+	defer func() { measurement.finish(result, completed) }()
+	err := a.verifyRuntimeInactiveMeasured(ctx, verifyWGProcessesInactive, &measurement)
+	// Preserve the original final context check before diagnostic output.
+	result = errors.Join(err, ctx.Err())
+	completed = true
+	return result
+}
+
+func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, processes func(context.Context, []string) error) (err error) {
+	measurement := beginWGRuntimeInactiveMeasurement()
+	completed := false
+	defer func() { measurement.finish(err, completed) }()
+	err = a.verifyRuntimeInactiveMeasured(ctx, processes, &measurement)
+	completed = true
+	return err
+}
+
+func (a *WARPWireGuardAdapter) verifyRuntimeInactiveMeasured(ctx context.Context, processes func(context.Context, []string) error, measurement *wgRuntimeInactiveMeasurement) error {
+	if a == nil || processes == nil || !filepath.IsAbs(a.StateRoot) || filepath.Clean(a.StateRoot) != a.StateRoot || !filepath.IsAbs(a.RuntimeConfigPath) {
+		return errWGInactiveUnknown
+	}
+	spec, err := a.endpointSpec()
+	if err != nil {
+		return err
+	}
+	interfaces := []string{a.interfaceName(), a.interfaceName() + "-canary"}
+	pass := 0
+	observeBody := func() error {
+		if err := errors.Join(ctx.Err(), a.checkWGPolicyOperation()); err != nil {
+			return err
+		}
+		state, owned, err := a.deactivationOwnership(ctx)
+		if err != nil {
+			return err
+		}
+		if owned {
+			ref, err := a.committedWGPolicyReference(state)
+			if err != nil {
+				return err
+			}
+			status, err := a.inspectWGPolicyReference(ctx, ref, "")
+			if err != nil || !status.Removed || status.Unknown || status.Promoted {
+				return errors.Join(err, errWGInactiveUnknown)
+			}
+			if err := a.wgPolicyAbsent(ctx, ref); err != nil {
+				return err
+			}
+			if state.WireGuardEndpoint != nil {
+				route, rule, err := a.inspectWGEndpoint(ctx, state.WireGuardEndpoint)
+				if err != nil || route || rule {
+					return errors.Join(err, errWGInactiveUnknown)
+				}
+			}
+		} else {
+			_, exists, err := readWARPCleanupFile(filepath.Join(a.StateRoot, wgPolicyReferenceFile), policyAdditionMaxBytes)
+			if err != nil || exists {
+				return errors.Join(err, errWGInactiveUnknown)
+			}
+		}
+		measurement.begin(pass, "links", 0, 0)
+		if err := a.verifyWGInactiveLinks(ctx, interfaces); err != nil {
+			return err
+		}
+		for _, family := range []int{4, 6} {
+			measurement.begin(pass, "rules", 0, family)
+			args := []string{"-N"}
+			if family == 6 {
+				args = append(args, "-6")
+			}
+			data, err := a.run(ctx, a.ip(), append(args, "rule", "show")...)
+			if err != nil || len(data) > 1<<20 {
+				return errors.Join(err, errWGInactiveUnknown)
+			}
+			for _, line := range strings.Split(string(data), "\n") {
+				fields := strings.Fields(line)
+				if len(fields) == 0 {
+					continue
+				}
+				priority, err := strconv.Atoi(strings.TrimSuffix(fields[0], ":"))
+				if err != nil || priority < 0 {
+					return errWGInactiveUnknown
+				}
+				if priority >= spec.PriorityBase && priority <= spec.PriorityEnd || priority >= spec.SharedPriorityBase && priority <= spec.SharedPriorityEnd || priority == spec.EndpointPriority || priority >= 18050 && priority < 18066 {
+					return errWGInactiveUnknown
+				}
+			}
+		}
+		// A foreign route in an owned namespace is an unknown outcome. Never
+		// adopt or remove it to make inactivity appear true.
+		for slot, table := range []int{spec.Table, spec.EndpointTable, 219} {
+			for _, family := range []int{4, 6} {
+				measurement.begin(pass, "table-reference", slot, family)
+				if err := AssertPolicyDefaultUnreferenced(ctx, a.Runner, a.ip(), PolicyState{Table: table}, family); err != nil {
+					return err
+				}
+				measurement.begin(pass, "table-empty", slot, family)
+				if err := a.verifyWGEmptyNumericTable(ctx, table, family); err != nil {
+					return err
+				}
+			}
+		}
+		measurement.begin(pass, "processes", 0, 0)
+		return processes(ctx, interfaces)
+	}
+	observe := func() (err error) {
+		pass++
+		measurement.begin(pass, "ownership", 0, 0)
+		completed := false
+		defer func() { measurement.end(err, completed) }()
+		err = observeBody()
+		completed = true
+		return err
+	}
+	if err := observe(); err != nil {
+		return err
+	}
+	// Observe both sides of the process inventory; no cached absence is used.
+	return observe()
+}
+
+// An unused Linux FIB table can report ENOENT instead of an empty JSON array.
+// Recognize only the bounded exact diagnostic of this family, then confirm it
+// with the existing full numeric text reader. Any route or other error refuses.
+func (a *WARPWireGuardAdapter) readWGCompleteNumericTable(ctx context.Context, table, family int) ([]byte, error) {
+	return a.readWGNumericTable(ctx, table, family, false)
+}
+
+// Positive service proof needs explicit protocol/scope/type. iproute2 otherwise
+// elides boot protocol and global scope; missing attributes grant no ownership.
+func (a *WARPWireGuardAdapter) readWGCompleteDetailedNumericTable(ctx context.Context, table, family int) ([]byte, error) {
+	return a.readWGNumericTable(ctx, table, family, true)
+}
+
+func (a *WARPWireGuardAdapter) readWGNumericTable(ctx context.Context, table, family int, details bool) ([]byte, error) {
+	if family != 4 && family != 6 || table < 1 || table > 252 {
+		return nil, errWGInactiveUnknown
+	}
+	args := []string{"-N"}
+	if details {
+		args = append(args, "-details")
+	}
+	if family == 6 {
+		args = append(args, "-6")
+	}
+	args = append(args, "-j", "route", "show", "table", strconv.Itoa(table))
+	data, err := a.run(ctx, a.ip(), args...)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if len(data) > 1<<20 {
+		return nil, errWGInactiveUnknown
+	}
+	if err == nil {
+		return data, nil
+	}
+	// Preserve only the exact format diagnostic for the separate negative
+	// empty-table reader. Detailed positive proof never negotiates text.
+	if !details && (wgEndpointUnknownOption(data, "-N") || wgEndpointUnknownOption(data, "-j")) {
+		return data, err
+	}
+	if !wgMissingTableDiagnostic(data, family, true) {
+		return nil, err
+	}
+	confirmation, confirmErr := readPolicyTable(ctx, numericPolicyReadRunner{base: a.Runner}, a.ip(), PolicyState{Table: table}, family)
+	if confirmErr != nil || strings.TrimSpace(string(confirmation)) != "" {
+		return nil, errors.Join(confirmErr, errWGInactiveUnknown)
+	}
+	return []byte("[]"), nil
+}
+
+func (a *WARPWireGuardAdapter) verifyWGInactiveLinks(ctx context.Context, interfaces []string) error {
+	if source, ok := a.Runner.(*WGInactivityRead); ok && source.kernelLinksAvailable() {
+		links, err := source.readKernelLinks(ctx)
+		if err != nil {
+			return err // An original kernel-source refusal cannot fall back to CLI.
+		}
+		return errors.Join(wgKernelLinksExclude(links, interfaces), ctx.Err())
+	}
+	data, err := a.run(ctx, a.ip(), "-j", "link", "show")
+	if err != nil || len(data) > 1<<20 {
+		return errors.Join(err, errWGInactiveUnknown)
+	}
+	var links []struct {
+		Name string `json:"ifname"`
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
+	if d.Decode(&links) != nil || links == nil || len(links) == 0 || len(links) > 4096 || d.Decode(&struct{}{}) != io.EOF {
+		return errWGInactiveUnknown
+	}
+	seen := map[string]bool{}
+	for _, link := range links {
+		if link.Name == "" || seen[link.Name] {
+			return errWGInactiveUnknown
+		}
+		seen[link.Name] = true
+		for _, iface := range interfaces {
+			if link.Name == iface {
+				return errWGInactiveUnknown
+			}
+		}
+	}
+	return ctx.Err()
+}

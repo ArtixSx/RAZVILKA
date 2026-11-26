@@ -1,0 +1,260 @@
+package autonomy
+
+import (
+	"encoding/json"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestDefaultPrefersNFQWS2AndNodeEnginesWithOtherRoutesOptIn(t *testing.T) {
+	want := []string{"nfqws2", "sing-box", "xray"}
+	p := Default()
+	if !slices.Equal(p.PreferredRoutes, want) {
+		t.Fatal("unexpected initial preference", p.PreferredRoutes)
+	}
+	p.PreferredRoutes[0] = "wireguard"
+	if !slices.Equal(Default().PreferredRoutes, want) {
+		t.Fatal("defaults share their preference slice")
+	}
+	for _, route := range []string{"usque", "warp-wg", "amneziawg", "wireguard"} {
+		p := validPolicy()
+		p.PreferredRoutes = []string{route}
+		if !slices.Contains(PreferredRouteIDs, route) || Validate(p) != nil {
+			t.Fatal("additional route lost explicit opt-in", route)
+		}
+	}
+}
+
+func TestDefaultUpdatesUseThreeToFiveInSelectedTimezone(t *testing.T) {
+	p := Default()
+	p.Timezone = "Europe/Moscow"
+	for name, window := range map[string]Window{"application": p.Application, "components": p.Components} {
+		if window.Mode != "install" || window.Start != "03:00" || window.End != "05:00" {
+			t.Fatalf("%s default update window: %+v", name, window)
+		}
+		open := time.Date(2026, time.November, 24, 0, 0, 0, 0, time.UTC)
+		if _, active := WindowKey(window, p.Timezone, open.Add(-time.Second)); active {
+			t.Fatalf("%s opened before 03:00 locally", name)
+		}
+		if _, active := WindowKey(window, p.Timezone, open); !active {
+			t.Fatalf("%s did not open at 03:00 locally", name)
+		}
+		if _, active := WindowKey(window, p.Timezone, open.Add(2*time.Hour)); active {
+			t.Fatalf("%s remained open at 05:00 locally", name)
+		}
+	}
+}
+
+func TestPublicNodeFailureThresholdBoundsAndHistoricalDefault(t *testing.T) {
+	const key = `"public_node_failure_threshold"`
+	p := validPolicy()
+	wire, err := json.Marshal(p)
+	if err != nil || strings.Contains(string(wire), key) || p.EffectivePublicNodeFailureThreshold() != 3 {
+		t.Fatalf("historical omitted setting changed: effective=%d err=%v", p.EffectivePublicNodeFailureThreshold(), err)
+	}
+	for _, threshold := range []int{-1, 1, 2, 3, MaxPublicNodeFailureThreshold, MaxPublicNodeFailureThreshold + 1} {
+		p.PublicNodeFailureThreshold = threshold
+		if valid := Validate(p) == nil; valid != (threshold >= 2 && threshold <= MaxPublicNodeFailureThreshold) || p.EffectivePublicNodeFailureThreshold() != threshold {
+			t.Fatalf("threshold %d: valid=%t effective=%d", threshold, valid, p.EffectivePublicNodeFailureThreshold())
+		}
+	}
+}
+
+func TestInitialWARPConsentPreservesLegacyWireAndExplicitRevocation(t *testing.T) {
+	p := validPolicy()
+	wire, err := json.Marshal(p)
+	if err != nil || strings.Contains(string(wire), `"allow_initial_warp_registration"`) {
+		t.Fatal("an absent WARP choice changed old saved policy", err)
+	}
+	for _, allowed := range []bool{false, true} {
+		p.AllowInitialWARPRegistration = &allowed
+		p.PreferredRoutes = []string{"warp-wg"}
+		if err := Validate(p); err != nil {
+			t.Fatal(err)
+		}
+		copy := Clone(p)
+		*copy.AllowInitialWARPRegistration = !allowed
+		if *p.AllowInitialWARPRegistration != allowed {
+			t.Fatal("cloned consent shares mutable state")
+		}
+		wire, err = json.Marshal(p)
+		var restored Policy
+		if err != nil || !strings.Contains(string(wire), `"allow_initial_warp_registration"`) || json.Unmarshal(wire, &restored) != nil || restored.AllowInitialWARPRegistration == nil || *restored.AllowInitialWARPRegistration != allowed {
+			t.Fatal("saved WARP choice did not survive round trip", err)
+		}
+		p.PreferredRoutes = []string{"sing-box"}
+		if (Validate(p) == nil) == allowed {
+			t.Fatal("registration permission escaped method selection")
+		}
+	}
+}
+
+func validPolicy() Policy {
+	p := Default()
+	p.SetupComplete = true
+	p.Enabled = true
+	p.AllLAN = false
+	p.DefaultSources = []string{"192.168.1.50/32"}
+	p.SourceIDs = []string{"feed-fixture"}
+	return p
+}
+func TestPolicyValidation(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*Policy)
+		valid  bool
+	}{
+		{"valid_defaults", func(*Policy) {}, true},
+		{"all_lan_explicit", func(p *Policy) { p.AllLAN = true; p.DefaultSources = nil }, true},
+		{"no_implicit_lan", func(p *Policy) { p.DefaultSources = nil }, false},
+		{"no_ambiguous_scope", func(p *Policy) { p.AllLAN = true }, false},
+		{"invalid_timezone", func(p *Policy) { p.Timezone = "No/SuchZone" }, false},
+		{"empty_timezone", func(p *Policy) { p.Timezone = "" }, false},
+		{"local_timezone", func(p *Policy) { p.Timezone = "Local" }, false},
+		{"timezone_with_dst", func(p *Policy) { p.Timezone = "Europe/Berlin" }, true},
+		{"setup_required", func(p *Policy) { p.SetupComplete = false }, false},
+		{"local_only_without_sources", func(p *Policy) { p.SourceIDs = nil }, true},
+		{"no_routes_or_sources", func(p *Policy) { p.SourceIDs = nil; p.PreferredRoutes = nil }, false},
+		{"unknown_source_syntax", func(p *Policy) { p.SourceIDs = []string{"https://example.org/sub?secret"} }, false},
+		{"duplicate_sources", func(p *Policy) { p.SourceIDs = []string{"feed-x", "feed-x"} }, false},
+		{"max_sources", func(p *Policy) { p.SourceIDs = make([]string, MaxSources+1) }, false},
+		{"minimum_interval", func(p *Policy) { p.CheckSeconds = 59 }, false},
+		{"maximum_interval", func(p *Policy) { p.CheckSeconds = 3601 }, false},
+		{"reserve_slower", func(p *Policy) { p.ReserveSeconds = 60 }, false},
+		{"reserve_too_large", func(p *Policy) { p.ReserveTarget = 5 }, false},
+		{"zero_reserve", func(p *Policy) { p.ReserveTarget = 0 }, false},
+		{"bounded_candidates", func(p *Policy) { p.CandidatesPerRound = 5 }, false},
+		{"no_zero_gap", func(p *Policy) { p.FailureConfirmSeconds = 0 }, false},
+		{"bounded_switches", func(p *Policy) { p.MaxSwitchesPerHour = 21 }, false},
+		{"no_unimplemented_protocol", func(p *Policy) { p.Protocols = []string{"trojan"} }, false},
+		{"duplicate_protocol", func(p *Policy) { p.Protocols = []string{"vless", "vless"} }, false},
+		{"no_empty_protocol", func(p *Policy) { p.Protocols = nil }, false},
+		{"no_unsupported_preferred", func(p *Policy) { p.PreferredRoutes = []string{"custom-shell"} }, false},
+		{"no_duplicate_preferred", func(p *Policy) { p.PreferredRoutes = []string{"usque", "usque"} }, false},
+		{"source_priority_consented", func(p *Policy) { p.PreferredSourceIDs = []string{"feed-fixture"} }, true},
+		{"source_priority_no_new_consent", func(p *Policy) { p.PreferredSourceIDs = []string{"manual"} }, false},
+		{"source_priority_unique", func(p *Policy) { p.PreferredSourceIDs = []string{"feed-fixture", "feed-fixture"} }, false},
+		{"own_servers_preferred", func(p *Policy) { p.PreferredRoutes = []string{"amneziawg", "wireguard", "sing-box", "xray"} }, true},
+		{"no_node_route_preferred", func(p *Policy) { p.PreferredRoutes = []string{"sing-box:node-abc"} }, false},
+		{"auto_install", func(p *Policy) { p.Application.Mode = "install" }, true},
+		{"component_install", func(p *Policy) { p.Components.Mode = "install" }, true},
+		{"no_unknown_mode", func(p *Policy) { p.Application.Mode = "upgrade" }, false},
+		{"application_prepare", func(p *Policy) { p.Application.Mode = "prepare" }, true},
+		{"no_component_prepare", func(p *Policy) { p.Components.Mode = "prepare" }, false},
+		{"no_empty_days", func(p *Policy) { p.Application.Days = nil }, false},
+		{"no_duplicate_days", func(p *Policy) { p.Application.Days = []int{1, 1} }, false},
+		{"no_equal_window", func(p *Policy) { p.Application.End = p.Application.Start }, false},
+		{"revision_overflow", func(p *Policy) { p.Revision = ^uint64(0) }, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := validPolicy()
+			tt.change(&p)
+			if got := Validate(p) == nil; got != tt.valid {
+				t.Fatalf("valid=%v want %v", got, tt.valid)
+			}
+		})
+	}
+}
+func TestScopeBoundaries(t *testing.T) {
+	for _, text := range []string{"0.0.0.0/0", "::/0", "127.0.0.1", "::1", "224.0.0.1", "192.168.1.2/24", "service.example", "/opt/key", "192.168.1.999"} {
+		t.Run(text, func(t *testing.T) {
+			if ValidateScope(false, []string{text}) == nil {
+				t.Fatal("unsafe scope accepted")
+			}
+		})
+	}
+	for _, text := range []string{"192.168.1.2", "192.168.1.0/24", "fd00:1234::/64", "2001:db8::1"} {
+		t.Run(text, func(t *testing.T) {
+			if ValidateScope(false, []string{text}) != nil {
+				t.Fatal("valid exact scope rejected")
+			}
+		})
+	}
+}
+func TestCloneIsolationAndRoundTrip(t *testing.T) {
+	p := validPolicy()
+	p.PreferredSourceIDs = []string{"feed-fixture"}
+	q := Clone(p)
+	q.SourceIDs[0] = "other"
+	q.Protocols[0] = "bad"
+	q.Application.Days[0] = 4
+	q.DefaultSources[0] = "bad"
+	q.PreferredRoutes[0] = "bad"
+	q.PreferredSourceIDs[0] = "bad"
+	if Validate(p) != nil {
+		t.Fatal("clone aliases policy")
+	}
+	b, e := json.Marshal(p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var r Policy
+	if json.Unmarshal(b, &r) != nil || !reflect.DeepEqual(p, r) {
+		t.Fatal("round trip failed")
+	}
+	if strings.Contains(string(b), "vless://") {
+		t.Fatal("credentials stored in policy")
+	}
+}
+func parseUTC(t *testing.T, s string) time.Time {
+	t.Helper()
+	v, e := time.Parse(time.RFC3339, s)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return v
+}
+func TestMidnightWindowBelongsToStartingDay(t *testing.T) {
+	w := Window{Mode: "check", Start: "23:30", End: "01:00", Days: []int{1}}
+	cases := []struct {
+		stamp  string
+		inside bool
+	}{{"2026-09-07T23:29:00Z", false}, {"2026-09-07T23:30:00Z", true}, {"2026-09-08T00:59:00Z", true}, {"2026-09-08T01:00:00Z", false}, {"2026-09-08T23:45:00Z", false}}
+	for _, c := range cases {
+		t.Run(c.stamp, func(t *testing.T) {
+			key, ok := WindowKey(w, "UTC", parseUTC(t, c.stamp))
+			if ok != c.inside {
+				t.Fatalf("inside=%v", ok)
+			}
+			if ok && !strings.HasPrefix(key, "2026-09-07/") {
+				t.Fatal(key)
+			}
+		})
+	}
+}
+func TestDSTRepeatedHourOnlyOneSlot(t *testing.T) {
+	w := Window{Mode: "check", Start: "02:00", End: "03:00", Days: []int{0}}
+	a, ok := WindowKey(w, "Europe/Berlin", parseUTC(t, "2026-10-25T00:20:00Z"))
+	b, ok2 := WindowKey(w, "Europe/Berlin", parseUTC(t, "2026-10-25T01:20:00Z"))
+	if !ok || !ok2 || a != b {
+		t.Fatal("DST repeated slot was not deduplicated")
+	}
+}
+func TestDSTGapAndNoCatchUp(t *testing.T) {
+	w := Window{Mode: "check", Start: "02:10", End: "02:40", Days: []int{0}}
+	n := parseUTC(t, "2026-03-29T01:00:00Z")
+	if _, ok := WindowKey(w, "Europe/Berlin", n); ok {
+		t.Fatal("nonexistent hour executed")
+	}
+	next := NextWindow(w, "Europe/Berlin", n)
+	if want := parseUTC(t, "2026-04-05T00:10:00Z"); !next.Equal(want) {
+		t.Fatalf("next=%v want=%v", next, want)
+	}
+	w.Mode = "off"
+	if !NextWindow(w, "UTC", n).IsZero() {
+		t.Fatal("disabled window scheduled")
+	}
+}
+func TestInvalidClockTimes(t *testing.T) {
+	for _, s := range []string{"3:00", "24:00", "03:60", "03:0x", "03:00:01", "", "-1:00"} {
+		t.Run(s, func(t *testing.T) {
+			if _, e := Minute(s); e == nil {
+				t.Fatal("invalid clock accepted")
+			}
+		})
+	}
+}

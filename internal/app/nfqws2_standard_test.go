@@ -1,0 +1,487 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"net/http/httptest"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/autonomy"
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
+	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
+	"github.com/ArtixSx/razvilka/internal/testlab"
+)
+
+func starterService(t *testing.T, id string) catalog.Service {
+	t.Helper()
+	for _, s := range catalog.NFQWS2Starter().Services {
+		if s.ID == id {
+			return s
+		}
+	}
+	t.Fatalf("starter service %s missing", id)
+	return catalog.Service{}
+}
+
+// Only the definition-refresh test models present runtime. A generic
+// transaction receipt alone cannot issue this observation, even in tests.
+type nfqDefinitionRuntimeModel struct {
+	*serviceRuntimeAdapter
+	active, committed bool
+}
+
+func (m *nfqDefinitionRuntimeModel) Activate(ctx context.Context, p dataplane.Plan, root string) error {
+	if err := m.serviceRuntimeAdapter.Activate(ctx, p, root); err != nil {
+		return err
+	}
+	m.active, m.committed = true, false
+	return nil
+}
+func (m *nfqDefinitionRuntimeModel) Commit(ctx context.Context, p dataplane.Plan, root string) error {
+	if !m.active {
+		return errors.New("NFQ runtime model was not activated")
+	}
+	if err := m.serviceRuntimeAdapter.Commit(ctx, p, root); err != nil {
+		return err
+	}
+	m.committed = true
+	return nil
+}
+func (m *nfqDefinitionRuntimeModel) Deactivate(ctx context.Context) error {
+	m.active, m.committed = false, false
+	return m.serviceRuntimeAdapter.Deactivate(ctx)
+}
+func (m *nfqDefinitionRuntimeModel) Rollback(ctx context.Context, p dataplane.Plan, root string) error {
+	m.active, m.committed = false, false
+	return m.serviceRuntimeAdapter.Rollback(ctx, p, root)
+}
+func (m *nfqDefinitionRuntimeModel) ObserveOwnedRuntime(ctx context.Context) error {
+	if !m.active || !m.committed {
+		return errors.New("NFQ runtime model is not active and committed")
+	}
+	return ctx.Err()
+}
+
+// The incumbent proxy covers explicit CIDRs only. After its real transaction,
+// the complete NFQ definition is separately reviewed through enrollment. Only
+// adapters and the node checker are modeled; this is not router evidence.
+func nfqws2StandardFixture(t *testing.T, service catalog.Service) (*App, string, *nodeApplyAdapter) {
+	return nfqws2StandardScopedFixture(t, service, nil)
+}
+
+func nfqws2StandardScopedFixture(t *testing.T, service catalog.Service, devices []string) (*App, string, *nodeApplyAdapter) {
+	t.Helper()
+	a, _, adapter := nodeApplyFixture(t)
+	initial := defaultRouteCloneCatalogService(service)
+	initial.Domains, initial.CIDRs = nil, []string{"93.184.216.34/32"}
+	a.Catalog.Services = []catalog.Service{initial}
+	// Candidate selection now requires the actual active user list. Enabling
+	// the autonomy policy alone cannot activate a catalog/library service.
+	if err := a.Store.UpdateService(service.ID, config.ServiceState{Enabled: true, Route: "auto", Sources: devices}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := a.Nodes.Import(context.Background(), nodestore.Source{ID: "feed", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174002@feed.example:443?security=tls", time.Now(), time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := ""
+	for _, n := range snapshot.Nodes {
+		for _, o := range n.Origins {
+			if o.SourceID == "feed" {
+				node = n.ID
+			}
+		}
+	}
+	// Both fakes share one call log and can retire their routes, like the
+	// real sing-box and NFQWS2 adapters.
+	a.Dataplane.Adapters["sing-box"] = &serviceRuntimeAdapter{nodeApplyAdapter: adapter, name: "sing-box"}
+	if err = a.Dataplane.Register(&serviceRuntimeAdapter{nodeApplyAdapter: adapter, name: "nfqws2"}); err != nil {
+		t.Fatal(err)
+	}
+	a.DataplaneHost = func() dataplane.HostState {
+		return dataplane.HostState{IPCommand: true, TUN: true, SingBox: true, IPTables: true, IP6Tables: true, NFQueueTarget: true, NFQWS2Config: true, NFQWS2Init: true, OffloadState: "disabled"}
+	}
+	a.nodeReviews.options = func() []routecatalog.Option {
+		return []routecatalog.Option{{ID: "direct", Installed: true, Configured: true, Selectable: true, Ready: true},
+			{ID: "nfqws2", Installed: true, Configured: true, Running: true, Selectable: true, Ready: true},
+			{ID: "sing-box", Installed: true, Configured: true, Selectable: true},
+			{ID: "sing-box:" + node, Installed: true, Configured: true, Selectable: true, Services: []string{service.ID}}}
+	}
+	a.NodeChecker = jobNodeChecker(func(_ context.Context, r dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		return autofallbackResult(r, true), nil
+	})
+	p := autonomy.Default()
+	p.SetupComplete, p.Enabled, p.InheritNewServices = true, true, true
+	p.AllLAN, p.DefaultSources = len(devices) == 0, devices
+	p.SourceIDs = []string{"feed"}
+	p.PreferredRoutes = nil
+	p.ReserveTarget = 1
+	p.Application.Mode, p.Components.Mode = "off", "off"
+	w := httptest.NewRecorder()
+	a.autonomyAPI(w, autonomyRequest("PUT", "/api/v1/autonomy", map[string]any{"expected_revision": 0, "policy": p, "confirm": "SAVE_AUTONOMY", "release_safe_mode": true}))
+	if w.Code != 200 {
+		t.Fatalf("setup %d %s", w.Code, w.Body.String())
+	}
+	if err = a.inheritAutonomyService(context.Background(), service.ID); err != nil {
+		t.Fatal(err)
+	}
+	a.autonomyRound(context.Background(), time.Now())
+	if route := selectedRoute(a.Store.Get().AppliedServices[service.ID]); route != "sing-box:"+node {
+		t.Fatalf("fixture node not applied: %q %+v", route, standardRuntime(a, service.ID))
+	}
+	adapter.calls = nil
+	previous, found, err := a.Dataplane.Committed()
+	if err != nil || !found || len(previous.Routes) != 1 || len(previous.Routes[0].Domains) != 0 || len(previous.Routes[0].CIDRs) != 1 {
+		t.Fatal("initial incumbent is not an explicit CIDR-only plan", err)
+	}
+	// The original complete domain contract is restored before any NFQ test.
+	// Enrollment freezes this changed definition without mutating that older
+	// CIDR-only runtime or manufacturing domain coverage for the proxy.
+	a.Catalog.Services[0] = defaultRouteCloneCatalogService(service)
+	before := a.Store.Get()
+	if !reflect.DeepEqual(initial, service) {
+		w = httptest.NewRecorder()
+		a.autonomyEnroll(w, autonomyRequest("POST", "/api/v1/autonomy/services", map[string]any{
+			"service_id": service.ID, "expected_definition": autonomyDefinition(service),
+			"expected_revision": a.autonomyPolicy().Revision, "confirm": "REVIEW_SERVICE_DEFINITION",
+		}))
+	}
+	current, _, err := a.Dataplane.Committed()
+	if w.Code != 200 || err != nil || !reflect.DeepEqual(previous, current) || !reflect.DeepEqual(before, a.Store.Get()) || len(adapter.calls) != 0 || !reflect.DeepEqual(a.Catalog.Services[0], service) {
+		t.Fatal("new definition review changed incumbent or NFQ domain contract", w.Code, err)
+	}
+	return a, node, adapter
+}
+
+func standardRuntime(a *App, id string) autonomy.Runtime {
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	return a.autonomy.doc.Runtime[id].Clone()
+}
+
+func standardDue(a *App, id string) {
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	r := a.autonomy.doc.Runtime[id]
+	r.NextCheck = time.Time{}
+	a.autonomy.doc.Runtime[id] = r
+	_ = a.persistAutonomyLocked(context.Background())
+}
+
+func standardExpected(a *App, id string) string {
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	return a.autonomy.doc.Services[id].ExpectedRoute
+}
+
+func TestAutopilotReturnsNFQWS2ServiceFromUnavailableNode(t *testing.T) {
+	a, node, adapter := nfqws2StandardFixture(t, starterService(t, "discord"))
+	if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	cfg := a.Store.Get()
+	r := standardRuntime(a, "discord")
+	if r.State != "applied" || selectedRoute(cfg.AppliedServices["discord"]) != "nfqws2" || selectedRoute(cfg.Services["discord"]) != "nfqws2" || !strings.Contains(r.Message, "NFQWS2") {
+		t.Fatalf("not returned to NFQWS2: %+v applied=%+v", r, cfg.AppliedServices["discord"])
+	}
+	if len(cfg.AppliedServices["discord"].Sources) != 0 || standardExpected(a, "discord") != "nfqws2" {
+		t.Fatalf("scope or expectation lost: %+v %q", cfg.AppliedServices["discord"], standardExpected(a, "discord"))
+	}
+	if !slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("transaction bypassed: %v", adapter.calls)
+	}
+	// The standard route is kept: a returning node is not selected again.
+	if _, err := a.Nodes.SetDisabled(context.Background(), node, false, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	adapter.calls = nil
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	if selectedRoute(a.Store.Get().AppliedServices["discord"]) != "nfqws2" || slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("standard route replaced: %+v %v", standardRuntime(a, "discord"), adapter.calls)
+	}
+}
+
+func TestAutopilotKeepsWorkingNodeOfNFQWS2Service(t *testing.T) {
+	a, node, _ := nfqws2StandardFixture(t, starterService(t, "discord"))
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	if route := selectedRoute(a.Store.Get().AppliedServices["discord"]); route != "sing-box:"+node {
+		t.Fatalf("working node replaced: %q %+v", route, standardRuntime(a, "discord"))
+	}
+}
+
+// Only the reviewed NFQWS2 list has NFQWS2 as its standard route.
+func TestAutopilotDoesNotMoveOtherServiceToNFQWS2(t *testing.T) {
+	a, node, _ := nfqws2StandardFixture(t, catalog.Service{ID: "my-site", Name: "My site", Domains: []string{"example.org"}, ProbeURL: "https://example.org/"})
+	if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	standardDue(a, "my-site")
+	a.autonomyRound(context.Background(), time.Now())
+	if route := selectedRoute(a.Store.Get().AppliedServices["my-site"]); route != "sing-box:"+node {
+		t.Fatalf("service outside the NFQWS2 list moved: %q", route)
+	}
+}
+
+// Regression for the owner's router: Discord's draft was returned to NFQWS2
+// while the unavailable node stayed applied, and the autopilot paused on a
+// "manual change" while every other service waited for Discord.
+func TestAutopilotAppliesOwnersReturnToNFQWS2(t *testing.T) {
+	a, node, adapter := nfqws2StandardFixture(t, starterService(t, "discord"))
+	if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Store.UpdateService("discord", config.ServiceState{Enabled: true, Mode: "nfqws2", Route: "nfqws2"}); err != nil {
+		t.Fatal(err)
+	}
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	cfg := a.Store.Get()
+	r := standardRuntime(a, "discord")
+	if r.State != "applied" || selectedRoute(cfg.AppliedServices["discord"]) != "nfqws2" || !strings.Contains(r.Message, "Ваш возврат") || !slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("owner's return not applied: %+v applied=%+v calls=%v", r, cfg.AppliedServices["discord"], adapter.calls)
+	}
+}
+
+func TestAutopilotStillPausesOnOtherManualChanges(t *testing.T) {
+	for name, draft := range map[string]config.ServiceState{
+		"other route":   {Enabled: true, Route: "direct"},
+		"other devices": {Enabled: true, Route: "nfqws2", Sources: []string{"192.168.1.51/32"}},
+		"disabled":      {Enabled: false, Route: "nfqws2"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, node, adapter := nfqws2StandardFixture(t, starterService(t, "discord"))
+			if err := a.Store.UpdateService("discord", draft); err != nil {
+				t.Fatal(err)
+			}
+			standardDue(a, "discord")
+			a.autonomyRound(context.Background(), time.Now())
+			if r := standardRuntime(a, "discord"); r.State != "manual-change" || len(adapter.calls) != 0 || selectedRoute(a.Store.Get().AppliedServices["discord"]) != "sing-box:"+node {
+				t.Fatalf("manual change applied: %+v calls=%v", r, adapter.calls)
+			}
+		})
+	}
+}
+
+// NFQWS2 cannot be limited to selected devices: a device-scoped autopilot keeps
+// its previous behaviour and never widens the scope to the whole LAN.
+func TestAutopilotDeviceScopeDoesNotReturnToNFQWS2(t *testing.T) {
+	a, node, adapter := nfqws2StandardScopedFixture(t, starterService(t, "discord"), []string{"192.168.1.50/32"})
+	if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	if route := selectedRoute(a.Store.Get().AppliedServices["discord"]); route != "sing-box:"+node || slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("device-scoped service widened to NFQWS2: %q %+v", route, standardRuntime(a, "discord"))
+	}
+}
+
+// A RAZVILKA update extends the reviewed list (as 0.18.19 did for Discord).
+// The autopilot accepts the shipped definition and applies its reviewed NFQ
+// route. A generic proxy cannot acquire the updated domain list.
+func TestAutopilotAdoptsReviewedDefinitionUpdate(t *testing.T) {
+	updated := starterService(t, "discord")
+	previous := updated
+	previous.Domains = append([]string(nil), updated.Domains[:len(updated.Domains)-3]...)
+	a, node, adapter := nfqws2StandardFixture(t, previous)
+	nfqRuntime := &nfqDefinitionRuntimeModel{serviceRuntimeAdapter: &serviceRuntimeAdapter{nodeApplyAdapter: adapter, name: "nfqws2"}}
+	if nfqRuntime.ObserveOwnedRuntime(context.Background()) == nil {
+		t.Fatal("unactivated NFQ model invented runtime presence")
+	}
+	a.Dataplane.Adapters["nfqws2"] = nfqRuntime
+	if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	a.Catalog.Services = []catalog.Service{updated}
+	a.TestLab = testlab.NewRunner()
+	a.RouteProber = confirmedRouteProber{} // same explicitly modeled probe as other App transactions
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	r := standardRuntime(a, "discord")
+	committed, _, err := a.Dataplane.Committed()
+	a.autonomy.mu.Lock()
+	definition := a.autonomy.doc.Services["discord"].Definition
+	a.autonomy.mu.Unlock()
+	if err != nil || r.State != "applied" || !strings.Contains(r.Message, "NFQWS2") || definition != autonomyDefinition(updated) || !slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("reviewed update not applied: %+v calls=%v err=%v", r, adapter.calls, err)
+	}
+	if !committedServiceCurrent(committed, a.catalogSnapshot().Services[0]) || selectedRoute(a.Store.Get().AppliedServices["discord"]) != "nfqws2" {
+		t.Fatalf("reviewed full domain definition not refreshed through NFQ: %+v", committed.Routes)
+	}
+	adapter.calls = nil
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	if r = standardRuntime(a, "discord"); r.State != "healthy" || slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("refreshed route applied again: %+v %v", r, adapter.calls)
+	}
+}
+
+// Definitions outside the shipped reviewed list still require confirmation.
+func TestAutopilotStillAsksToConfirmOtherDefinitionChanges(t *testing.T) {
+	previous := starterService(t, "discord")
+	changed := previous
+	changed.Domains = append(append([]string(nil), previous.Domains...), "unreviewed.example")
+	a, _, adapter := nfqws2StandardFixture(t, previous)
+	a.Catalog.Services = []catalog.Service{changed}
+	standardDue(a, "discord")
+	a.autonomyRound(context.Background(), time.Now())
+	if r := standardRuntime(a, "discord"); r.State != "definition-changed" || len(adapter.calls) != 0 {
+		t.Fatalf("unreviewed definition accepted: %+v %v", r, adapter.calls)
+	}
+}
+
+func TestStandardRouteOnlyForReviewedNFQWS2List(t *testing.T) {
+	discord := starterService(t, "discord")
+	changed := discord
+	changed.Domains = append(append([]string(nil), discord.Domains...), "unreviewed.example")
+	if standardRoute(discord) != "nfqws2" || standardRoute(changed) != "" || standardRoute(catalog.Service{ID: "my-site"}) != "" {
+		t.Fatal("standard route offered outside the reviewed NFQWS2 list")
+	}
+}
+
+// Once the service returned to NFQWS2 and the new plan has no node routes,
+// the node recovery status of the earlier plan must not keep claiming that
+// the router needs review (seen on the owner's router after the return).
+func TestNodeRecoveryStatusOfSupersededPlanIsCleared(t *testing.T) {
+	for reason, keep := range map[string]bool{"scope-changed": false, "node-unavailable": false, "cleanup-unconfirmed": true} {
+		t.Run(reason, func(t *testing.T) {
+			a, node, _ := nfqws2StandardFixture(t, starterService(t, "discord"))
+			before, _, _ := a.Dataplane.Committed()
+			a.setNodeRecoveryStatus(nodeRecoveryStatus{State: "requires-review", PlanID: before.PlanID, Reason: reason, ServiceID: "discord"})
+			if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			standardDue(a, "discord")
+			a.autonomyRound(context.Background(), time.Now())
+			if selectedRoute(a.Store.Get().AppliedServices["discord"]) != "nfqws2" {
+				t.Fatal("fixture did not return to NFQWS2")
+			}
+			a.nodeRecoveryRound(context.Background(), time.Now())
+			status := a.nodeRecoverySnapshot()
+			if cleared := status.State == "idle" && status.Reason == ""; cleared == keep {
+				t.Fatalf("status=%+v", status)
+			}
+		})
+	}
+}
+
+func communityTelegram(cidrs []string, fetched string) catalog.Service {
+	return catalog.Service{ID: "custom-telegram-networks", Name: "Telegram · домены и сети", Category: "Мессенджеры", Icon: "TG",
+		Domains: []string{"telegram.org", "t.me"}, CIDRs: cidrs, Strategy: []string{"auto"}, ProbeURL: "https://telegram.org/",
+		SourceRefs: []string{"community:telegram-networks"},
+		Provenance: &catalog.Provenance{Provider: "V2Fly + Loyalsoldier GeoIP", EntryID: "telegram-networks", URL: "https://github.com/Loyalsoldier/geoip", SHA256: strings.Repeat("ab", 32), FetchedAt: fetched}}
+}
+
+// An explicit CIDR-only community refresh keeps the same node on the new
+// networks. Domain or mixed definitions require separate flow authority.
+func TestAutopilotAdoptsCommunityRefresh(t *testing.T) {
+	previous := communityTelegram([]string{"149.154.160.0/20"}, "2026-09-29T13:00:00Z")
+	updated := communityTelegram([]string{"149.154.160.0/20", "91.108.4.0/22"}, "2026-09-29T20:27:57Z")
+	previous.Domains, updated.Domains = nil, nil
+	updated.Provenance.SHA256 = strings.Repeat("cd", 32)
+	a, node, adapter := nfqws2StandardFixture(t, previous)
+	a.Catalog.Services = []catalog.Service{updated}
+	standardDue(a, updated.ID)
+	a.autonomyRound(context.Background(), time.Now())
+	r := standardRuntime(a, updated.ID)
+	committed, _, err := a.Dataplane.Committed()
+	if err != nil || r.State != "applied" || !slices.Contains(adapter.calls, "commit") {
+		t.Fatalf("community refresh not applied: %+v calls=%v err=%v", r, adapter.calls, err)
+	}
+	if !committedServiceCurrent(committed, updated) || selectedRoute(a.Store.Get().AppliedServices[updated.ID]) != "sing-box:"+node {
+		t.Fatalf("route not refreshed with the same node: %+v", committed.Routes)
+	}
+}
+
+func TestAutopilotCommunityDomainRefreshCannotActivateGenericProxy(t *testing.T) {
+	previous := communityTelegram([]string{"149.154.160.0/20"}, "2026-09-29T13:00:00Z")
+	previous.Domains = nil
+	updated := communityTelegram([]string{"149.154.160.0/20", "91.108.4.0/22"}, "2026-09-29T20:27:57Z")
+	updated.Provenance.SHA256 = strings.Repeat("cd", 32)
+	a, _, adapter := nfqws2StandardFixture(t, previous)
+	incumbent, _, err := a.Dataplane.Committed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := a.Store.Get()
+	a.Catalog.Services = []catalog.Service{updated}
+	standardDue(a, updated.ID)
+	a.autonomyRound(context.Background(), time.Now())
+	current, _, err := a.Dataplane.Committed()
+	if err != nil || standardRuntime(a, updated.ID).State != autonomyStateDomainRouteUnavailable || len(adapter.calls) != 0 || !reflect.DeepEqual(incumbent, current) || !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("community metadata granted generic domain effects", standardRuntime(a, updated.ID), adapter.calls, err)
+	}
+	plan, err := a.buildDataplanePlanForScope(a.Store.Get(), a.nodeRouteOptions(), changeScopeServices, "")
+	blocked := false
+	for _, issue := range plan.Blockers {
+		blocked = blocked || issue.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED"
+	}
+	if err != nil || plan.Ready || !blocked {
+		t.Fatal("mixed community domain plan was not fenced", err, plan.State)
+	}
+}
+
+// Without the community catalogue origin a changed service still needs the
+// owner's confirmation.
+func TestAutopilotAsksToConfirmEditedCustomService(t *testing.T) {
+	previous := communityTelegram([]string{"149.154.160.0/20"}, "2026-09-29T13:00:00Z")
+	previous.ID, previous.Provenance, previous.SourceRefs = "custom-telegram-own", nil, nil
+	changed := previous
+	changed.CIDRs = []string{"149.154.160.0/20", "91.108.4.0/22"}
+	a, _, adapter := nfqws2StandardFixture(t, previous)
+	a.Catalog.Services = []catalog.Service{changed}
+	standardDue(a, changed.ID)
+	a.autonomyRound(context.Background(), time.Now())
+	if r := standardRuntime(a, changed.ID); r.State != "definition-changed" || len(adapter.calls) != 0 {
+		t.Fatalf("edited service accepted: %+v %v", r, adapter.calls)
+	}
+}
+
+// Every check of a starter service takes a whole autopilot round. Without an
+// apply budget the check cannot lead anywhere, so it waits for the budget and
+// leaves the rounds to the services still waiting for their first check.
+func TestNFQWS2StarterWaitsForSwitchBudgetWithoutChecking(t *testing.T) {
+	a := &App{}
+	a.nodeReviews.options = func() []routecatalog.Option {
+		return []routecatalog.Option{{ID: "nfqws2", Installed: true, Configured: true, Running: true, Selectable: true, Ready: true}}
+	}
+	p := autonomy.Default()
+	now := time.Now()
+	full := autonomy.Runtime{}
+	for i := 0; i < p.MaxSwitchesPerHour; i++ {
+		full.Switches = append(full.Switches, now.Add(-time.Duration(50-i)*time.Minute))
+	}
+	r := a.runNFQWS2Starter(context.Background(), p, autonomy.Service{ID: "discord"}, full, catalog.Service{ID: "discord"}, config.Config{}, "profile")
+	if r.State != "rate-limited" || !strings.Contains(r.Message, "через") || r.NextCheck.Sub(now) < 9*time.Minute || r.NextCheck.Sub(now) > 11*time.Minute || len(r.Switches) != p.MaxSwitchesPerHour {
+		t.Fatalf("%s %q next in %v switches %d", r.State, r.Message, r.NextCheck.Sub(now), len(r.Switches))
+	}
+	// With room in the budget the check runs (and stays unconfirmed without a prober).
+	full.Switches = full.Switches[1:]
+	if r := a.runNFQWS2Starter(context.Background(), p, autonomy.Service{ID: "discord"}, full, catalog.Service{ID: "discord"}, config.Config{}, "profile"); r.State != "unconfirmed" {
+		t.Fatal(r.State, r.Message)
+	}
+}
+
+func TestNFQWS2StarterNamesStoppedDaemon(t *testing.T) {
+	for _, running := range []bool{false, true} {
+		a := &App{}
+		a.nodeReviews.options = func() []routecatalog.Option {
+			return []routecatalog.Option{{ID: "nfqws2", Installed: true, Configured: true, Running: running, Selectable: true, Ready: true}}
+		}
+		r := a.runNFQWS2Starter(context.Background(), autonomy.Default(), autonomy.Service{ID: "discord"}, autonomy.Runtime{}, catalog.Service{ID: "discord"}, config.Config{}, "profile")
+		if want := map[bool]string{false: "component-stopped", true: "unconfirmed"}[running]; r.State != want {
+			t.Fatalf("running=%v: %s %q", running, r.State, r.Message)
+		}
+	}
+}

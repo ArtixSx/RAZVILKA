@@ -1,0 +1,392 @@
+#!/bin/sh
+set -eu
+
+# CI-only ROOT fixture. All packet/address/rule effects occur in a new netns.
+# Production installer/stock platform approval remains unchanged. The tagged
+# fixture models platform classification, NOT artifact bytes, FD ownership,
+# compatibility, NFQUEUE packets, TLS/catalogue predicates or cleanup.
+test "$(id -u)" = 0 || { echo 'ROOT isolated CI fixture required' >&2; exit 2; }
+for probe_tool in curl sha256sum tar python3 unshare mount ip iptables-legacy ip6tables-legacy nft go timeout; do
+  command -v "$probe_tool" >/dev/null
+done
+probe_repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+probe_work=$(mktemp -d /tmp/razvilka-managed-probe.XXXXXX)
+chmod 700 "$probe_work"
+trap 'rm -rf -- "$probe_work"' EXIT HUP INT TERM
+export TMPDIR="$probe_work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+if test -n "${RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT:-}"; then
+  test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1
+  python3 - <<'PY'
+import os, pathlib
+p=pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT'])
+if not p.is_absolute() or p.resolve()!=p or not p.parent.is_dir(): raise SystemExit('profile output must be a fresh canonical absolute directory')
+p.mkdir(mode=0o755) # No adoption, overwrite, or recursive cleanup of supplied output.
+p.chmod(0o755) # Public synthetic profile evidence must be readable by the CI uploader.
+PY
+fi
+
+# Official release v1.0.6, source tag resolves to
+# 221d7dff24bfec0cd5ac0a5070b8acef2008af3d. The archive digest was checked
+# against the official release API's sha256 digest; every consumed member is
+# additionally pinned below. No unreviewed release, branch or latest lookup.
+sh "$probe_repo/scripts/fetch-native-fixture.sh" zapret2-1.0.6 "$probe_work/release.tar.gz"
+echo "eb412aebc82cdef1f09b6aa9df45c8ff60fb88683b6663e6c4a9275d87ea2db4  $probe_work/release.tar.gz" | sha256sum --check --strict
+tar -xzf "$probe_work/release.tar.gz" -C "$probe_work" \
+  zapret2-v1.0.6/binaries/linux-x86_64/nfqws2 \
+  zapret2-v1.0.6/lua/zapret-lib.lua \
+  zapret2-v1.0.6/lua/zapret-antidpi.lua \
+  zapret2-v1.0.6/lua/zapret-auto.lua \
+  zapret2-v1.0.6/files/fake/quic_initial_www_google_com.bin \
+  zapret2-v1.0.6/files/fake/tls_clienthello_www_google_com.bin
+export RAZVILKA_MANAGED_PROBE_FIXTURE_WORK="$probe_work"
+export RAZVILKA_MANAGED_PROBE_FIXTURE_REPO="$probe_repo"
+python3 - <<'PY'
+import hashlib, json, os, pathlib, subprocess
+work = pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_FIXTURE_WORK'])
+base = work / 'zapret2-v1.0.6'
+members = [
+ ('binaries/linux-x86_64/nfqws2', '25049b2bff954c02051e1102a06d34f2f0f946b069d350c9065a86ecd88267c1'),
+ ('lua/zapret-lib.lua', '6bf528fef1f0fc3c65e189216fc8a06bb873f6e25d1c29d2bfa4695a09b73440'),
+ ('lua/zapret-antidpi.lua', '6d1fa9168e5de1682fef91fd174f68b58c50f6739ef00f42ca7db2b940b6246d'),
+ ('lua/zapret-auto.lua', '23a9b99a776d868d92f4cc0ee5110f5c1f12fe746620d9c0337022dbc2f52df0'),
+ ('files/fake/quic_initial_www_google_com.bin', 'f4589c57749f956bb30538197a521d7005f8b0a8723b4707e72405e51ddac50a'),
+ ('files/fake/tls_clienthello_www_google_com.bin', '936c2bee4cfb80aa3c426b2dcbcc834b3fbcd1adb17172959dc569c73a14275c'),
+]
+paths = []
+for relative, expected in members:
+    path = base / relative
+    if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+        raise SystemExit('pinned member refused: ' + relative)
+    path.chmod(0o500 if not paths else 0o400)
+    paths.append({'Path': str(path), 'SHA256': expected})
+# Retain PRIVATE ancestors of the actual executable/assets, not just leaves.
+for path in base.rglob('*'):
+    if path.is_dir(): path.chmod(0o700)
+base.chmod(0o700)
+arguments = ['--lua-init=@' + p['Path'] for p in paths[1:4]]
+arguments += ['--blob=quic_initial:@' + paths[4]['Path'], '--blob=tls_clienthello:@' + paths[5]['Path']]
+(work / 'genuine.json').write_text(json.dumps({'BinaryPath': paths[0]['Path'], 'BinarySHA256': paths[0]['SHA256'], 'Assets': paths[1:], 'BaseArguments': arguments}))
+xt = pathlib.Path('/usr/sbin/xtables-legacy-multi')
+ip = pathlib.Path('/usr/bin/ip')
+version = subprocess.check_output(['/usr/sbin/iptables-legacy', '--version'], text=True).strip()
+if not version.startswith('iptables v'): raise SystemExit('unexpected xtables identity')
+version = version.removeprefix('iptables v')
+review = {'XTablesSHA256': hashlib.sha256(xt.read_bytes()).hexdigest(), 'IPToolSHA256': hashlib.sha256(ip.read_bytes()).hexdigest(), 'Version': version, 'IPVersion': subprocess.check_output(['/usr/sbin/ip', '-Version'], text=True)}
+(work / 'tools.json').write_text(json.dumps(review))
+print('CI-only platform classification; actual tool hashes/version:', json.dumps(review))
+PY
+export RAZVILKA_MANAGED_PROBE_NATIVE=1
+export RAZVILKA_NFQWS_MANAGED_GENUINE_REVIEW="$probe_work/genuine.json"
+export RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$probe_work/tools.json"
+cd "$probe_repo"
+probe_build_mode=${RAZVILKA_MANAGED_PROBE_BUILD_MODE:-race}
+printf 'Actual native build mode: %s\n' "$probe_build_mode"
+uname -a
+go version
+python3 - <<'PY'
+import pathlib
+for line in pathlib.Path('/proc/cpuinfo').read_text().splitlines():
+    if line.startswith('model name'):
+        print('Actual CPU:', line)
+        break
+PY
+case "$probe_build_mode" in
+  race)
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/startuptools.test" ./internal/startuptools ;;
+  production)
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/startuptools.test" ./internal/startuptools ;;
+  *) printf 'Unknown native build mode\n' >&2; exit 2 ;;
+esac
+# Default managed-copy tests/benchmarks and cold-source tests both execute
+# dataplane.test. LAN-only actors do not need this extra test binary.
+if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" != 1 || test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+  if test "$probe_build_mode" = race; then
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+  else
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+  fi
+fi
+if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+  if test "$probe_build_mode" = race; then
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
+  else
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
+  fi
+  cp "$probe_work/tools.json" "$probe_work/runtime-native-tool-review.json"
+  chmod 600 "$probe_work/runtime-native-tool-review.json"
+  export RAZVILKA_RUNTIME_NATIVE_REVIEW="$probe_work/runtime-native-tool-review.json" RAZVILKA_RUNTIME_NATIVE_OUTER_NET_FD=3
+  exec 3</proc/self/ns/net
+fi
+chmod 500 "$probe_work/app.test"
+# Go 1.26 builds this builtin tool lazily. Warm it outside the packet actor and
+# private /opt mount; this diagnostic compiler work is not a probe budget.
+timeout 50s go tool pprof -h >/dev/null 2>&1
+python3 - <<'PY'
+import os, pathlib
+program = pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_FIXTURE_WORK']) / 'app.test'
+size = program.stat().st_size
+print('Actual compiled reader/consumer bytes:', size)
+if not 0 < size <= 64 << 20:
+    raise SystemExit('fixture exceeds the real controller binary admission bound')
+PY
+printf '127.0.0.1 localhost\n8.8.8.8 managed-probe.example\n' > "$probe_work/hosts"
+chmod 400 "$probe_work/hosts"
+# GitHub's host /opt is writable for its tool cache. The real protected tool
+# review correctly refuses it as a preload ancestor. Give this disposable
+# mount namespace an actual empty protected /opt; never chmod/change the host.
+# Run acceptance actors before the three experimental allocation groups. A failed
+# fixed-slot cost model must not prevent observing the actual packet workflow;
+# Selected experiments remain mandatory and keep their nonzero failure exit.
+probe_cases='TestStaticVersionFactNativeNFQLANRPDB TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestNFQWSManagedCopy.* TestOutputReader.* TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerInitialWaitCleanup TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment TestMetadataParallel.* TestVersionNamesCandidate.* TestStartupImageMeasurement.*'
+probe_timeout=100s
+if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
+  case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
+    full) probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP' ;;
+    manual) probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANManualApply' ;;
+    pre-ledger)
+      test "${RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE:-}" = pre-ledger
+      test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+      test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = all
+      probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANPreLedgerRecovery' ;;
+    prepared-active)
+      test "${RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE:-}" = prepared-active
+      test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+      test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = all
+      probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANPreparedActiveRecovery' ;;
+    *) exit 2 ;;
+  esac
+  probe_timeout=240s
+elif test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" != full; then
+  exit 2
+fi
+# Separate genuine source admission diagnostic; it does not stand in for the
+# full NFQWS2 packet workflow or positive offline retirement.
+if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+  probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent TestMihomoLiveColdExportNativeHistoricalIntent TestMihomoLiveColdCLINativeHistoricalIntent TestMihomoLiveColdHealth9ExportNativeHistoricalIntent TestMihomoLiveColdHealth9CLINativeHistoricalIntent'
+  probe_timeout=220s
+fi
+# Use the already compiled native binary; benchmark only the default production
+# fixture, never each LAN/recovery invocation and never as a readiness claim.
+case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
+  all) ;;
+  helper-exit)
+    test "$probe_build_mode" = race
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    probe_cases='TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup' ;;
+  wait-cleanup)
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    test -z "${RAZVILKA_NATIVE_RACE_HELPER_EXIT:-}"
+    probe_cases='TestManagedStrategyProbeNativeConsumerInitialWaitCleanup TestManagedStrategyProbeNativeConsumerLateWaitCleanup' ;;
+  wg-inactivity)
+    # Complete original WG observer only, never full NFQ/LAN acceptance.
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    test -z "${RAZVILKA_NATIVE_RACE_HELPER_EXIT:-}"
+    test -z "${RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE:-}"
+    probe_cases='TestManagedStrategyProbeNativeWGInactivityMeasurement' ;;
+  tool-image)
+    # Explicit source-observation gate only. The default all packet actors and
+    # helper-exit experiment above keep their original selectors unchanged.
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    export RAZVILKA_TOOL_IMAGE_MEASURE=1
+    probe_cases='TestToolObservationImagePairRefusals TestToolObservationImageFixedSlotFallback TestToolObservationImageReadsAfterMismatch TestToolObservationImageActualLease TestToolObservationImageStageMeasurement TestClassicReadBatchNativeMutation TestReadObservationCopiedForeignExpiredMarkersNeverFallback TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead' ;;
+  metadata-parent)
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    probe_cases='TestMetadataParentSourceParity TestMetadataParentOwnedMutations TestMetadataParentActualPairs' ;;
+  *) exit 2 ;;
+esac
+probe_result=0
+case "$probe_cases:$probe_build_mode" in
+  *TestFreshPathNode*:production)
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFresh(Path|Held)Node$' -test.benchtime=1s -test.count=3 -test.benchmem ;;
+  *TestFreshPathNode*:race)
+    printf 'Actual race-only path allocation benchmark; sync.Pool may discard scratch\n'
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFreshPathNode$' -test.benchtime=200ms -test.count=3 -test.benchmem ;;
+esac
+# Same original output sink and actual child, outside route timing. Race runtime
+# exit delay is part of its own samples; never compare it to production latency.
+case "$probe_cases" in
+  *TestOutputReader*)
+    printf 'Actual bounded output copy benchmarks mode=%s; diagnostic_only=true\n' "$probe_build_mode"
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkOutputReader$' -test.benchtime=300ms -test.count=3 -test.benchmem
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkOutputReaderChild$' -test.benchtime=3x -test.count=3 -test.benchmem
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkClassicSaveOutputChild$' -test.benchtime=3x -test.count=3 -test.benchmem ;;
+esac
+# Full-byte managed source hashing only; same file inputs and reader bounds.
+# Keep allocation diagnostics outside all operation clocks.
+case "$probe_cases" in
+  *TestNFQWSManagedCopy*)
+    "$probe_work/dataplane.test" -test.run '^$' -test.bench '^BenchmarkNFQWSManagedCopy$' -test.benchtime=300ms -test.count=3 -test.benchmem ;;
+esac
+for probe_case in $probe_cases; do
+probe_status=0
+probe_program=/opt/bin/razvilka
+case "$probe_case" in TestToolObservationImage*|TestReadObservation*|TestMetadataParent*|TestMetadataParallel*|TestStartupImageMeasurement*|TestVersionNamesCandidate*|TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestOutputReader*|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
+case "$probe_case" in
+  TestNFQWSManagedCopy*|TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
+  TestMihomoLiveColdCLINativeHistoricalIntent|TestMihomoLiveColdHealth9CLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;
+esac
+RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER="$probe_work/app.test"
+if test "$probe_case" = TestMihomoLiveColdHealth9CLINativeHistoricalIntent; then
+  RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER="$probe_work/controller.test"
+fi
+export RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER
+set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout="$probe_timeout"
+case "$probe_case" in
+  TestMetadataParallel*)
+    # Test-only complete traversal; include each original provider/thread boundary.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench='^BenchmarkMetadataParallelCostModel$' -test.benchtime=300ms -test.benchmem ;;
+  TestStaticVersionFactNativeNFQLANRPDB)
+    # Same actual numeric RPDB children and full outer source boundaries.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench='^BenchmarkNFQLANRPDBPair$' -test.benchtime=300ms -test.benchmem ;;
+  TestStartupImageMeasurement*)
+    # Measurement only, same actual held graph and original namespace.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench='^BenchmarkStartupImage(Pair)?Measurement$' -test.benchtime=100ms -test.benchmem ;;
+  TestVersionNamesCandidate*)
+    # Same full metadata traversal and original namespace; not route latency.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench="^BenchmarkVersionMetadataNamesCandidate\$" -test.benchtime=300ms -test.benchmem ;;
+esac
+if test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = tool-image; then
+  # Measure this actual test process/children, not the compiler or whole job.
+  # The original mount/netns setup and test arguments below remain unchanged.
+  test -x /usr/bin/time
+  printf 'Actual isolated tool-image test resource measurement: %s\n' "$probe_case"
+  set -- /usr/bin/time -v "$@"
+fi
+unshare --mount --net sh -c '
+
+  set -eu
+  mount --make-rprivate /
+  mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
+  # Bind the SAME compiled reader/consumer inode at the actual controller
+  # pathname. The real fleet/identity scanner remains in the HTTP admission.
+  mkdir -m 755 /opt/bin
+  touch /opt/bin/razvilka
+  chmod 500 /opt/bin/razvilka
+  mount --bind "$RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER" /opt/bin/razvilka
+  # Production LookupNetIP uses the real resolver and this private mount;
+  # no supplied address/lookup callback bypasses catalogue DNS selection.
+  mount --bind "$RAZVILKA_MANAGED_PROBE_FIXTURE_WORK/hosts" /etc/hosts
+  # Register actual legacy table/proc inventories before the complete reader.
+  # This unreferenced disposable chain loads the NFQUEUE target, sees no
+  # packets, and is deleted before original App/Manager admission begins.
+  /usr/sbin/iptables-legacy -t mangle -S >/dev/null
+  /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
+  /usr/sbin/iptables-legacy -t mangle -N RZV_CI_NFQ_BOOTSTRAP
+  /usr/sbin/iptables-legacy -t mangle -A RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+  /usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+  /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
+  python3 "$RAZVILKA_MANAGED_PROBE_FIXTURE_REPO/scripts/native-managed-probe-queue-init.py"
+  exec "$@"
+' sh "$@" || probe_status=$?
+# Only these original HTTP populations create the two profiles. Their source
+# contains function/build locations and numeric samples, never packet bodies,
+# credentials, config values or environment dumps. Preserve raw evidence after
+# the original child returned; profile transfer cannot turn its FAIL into PASS.
+case "$probe_case" in
+  TestManagedStrategyProbeNativeLANAppHTTP|TestManagedStrategyProbeNativeLANManualApply|TestManagedStrategyProbeNativeLANPreLedgerRecovery|TestManagedStrategyProbeNativeLANPreparedActiveRecovery)
+    if test -n "${RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT:-}"; then
+      if ! python3 - "$probe_work" "$probe_case" "$probe_status" <<'PY'
+import hashlib,json,os,pathlib,stat,sys
+work=pathlib.Path(sys.argv[1]); name=sys.argv[2]
+root=pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_PROFILE_OUTPUT'])
+root_stat=root.lstat()
+if root.resolve()!=root or not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid!=os.geteuid() or stat.S_IMODE(root_stat.st_mode)!=0o755: raise SystemExit('profile output changed')
+out=root/name; out.mkdir(mode=0o755); out.chmod(0o755)
+rows=[]
+for suffix in ('.pprof','.pprof.alloc'):
+ p=work/(name+suffix)
+ fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+ try:
+  before=os.fstat(fd)
+  if not stat.S_ISREG(before.st_mode) or before.st_uid!=os.geteuid() or before.st_nlink!=1 or not 0<before.st_size<=64<<20: raise ValueError('profile bounds/type/owner')
+  digest=hashlib.sha256(); total=0
+  dest=os.open(out/p.name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+  try:
+   while True:
+    b=os.read(fd,min(65536,(64<<20)+1-total))
+    if not b: break
+    total+=len(b)
+    if total>64<<20: raise ValueError('profile grew beyond cap')
+    digest.update(b)
+    view=memoryview(b)
+    while view:
+     n=os.write(dest,view)
+     if n<=0: raise ValueError('profile write made no progress')
+     view=view[n:]
+   os.fsync(dest)
+   os.fchmod(dest,0o644)
+  finally: os.close(dest)
+  after=os.fstat(fd); named=os.stat(p,follow_symlinks=False)
+  fields=lambda s:(s.st_dev,s.st_ino,s.st_mode,s.st_uid,s.st_gid,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
+  if fields(before)!=fields(after) or fields(before)!=fields(named) or total!=before.st_size: raise ValueError('profile changed while copying')
+  rows.append({'file':p.name,'bytes':total,'sha256':digest.hexdigest()})
+ finally: os.close(fd)
+(out/'manifest.json').write_text(json.dumps({'test':name,'original_test_exit':int(sys.argv[3]),'scope':'whole HTTP population including setup and rollback; not forward-only','profiles':rows},indent=2)+'\n')
+(out/'manifest.json').chmod(0o644)
+print('actual_native_profiles_preserved test='+name+' original_exit='+sys.argv[3])
+PY
+      then
+        printf 'native_profile_transfer_failed original_test_status=%s\n' "$probe_status" >&2
+        if test "$probe_status" = 0; then probe_status=1; fi
+      fi
+    fi ;;
+esac
+# Analyze outside the private /opt mount; retain the original native failure.
+if test -f "$probe_work/$probe_case.pprof"; then
+  if ! timeout 50s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+  # Cumulative callers attribute syscall/SHA cost to the original producer;
+  # flat runtime leaves alone cannot distinguish tools from runtime assets.
+  if ! timeout 50s go tool pprof -top -cum -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+  # Filter ancestors/runtime leaves to expose actual source/controller costs.
+  if ! timeout 50s go tool pprof -top -cum -nodecount=40 -show="github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|components|app)" "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+fi
+if test -f "$probe_work/$probe_case.pprof.alloc"; then
+  if ! timeout 50s go tool pprof -top -sample_index=alloc_space -nodecount=30 "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+  # Include the fixed wrapper/caller nodes: copyBuffer alone reports only
+  # io.Copy and cannot distinguish source hashing from os/exec pipe copies.
+  peek_filter='^io[.](Copy|copyBuffer)$|^os[.].*WriteTo$|^os/exec[.].*writerDescriptor|netidentity[.]imageHash$|StockNFQWSNativeReview[)].current$'
+  peek_status=0
+  timeout 50s go tool pprof -sample_index=alloc_space -peek="$peek_filter" "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc" > "$probe_work/peek-output.txt" 2>&1 || peek_status=$?
+  cat "$probe_work/peek-output.txt"
+  # A valid allocation profile can contain no samples of these optional
+  # callers. Accept only pprof's exact no-match result, never a parse error,
+  # missing file, timeout or the original test failure in probe_status.
+  printf 'no matches found for regexp: %s\n' "$peek_filter" > "$probe_work/peek-empty.txt"
+  if test "$peek_status" = 2 && cmp -s "$probe_work/peek-output.txt" "$probe_work/peek-empty.txt"; then
+    printf 'optional_allocation_callers=no_samples original_test_status=%s\n' "$probe_status"
+  elif test "$peek_status" != 0; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+fi
+if test "$probe_status" != 0; then
+  if test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = helper-exit; then
+    probe_result="$probe_status"
+  else
+    exit "$probe_status"
+  fi
+fi
+done
+exit "$probe_result"

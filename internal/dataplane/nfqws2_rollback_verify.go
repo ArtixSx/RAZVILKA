@@ -1,0 +1,183 @@
+package dataplane
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// VerifyRollback only observes the restored instance. It never restarts a
+// process, consumes a draft, or treats a web probe as proof of rollback.
+func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root string) (bool, error) {
+	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
+		if err != nil {
+			return false, err
+		}
+		return e.verifyRollback(ctx)
+	}
+	snapshot, err := readNFQWS2Snapshot(root)
+	if err != nil {
+		return false, err
+	}
+	unlock, err := a.lockResources()
+	if err != nil {
+		return false, err
+	}
+	defer unlock()
+	lease, err := a.readLease()
+	if err != nil || !nfqws2RollbackLeaseEqual(lease, snapshot.Lease) {
+		return false, errors.New("NFQWS2 rollback ownership differs from its snapshot")
+	}
+	lists := nfqws2PlanLists(plan, a.ID())
+	owner, ownerErr := a.owner()
+	for index, file := range []struct {
+		path   string
+		data   []byte
+		exists bool
+		values []string
+	}{
+		{a.ConfigPath, snapshot.Config, snapshot.ConfigExisted, nil},
+		{a.UserListPath, snapshot.UserList, snapshot.UserListExisted, lists[0]},
+		{a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted, lists[1]},
+		{a.ownedListPaths()[2], snapshot.ExcludeList, snapshot.ExcludeExisted, lists[2]},
+		{a.ownedListPaths()[3], snapshot.IPSetExcludeList, snapshot.IPSetExclExisted, lists[3]},
+	} {
+		data, exists, err := nfqws2Read(file.path)
+		if err != nil || exists != file.exists {
+			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+		}
+		if bytes.Equal(data, file.data) {
+			continue
+		}
+		// Rollback may have put back the block the snapshot lacked and its
+		// lease records (see Rollback); accept exactly that and nothing else.
+		if index == 0 {
+			if lease == nil || lease.ConfigOwner == "" || nfqws2Hash(file.data) != lease.ConfigOwner || nfqws2Hash(data) != lease.ConfigHash {
+				return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+			}
+			restored, err := a.exclusionConfig(file.data, plan)
+			if err != nil || !bytes.Equal(data, restored) {
+				return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+			}
+			continue
+		}
+		if lease == nil || ownerErr != nil || len(lease.Lists) < index {
+			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+		}
+		if block, blockErr := nfqws2Block(file.data); blockErr != nil || len(block) > 0 {
+			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+		}
+		restored, ok := leaseBlockRestoration(file.data, file.values, owner, lease.Lists[index-1].BlockHash)
+		if !ok || !bytes.Equal(data, restored) {
+			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+		}
+	}
+	// A pre-existing external service has no instance manifest to prove its
+	// runtime. Keep that result explicitly unconfirmed, including stopped cases.
+	if lease == nil {
+		if snapshot.FirstStart {
+			init, exists, err := nfqws2Read(a.InitPath)
+			if err != nil || !exists || !bytes.Equal(init, snapshot.Init) {
+				return false, ErrReviewChanged
+			}
+			running, exists, err := nfqws2Read(a.ConfigPath + ".run")
+			if err != nil || exists != snapshot.RunningConfigExisted || !bytes.Equal(running, snapshot.RunningConfig) {
+				return false, ErrReviewChanged
+			}
+			if err := a.observeFirstStartAbsent(ctx, true); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		return false, nil
+	}
+	if _, err := a.verifyOwnedLists(false); err != nil {
+		return false, err
+	}
+	if snapshot.FirstStart && snapshot.WasRunning {
+		identity, err := a.captureFirstStartProcess(snapshot.Config)
+		if err != nil || lease.FirstStart == nil || lease.FirstStart.Process == nil || *identity != *lease.FirstStart.Process {
+			return false, errors.New("restored NFQWS2 process identity is not confirmed")
+		}
+	}
+	queue, ok := nfqws2LiteralQueue(snapshot.Config)
+	if !ok {
+		return false, errors.New("NFQWS2 rollback queue cannot be determined without executing configuration")
+	}
+	output, statusErr := a.run(ctx, a.InitPath, "status")
+	running := statusErr == nil && runningOutput(string(output))
+	stopped := !runningOutput(string(output)) && strings.Contains(strings.ToLower(string(output)), "not running")
+	if snapshot.WasRunning && !running || !snapshot.WasRunning && !stopped {
+		return false, errors.New("NFQWS2 rollback process state is not confirmed")
+	}
+	command := a.IPTablesSave
+	if command == "" {
+		command = findExecutable("/opt/sbin/iptables-save", "/opt/bin/iptables-save", "iptables-save")
+	}
+	if command == "" {
+		return false, errors.New("iptables-save is unavailable for NFQWS2 rollback verification")
+	}
+	output, err = a.run(ctx, command)
+	if err != nil {
+		return false, fmt.Errorf("read NFQWS2 rollback rules: %w", err)
+	}
+	queueConfirmed := nfqws2QueueRule(output, queue)
+	if snapshot.FirstStart && snapshot.WasRunning {
+		running, exists, err := nfqws2Read(a.ConfigPath + ".run")
+		queueConfirmed = err == nil && exists && nfqws2ClosedReachableQueueRule(output, snapshot.Config, running, lease.Owner) &&
+			nfqws2ClosedReachablePreRule(output, snapshot.Config, running, lease.Owner)
+	}
+	if queueConfirmed != snapshot.WasRunning {
+		return false, errors.New("NFQWS2 rollback queue rules are not confirmed")
+	}
+	return ctx.Err() == nil, ctx.Err()
+}
+
+var nfqws2QueueAssignment = regexp.MustCompile(`^(?:export\s+)?NFQUEUE_NUM\s*=\s*(?:"([0-9]+)"|'([0-9]+)'|([0-9]+))\s*(?:#.*)?$`)
+
+func nfqws2LiteralQueue(config []byte) (string, bool) {
+	queue := "300" // The installed NFQWS2 service's default.
+	for _, raw := range strings.Split(string(config), "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "#") || !strings.Contains(line, "NFQUEUE_NUM") {
+			continue
+		}
+		match := nfqws2QueueAssignment.FindStringSubmatch(line)
+		if match == nil {
+			return "", false
+		}
+		for _, value := range match[1:] {
+			if value == "" {
+				continue
+			}
+			n, err := strconv.Atoi(value)
+			if err != nil || n < 1 || n > 65535 {
+				return "", false
+			}
+			queue = strconv.Itoa(n)
+		}
+	}
+	return queue, true
+}
+
+func nfqws2QueueRule(data []byte, queue string) bool {
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 6 || fields[0] != "-A" || !strings.HasPrefix(strings.ToLower(fields[1]), "nfqws") {
+			continue
+		}
+		target, number := false, false
+		for i := 2; i+1 < len(fields); i++ {
+			target = target || fields[i] == "-j" && fields[i+1] == "NFQUEUE"
+			number = number || fields[i] == "--queue-num" && fields[i+1] == queue
+		}
+		if target && number {
+			return true
+		}
+	}
+	return false
+}

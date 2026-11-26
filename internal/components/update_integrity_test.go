@@ -1,0 +1,144 @@
+package components
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+type preciseUpdateRunner struct {
+	calls         []string
+	before, after string
+	changed       bool
+	failed        string
+}
+
+func (r *preciseUpdateRunner) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
+	c := strings.Join(args, " ")
+	r.calls = append(r.calls, c)
+	if c == r.failed {
+		return nil, errors.New("test-read-failure")
+	}
+	switch c {
+	case "list-installed":
+		v := r.before
+		if r.changed {
+			v = r.after
+		}
+		return []byte("sing-box-go - " + v + " - test\n"), nil
+	case "list":
+		return []byte("sing-box-go - 1.14.1 - test\n"), nil
+	case "upgrade sing-box-go":
+		r.changed = true
+		return []byte("ok"), nil
+	}
+	return nil, errors.New("unreviewed operation")
+}
+func TestNamedUpgradeMustAdvanceBeforeReceipt(t *testing.T) {
+	for _, version := range []string{"1.14.1", "1.13.3", "1.12.0"} {
+		t.Run(version, func(t *testing.T) {
+			r := &preciseUpdateRunner{before: "1.13.3", after: version}
+			initDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(initDir, singBoxInitName), []byte(singBoxInitFixture), 0755); err != nil {
+				t.Fatal(err)
+			}
+			m := &Manager{Opkg: "opkg", RepoDir: t.TempDir(), StateDir: t.TempDir(), InitDir: initDir, Runner: r}
+			// Version/receipt verification remains a package primitive contract.
+			// Public installed-component updates additionally require a journal.
+			result, err := m.applyLocked(context.Background(), "sing-box", map[string]bool{})
+			if (err == nil) != (version == "1.14.1") || result.OK != (version == "1.14.1") {
+				t.Fatal(result, err)
+			}
+			for _, c := range r.calls {
+				if c == "upgrade" || strings.HasPrefix(c, "install") {
+					t.Fatal(c)
+				}
+			}
+			_, stat := os.Stat(filepath.Join(m.StateDir, "receipts/sing-box.json"))
+			if (stat == nil) != (version == "1.14.1") {
+				t.Fatal(stat)
+			}
+		})
+	}
+}
+func TestPartialInventoryNeverInventsMissingOrNewerVersion(t *testing.T) {
+	for _, failed := range []string{"list-installed", "list"} {
+		r := &preciseUpdateRunner{before: "1.13.3"}
+		m := &Manager{Opkg: "opkg", Runner: r}
+		if _, err := m.List(context.Background(), false); err != nil {
+			t.Fatal(err)
+		}
+		r.failed = failed
+		views, err := m.List(context.Background(), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v := componentView(t, views, "sing-box")
+		if !v.Installed || v.InstalledVersion != "1.13.3" || v.CanInstall || v.CanUpdate || (failed == "list-installed" && v.InventoryError == "") || (failed == "list" && !v.CatalogStale) {
+			t.Fatal(failed, v)
+		}
+	}
+}
+func TestChecksumRejectsDuplicateEvenEqual(t *testing.T) {
+	a := strings.Repeat("a", 64)
+	b := strings.Repeat("b", 64)
+	for _, raw := range []string{a + " file\n" + a + " file", a + " file\n" + b + " file", a + " extra file", "bad file", a + " other"} {
+		if _, e := checksumForAsset([]byte(raw), "file"); e == nil {
+			t.Fatal(raw)
+		}
+	}
+	if s, e := checksumForAsset([]byte(a+" *file"), "file"); e != nil || s != a {
+		t.Fatal(s, e)
+	}
+}
+func TestRepositoryReadCannotClobberExternalDefinition(t *testing.T) {
+	m := &Manager{RepoDir: t.TempDir()}
+	f := filepath.Join(m.RepoDir, "nfqws2.conf")
+	original := []byte("src/gz mine https://example.org/other\n")
+	os.WriteFile(f, original, 0600)
+	spec, _ := lookup("nfqws2")
+	if m.ensureRepository(spec) == nil {
+		t.Fatal("overwrote foreign file")
+	}
+	after, _ := os.ReadFile(f)
+	if string(after) != string(original) {
+		t.Fatal("clobbered")
+	}
+}
+
+func TestWarpWireGuardInstallDoesNotDownloadLegacyGenerator(t *testing.T) {
+	bin := t.TempDir()
+	r := &fakeRunner{output: map[string]string{"install": "ok"}}
+	requests := 0
+	client := &http.Client{Transport: inventoryTransport(func(*http.Request) (*http.Response, error) {
+		requests++
+		return nil, errors.New("unexpected release request")
+	})}
+	m := &Manager{Opkg: "opkg", RepoDir: t.TempDir(), StateDir: t.TempDir(), BinDir: bin, Runner: r, Client: client}
+	result, err := m.Apply(context.Background(), "warp-wg")
+	if err != nil || !result.OK {
+		t.Fatal(result, err)
+	}
+	installed := false
+	for _, args := range r.calls {
+		if len(args) > 2 {
+			if args[1] != "install" || args[2] != "wireguard-tools" {
+				t.Fatal("unexpected package operation", args)
+			}
+			installed = true
+		}
+	}
+	if !installed {
+		t.Fatal("WireGuard tools were not installed")
+	}
+	if requests != 0 {
+		t.Fatalf("WireGuard install attempted %d external release requests", requests)
+	}
+	if _, err := os.Stat(filepath.Join(bin, "wgcf")); !os.IsNotExist(err) {
+		t.Fatal("installed optional legacy generator", err)
+	}
+}

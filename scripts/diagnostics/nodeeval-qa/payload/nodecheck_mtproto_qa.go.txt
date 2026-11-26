@@ -1,0 +1,341 @@
+// Disposable QA overlay only; no production API or persisted health authority.
+package dataplane
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"net/netip"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
+	xnetproxy "golang.org/x/net/proxy"
+)
+
+// Official Telegram Desktop production built-in DC 2, reviewed 2026-10-07:
+// Telegram/SourceFiles/mtproto/mtproto_dc_options.cpp, kBuiltInDcs.
+const qaMTEndpoint = "149.154.167.51:443"
+const qaMTBudget = 3 * time.Second
+const qaMTMaxFrame = 4096
+const qaMTMaxFingerprints = 16
+const qaMTReqPQ uint32 = 0xbe7e8ef1
+const qaMTResPQ uint32 = 0x05162463
+const qaMTVector uint32 = 0x1cb5c415
+
+type qaMTContextKey struct{}
+type qaMTObservation struct {
+	Code      string
+	Reply     bool
+	ElapsedMS int64
+}
+type qaMTEvent struct {
+	Kind             string `json:"kind"`
+	NodeID           string `json:"node_id"`
+	Engine           string `json:"engine"`
+	DC               int    `json:"dc"`
+	Code             string `json:"code"`
+	ProtocolReply    bool   `json:"mtproto_reply"`
+	Accepted         bool   `json:"mtproto_accepted"`
+	HTTPSPass        bool   `json:"https_pass"`
+	ClosingConfirmed bool   `json:"closing_confirmed"`
+	ElapsedMS        int64  `json:"elapsed_ms"`
+	Scope            string `json:"scope"`
+}
+
+type qaMTAttemptRecord struct {
+	mu                             sync.Mutex
+	node, engine, profile, service string
+	started                        time.Time
+	session                        exactNodeSession
+	passport                       routeidentity.Passport
+	bound, taken                   bool
+	observation                    qaMTObservation
+	exchange                       func(context.Context, string) qaMTObservation
+	emit                           func(qaMTEvent)
+}
+
+var qaMTOutputMu sync.Mutex
+
+func qaMTNewAttempt(c *ExactNodeChecker, r NodeCheckRequest) *qaMTAttemptRecord {
+	if c == nil || r.Service.ID != "custom-telegram-https" || r.Service.ProbeURL != "https://telegram.org/" || !exactNodeIDPattern.MatchString(r.NodeID) {
+		return nil
+	}
+	return &qaMTAttemptRecord{node: r.NodeID, engine: c.EngineID(), profile: r.NetworkProfile, service: r.Service.ID, started: c.currentTime(), exchange: qaMTProbe, emit: func(e qaMTEvent) {
+		qaMTOutputMu.Lock()
+		defer qaMTOutputMu.Unlock()
+		_ = json.NewEncoder(os.Stdout).Encode(e)
+	}}
+}
+
+func qaMTBind(a *qaMTAttemptRecord, s exactNodeSession, p routeidentity.Passport) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.session, a.passport, a.bound = s, p, true
+}
+
+func qaMTWrapService(c *ExactNodeChecker, original func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error)) func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error) {
+	return func(ctx context.Context, address, route, egress string, service catalog.Service) (evidence.ProbeEvidence, error) {
+		proof, err := original(ctx, address, route, egress, service) // Original HTTPS exactly once, unchanged.
+		a, _ := ctx.Value(qaMTContextKey{}).(*qaMTAttemptRecord)
+		if a == nil {
+			return proof, err
+		}
+		a.mu.Lock()
+		if a.taken || !a.bound || a.service != service.ID || route != a.engine+":"+a.node || address != a.session.Address {
+			a.mu.Unlock()
+			return proof, err
+		}
+		a.taken = true
+		session, passport, exchange := a.session, a.passport, a.exchange
+		a.mu.Unlock()
+		bounded, cancel := context.WithTimeout(ctx, qaMTBudget)
+		defer cancel()
+		started := time.Now()
+		observation := qaMTObservation{Code: "mtproto-owner-unconfirmed"}
+		before, identityErr := c.identity(session)
+		// The additional numeric destination must respect the same current
+		// resource boundary as the original service, including after the reply.
+		destination := netip.MustParseAddr("149.154.167.51")
+		if identityErr == nil && before == passport && c.checkNetwork(bounded, a.profile) == nil && checkNodeResource(bounded, "", destination) == nil {
+			observation = exchange(bounded, address)
+			after, afterErr := c.identity(session)
+			if afterErr != nil || after != passport {
+				observation.Reply = false
+				observation.Code = "mtproto-owner-changed"
+			} else if c.checkNetwork(bounded, a.profile) != nil {
+				observation.Reply = false
+				observation.Code = "mtproto-network-unconfirmed"
+			} else if checkNodeResource(bounded, "", destination) != nil {
+				observation.Reply = false
+				observation.Code = "mtproto-resource-unconfirmed"
+			}
+		}
+		if bounded.Err() != nil {
+			observation.Reply = false
+			observation.Code = qaMTIOCode(bounded, bounded.Err())
+		}
+		observation.ElapsedMS = min(time.Since(started).Milliseconds(), 3000)
+		a.mu.Lock()
+		a.observation = observation
+		a.mu.Unlock()
+		return proof, err // MTProto never modifies the original HTTPS evidence/error.
+	}
+}
+
+// Registered first in Check, hence runs AFTER the original identity, cleanup,
+// WAN closing, cancellation and gate-release defers. It cannot upgrade them.
+func qaMTFinalize(c *ExactNodeChecker, parent context.Context, r NodeCheckRequest, a *qaMTAttemptRecord, result NodeCheckResult, err error) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.taken {
+		return
+	}
+	now := c.currentTime()
+	fresh := result.NodeID == r.NodeID && result.ServiceID == a.service && result.NetworkProfile == a.profile && result.RoutePathID == a.engine+":"+a.node &&
+		!result.StartedAt.Before(a.started) && !result.FinishedAt.Before(result.StartedAt) && !result.FinishedAt.After(now) && now.Before(result.ExpiresAt)
+	https := err == nil && parent.Err() == nil && fresh && result.Available && result.Verdict == evidence.VerdictPass && result.TestLevel == "service" && result.ErrorCode == "" && !result.DirectLeak && result.HTTPStatus >= 200 && result.HTTPStatus < 300
+	closing := https && result.Stage != "cleanup" && !c.poisoned.Load()
+	a.emit(qaMTEvent{Kind: "qa-mtproto", NodeID: a.node, Engine: a.engine, DC: 2, Code: a.observation.Code, ProtocolReply: a.observation.Reply, Accepted: a.observation.Reply && closing, HTTPSPass: https, ClosingConfirmed: closing, ElapsedMS: a.observation.ElapsedMS, Scope: "one unauthenticated resPQ through owned SOCKS; no server authentication, auth key, account, media, voice, LAN/TUN or Selectable claim"})
+}
+
+// SOCKS is mandatory. The only underlying TCP dial goes to the already-owned
+// literal loopback listener; the numeric DC is sent to SOCKS, never direct.
+func qaMTDial(ctx context.Context, address string) (net.Conn, error) {
+	return qaMTSOCKSDial(ctx, address, &net.Dialer{Timeout: qaMTBudget})
+}
+
+func qaMTSOCKSDial(ctx context.Context, address string, forward xnetproxy.Dialer) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	ip, ipErr := netip.ParseAddr(host)
+	number, portErr := strconv.Atoi(port)
+	if err != nil || ipErr != nil || !ip.IsLoopback() || ip.Zone() != "" || portErr != nil || number < 1 || number > 65535 {
+		return nil, errors.New("MTProto QA loopback unavailable")
+	}
+	proxy, err := xnetproxy.SOCKS5("tcp", address, nil, forward)
+	if err != nil {
+		return nil, err
+	}
+	dialer, ok := proxy.(xnetproxy.ContextDialer)
+	if !ok {
+		return nil, errors.New("MTProto QA bounded SOCKS unavailable")
+	}
+	return dialer.DialContext(ctx, "tcp", qaMTEndpoint)
+}
+
+func qaMTProbe(ctx context.Context, address string) qaMTObservation {
+	return qaMTExchange(ctx, address, qaMTDial, time.Now)
+}
+
+func qaMTExchange(parent context.Context, address string, dial func(context.Context, string) (net.Conn, error), now func() time.Time) qaMTObservation {
+	ctx, cancel := context.WithTimeout(parent, qaMTBudget)
+	defer cancel()
+	if ctx.Err() != nil {
+		return qaMTObservation{Code: qaMTIOCode(ctx, ctx.Err())}
+	}
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return qaMTObservation{Code: "mtproto-entropy-unavailable"}
+	}
+	defer clear(nonce[:])
+	conn, err := dial(ctx, address)
+	if err != nil {
+		return qaMTObservation{Code: qaMTIOCode(ctx, err)}
+	}
+	defer conn.Close()
+	end, _ := ctx.Deadline()
+	if conn.SetDeadline(end) != nil {
+		return qaMTObservation{Code: "mtproto-deadline-setup"}
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	request := qaMTRequest(nonce, now())
+	defer clear(request)
+	if _, err := io.Copy(conn, bytes.NewReader(request)); err != nil {
+		return qaMTObservation{Code: qaMTIOCode(ctx, err)}
+	}
+	frame, code := qaMTReadFrame(ctx, conn)
+	if code != "" {
+		return qaMTObservation{Code: code}
+	}
+	defer clear(frame)
+	code = qaMTValidate(frame, nonce, now())
+	if ctx.Err() != nil {
+		return qaMTObservation{Code: qaMTIOCode(ctx, ctx.Err())}
+	}
+	if code != "" {
+		return qaMTObservation{Code: code}
+	}
+	return qaMTObservation{Code: "mtproto-respq", Reply: true}
+}
+
+func qaMTRequest(nonce [16]byte, now time.Time) []byte {
+	packet := make([]byte, 42)
+	packet[0], packet[1] = 0xef, 10 // one transport marker, then 40-byte payload / 4
+	messageID := uint64(now.Unix())<<32 | ((uint64(now.Nanosecond())<<32)/1000000000)&^3
+	binary.LittleEndian.PutUint64(packet[10:18], messageID)
+	binary.LittleEndian.PutUint32(packet[18:22], 20)
+	binary.LittleEndian.PutUint32(packet[22:26], qaMTReqPQ)
+	copy(packet[26:], nonce[:])
+	return packet
+}
+
+func qaMTReadFrame(ctx context.Context, r io.Reader) ([]byte, string) {
+	var first [1]byte
+	if _, err := io.ReadFull(r, first[:]); err != nil {
+		return nil, qaMTIOCode(ctx, err)
+	}
+	words := uint32(first[0])
+	if words == 0 || words > 127 {
+		return nil, "mtproto-frame-invalid"
+	}
+	if words == 127 {
+		var extended [3]byte
+		if _, err := io.ReadFull(r, extended[:]); err != nil {
+			return nil, qaMTIOCode(ctx, err)
+		}
+		words = uint32(extended[0]) | uint32(extended[1])<<8 | uint32(extended[2])<<16
+		if words < 127 {
+			return nil, "mtproto-frame-invalid"
+		}
+	}
+	if words > qaMTMaxFrame/4 {
+		return nil, "mtproto-frame-oversize"
+	}
+	frame := make([]byte, int(words)*4)
+	if _, err := io.ReadFull(r, frame); err != nil {
+		clear(frame)
+		return nil, qaMTIOCode(ctx, err)
+	}
+	if len(frame) == 4 && int32(binary.LittleEndian.Uint32(frame)) < 0 {
+		clear(frame)
+		return nil, "mtproto-transport-error"
+	}
+	return frame, ""
+}
+
+func qaMTValidate(frame []byte, nonce [16]byte, now time.Time) string {
+	if len(frame) < 76 || len(frame) > qaMTMaxFrame || len(frame)%4 != 0 || binary.LittleEndian.Uint64(frame[:8]) != 0 || int(binary.LittleEndian.Uint32(frame[16:20])) != len(frame)-20 {
+		return "mtproto-envelope-invalid"
+	}
+	id := binary.LittleEndian.Uint64(frame[8:16])
+	seconds := int64(id >> 32)
+	if id&3 != 1 || seconds < now.Unix()-300 || seconds > now.Unix()+30 {
+		return "mtproto-message-id-invalid"
+	}
+	body := frame[20:]
+	if binary.LittleEndian.Uint32(body[:4]) != qaMTResPQ {
+		return "mtproto-constructor-invalid"
+	}
+	if !bytes.Equal(body[4:20], nonce[:]) {
+		return "mtproto-nonce-mismatch"
+	}
+	// nonce/server_nonce are fixed 16-byte fields; no server identity is inferred.
+	n := int(body[36])
+	if n < 1 || n > 8 || 37+n > len(body) {
+		return "mtproto-pq-invalid"
+	}
+	pq := body[37 : 37+n]
+	if pq[0] == 0 || n == 8 && pq[0]&128 != 0 {
+		return "mtproto-pq-invalid"
+	}
+	var number uint64
+	for _, b := range pq {
+		number = number<<8 | uint64(b)
+	}
+	if number < 15 || number&1 == 0 {
+		return "mtproto-pq-invalid"
+	}
+	end := (37 + n + 3) &^ 3
+	if end+8 > len(body) {
+		return "mtproto-tl-truncated"
+	}
+	for _, pad := range body[37+n : end] {
+		if pad != 0 {
+			return "mtproto-tl-padding"
+		}
+	}
+	if binary.LittleEndian.Uint32(body[end:end+4]) != qaMTVector {
+		return "mtproto-vector-invalid"
+	}
+	count := binary.LittleEndian.Uint32(body[end+4 : end+8])
+	if count < 1 || count > qaMTMaxFingerprints {
+		return "mtproto-vector-bounds"
+	}
+	if end+8+int(count)*8 != len(body) {
+		return "mtproto-tl-length"
+	}
+	return ""
+}
+
+func qaMTIOCode(ctx context.Context, err error) string {
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+		return "mtproto-canceled"
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+		return "mtproto-deadline"
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return "mtproto-truncated"
+	}
+	var timeout net.Error
+	if errors.As(err, &timeout) && timeout.Timeout() {
+		return "mtproto-deadline"
+	}
+	return "mtproto-io-failed"
+}

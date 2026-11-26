@@ -1,0 +1,311 @@
+// Package autonomy contains the bounded, router-side autonomy policy.
+// It grants no networking capability; the App adapter must recheck consent,
+// configuration, origin and exact service proof at every transaction boundary.
+package autonomy
+
+import (
+	"errors"
+	"fmt"
+	"net/netip"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+	_ "time/tzdata" // Entware need not have an IANA timezone database installed.
+
+	"github.com/ArtixSx/razvilka/internal/routekind"
+)
+
+const Schema = 1
+const MaxServices = 128
+const MaxSources = 32
+const MaxPublicNodeFailureThreshold = 8
+const defaultPublicNodeFailureThreshold = 3
+
+var ErrPolicy = errors.New("invalid autonomy policy")
+var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
+
+type Window struct {
+	Mode  string `json:"mode"` // off, check, prepare, install (updates itself with rollback)
+	Start string `json:"start"`
+	End   string `json:"end"`
+	Days  []int  `json:"days"` // Sunday = 0. Cross-midnight belongs to its start day.
+}
+type Policy struct {
+	UpdateChannel              string   `json:"update_channel,omitempty"`
+	PreferredRoutes            []string `json:"preferred_routes"`
+	PreferredSourceIDs         []string `json:"preferred_source_ids,omitempty"`
+	Schema                     int      `json:"schema"`
+	Revision                   uint64   `json:"revision"`
+	InheritNewServices         bool     `json:"inherit_new_services"`
+	SetupComplete              bool     `json:"setup_complete"`
+	Enabled                    bool     `json:"enabled"`
+	Timezone                   string   `json:"timezone"`
+	AllLAN                     bool     `json:"all_lan"`
+	ManagedLANOnly             bool     `json:"managed_lan_only,omitempty"` // All-LAN defaults require the managed network scope.
+	DefaultSources             []string `json:"default_sources"`
+	SourceIDs                  []string `json:"source_ids"`
+	Protocols                  []string `json:"protocols"`
+	CheckSeconds               int      `json:"check_seconds"`
+	ReserveSeconds             int      `json:"reserve_seconds"`
+	ReserveTarget              int      `json:"reserve_target"` // including the primary; 1..4
+	CandidatesPerRound         int      `json:"candidates_per_round"`
+	FailureConfirmSeconds      int      `json:"failure_confirm_seconds"`
+	MaxSwitchesPerHour         int      `json:"max_switches_per_hour"`
+	PublicNodeFailureThreshold int      `json:"public_node_failure_threshold,omitempty"`
+	// A missing value preserves the older window-bound first install. Explicit
+	// true allows first install at any time, while false disables first install.
+	InstallMissingComponents *bool `json:"install_missing_components,omitempty"`
+	// Nil retains a saved legacy WARP health-policy choice. An explicit Auto
+	// choice owns only first registration, never health recovery or rotation.
+	AllowInitialWARPRegistration *bool `json:"allow_initial_warp_registration,omitempty"`
+	// This independent consent covers the first consumer MASQUE registration.
+	AllowInitialMASQUERegistration bool   `json:"allow_initial_masque_registration,omitempty"`
+	Application                    Window `json:"application"`
+	Components                     Window `json:"components"`
+}
+
+type Service struct {
+	Removing         bool     `json:"removing"`
+	DeleteDefinition bool     `json:"delete_definition"`
+	DraftFingerprint string   `json:"draft_fingerprint"`
+	ID               string   `json:"id"`
+	Enabled          bool     `json:"enabled"`
+	AllLAN           bool     `json:"all_lan"`
+	ManagedLANOnly   bool     `json:"managed_lan_only,omitempty"`
+	Sources          []string `json:"sources"`
+	Definition       string   `json:"definition"`     // catalog/probe fingerprint; not evidence
+	ExpectedRoute    string   `json:"expected_route"` // fences subsequent manual changes
+}
+
+// PreferredRouteIDs lists every local route available for explicit opt-in.
+// Default selects a smaller initial preference; saved preferences stay exact.
+var PreferredRouteIDs = routekind.PreferredIDs()
+
+func Default() Policy {
+	return Policy{PreferredRoutes: []string{"nfqws2", "sing-box", "xray"}, Schema: Schema, Timezone: "UTC", Protocols: []string{"vless", "hysteria2", "tuic", "shadowsocks"},
+		SourceIDs: []string{}, DefaultSources: []string{}, CheckSeconds: 120, ReserveSeconds: 300, ReserveTarget: 3, CandidatesPerRound: 2,
+		FailureConfirmSeconds: 20, MaxSwitchesPerHour: 6,
+		Application: Window{Mode: "install", Start: "03:00", End: "05:00", Days: []int{0, 1, 2, 3, 4, 5, 6}},
+		Components:  Window{Mode: "install", Start: "03:00", End: "05:00", Days: []int{0, 1, 2, 3, 4, 5, 6}}}
+}
+func ValidID(id string) bool { return identifier.MatchString(id) }
+
+func (p Policy) EffectivePublicNodeFailureThreshold() int {
+	if p.PublicNodeFailureThreshold == 0 {
+		return defaultPublicNodeFailureThreshold
+	}
+	return p.PublicNodeFailureThreshold
+}
+
+func ValidateScope(all bool, values []string) error {
+	if all && len(values) != 0 || !all && len(values) == 0 || len(values) > 128 {
+		return ErrPolicy
+	}
+	seen := map[string]bool{}
+	for _, s := range values {
+		if seen[s] {
+			return ErrPolicy
+		}
+		seen[s] = true
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			p, e := netip.ParsePrefix(s)
+			if e != nil || p.Bits() == 0 || p != p.Masked() {
+				return ErrPolicy
+			}
+			a = p.Addr()
+		}
+		if !a.IsValid() || a.IsUnspecified() || a.IsMulticast() || a.IsLoopback() {
+			return ErrPolicy
+		}
+	}
+	return nil
+}
+
+// A persisted empty device selection authorizes no client. The API decides
+// separately when an explicit empty selection may be retained or inherited.
+func ValidateStoredScope(all bool, values []string) error {
+	if !all && len(values) == 0 {
+		return nil
+	}
+	return ValidateScope(all, values)
+}
+
+func Validate(p Policy) error {
+	return validate(p, false)
+}
+
+func ValidateStored(p Policy) error {
+	return validate(p, true)
+}
+
+func validate(p Policy, stored bool) error {
+	if (p.UpdateChannel != "" && p.UpdateChannel != "stable" && p.UpdateChannel != "preview") || p.Schema != Schema || p.Revision == ^uint64(0) || p.Enabled && !p.SetupComplete || p.Timezone == "" || len(p.Timezone) > 96 || p.Timezone == "Local" {
+		return ErrPolicy
+	}
+	if _, e := time.LoadLocation(p.Timezone); e != nil {
+		return fmt.Errorf("%w: timezone", ErrPolicy)
+	}
+	if threshold := p.EffectivePublicNodeFailureThreshold(); threshold < 2 || threshold > MaxPublicNodeFailureThreshold {
+		return fmt.Errorf("%w: public node failure threshold", ErrPolicy)
+	}
+	if p.SetupComplete {
+		if !stored && !p.AllLAN && len(p.DefaultSources) == 0 {
+			return ErrPolicy
+		}
+		if e := ValidateStoredScope(p.AllLAN, p.DefaultSources); e != nil {
+			return e
+		}
+	}
+	if len(p.SourceIDs) > MaxSources || len(p.Protocols) == 0 || len(p.Protocols) > 4 {
+		return ErrPolicy
+	}
+	if len(p.PreferredRoutes) > routekind.PreferredCount {
+		return ErrPolicy
+	}
+	if len(p.PreferredSourceIDs) > MaxSources {
+		return ErrPolicy
+	}
+	priorities := map[string]bool{}
+	for _, id := range p.PreferredSourceIDs {
+		if !slices.Contains(p.SourceIDs, id) || priorities[id] {
+			return ErrPolicy
+		}
+		priorities[id] = true
+	}
+	routes := map[string]bool{}
+	for _, r := range p.PreferredRoutes {
+		if !routekind.IsExecutor(r) || routes[r] {
+			return ErrPolicy
+		}
+		routes[r] = true
+	}
+	if p.AllowInitialWARPRegistration != nil && *p.AllowInitialWARPRegistration && !routes["warp-wg"] {
+		return fmt.Errorf("%w: initial WARP registration requires its method", ErrPolicy)
+	}
+	seen := map[string]bool{}
+	for _, id := range p.SourceIDs {
+		if !ValidID(id) || seen[id] {
+			return ErrPolicy
+		}
+		seen[id] = true
+	}
+	seen = map[string]bool{}
+	for _, id := range p.Protocols {
+		if !slices.Contains([]string{"vless", "hysteria2", "tuic", "shadowsocks"}, id) || seen[id] {
+			return ErrPolicy
+		}
+		seen[id] = true
+	}
+	if p.Enabled && len(p.SourceIDs) == 0 && len(p.PreferredRoutes) == 0 || p.CheckSeconds < 60 || p.CheckSeconds > 3600 || p.ReserveSeconds < p.CheckSeconds || p.ReserveSeconds > 86400 || p.ReserveTarget < 1 || p.ReserveTarget > 4 || p.CandidatesPerRound < 1 || p.CandidatesPerRound > 4 || p.FailureConfirmSeconds < 10 || p.FailureConfirmSeconds > 300 || p.MaxSwitchesPerHour < 1 || p.MaxSwitchesPerHour > 20 {
+		return ErrPolicy
+	}
+	if ValidateWindow(p.Application) != nil || ValidateWindow(p.Components) != nil || p.Components.Mode == "prepare" {
+		return ErrPolicy
+	}
+	return nil
+}
+func Clone(p Policy) Policy {
+	p.PreferredRoutes = slices.Clone(p.PreferredRoutes)
+	p.PreferredSourceIDs = slices.Clone(p.PreferredSourceIDs)
+	p.DefaultSources = slices.Clone(p.DefaultSources)
+	p.SourceIDs = slices.Clone(p.SourceIDs)
+	p.Protocols = slices.Clone(p.Protocols)
+	if p.InstallMissingComponents != nil {
+		allowed := *p.InstallMissingComponents
+		p.InstallMissingComponents = &allowed
+	}
+	if p.AllowInitialWARPRegistration != nil {
+		allowed := *p.AllowInitialWARPRegistration
+		p.AllowInitialWARPRegistration = &allowed
+	}
+	p.Application.Days = slices.Clone(p.Application.Days)
+	p.Components.Days = slices.Clone(p.Components.Days)
+	return p
+}
+func Minute(s string) (int, error) {
+	if len(s) != 5 || s[2] != ':' || strings.Trim(s[:2]+s[3:], "0123456789") != "" {
+		return 0, ErrPolicy
+	}
+	h := int(s[0]-'0')*10 + int(s[1]-'0')
+	m := int(s[3]-'0')*10 + int(s[4]-'0')
+	if h > 23 || m > 59 {
+		return 0, ErrPolicy
+	}
+	return h*60 + m, nil
+}
+func ValidateWindow(w Window) error {
+	a, e := Minute(w.Start)
+	b, f := Minute(w.End)
+	if e != nil || f != nil || a == b || len(w.Days) == 0 || len(w.Days) > 7 || !slices.Contains([]string{"off", "check", "prepare", "install"}, w.Mode) {
+		return ErrPolicy
+	}
+	seen := map[int]bool{}
+	for _, d := range w.Days {
+		if d < 0 || d > 6 || seen[d] {
+			return ErrPolicy
+		}
+		seen[d] = true
+	}
+	return nil
+}
+
+// WindowKey is stable across a repeated DST hour. Skipped windows never cause
+// a catch-up installation outside the selected local window.
+func WindowKey(w Window, timezone string, now time.Time) (string, bool) {
+	if ValidateWindow(w) != nil || w.Mode == "off" || now.IsZero() {
+		return "", false
+	}
+	loc, e := time.LoadLocation(timezone)
+	if e != nil {
+		return "", false
+	}
+	return windowKeyIn(w, loc, now)
+}
+
+// windowKeyIn expects a validated window. LoadLocation parses zone data on
+// every call, so loops resolve the location once and call this directly.
+func windowKeyIn(w Window, loc *time.Location, now time.Time) (string, bool) {
+	n := now.In(loc)
+	start, _ := Minute(w.Start)
+	end, _ := Minute(w.End)
+	m := n.Hour()*60 + n.Minute()
+	day := n
+	if start < end {
+		if m < start || m >= end {
+			return "", false
+		}
+	} else {
+		if m >= end && m < start {
+			return "", false
+		}
+		if m < end {
+			day = n.AddDate(0, 0, -1)
+		}
+	}
+	if !slices.Contains(w.Days, int(day.Weekday())) {
+		return "", false
+	}
+	return day.Format("2006-01-02") + "/" + w.Start + "/" + w.End, true
+}
+
+// NextWindow walks real minutes, so DST gaps/overlaps follow the same rule as
+// dispatch. It is used by the UI, not a high-frequency data-plane loop.
+func NextWindow(w Window, timezone string, now time.Time) time.Time {
+	if ValidateWindow(w) != nil || w.Mode == "off" || now.IsZero() {
+		return time.Time{}
+	}
+	loc, e := time.LoadLocation(timezone)
+	if e != nil {
+		return time.Time{}
+	}
+	n := now.Truncate(time.Minute)
+	for i := 0; i < 8*24*60; i++ {
+		if _, ok := windowKeyIn(w, loc, n); ok {
+			return n
+		}
+		n = n.Add(time.Minute)
+	}
+	return time.Time{}
+}

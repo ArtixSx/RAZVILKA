@@ -1,0 +1,86 @@
+name: Pinned compatibility source restoration
+on:
+  workflow_dispatch:
+    inputs:
+      assets_ref:
+        description: 'Optional exact commit of the pre-publication data-only archive branch'
+        type: string
+        default: ''
+  push:
+    branches: ['work/compatibility-sources-*']
+permissions:
+  contents: read
+jobs:
+  restore:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Validate optional data-only transfer commit
+        if: ${{ inputs.assets_ref != '' }}
+        shell: bash
+        env:
+          ASSETS_REF: ${{ inputs.assets_ref }}
+        run: '[[ "$ASSETS_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - name: Read prepared immutable archive bytes
+        if: ${{ inputs.assets_ref != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.assets_ref }}
+          path: prepared-assets
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Refusals, anchored writes and differently owned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          sudo env PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-restore-compatibility-source.py -v 2>&1 | tee artifacts/contracts.log
+          if grep -E 'skipped|SKIP' artifacts/contracts.log; then exit 1; fi
+      - name: Restore all eight pinned archives and exact isolated Git sources
+        shell: bash
+        env:
+          ASSETS_REF: ${{ inputs.assets_ref }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util, json, os, pathlib, tempfile
+          spec=importlib.util.spec_from_file_location('compatibility', 'scripts/restore-compatibility-source.py')
+          module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+          repository=pathlib.Path.cwd()
+          output=repository/'artifacts'
+          results=[]
+          document=json.loads(module.PINS.read_text(encoding='utf-8'))
+          archive_dir=repository/'prepared-assets' if os.environ.get('ASSETS_REF') else None
+          with tempfile.TemporaryDirectory(prefix='razvilka-compatibility-') as work:
+              work=pathlib.Path(work)
+              for row in document['sources']:
+                  commit=row['commit']
+                  source=work/(commit+'-source')
+                  # Verify the EXACT prepared gzip bytes. Recompressing on a
+                  # different zlib implementation is not this immutable asset.
+                  # An empty input exercises the fixed published asset URL.
+                  first=module.restore(commit,source,archive_dir=archive_dir,make_git=True)
+                  results.append(first)
+                  (output/'restorations.json').write_text(json.dumps(results,indent=2)+'\n')
+                  # Then exercise local Git from that restored single shallow
+                  # commit, with the independently pinned raw tar/tree checks.
+                  second=module.restore(commit,work/(commit+'-local'),local_repo=source,make_git=True)
+                  results.append(second)
+                  (output/'restorations.json').write_text(json.dumps(results,indent=2)+'\n')
+              assert len(results)==16
+          print('All eight exact Git trees, archives, modes and isolated shallow commits verified; no application/router claim.')
+          PY
+      - name: Preserve verification and original failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compatibility-sources-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

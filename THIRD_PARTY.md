@@ -1,0 +1,97 @@
+# Third-party components and data sources
+
+The [license notices for the shipped Go binaries and data](docs/third-party/GO_DEPENDENCY_NOTICES.txt) accompany release 0.20.0-rc.128.
+
+Здесь перечислены сторонние компоненты, источники данных и проекты,
+использованные как ориентиры. Упоминание проекта не означает, что его код
+включён в RAZVILKA: состав и условия указаны ниже. Лицензии и авторство
+сохраняются за их владельцами. Настоящий список не заменяет
+[инструкцию установки](README.md) и [статус совместимости](docs/CURRENT_STATUS_RU.md).
+
+RAZVILKA references the following engines and external datasets. Their own licenses and trademarks remain applicable.
+
+- nfqws2-keenetic / zapret2 — anti-DPI engine/integration.
+- [z2k](https://github.com/necronicle/z2k) — MIT-licensed Zapret2 integration reviewed for strategy organization, validation, diagnostics and external-runtime ownership concepts. RAZVILKA does not bundle z2k scripts, fake payloads or telemetry.
+- usque / usque-keenetic — Cloudflare WARP MASQUE implementation/integration.
+- [quic-go](https://github.com/quic-go/quic-go) and qpack — MIT-licensed Go QUIC/HTTP3 transport used only for real Strategy Lab HTTP/3 probes.
+- Go `x/crypto`, `x/net`, `x/sys` and `x/text` modules — BSD-licensed transitive runtime dependencies of the HTTP/3 transport.
+- sing-box — proxy/routing core.
+- Xray-core — optional proxy transport core.
+- ByeDPI — candidate local SOCKS anti-DPI adapter.
+- AmneziaWG — candidate DPI-resistant VPN adapter.
+- MagiTrickle — routing/integration reference.
+- Re:filter lists — external operational domain/IP lists (MIT repository).
+- RunetFreedom russia-blocked-geosite / geoip — external routing datasets (GPL-3.0 repositories).
+- v2fly/domain-list-community — external service classification dataset (MIT).
+- Loyalsoldier/geoip — external generated network datasets (CC BY-SA 4.0 and GPL-3.0; upstream also incorporates attributed GeoLite2 data).
+- Roskomnadzor unified registry — external official point-lookup reference.
+- OpenAI network recommendations — vendor documentation used to maintain the OpenAI service manifest.
+- Telegram CIDR resource — vendor-published network ranges.
+- [Unicode CLDR](https://github.com/unicode-org/cldr-json) — bundled English and Russian country display names, copyright © 2015–2024 Unicode, Inc., under [Unicode License V3](docs/UNICODE_LICENSE.txt). The allowlisted subset is recorded with its source revision in `internal/providerfeed/country_names.go`; it provides publisher-label interpretation, not geolocation.
+
+- [Geo-Aggregator](https://github.com/Ground-Zerro/Geo-Aggregator) — GPL-3.0 catalogue of services by category (the source HydraRoute imports from), aggregating v2fly, Loyalsoldier, runetfreedom, itdoginfo, antifilter and b4geoip data. The panel reads its index and a service list only when the owner searches or previews; nothing is bundled.
+- [flag-icons](https://github.com/lipis/flag-icons) 7.5.0 — MIT, copyright (c) 2013 Panayiotis Lipiridis. A subset of 4:3 country flags is bundled in `cmd/razvilka/web/ui-icons.js`; flags with a coat of arms are simplified to their field for small sizes.
+- [Simple Icons](https://github.com/simple-icons/simple-icons) 16.33.0 — CC0-1.0 icon data. A subset of brand marks is bundled in `cmd/razvilka/web/ui-icons.js` only to identify services; the trademarks belong to their owners. Marks withdrawn from Simple Icons are not used.
+
+Before a public packaged release, exact bundled-vs-referenced license obligations must be reviewed for every component included in distribution artifacts.
+
+## Research wave 2026-11-09
+
+The [source policy](docs/SOURCES.md) describes how upstream sources are selected and used. Xray/mihomo/sing-box health checks,
+v2rayN and xray-knife batch evaluation, Toxiproxy fault injection,
+blackbox_exporter probe stages, Tailscale diagnostics, nfqws2-keenetic lifecycle
+and controller-runtime reconciliation are research references, not new bundled
+dependencies. Source checkouts and lab binaries stay outside the production tree.
+No upstream implementation is copied by this wave; license notices for existing
+bundled data remain unchanged. A newer research source revision is not an
+approval to replace the separately pinned runtime used by native fixtures.
+
+
+## UX references
+
+- XKeen-UI (zxc-rv/XKeen-UI) was reviewed as a UX reference for selector and connection-monitoring concepts. No XKeen-UI source code is included in RAZVILKA.
+- MetaCubeXD and Zashboard — dashboard/product UX references; no code bundled.
+- Pi-hole Web and AdGuard Home — network activity/client UX references; no code bundled.
+- HomeProxy / PassWall — router control-plane/config-validation references; no code bundled.
+- [HydraRoute](https://github.com/Ground-Zerro/HydraRoute) — selective service/domain routing and one-command installation reference; no code bundled.
+- [keenetic-sing-box-ui](https://github.com/CoOre/keenetic-sing-box-ui) — checked releases, TProxy/REDIRECT fallback and profile-management UX reference; no code bundled.
+- [NFQWS2 Strategy Selector](https://github.com/Omn1z/nfqws2-keenetic-strategy-selector) — isolated strategy testing, response-stall evidence and live diagnostics reference; no code bundled.
+- [SKeen](https://github.com/jinndi/SKeen) — TProxy/socket fast-path, anti-loop and resource-efficiency reference; no code bundled.
+- AntiGoblin — Keenetic selective-routing UX/transaction reference; no code bundled.
+- Hiddify App — profile/automatic-selection UX reference; no code bundled.
+- 3x-ui — node/traffic/multi-hop operational UX reference; no code bundled.
+- OpenClash and OpenWrt PassWall — router integration/dependency/compatibility references; no code bundled.
+
+## Bundled NFQWS2 starter data (repair.2)
+
+The 278-domain starter snapshot derives from `nfqws/nfqws2-keenetic` at
+`c77226bd384e047a3d97e3ab6f0ad8b46fc3c967`, `etc/nfqws2/lists/user.list`.
+Copyright (c) 2026 nfqws, MIT. The complete notice is retained in
+[docs/NFQWS2_DATA_LICENSE.txt](docs/NFQWS2_DATA_LICENSE.txt) and alongside
+the embedded source data. RAZVILKA groups the data into six services and adds
+local test definitions; it does not bundle or execute that project's installer.
+
+The native-parameter regression fixture
+`internal/components/testdata/nfqws2-keenetic-1.3.1/S51nfqws2` is an unmodified
+installed-router snapshot of that project's MIT-licensed 1.3.1 init script,
+copyright (c) 2026 nfqws. It is only read as test data, never executed. Its
+provenance and SHA256 are recorded alongside the fixture; the same complete
+MIT notice above applies.
+
+The optional `stock-tls-circular-v1` recipe adapts the three HTTPS strategies
+from `etc/nfqws2/nfqws2.conf` at the same pinned upstream revision. It keeps
+their strategy arguments, narrows the filters to TLS ClientHello on TCP 443,
+and uses RAZVILKA's reviewed domain list and exclusions. The same MIT notice
+applies. HTTP, MTProto and UDP strategies from that configuration are not part
+of this recipe.
+
+The optional `stock-tls-circular-auto-v1` recipe keeps that same TLS/TCP443
+strategy chain and scope, but uses the universal 1.3.1 package's
+`--fastpath-workaround=auto`. Its implementation and default are documented in
+[`patches/README.md`](https://github.com/nfqws/nfqws2-keenetic/blob/4c094e0ebca4e5c7e409f4137a151d31244b4e85/patches/README.md)
+and [`patches/001-tls-reasm-fastpath.patch`](https://github.com/nfqws/nfqws2-keenetic/blob/4c094e0ebca4e5c7e409f4137a151d31244b4e85/patches/001-tls-reasm-fastpath.patch).
+The patch credits Anonym-tsk/zapret2 at
+`cba26527030206b6d4ae509fad49b26666ca8b9a`. RAZVILKA emits only the option;
+it does not vendor that patch or change the installed package. This selection
+does not establish that a router needs the workaround or that service health
+will pass. Existing recipe IDs keep their original fastpath mode.

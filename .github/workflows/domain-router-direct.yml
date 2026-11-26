@@ -1,0 +1,252 @@
+name: DNS router-source direct validation
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/domain-router-direct-20261117', 'work/autopilot-service-integration-20261124', 'work/autopilot-keenetic-continuation-20261125']
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/**'
+      - 'cmd/**'
+      - 'scripts/test-domain*'
+      - '.github/workflows/domain-router-direct.yml'
+permissions:
+  contents: read
+jobs:
+  policy-read:
+    name: Native IPv4 policy read without ip JSON
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Seven rules and a marked alternate table in a private namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 util-linux
+          mkdir -p artifacts/policy-read
+          for mode in normal race; do
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              sh scripts/test-domain-policy-read-native.sh "$mode" \
+              2>&1 | tee "artifacts/policy-read/$mode.log"
+            grep -F -- '--- PASS: TestNativeDomainIPv4PolicyInventory ' "artifacts/policy-read/$mode.log"
+            grep -F -- '--- PASS: TestNativeDomainIPv4PolicyMarkedLookup ' "artifacts/policy-read/$mode.log"
+            grep -F -- '--- PASS: TestNativeDomainIPv4PolicyWindowRejectsRestoredRule ' "artifacts/policy-read/$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/policy-read/$mode.log"; then exit 1; fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: domain-ipv4-policy-read-${{ github.sha }}
+          path: artifacts/policy-read
+          if-no-files-found: error
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [selected, direct-deny, canceled-ready]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Direct authority, cancellation and fixed read ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/domain
+          for mode in normal race; do
+            flags=()
+            if [ "$mode" = race ]; then flags=(-race); fi
+            go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane ./internal/startuptools \
+              -run '^TestDomainPriorRead|^TestDomainMappingPrior|^TestDomainTCPDirect|^TestDomainBaselineObservedRead|^TestDomainNativeAcceptedStages|^TestDomainAcceptedPrefix|^TestDomainMappingObservation|^TestXrayDomainFileObservation|^TestDomainPolicySyntheticTCP(Model|Scope|Capture)' \
+              2>&1 | tee "artifacts/domain/direct-contract-$mode.log"
+            grep -F -- '--- PASS: TestDomainTCPDirect' "artifacts/domain/direct-contract-$mode.log"
+            grep -F -- '--- PASS: TestDomainBaselineObservedRead' "artifacts/domain/direct-contract-$mode.log"
+            grep -F -- '--- PASS: TestDomainAcceptedPrefix' "artifacts/domain/direct-contract-$mode.log"
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/direct-contract-$mode.log"; then exit 1; fi
+          done
+      - name: Original scope and cleanup with unchanged production deadlines
+        shell: bash
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/domain
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain' EXIT
+          case "$SCENARIO" in
+            selected) expected_case=TestDomainTCPOriginalNativeAcceptedFlows ;;
+            direct-deny)
+              expected_case=TestDomainTCPOriginalNativeDirectForwardDeny
+              export RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE=1 ;;
+            canceled-ready)
+              expected_case=TestDomainTCPOriginalNativeCanceledReadyRetirement
+              export RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1
+              export RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1
+              export RAZVILKA_DOMAIN_CANCELED_CHILD=1 RAZVILKA_DOMAIN_CANCELED_READY=1 ;;
+            *) exit 2 ;;
+          esac
+          sudo --preserve-env=RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE,RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \
+            env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/domain" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain/native.log
+          grep -F -- "--- PASS: $expected_case " artifacts/domain/native.log
+          if [ "$SCENARIO" = direct-deny ]; then grep -F 'ACTUAL_DIRECT_FORWARD_DENY_ZERO_SYN:' artifacts/domain/native.log; fi
+          if grep -F -- '--- SKIP:' artifacts/domain/native.log; then exit 1; fi
+          grep -Fx 'child_exit_status=0' artifacts/domain/status.txt
+          grep -Fx "native_case=$expected_case" artifacts/domain/status.txt
+          grep -Fx 'publication_budget_seconds=12' artifacts/domain/status.txt
+          grep -Fx 'diagnostic_only=false' artifacts/domain/status.txt
+      - name: Record exact wall-clock measurements
+        if: ${{ !cancelled() }}
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          mkdir -p artifacts/domain
+          python3 scripts/domain-native-phase-report.py artifacts/domain "$GITHUB_SHA" "$SCENARIO"
+      - name: Preserve original result including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-router-direct-${{ matrix.scenario }}-${{ github.sha }}
+          path: artifacts/domain
+          if-no-files-found: error
+          retention-days: 14
+  bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build an exact unpublished Entware acceptance bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(go env GOVERSION)" = "$(sed -n 's/^toolchain //p' go.mod)"
+          version="$(tr -d '\r\n' < VERSION)+${GITHUB_SHA::7}"
+          stage="RAZVILKA-$version"
+          output="$RUNNER_TEMP/domain-entware"
+          mkdir -p "$output"
+          RAZVILKA_VERSION="$version" RAZVILKA_COMMIT="$GITHUB_SHA" \
+            RAZVILKA_BUILD_TIME="$(git show -s --format=%cI HEAD)" RAZVILKA_DIRTY=false \
+            RAZVILKA_BUILD_TARGETS=all ./build.sh
+          test "$(./dist/razvilka-linux-amd64 -version)" = "$version"
+          git archive --format=tar --prefix="$stage/" "$GITHUB_SHA" -- \
+            VERSION README.md README_RU.md README_EN.md LICENSE THIRD_PARTY.md \
+            configs/config.example.json configs/service-catalog.json configs/community-catalog.json configs/sources.json \
+            docs/INSTALL_RU.md docs/ROUTER_ACCEPTANCE_RU.md \
+            scripts/S99razvilka scripts/install-entware.sh scripts/upgrade-entware.sh \
+            scripts/rollback-entware.sh scripts/uninstall-entware.sh | tar -x -C "$RUNNER_TEMP"
+          cp -a dist "$RUNNER_TEMP/$stage/"
+          (cd "$RUNNER_TEMP/$stage" && sha256sum -c dist/SHA256SUMS)
+          tar -czf "$output/$stage-entware-lab.tar.gz" -C "$RUNNER_TEMP" "$stage"
+          (cd "$output" && sha256sum "$stage-entware-lab.tar.gz" > SHA256SUMS)
+          cp dist/SHA256SUMS "$output/SHA256SUMS-binaries"
+          jq -n --arg revision "$GITHUB_SHA" --arg version "$version" --arg go "$(go env GOVERSION)" \
+            '{revision: $revision, version: $version, toolchain: $go, physical_acceptance: false}' > "$output/build.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: entware-domain-acceptance-${{ github.sha }}
+          path: ${{ runner.temp }}/domain-entware
+          if-no-files-found: error
+          retention-days: 14
+  evidence:
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+    needs: [native, bundle]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      actions: read
+    steps:
+      - name: Collect the exact revision, statuses, timings and digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+          BUNDLE_RESULT: ${{ needs.bundle.result }}
+        run: |
+          set -eu
+          mkdir -p incoming evidence
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir incoming \
+            --pattern "domain-router-direct-*-$GITHUB_SHA" --pattern "entware-domain-acceptance-$GITHUB_SHA" \
+            || echo 'Some acceptance artifacts were unavailable'
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          sha = os.environ['GITHUB_SHA']
+          root = Path('incoming')
+          report = {
+              'revision': sha,
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'native_gate': os.environ['NATIVE_RESULT'],
+              'bundle_gate': os.environ['BUNDLE_RESULT'],
+              'physical_acceptance': False,
+              'cases': {},
+              'archive': None,
+          }
+          for case in ('selected', 'direct-deny', 'canceled-ready'):
+              artifact = f'domain-router-direct-{case}-{sha}'
+              folder = root / artifact
+              entry = {'artifact': artifact, 'phases': None, 'native_log_sha256': None}
+              if (folder / 'phases.json').is_file():
+                  entry['phases'] = json.loads((folder / 'phases.json').read_text())
+                  if entry['phases']['revision'] != sha or entry['phases']['scenario'] != case:
+                      raise SystemExit('unexpected evidence identity')
+              if (folder / 'native.log').is_file():
+                  with (folder / 'native.log').open('rb') as log:
+                      entry['native_log_sha256'] = hashlib.file_digest(log, 'sha256').hexdigest()
+              report['cases'][case] = entry
+          artifact = f'entware-domain-acceptance-{sha}'
+          folder = root / artifact
+          if (folder / 'build.json').is_file():
+              build = json.loads((folder / 'build.json').read_text())
+              if build['revision'] != sha:
+                  raise SystemExit('unexpected build identity')
+              expected, archive = (folder / 'SHA256SUMS').read_text().strip().split(maxsplit=1)
+              if Path(archive).name != archive or not archive.endswith('.tar.gz'):
+                  raise SystemExit('unexpected archive name')
+              with (folder / archive).open('rb') as package:
+                  actual = hashlib.file_digest(package, 'sha256').hexdigest()
+              if actual != expected:
+                  raise SystemExit('acceptance archive checksum mismatch')
+              report['archive'] = {'artifact': artifact, 'file': archive, 'sha256': actual, 'build': build}
+          Path('evidence/acceptance.json').write_text(json.dumps(report, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-acceptance-report-${{ github.sha }}
+          path: evidence/acceptance.json
+          if-no-files-found: error
+          retention-days: 14

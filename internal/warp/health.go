@@ -1,0 +1,474 @@
+package warp
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/evidence"
+)
+
+type HealthPolicy struct {
+	Enabled               bool `json:"enabled"`
+	CheckIntervalSeconds  int  `json:"check_interval_seconds,omitempty"`
+	AllowAccountRefresh   bool `json:"allow_account_refresh,omitempty"`
+	AcceptTOS             bool `json:"accept_tos"`
+	AutoPrepareInitial    bool `json:"auto_prepare_initial,omitempty"`
+	AutoGenerateCandidate bool `json:"auto_generate_candidate"`
+	AutoApplyCandidate    bool `json:"auto_apply_candidate"`
+	FailureThreshold      int  `json:"failure_threshold"`
+	MinFailedServices     int  `json:"min_failed_services"`
+	CooldownHours         int  `json:"cooldown_hours"`
+	MaxRotationsPerDay    int  `json:"max_rotations_per_day"`
+}
+
+type HealthState struct {
+	ConsecutiveFailedRounds int            `json:"consecutive_failed_rounds"`
+	LastChecked             string         `json:"last_checked,omitempty"`
+	LastDecision            string         `json:"last_decision,omitempty"`
+	LastFailedServices      []string       `json:"last_failed_services,omitempty"`
+	LastSuccessfulServices  []string       `json:"last_successful_services,omitempty"`
+	RouteEvidenceConfirmed  bool           `json:"route_evidence_confirmed"`
+	EvidenceLevel           evidence.Level `json:"evidence_level"`
+	Attempts                []string       `json:"registration_attempts,omitempty"`
+	LastFailureRound        string         `json:"last_failure_round,omitempty"`
+	NetworkProfile          string         `json:"network_profile,omitempty"`
+	Rotations               []string       `json:"rotations,omitempty"`
+	LastActivation          string         `json:"last_activation,omitempty"`
+	LastActivationError     string         `json:"last_activation_error,omitempty"`
+}
+
+type HealthStatus struct {
+	Policy   HealthPolicy `json:"policy"`
+	State    HealthState  `json:"state"`
+	Eligible bool         `json:"eligible"`
+	Reason   string       `json:"reason"`
+}
+
+type HealthEvidence struct {
+	ServiceID      string
+	Status         string
+	RouteConfirmed bool
+	Level          evidence.Level
+	NetworkProfile string
+}
+
+type HealthDecision struct {
+	HealthStatus
+	ShouldGenerate bool `json:"should_generate"`
+}
+
+type healthDocument struct {
+	Schema int          `json:"schema"`
+	Policy HealthPolicy `json:"policy"`
+	State  HealthState  `json:"state"`
+}
+
+func defaultHealthPolicy() HealthPolicy {
+	return HealthPolicy{FailureThreshold: 3, MinFailedServices: 2, CooldownHours: 24, MaxRotationsPerDay: 1}
+}
+
+func (m *Manager) Health() HealthStatus {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	doc, _ := m.loadHealthLocked()
+	return m.healthStatusLocked(doc)
+}
+
+func (m *Manager) UpdateHealthPolicy(policy HealthPolicy) (HealthStatus, error) {
+	if err := validateHealthPolicy(policy); err != nil {
+		return HealthStatus{}, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return HealthStatus{}, err
+	}
+	doc.Policy = policy
+	if !policy.Enabled {
+		doc.State.ConsecutiveFailedRounds = 0
+		doc.State.LastDecision = "policy-disabled"
+	}
+	if err := m.saveHealthLocked(doc); err != nil {
+		return HealthStatus{}, err
+	}
+	return m.healthStatusLocked(doc), nil
+}
+
+func (m *Manager) ObserveHealth(items []HealthEvidence) (HealthDecision, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return HealthDecision{}, err
+	}
+	now := m.healthClock()
+	doc.State.LastChecked = now.Format(time.RFC3339)
+	failures, successes := []string{}, []string{}
+	profile := ""
+	for _, item := range items {
+		if item.NetworkProfile != "" {
+			if profile != "" && profile != item.NetworkProfile {
+				return HealthDecision{}, errors.New("mixed network evidence")
+			}
+			profile = item.NetworkProfile
+		}
+	}
+	if profile != doc.State.NetworkProfile {
+		doc.State.NetworkProfile = profile
+		doc.State.ConsecutiveFailedRounds = 0
+		doc.State.LastFailureRound = ""
+	}
+	doc.State.EvidenceLevel = evidence.None
+	for _, item := range items {
+		level := item.Level
+		if !level.Valid() || level == evidence.None {
+			level = evidence.FromProbe(item.Status, item.RouteConfirmed)
+		}
+		if !level.AtLeast(evidence.Route) || strings.TrimSpace(item.ServiceID) == "" {
+			continue
+		}
+		doc.State.EvidenceLevel = evidence.Stronger(doc.State.EvidenceLevel, level)
+		switch item.Status {
+		case "pass", "partial":
+			if level.AtLeast(evidence.Service) {
+				successes = append(successes, item.ServiceID)
+			}
+		case "fail":
+			failures = append(failures, item.ServiceID)
+		}
+	}
+	sort.Strings(failures)
+	sort.Strings(successes)
+	doc.State.LastFailedServices = unique(failures)
+	doc.State.LastSuccessfulServices = unique(successes)
+	doc.State.RouteEvidenceConfirmed = len(failures)+len(successes) > 0
+
+	if !doc.Policy.Enabled {
+		doc.State.LastDecision = "policy-disabled"
+		doc.State.ConsecutiveFailedRounds = 0
+	} else if !doc.State.RouteEvidenceConfirmed {
+		doc.State.LastDecision = "waiting-for-confirmed-warp-route-evidence"
+	} else if len(doc.State.LastSuccessfulServices) > 0 {
+		// One real service still works over this tunnel: account-wide regeneration
+		// must not be triggered by another site's refusal.
+		doc.State.ConsecutiveFailedRounds = 0
+		doc.State.LastDecision = "tunnel-works-service-specific-failure"
+	} else if len(doc.State.LastFailedServices) >= doc.Policy.MinFailedServices {
+		previous, _ := time.Parse(time.RFC3339, doc.State.LastFailureRound)
+		if !previous.IsZero() && now.Sub(previous) < 30*time.Second {
+			doc.State.LastDecision = "waiting-for-independent-failure-round"
+			if err := m.saveHealthLocked(doc); err != nil {
+				return HealthDecision{}, err
+			}
+			status := m.healthStatusLocked(doc)
+			status.Eligible = false
+			status.Reason = doc.State.LastDecision
+			return HealthDecision{HealthStatus: status}, nil
+		}
+		doc.State.LastFailureRound = now.Format(time.RFC3339)
+		doc.State.ConsecutiveFailedRounds++
+		doc.State.LastDecision = fmt.Sprintf("failed-round-%d-of-%d", doc.State.ConsecutiveFailedRounds, doc.Policy.FailureThreshold)
+	} else {
+		doc.State.ConsecutiveFailedRounds = 0
+		doc.State.LastDecision = "healthy-or-insufficient-failures"
+	}
+
+	status := m.healthStatusLocked(doc)
+	decision := HealthDecision{HealthStatus: status, ShouldGenerate: status.Eligible && doc.Policy.AutoGenerateCandidate}
+	if decision.ShouldGenerate {
+		doc.State.LastDecision = "fresh-candidate-requested"
+		decision.State.LastDecision = doc.State.LastDecision
+	}
+	if err := m.saveHealthLocked(doc); err != nil {
+		return HealthDecision{}, err
+	}
+	return decision, nil
+}
+
+func (m *Manager) RecordRotation() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.recordRotationLocked()
+}
+
+// RecordActivation stores the outcome of the transactional candidate Apply.
+// It never changes a profile; activation and rollback belong to dataplane.
+func (m *Manager) RecordActivation(ok bool, detail string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return err
+	}
+	doc.State.LastActivation = time.Now().UTC().Format(time.RFC3339)
+	doc.State.LastActivationError = ""
+	if ok {
+		doc.State.ConsecutiveFailedRounds = 0
+		doc.State.LastDecision = "fresh-profile-activated"
+		doc.State.LastActivationError = ""
+	} else {
+		doc.State.LastDecision = "fresh-profile-activation-failed"
+		doc.State.LastActivationError = "candidate-activation-failed"
+	}
+	return m.saveHealthLocked(doc)
+}
+
+func (m *Manager) recordRotationLocked() error {
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return err
+	}
+	doc.State.Rotations = append(pruneRotations(doc.State.Rotations, time.Now().UTC().Add(-24*time.Hour)), time.Now().UTC().Format(time.RFC3339))
+	doc.State.ConsecutiveFailedRounds = 0
+	doc.State.LastDecision = "candidate-staged-awaiting-isolated-validation"
+	return m.saveHealthLocked(doc)
+}
+
+func (m *Manager) healthStatusLocked(doc healthDocument) HealthStatus {
+	status := HealthStatus{Policy: doc.Policy, State: doc.State, Reason: doc.State.LastDecision}
+	if !doc.Policy.Enabled {
+		status.Reason = "policy-disabled"
+		return status
+	}
+	if !doc.Policy.AcceptTOS {
+		status.Reason = "terms-not-accepted"
+		return status
+	}
+	if !doc.State.RouteEvidenceConfirmed {
+		status.Reason = "waiting-for-confirmed-warp-route-evidence"
+		return status
+	}
+	if doc.State.ConsecutiveFailedRounds < doc.Policy.FailureThreshold {
+		status.Reason = fmt.Sprintf("failure-threshold-not-reached-%d-of-%d", doc.State.ConsecutiveFailedRounds, doc.Policy.FailureThreshold)
+		return status
+	}
+	if m.hasStagedCandidateLocked() {
+		status.Reason = "candidate-already-staged"
+		return status
+	}
+	now := m.healthClock()
+	attempts := pruneRotations(doc.State.Attempts, now.Add(-24*time.Hour))
+	if len(attempts) >= doc.Policy.MaxRotationsPerDay {
+		status.Reason = "daily-attempt-limit-reached"
+		return status
+	}
+	if len(attempts) > 0 {
+		last, _ := time.Parse(time.RFC3339, attempts[len(attempts)-1])
+		if now.Sub(last) < time.Duration(doc.Policy.CooldownHours)*time.Hour {
+			status.Reason = "attempt-cooldown-active"
+			return status
+		}
+	}
+	rotations := pruneRotations(doc.State.Rotations, now.Add(-24*time.Hour))
+	if len(rotations) >= doc.Policy.MaxRotationsPerDay {
+		status.Reason = "daily-rotation-limit-reached"
+		return status
+	}
+	if len(rotations) > 0 {
+		last, _ := time.Parse(time.RFC3339, rotations[len(rotations)-1])
+		if now.Sub(last) < time.Duration(doc.Policy.CooldownHours)*time.Hour {
+			status.Reason = "rotation-cooldown-active"
+			return status
+		}
+	}
+	status.Eligible = true
+	status.Reason = "eligible-to-stage-fresh-candidate"
+	return status
+}
+
+func (m *Manager) hasStagedCandidateLocked() bool {
+	if m.EngineConfigs == nil {
+		return false
+	}
+	for _, engine := range m.EngineConfigs.List() {
+		if engine.ID != "warp-wg" {
+			continue
+		}
+		for _, file := range engine.Files {
+			if file.ID == "main" && file.Staged {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m *Manager) loadHealthLocked() (healthDocument, error) {
+	doc := healthDocument{Schema: 1, Policy: defaultHealthPolicy()}
+	path := filepath.Join(m.Root, "health-policy.json")
+	if fi, err := os.Lstat(path); err == nil && (!fi.Mode().IsRegular() || fi.Size() > 64<<10) {
+		return healthDocument{}, errors.New("invalid health state file")
+	}
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return doc, nil
+	}
+	if err != nil {
+		return healthDocument{}, err
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return healthDocument{}, fmt.Errorf("decode WARP health policy: %w", err)
+	}
+	if doc.Schema != 1 {
+		return healthDocument{}, fmt.Errorf("unsupported WARP health schema %d", doc.Schema)
+	}
+	if err := validateHealthPolicy(doc.Policy); err != nil {
+		return healthDocument{}, err
+	}
+	if len(doc.State.Attempts) > 32 || len(doc.State.Rotations) > 32 {
+		return healthDocument{}, errors.New("health history exceeds limit")
+	}
+	// Old versions persisted free-form executor errors, potentially containing
+	// secrets. Never replay those values in readback or a subsequent save.
+	if doc.State.LastActivationError != "" {
+		doc.State.LastActivationError = "candidate-activation-failed"
+	}
+	for _, values := range [][]string{doc.State.Attempts, doc.State.Rotations} {
+		for _, v := range values {
+			if _, err := time.Parse(time.RFC3339, v); err != nil {
+				return healthDocument{}, errors.New("invalid health history")
+			}
+		}
+	}
+	return doc, nil
+}
+
+func (m *Manager) saveHealthLocked(doc healthDocument) error {
+	doc.Schema = 1
+	b, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeSecret(filepath.Join(m.Root, "health-policy.json"), b)
+}
+
+func validateHealthPolicy(policy HealthPolicy) error {
+	if policy.CheckIntervalSeconds != 0 && (policy.CheckIntervalSeconds < 60 || policy.CheckIntervalSeconds > 3600) {
+		return errors.New("check_interval_seconds must be 60..3600")
+	}
+	if policy.AllowAccountRefresh && !policy.AutoGenerateCandidate {
+		return errors.New("account refresh requires automatic candidate generation")
+	}
+	if policy.FailureThreshold < 2 || policy.FailureThreshold > 20 {
+		return errors.New("failure_threshold must be 2..20")
+	}
+	if policy.MinFailedServices < 1 || policy.MinFailedServices > 20 {
+		return errors.New("min_failed_services must be 1..20")
+	}
+	if policy.CooldownHours < 1 || policy.CooldownHours > 168 {
+		return errors.New("cooldown_hours must be 1..168")
+	}
+	if policy.MaxRotationsPerDay < 1 || policy.MaxRotationsPerDay > 4 {
+		return errors.New("max_rotations_per_day must be 1..4")
+	}
+	if policy.AutoGenerateCandidate && (!policy.Enabled || !policy.AcceptTOS) {
+		return errors.New("automatic candidate generation requires enabled policy and accepted terms")
+	}
+	if policy.AutoPrepareInitial && (!policy.Enabled || !policy.AcceptTOS) {
+		return errors.New("automatic initial profile requires enabled policy and accepted terms")
+	}
+	if policy.AutoApplyCandidate && !policy.AutoGenerateCandidate {
+		return errors.New("automatic candidate apply requires automatic candidate generation")
+	}
+	return nil
+}
+
+func pruneRotations(values []string, after time.Time) []string {
+	out := []string{}
+	for _, value := range values {
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err == nil && parsed.After(after) {
+			out = append(out, parsed.UTC().Format(time.RFC3339))
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func unique(values []string) []string {
+	out := values[:0]
+	for _, value := range values {
+		if len(out) == 0 || out[len(out)-1] != value {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func (m *Manager) healthClock() time.Time {
+	if m.healthNow != nil {
+		return m.healthNow().UTC()
+	}
+	return time.Now().UTC()
+}
+
+// CheckInterval is a scheduler hint, not another timer. Old policies migrate
+// to a three-minute interval without changing their opt-in permissions.
+func (p HealthPolicy) CheckInterval() time.Duration {
+	if p.CheckIntervalSeconds == 0 {
+		return 3 * time.Minute
+	}
+	return time.Duration(p.CheckIntervalSeconds) * time.Second
+}
+
+// GenerateAutomatic only stages a candidate. Caller owns exclusive app
+// admission and has already confirmed transport exhaustion plus an independent
+// healthy control path. The attempt is charged BEFORE any remote side effect;
+// failed/uncertain enrollments consume quota and survive process restart.
+func (m *Manager) GenerateAutomatic(ctx context.Context, expected HealthPolicy) (Result, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return Result{}, err
+	}
+	if doc.Policy != expected || !doc.Policy.AutoGenerateCandidate || !doc.Policy.AllowAccountRefresh || !m.healthStatusLocked(doc).Eligible {
+		return Result{}, errors.New("automatic registration not authorized or budget exhausted")
+	}
+	if m.EngineConfigs == nil || m.nativeAPI == nil {
+		return Result{}, errors.New("local native generator unavailable")
+	}
+	now := m.healthClock()
+	doc.State.Attempts = append(pruneRotations(doc.State.Attempts, now.Add(-24*time.Hour)), now.Format(time.RFC3339))
+	doc.State.LastDecision = "registration-attempt-reserved"
+	if err := m.saveHealthLocked(doc); err != nil {
+		return Result{}, err
+	}
+	result, err := m.generateNativeLocked(ctx, true, true)
+	if err != nil {
+		_ = m.recordRecoveryLocked("registration-pending-or-failed")
+		return result, err
+	}
+	return result, nil
+}
+
+func (m *Manager) RecordRecovery(reason string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.recordRecoveryLocked(reason)
+}
+func (m *Manager) recordRecoveryLocked(reason string) error {
+	switch reason {
+	case "control-path-unavailable", "transport-exhausted-refresh-disabled", "service-failed-account-kept", "candidate-repair-staged", "candidate-repair-activated", "registration-pending-or-failed", "safe-mode-blocked-recovery", "recovery-network-changed",
+		"initial-profile-unavailable", "initial-registration-timeout", "initial-registration-endpoint-unavailable", "initial-profile-conflict", "initial-registration-budget", "initial-service-unconfirmed", "initial-profile-activated":
+	default:
+		return errors.New("unknown recovery reason")
+	}
+	doc, err := m.loadHealthLocked()
+	if err != nil {
+		return err
+	}
+	doc.State.LastDecision = reason
+	return m.saveHealthLocked(doc)
+}

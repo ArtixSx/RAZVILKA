@@ -1,0 +1,262 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const src=fs.readFileSync(new URL('../cmd/razvilka/web/autopilot-settings.js',import.meta.url),'utf8');
+const autonomySource=fs.readFileSync(new URL('../cmd/razvilka/web/console-autonomy.js',import.meta.url),'utf8');
+const c={};vm.createContext(c);vm.runInContext(autonomySource,c);vm.runInContext(src,c);const model=c.RazvilkaQuickPolicy;
+const policy={schema:1,revision:12,setup_complete:true,enabled:true,check_seconds:300,reserve_seconds:1800,reserve_target:3,candidates_per_round:2,source_ids:['private-source'],protocols:['vless'],preferred_routes:['xray'],default_sources:['192.168.1.20'],all_lan:false,application:{mode:'prepare'},components:{mode:'check'}};
+const inputs={check_seconds:'120',reserve_seconds:'1200',reserve_target:'4',candidates_per_round:'1'};
+let total=0;function test(n,f){f();total++;console.log('PASS '+n);}
+test('quick policy interval is a minimum and queue delay is explicit',()=>{
+ const html=fs.readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');
+ const form=html.match(/<form id="autoQuickForm">[\s\S]*?<\/form>/)[0];
+ assert.match(form,/Минимальный интервал проверок, сек<input id="autoQuickCheck"/);
+ assert.match(form,/Сервисы проверяются по очереди/);assert.match(form,/долгие проверки увеличивают ожидание/);
+ assert.doesNotMatch(form,/Проверять сервисы каждые/);
+});
+async function asyncTest(n,f){await f();total++;console.log('PASS '+n);}
+
+function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
+function fixture(){
+  const elements=new Map(),listeners=new Map(),documentListeners=new Map(),requests=[];
+  const element=id=>{
+    if(!elements.has(id))elements.set(id,{value:'',textContent:'',disabled:false,events:{},addEventListener(name,fn){this.events[name]=fn;}});
+    return elements.get(id);
+  };
+  const context={Date,Number,JSON,console,RazvilkaAutonomyModel:c.RazvilkaAutonomyModel,CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},
+    document:{getElementById:element,addEventListener:(name,fn)=>documentListeners.set(name,fn),dispatchEvent(){}},
+    addEventListener:(name,fn)=>listeners.set(name,fn),
+    dispatchEvent:event=>listeners.get(event.type)?.(event),
+    interfaceRequest(path,options={}){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
+  };
+  vm.createContext(context);vm.runInContext(src,context);
+  return {element,requests,
+    snapshot:(revision=policy.revision)=>({policy:{...policy,revision},server_time:new Date().toISOString()}),
+    publish:next=>listeners.get('razvilka:autonomy-state')({detail:next}),
+    edit(){element('autoQuickCheck').value='180';element('autoQuickForm').events.input();},
+    submit:()=>element('autoQuickForm').events.submit({preventDefault(){}}),
+    reload:()=>element('a1-reloadButton').events.click(),
+    visibleReload:()=>element('autoQuickRefresh').events.click(),
+    globalReload:()=>element('refreshAll').events.click(),
+    logout:()=>documentListeners.get('razvilka:auth-required')(),
+    leave(){const event={prevented:false,preventDefault(){this.prevented=true;}};listeners.get('beforeunload')?.(event);return event;}
+  };
+}
+for(const text of ['Failed to fetch','NetworkError when attempting to fetch resource.','Load failed'])await asyncTest('network loss keeps quick policy write unknown: '+text,async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(new TypeError(text));await save;
+  assert.match(f.element('autoQuickMessage').textContent,/Нет связи с панелью.*не подтверждён.*повторная запись заблокирована/);
+  assert.equal(f.element('autoQuickSave').disabled,true);assert.equal(f.element('autoQuickCheck').value,'180');
+  await f.submit();assert.equal(f.requests.length,1);
+  const read=f.visibleReload();f.requests[1].reject(new TypeError(text));await read;
+  assert.match(f.element('autoQuickMessage').textContent,/Нет связи с панелью.*повторная запись заблокирована/);
+  assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1);assert.equal(f.element('autoQuickSave').disabled,true);
+});
+test('network presentation preserves HTTP, auth and cancellation errors',()=>{
+  const human=c.RazvilkaAutonomyModel.requestErrorText;
+  for(const error of [Object.assign(new Error('Failed to fetch'),{status:503}),Object.assign(new Error('Failed to fetch'),{name:'AbortError'}),Object.assign(new Error('Failed to fetch'),{name:'AuthGenerationChanged'}),new Error('CAS conflict')])assert.equal(human(error,true),error.message);
+});
+test('ordinary edit preserves every authority-bearing and unknown future field',()=>{const next=model.draft(policy,inputs);for(const key of Object.keys(policy))if(!(key in inputs))assert.equal(JSON.stringify(next[key]),JSON.stringify(policy[key]),key);assert.equal(policy.check_seconds,300);assert.equal(next.check_seconds,120);});
+test('range and type constraints match server policy',()=>{for(const [k,v] of [['check_seconds','59'],['check_seconds','3601'],['reserve_seconds','119'],['reserve_seconds','86401'],['reserve_target','5'],['candidates_per_round','0'],['check_seconds','1e3'],['check_seconds',''],['check_seconds','Infinity'],['check_seconds',null]])assert.throws(()=>model.draft(policy,{...inputs,[k]:v}));});
+test('first setup is not silently enabled by interval form',()=>assert.throws(()=>model.draft({...policy,setup_complete:false},inputs)));
+test('stale or fenced snapshot cannot enable save',()=>{const now=Date.now(),snapshot={policy,server_time:new Date(now).toISOString()};assert(model.current(snapshot,now,now));assert(!model.current(snapshot,now,now+60000));assert(!model.current(snapshot,now,now-1));assert(!model.current({...snapshot,blocked:true},now,now));assert(!model.current({...snapshot,observation:{state:'retained'}},now,now));});
+test('navigation and normal polling never submit writes',()=>{const requests=[],listeners={},elements=new Map();const el=id=>{if(!elements.has(id))elements.set(id,{value:'',events:{},addEventListener(n,f){this.events[n]=f;}});return elements.get(id);};const context={Date,Number,JSON,console,CustomEvent:class{},document:{getElementById:el,addEventListener(){}},addEventListener:(n,f)=>listeners[n]=f,interfaceRequest:(...args)=>{requests.push(args);return Promise.resolve({});}};vm.createContext(context);vm.runInContext(src,context);listeners['razvilka:autonomy-state']({detail:{policy,server_time:new Date().toISOString()}});assert.equal(requests.length,0);assert.equal(elements.get('autoQuickCheck').value,300);});
+test('unsaved fields survive newer published revision and save is fenced',()=>{const listeners={},elements=new Map();const el=id=>{if(!elements.has(id))elements.set(id,{value:'',events:{},addEventListener(n,f){this.events[n]=f;}});return elements.get(id);};const context={Date,Number,JSON,console,CustomEvent:class{},document:{getElementById:el,addEventListener(){}},addEventListener:(n,f)=>listeners[n]=f};vm.createContext(context);vm.runInContext(src,context);const time=new Date().toISOString();listeners['razvilka:autonomy-state']({detail:{policy,server_time:time}});el('autoQuickCheck').value='180';el('autoQuickForm').events.input();listeners['razvilka:autonomy-state']({detail:{policy:{...policy,revision:13},server_time:time}});assert.equal(el('autoQuickCheck').value,'180');assert.equal(el('autoQuickSave').disabled,true);});
+for(const kind of ['missing-policy','invalid-time','older-snapshot','retained','blocked'])await asyncTest('unknown write remains fenced after unusable readback: '+kind,async()=>{
+  const f=fixture(),initial=f.snapshot();f.publish(initial);f.edit();
+  const save=f.submit();f.requests[0].reject(new Error('connection lost'));await save;
+  assert.equal(f.element('autoQuickSave').disabled,true);
+  const reload=f.reload();let response=f.snapshot();
+  if(kind==='missing-policy')response={};
+  if(kind==='invalid-time')response.server_time='invalid';
+  if(kind==='older-snapshot')response.server_time='2000-01-01T00:00:00Z';
+  if(kind==='retained')response.observation={state:'retained'};
+  if(kind==='blocked')response.blocked=true;
+  f.requests[1].resolve(response);await reload;
+  // A later passive poll cannot substitute for the rejected independent read.
+  f.publish(initial);
+  assert.equal(f.element('autoQuickCheck').value,'180');
+  assert.equal(f.element('autoQuickSave').disabled,true,'unusable readback released the write fence');
+  await f.submit();assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1,'unknown write was resubmitted');
+  const retry=f.reload();f.requests.at(-1).resolve(f.snapshot());await retry;
+  assert.equal(f.element('autoQuickSave').disabled,false,'valid independent read did not restore editing');
+  assert.equal(f.element('autoQuickCheck').value,'180');
+});
+
+await asyncTest('late failed PUT cannot fence a new authenticated form',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.logout();f.publish(f.snapshot(13));f.edit();
+  f.requests[0].reject(new Error('old session aborted'));await save;
+  f.edit();assert.equal(f.element('autoQuickSave').disabled,false);
+  assert.equal(f.element('autoQuickCheck').value,'180');
+  assert.equal(f.requests.length,1);
+});
+
+await asyncTest('unknown write reconciliation coalesces repeated clicks and retains draft',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(Object.assign(new Error('server error'),{status:500}));await save;
+  const reload=f.reload();await f.reload();assert.equal(f.requests.length,2);
+  f.requests[1].resolve(f.snapshot(13));await reload;
+  assert.equal(f.element('autoQuickCheck').value,'180');
+  assert.equal(f.element('autoQuickSave').disabled,true,'new revision must require explicit draft reset');
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickSave').disabled,false);
+  assert.equal(f.element('autoQuickCheck').value,300);
+});
+
+await asyncTest('successful PUT with invalid readback cannot report saved or discard draft',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].resolve({});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.requests[1].path,'/api/v1/autonomy');
+  f.requests[1].resolve({...f.snapshot(13),server_time:'invalid'});await save;
+  assert.equal(f.element('autoQuickCheck').value,'180');
+  assert.equal(f.element('autoQuickSave').disabled,true);
+  assert.doesNotMatch(f.element('autoQuickMessage').textContent,/Параметры сохранены/);
+});
+
+await asyncTest('valid save preserves policy authority and waits for live revision',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  const request=f.requests[0],body=JSON.parse(request.options.body);
+  assert.equal(request.path,'/api/v1/autonomy');assert.equal(request.options.method,'PUT');
+  assert.equal(body.expected_revision,policy.revision);assert.equal(body.confirm,'SAVE_AUTONOMY');assert.equal(body.release_safe_mode,false);
+  for(const key of Object.keys(policy))if(key!=='check_seconds')assert.deepEqual(body.policy[key],policy[key],key);
+  f.requests[0].resolve({});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.element('autoQuickSave').disabled,true);
+  const next=f.snapshot(13);next.policy.check_seconds=180;f.requests[1].resolve(next);await save;
+  assert.equal(f.element('autoQuickCheck').value,180);assert.equal(f.element('autoQuickSave').disabled,false);
+  assert.match(f.element('autoQuickMessage').textContent,/Параметры сохранены/);
+});
+
+await asyncTest('revision conflict retains draft and never repeats PUT automatically',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(Object.assign(new Error('revision conflict'),{status:409}));await save;
+  f.publish(f.snapshot(13));assert.equal(f.element('autoQuickCheck').value,'180');
+  assert.equal(f.element('autoQuickSave').disabled,true);await f.submit();assert.equal(f.requests.length,1);
+});
+
+await asyncTest('late successful reconciliation cannot overwrite a new session draft',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(new Error('connection lost'));await save;const reload=f.reload();
+  f.logout();f.publish(f.snapshot(14));f.element('autoQuickCheck').value='240';f.element('autoQuickForm').events.input();
+  f.requests[1].resolve(f.snapshot(13));await reload;
+  assert.equal(f.element('autoQuickCheck').value,'240');assert.equal(f.element('autoQuickSave').disabled,false);
+  assert.match(f.element('autoQuickRevision').textContent,/14/);assert.equal(f.requests.length,2);
+});
+test('leaving warns only while quick policy changes remain unsaved',()=>{
+  const f=fixture();f.publish(f.snapshot());assert.equal(f.leave().prevented,false);
+  f.edit();const dirty=f.leave();assert.equal(dirty.prevented,true);assert.equal(dirty.returnValue,'');
+  f.element('autoQuickReset').events.click();assert.equal(f.leave().prevented,false);
+  f.edit();f.logout();assert.equal(f.leave().prevented,false);
+});
+
+function published(f,instance,serverTime,revision=12,checkSeconds=300){
+  const snapshot=f.snapshot(revision);snapshot.server_time=serverTime;snapshot.policy.check_seconds=checkSeconds;
+  snapshot.observation={instance_id:instance.repeat(32),state:'available',revision:1,data_age_ms:0,observed_at:serverTime};return snapshot;
+}
+test('new process accepts an earlier server clock but fences drafts at the same policy revision',()=>{
+  const f=fixture(),old=published(f,'a','2026-10-03T15:00:00Z');f.publish(old);f.edit();
+  f.publish(published(f,'b','2026-10-03T14:00:00Z',12,240));
+  assert.equal(f.element('autoQuickCheck').value,'180');assert.equal(f.element('autoQuickSave').disabled,true,'restart did not fence the old policy draft');
+  f.publish({...old,server_time:'2026-10-03T16:00:00Z'});
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickCheck').value,240,'old process replaced the restarted process');
+  assert.equal(f.element('autoQuickSave').disabled,false);
+  f.publish(published(f,'b','2026-10-03T13:00:00Z',12,600));assert.equal(f.element('autoQuickCheck').value,240,'older same-process snapshot was accepted');
+  f.logout();f.publish(old);assert.equal(f.element('autoQuickCheck').value,300,'new login inherited retired process state');
+});
+
+await asyncTest('live readback without instance id retains the publication ordering context',async()=>{
+  const f=fixture();f.publish(published(f,'a','2026-10-03T15:00:00Z'));f.edit();const save=f.submit();
+  f.requests[0].resolve({});await new Promise(resolve=>setImmediate(resolve));
+  const live=f.snapshot(13);live.server_time='2026-10-03T15:01:00Z';live.policy.check_seconds=180;
+  f.requests[1].resolve(live);await save;assert.equal(f.leave().prevented,false);
+  f.publish(published(f,'b','2026-10-03T14:00:00Z',13,240));assert.equal(f.element('autoQuickCheck').value,240);
+  assert.equal(f.element('autoQuickSave').disabled,false);assert.equal(f.requests.length,2);
+});
+
+await asyncTest('process change while reconciling cannot unlock an unknown write using an old response',async()=>{
+  const f=fixture(),old=published(f,'a','2026-10-03T15:00:00Z');f.publish(old);f.edit();const save=f.submit();
+  f.requests[0].reject(new Error('connection lost'));await save;const reload=f.reload();
+  const restarted=published(f,'b','2026-10-03T14:00:00Z',12,240);f.publish(restarted);
+  f.requests[1].resolve({...old,observation:undefined});await reload;
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickCheck').value,240);
+  assert.equal(f.element('autoQuickSave').disabled,true,'pre-restart live response unlocked the write');
+  assert.equal(f.leave().prevented,true,'unknown write lost its unload warning after resetting draft');
+  const retry=f.reload();f.requests[2].resolve({...restarted,observation:undefined});await retry;
+  assert.equal(f.element('autoQuickSave').disabled,false);assert.equal(f.leave().prevented,false);
+  assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1);
+});
+for(const button of ['visibleReload','globalReload'])await asyncTest(button+' reconciles unknown writes without replay',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(Object.assign(new Error('server response lost'),{status:500}));await save;
+  assert.match(f.element('autoQuickMessage').textContent,/Обновить состояние/);
+  const reload=f[button]();await f[button]();assert.equal(f.requests.length,2);
+  assert.equal(f.element('autoQuickRefresh').disabled,true);
+  f.requests[1].resolve(f.snapshot(13));await reload;
+  assert.equal(f.element('autoQuickCheck').value,'180');assert.equal(f.element('autoQuickSave').disabled,true);
+  assert.equal(f.element('autoQuickRefresh').disabled,false);
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickSave').disabled,false);
+  assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1);
+});
+
+await asyncTest('visible read updates a CAS-conflicted policy while keeping draft',async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(Object.assign(new Error('revision conflict'),{status:409}));await save;
+  await f.globalReload();assert.equal(f.requests.length,1,'global refresh added an unnecessary live policy read');
+  const reload=f.visibleReload();f.requests[1].resolve(f.snapshot(13));await reload;
+  assert.equal(f.element('autoQuickCheck').value,'180');assert.equal(f.element('autoQuickSave').disabled,true);
+  f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickCheck').value,300);
+});
+
+test('source priority is an ordered subset and never grants source permission',()=>{
+  const p={...policy,source_ids:['manual','feed-a','feed-b'],preferred_source_ids:[]};
+  const next=model.draft(p,{...inputs,preferred_source_ids:['feed-b','manual']});
+  assert.deepEqual(JSON.parse(JSON.stringify(next.preferred_source_ids)),['feed-b','manual']);
+  assert.deepEqual(JSON.parse(JSON.stringify(next.source_ids)),p.source_ids);assert.deepEqual(JSON.parse(JSON.stringify(next.preferred_routes)),p.preferred_routes);
+  for(const order of [['unknown'],['feed-a','feed-a'],'manual',null,['https://secret.invalid/?token=x']])assert.throws(()=>model.draft(p,{...inputs,preferred_source_ids:order}));
+  assert.deepEqual(JSON.parse(JSON.stringify(model.draft(p,{...inputs,preferred_source_ids:[]}).preferred_source_ids)),[]);
+});
+
+test('source names use safe metadata and do not assert manual privacy',()=>{
+  const choices=model.sourceChoices({policy:{source_ids:['manual','feed-a','feed-b','unlabeled']},source_choices:[{id:'manual',name:'Private personal source',kind:'manual'},{id:'feed-a',name:'Моя подписка'},{id:'feed-b',name:'https://secret.invalid/?token=hidden'}]});
+  assert.equal(choices[0].name,'Добавленные вручную');assert.equal(choices[1].name,'Моя подписка');
+  assert.equal(choices[2].name,'Источник 3');assert.equal(choices[3].name,'Источник 4');
+  const html=model.sourcePriorityHTML(['feed-a','revoked'],[{id:'feed-a',name:'<img src=x onerror=attack()>'}]);
+  assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img|https:|token=|Private/);
+  assert.match(html,/Источник больше не разрешён/);
+});
+
+await asyncTest('priority add reorder remove stays local and save preserves consent and route types',async()=>{
+  const f=fixture(),snap=f.snapshot();snap.policy={...snap.policy,source_ids:['manual','feed-a','feed-b'],preferred_source_ids:[]};
+  snap.source_choices=[{id:'manual',kind:'manual'},{id:'feed-a',name:'Подписка A'},{id:'feed-b',name:'Подписка B'}];f.publish(snap);
+  const list=f.element('autoSourcePriorityList'),add=id=>{f.element('autoSourcePrioritySelect').value=id;f.element('autoSourcePriorityAdd').events.click();};
+  const move=(action,index)=>list.events.click({target:{closest:()=>({dataset:{priority:action,index:String(index)}})}});
+  add('feed-a');add('manual');add('feed-b');move('up',2);move('down',0);move('remove',2);
+  assert.equal(f.requests.length,0,'priority editing itself wrote policy or consent');
+  assert.match(list.innerHTML,/1\. Подписка B/);assert.match(list.innerHTML,/2\. Подписка A/);
+  add('not-allowed');assert.doesNotMatch(list.innerHTML,/not-allowed/);
+  const save=f.submit(),body=JSON.parse(f.requests[0].options.body);
+  assert.deepEqual(body.policy.preferred_source_ids,['feed-b','feed-a']);assert.deepEqual(body.policy.source_ids,snap.policy.source_ids);
+  assert.deepEqual(body.policy.preferred_routes,snap.policy.preferred_routes);assert.equal(body.release_safe_mode,false);
+  f.requests[0].resolve({});await new Promise(resolve=>setImmediate(resolve));
+  f.requests[1].resolve({...snap,policy:{...snap.policy,...body.policy,revision:13}});await save;
+  assert.equal(f.element('autoQuickSave').disabled,false);
+});
+
+await asyncTest('revoked source remains visibly invalid until removed and cannot be submitted',async()=>{
+  const f=fixture(),snap=f.snapshot();snap.policy={...snap.policy,source_ids:['manual'],preferred_source_ids:['revoked']};f.publish(snap);
+  const list=f.element('autoSourcePriorityList');assert.match(list.innerHTML,/Источник больше не разрешён/);
+  await f.submit();assert.equal(f.requests.length,0);assert.match(f.element('autoQuickMessage').textContent,/разрешённые источники/);
+  list.events.click({target:{closest:()=>({dataset:{priority:'remove',index:'0'}})}});
+  const save=f.submit();assert.deepEqual(JSON.parse(f.requests[0].options.body).policy.preferred_source_ids,[]);
+  f.requests[0].reject(Object.assign(new Error('CAS conflict'),{status:409}));await save;
+  assert.deepEqual(snap.policy.source_ids,['manual']);
+});
+
+test('priority controls preserve dirty edits across a changed revision and clear on logout',()=>{
+  const f=fixture(),snap=f.snapshot();snap.policy={...snap.policy,source_ids:['manual'],preferred_source_ids:['manual']};f.publish(snap);
+  f.edit();f.publish({...snap,policy:{...snap.policy,revision:13,source_ids:[],preferred_source_ids:[]}});
+  assert.match(f.element('autoSourcePriorityList').innerHTML,/Источник больше не разрешён/);
+  assert.equal(f.element('autoSourcePriorityAdd').disabled,true);assert.equal(f.element('autoQuickSave').disabled,true);
+  f.logout();assert.equal(f.element('autoSourcePriorityList').innerHTML,'');
+});
+
+console.log(JSON.stringify({suite:'autopilot-settings',tests:total}));

@@ -1,0 +1,144 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"reflect"
+	"time"
+)
+
+// A scoped proxy inspection reads the forwarding lease, firewall attachments
+// and every admitted source/destination route. On routers this can exceed two
+// seconds even with healthy processes; retain a bound without truncating that
+// proof or replacing it with a PID/journal-only check.
+const runtimePresenceTimeout = 8 * time.Second
+
+// RuntimeObserver reports owned processes and rules without changing them.
+// The manager still verifies the committed plan and network on both sides.
+type RuntimeObserver interface {
+	ObserveOwnedRuntime(context.Context) error
+}
+
+// ObserveCommittedRuntime proves present owned runtime, not service reachability.
+// Bounded read-only inspection never probes services, switches an endpoint,
+// starts a process, repairs state or changes kernel rules.
+func (m *Manager) ObserveCommittedRuntime(ctx context.Context, expected Plan) (retErr error) {
+	if m == nil || expected.State != "committed" || len(expected.Routes) == 0 {
+		return ErrReviewChanged
+	}
+	if err := validateDomainTransportForExecution(expected); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, runtimePresenceTimeout)
+	defer cancel()
+	defer func() {
+		// Command runners can return only an exit status (or a higher-level
+		// ownership error) after cancellation. Preserve the actual observation
+		// timeout so consumers do not misreport it as absent/broken runtime.
+		if err := ctx.Err(); err != nil {
+			retErr = err
+		}
+	}()
+	if err := m.beginOperation(ctx); err != nil {
+		return err
+	}
+	defer m.endOperation()
+	verify := func() error {
+		current, exists, err := m.Committed()
+		if err != nil || !exists || !reflect.DeepEqual(current, expected) {
+			return ErrReviewChanged
+		}
+		return m.checkPlanNetwork(ctx, expected)
+	}
+	if err := verify(); err != nil {
+		return err
+	}
+	if expected.LAN != nil && expected.LAN.Mode == LANPolicyXraySelectedTCPMode {
+		owner := m.retainedXrayOwner()
+		if owner == nil || owner.scope == nil || owner.scope.manager != m || owner.execution == nil || !xraySelectedTCPSamePlan(owner.execution.plan, expected) {
+			return ErrXrayOperationOwner
+		}
+		held, end, err := owner.operation(ctx, nil, true)
+		if err != nil {
+			return err
+		}
+		defer end()
+		ctx = held
+	}
+	for _, id := range expected.Adapters {
+		registered, exists := m.adapter(id)
+		if !exists {
+			return errors.New("owned runtime adapter unavailable")
+		}
+		observer, ok := registered.(RuntimeObserver)
+		if !ok {
+			return errors.New("owned runtime observation unavailable")
+		}
+		if err := observer.ObserveOwnedRuntime(ctx); err != nil {
+			return err
+		}
+	}
+	return verify()
+}
+
+func (a *ProxyTunnelAdapter) ObserveOwnedRuntime(ctx context.Context) error {
+	xraySelectedTCPExecutions.Lock()
+	associated := xraySelectedTCPExecutions.live[a]
+	xraySelectedTCPExecutions.Unlock()
+	if associated != nil {
+		if associated.material == nil {
+			return ErrXrayOperationOwner
+		}
+		root := filepath.Join(associated.material.managerRoot, "transactions", associated.plan.PlanID, "xray")
+		e, _, err := xraySelectedTCPExecutionFor(ctx, a, associated.plan, root)
+		if err != nil {
+			return err
+		}
+		return e.health(ctx)
+	}
+	if ctx != nil && ctx.Value(xraySelectedTCPExecutionKey{}) != nil {
+		return ErrXrayOperationOwner
+	}
+	if err := a.checkSidecarIdentity(); err != nil {
+		return err
+	}
+	state, exists, err := a.loadPolicy()
+	if err != nil || !exists || state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || a.Processes == nil {
+		return errors.New("owned proxy policy unavailable")
+	}
+	if !regularFile(a.engineConfigPath()) || !regularFile(a.sidecarConfigPath()) || !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
+		return errors.New("owned proxy process unavailable")
+	}
+	if err := a.verifyForwarding(ctx, state); err != nil {
+		return err
+	}
+	return verifyPolicyEvidence(ctx, a.Runner, a.ip(), state)
+}
+
+func (a *WARPWireGuardAdapter) ObserveOwnedRuntime(ctx context.Context) error {
+	state, exists, err := a.deactivationOwnership(ctx)
+	if err != nil || !exists {
+		return errors.New("owned WireGuard policy unavailable")
+	}
+	active, err := a.deactivationInterfaceActive(ctx)
+	if err != nil || !active {
+		return errors.New("owned WireGuard interface unavailable")
+	}
+	return verifyPolicyEvidence(ctx, a.Runner, a.ip(), state)
+}
+
+func (a *NFQWS2Adapter) ObserveOwnedRuntime(ctx context.Context) error {
+	lease, err := a.verifyOwnedLists(false)
+	if err != nil || lease == nil {
+		return errors.New("owned NFQWS2 policy unavailable")
+	}
+	if err := a.verifyOwnedRuntime(lease, false); err != nil {
+		return err
+	}
+	output, err := a.run(ctx, a.InitPath, "status")
+	if err != nil || !runningOutput(string(output)) {
+		return errors.New("owned NFQWS2 process unavailable")
+	}
+	return ctx.Err()
+}

@@ -1,0 +1,544 @@
+package app
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"sort"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/nodequality"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
+)
+
+const maxNodeCheckBatch = 64
+
+type nodeCheckJobRequest struct {
+	IdempotencyKey   string                `json:"idempotency_key,omitempty"`
+	ExpectedRevision *uint64               `json:"expected_revision,omitempty"`
+	Scope            string                `json:"scope,omitempty"`
+	Generation       uint64                `json:"generation,omitempty"`
+	CatalogDigest    string                `json:"catalog_digest,omitempty"`
+	NodeIDs          []string              `json:"node_ids"`
+	ServiceID        string                `json:"service_id"`
+	Mode             string                `json:"mode"`
+	Feed             *providerfeed.Request `json:"feed,omitempty"`
+	FeedID           string                `json:"feed_id,omitempty"`
+	Limit            int                   `json:"limit,omitempty"`
+	Confirm          string                `json:"confirm,omitempty"`
+}
+
+type nodeCheckItem struct {
+	NetworkTimings       []probecheck.NetworkTiming  `json:"network_timings,omitempty"`
+	ServiceErrorCategory string                      `json:"service_error_category,omitempty"`
+	DirectEgressError    string                      `json:"direct_egress_error,omitempty"`
+	ProxyEgressError     string                      `json:"proxy_egress_error,omitempty"`
+	Stages               []nodeCheckDiagnosticStage  `json:"stages,omitempty"`
+	NodeID               string                      `json:"node_id"`
+	NetworkProfile       string                      `json:"network_profile"`
+	CheckedAt            time.Time                   `json:"checked_at"`
+	Reachable            bool                        `json:"reachable"`
+	Available            bool                        `json:"available"`
+	LatencyMS            int64                       `json:"latency_ms,omitempty"`
+	DurationMS           int64                       `json:"duration_ms,omitempty"`
+	Message              string                      `json:"message"`
+	Verdict              string                      `json:"verdict,omitempty"`
+	TestLevel            string                      `json:"test_level,omitempty"`
+	ErrorCode            string                      `json:"error_code,omitempty"`
+	ConnectivityReady    bool                        `json:"connectivity_ready"`
+	CleanupVerified      bool                        `json:"cleanup_verified"`
+	CleanupStatus        dataplane.NodeCleanupStatus `json:"cleanup_status,omitempty"`
+	ExpiresAt            time.Time                   `json:"expires_at,omitempty"`
+	Engine               string                      `json:"engine,omitempty"`
+	Stage                string                      `json:"stage,omitempty"`
+	DirectControl        string                      `json:"direct_control,omitempty"`
+	ProbeID              string                      `json:"probe_id,omitempty"`
+}
+
+type nodeCheckJob struct {
+	Timing                  *nodeJobTiming            `json:"timing,omitempty"`
+	network                 string                    // Process-local epoch fingerprint; never replayed as proof.
+	Scope                   string                    `json:"scope,omitempty"`
+	ResultState             string                    `json:"result_state,omitempty"`
+	EarlierNetworkCompleted int                       `json:"earlier_network_completed,omitempty"`
+	Matched                 int                       `json:"matched,omitempty"`
+	Passed                  int                       `json:"passed"`
+	Failed                  int                       `json:"failed"`
+	Inconclusive            int                       `json:"inconclusive"`
+	ID                      uint64                    `json:"id"`
+	Phase                   string                    `json:"phase"`
+	ErrorCode               string                    `json:"error_code,omitempty"`
+	Skipped                 int                       `json:"skipped"`
+	Fetch                   *providerfeed.Result      `json:"fetch,omitempty"`
+	Mode                    string                    `json:"mode"`
+	ServiceID               string                    `json:"service_id,omitempty"`
+	State                   string                    `json:"state"`
+	Total                   int                       `json:"total"`
+	Completed               int                       `json:"completed"`
+	StartedAt               time.Time                 `json:"started_at"`
+	FinishedAt              *time.Time                `json:"finished_at,omitempty"`
+	Message                 string                    `json:"message"`
+	Results                 []nodeCheckItem           `json:"results"`
+	ServiceResults          []serviceControlResult    `json:"service_results,omitempty"`
+	DNSResult               json.RawMessage           `json:"dns_result,omitempty"`
+	DNSRequest              *serviceDNSCompareRequest `json:"dns_request,omitempty"`
+	DNSApplyAction          string                    `json:"dns_apply_action,omitempty"`
+}
+
+type nodeCheckState struct {
+	// Test seam is private and fixed before HTTP serving; production always uses NodeFeeds.
+	fetchSource                   func(context.Context, nodeCheckJobRequest) (providerfeed.Result, error)
+	bulkWait                      func(context.Context, time.Duration) error // private test seam, fixed before serving
+	mu                            sync.Mutex
+	root                          context.Context
+	closed                        bool
+	nextID                        uint64
+	job                           *nodeCheckJob
+	cancel                        context.CancelFunc
+	done                          chan struct{}
+	measurements                  *nodequality.Cache
+	pings                         map[string]nodeCheckItem
+	connectivity                  map[string]nodeCheckItem // Bounded RAM observations, never service history.
+	connectivityScopesSaturated   bool
+	connectivityScopes            map[string]freeConnectivityScope // bounded observations across WAN and engine changes
+	connectivityTransportFailures map[string][]nodeCheckItem       // At most two unique recent transport failures per key.
+	serviceResults                map[string]serviceControlResult
+	serviceAttempts               map[string]time.Time
+	batchResults                  map[uint64]*nodeCheckJob // bounded process-local observations, never replayed from disk
+}
+
+// StartNodeChecks attaches detached checks to application lifetime. Call before
+// serving HTTP; every accepted job keeps its own operation admission until all
+// network work and the exact checker's cleanup have finished.
+func (a *App) StartNodeChecks(ctx context.Context) {
+	a.nodeChecks.mu.Lock()
+	defer a.nodeChecks.mu.Unlock()
+	if a.nodeChecks.root == nil && !a.nodeChecks.closed {
+		// Stay within JavaScript's exact integer range while preventing a stale
+		// browser cancel from matching a new process's first job after restart.
+		var seed [8]byte
+		if _, err := rand.Read(seed[:]); err != nil {
+			a.nodeChecks.closed = true
+			return
+		}
+		a.nodeChecks.nextID = 1 + (binary.LittleEndian.Uint64(seed[:]) & ((1 << 48) - 1))
+		a.nodeChecks.root = ctx
+	}
+}
+
+// WaitNodeChecks stops admission, cancels the current job and joins it.
+func (a *App) WaitNodeChecks(ctx context.Context) error {
+	a.nodeChecks.mu.Lock()
+	a.nodeChecks.closed = true
+	if a.nodeChecks.cancel != nil {
+		a.nodeChecks.cancel()
+	}
+	done := a.nodeChecks.done
+	a.nodeChecks.mu.Unlock()
+	if done == nil {
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (a *App) nodeCheckSnapshot() map[string]any {
+	a.nodeChecks.mu.Lock()
+	defer a.nodeChecks.mu.Unlock()
+	var job *nodeCheckJob
+	if a.nodeChecks.job != nil {
+		copy := *a.nodeChecks.job
+		copy.Results = append([]nodeCheckItem{}, copy.Results...)
+		for i := range copy.Results {
+			copy.Results[i].NetworkTimings = closedNodeNetworkTimings(copy.Results[i].NetworkTimings)
+		}
+		if copy.Fetch != nil {
+			fetch := *copy.Fetch
+			fetch.NodeIDs = append([]string{}, fetch.NodeIDs...)
+			fetch.Issues = nil
+			copy.Fetch = &fetch
+		}
+		copy.ServiceResults = append([]serviceControlResult{}, copy.ServiceResults...)
+		for i := range copy.ServiceResults {
+			copy.ServiceResults[i].Scope.Sources = append([]string{}, copy.ServiceResults[i].Scope.Sources...)
+		}
+		job = &copy
+	}
+	pings := make([]nodeCheckItem, 0, len(a.nodeChecks.pings))
+	for _, ping := range a.nodeChecks.pings {
+		pings = append(pings, ping)
+	}
+	sort.Slice(pings, func(i, j int) bool { return pings[i].NodeID < pings[j].NodeID })
+	connectivity := a.nodeConnectivitySnapshotLocked(time.Now().UTC())
+	return map[string]any{"job": job, "pings": pings, "connectivity": connectivity, "node_measurements": a.nodeChecks.measurements.Snapshot(time.Now().UTC()), "working_routes_changed": false, "fetch_and_check": true, "all_vless": true, "cancel_requires_job_id": true}
+}
+
+func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	switch r.Method {
+	case http.MethodGet:
+	case http.MethodDelete:
+		requestedID, err := strconv.ParseUint(r.URL.Query().Get("job_id"), 10, 64)
+		if err != nil || requestedID == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Укажите идентификатор проверочной задачи."})
+			return
+		}
+		if found, err := a.cancelDurableServiceJob(r.Context(), requestedID); found || err != nil {
+			if err != nil {
+				a.writeDurableJobFailure(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, a.nodeCheckCurrentView())
+			return
+		}
+		a.nodeChecks.mu.Lock()
+		if a.nodeChecks.job == nil || a.nodeChecks.job.ID != requestedID {
+			a.nodeChecks.mu.Unlock()
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Задача изменилась. Отмена не выполнена.", "not_started": true})
+			return
+		}
+		if a.nodeChecks.cancel != nil && a.nodeChecks.job != nil {
+			a.nodeChecks.job.State = "canceling"
+			a.nodeChecks.job.Message = "Завершаем текущую проверку и очищаем временные ресурсы."
+			a.nodeChecks.cancel()
+		}
+		a.nodeChecks.mu.Unlock()
+	default:
+		methodNotAllowed(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.nodeCheckCurrentView())
+}
+
+func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if a.Nodes == nil {
+		http.Error(w, "Хранилище узлов недоступно.", http.StatusServiceUnavailable)
+		return
+	}
+	var request nodeCheckJobRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		http.Error(w, "Выберите от 1 до 64 узлов и тип проверки.", http.StatusBadRequest)
+		return
+	}
+	if request.Scope != "" {
+		a.checkAllVLESS(w, r, request)
+		return
+	}
+	if request.Generation != 0 || request.CatalogDigest != "" || !validNodeCheckJobRequest(request) {
+		http.Error(w, "Выберите от 1 до 64 узлов или действие для всего VLESS-каталога.", http.StatusBadRequest)
+		return
+	}
+	if request.Feed == nil && request.FeedID == "" && (request.Mode == "connectivity" || a.managedReconcilerActive() || request.IdempotencyKey != "" || request.ExpectedRevision != nil) {
+		a.acceptDurableNodeChecks(w, r, request)
+		return
+	}
+	enter := a.Operations.Enter
+	if request.Mode == "service" {
+		enter = a.Operations.Exclusive
+	}
+	release, err := enter(r.Context())
+	if err != nil {
+		a.writeOperationFailure(w, err)
+		return
+	}
+	retained := false
+	defer func() {
+		if !retained {
+			release()
+		}
+	}()
+	var service catalog.Service
+	if request.Mode == "service" {
+		if a.NodeChecker == nil {
+			http.Error(w, "Для проверки сервиса нужен компонент Sing-box.", http.StatusServiceUnavailable)
+			return
+		}
+		for _, candidate := range a.catalogSnapshot().Services {
+			if candidate.ID == request.ServiceID && serviceHasNodeProbe(candidate) {
+				service = candidate
+				break
+			}
+		}
+		if service.ID == "" {
+			http.Error(w, "Выберите сервис с доступной проверкой.", http.StatusBadRequest)
+			return
+		}
+	} else {
+		request.ServiceID = ""
+	}
+	fetchLimit, err := a.validateNodeCheckFeed(request)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Источник не прошёл проверку. Настройки и маршруты не изменены."})
+		return
+	}
+	snapshot, err := a.Nodes.Snapshot(r.Context(), time.Now())
+	if err != nil {
+		writeNodeError(w, err)
+		return
+	}
+	allowed := make(map[string]bool, len(snapshot.Nodes))
+	for _, node := range snapshot.Nodes {
+		allowed[node.ID] = !node.Disabled && node.State != "expired"
+	}
+	seen := make(map[string]bool, len(request.NodeIDs))
+	for _, id := range request.NodeIDs {
+		if !allowed[id] || seen[id] {
+			http.Error(w, "Список содержит повторный, отключённый или недоступный узел.", http.StatusBadRequest)
+			return
+		}
+		seen[id] = true
+	}
+	// HTTP 202 transfers preparation admission to the worker. Service checks
+	// then yield between nodes, while retaining admission through each cleanup.
+	a.nodeChecks.mu.Lock()
+	if a.nodeChecks.closed || a.nodeChecks.root == nil || a.nodeChecks.root.Err() != nil {
+		a.nodeChecks.mu.Unlock()
+		http.Error(w, "Приложение завершает работу. Повторите после запуска.", http.StatusServiceUnavailable)
+		return
+	}
+	if a.nodeChecks.cancel != nil {
+		a.nodeChecks.mu.Unlock()
+		w.Header().Set("Retry-After", "2")
+		http.Error(w, "Проверка уже выполняется. Дождитесь завершения или остановите её.", http.StatusConflict)
+		return
+	}
+	// Service checks may take up to 45 seconds each. A job has a fixed upper
+	// bound even when an injected or future checker has a larger default.
+	total := len(request.NodeIDs)
+	phase, message := "checking", "Проверяем выбранные узлы."
+	if request.Feed != nil || request.FeedID != "" {
+		total = fetchLimit
+		phase, message = "fetching", "Получаем источник. Маршруты не изменяются."
+	}
+	budget := 5 * time.Minute
+	if request.Mode == "service" {
+		budget = time.Duration(total)*time.Minute + time.Minute
+	}
+	ctx, cancel := context.WithTimeout(a.nodeChecks.root, budget)
+	a.nodeChecks.nextID++
+	id := a.nodeChecks.nextID
+	a.nodeChecks.job = &nodeCheckJob{ID: id, Mode: request.Mode, ServiceID: request.ServiceID, State: "running", Total: total, Phase: phase, StartedAt: time.Now().UTC(), Message: message, Results: []nodeCheckItem{}}
+	source := a.legacyManualCandidateSource(ctx, service)
+	a.nodeChecks.cancel = cancel
+	done := make(chan struct{})
+	a.nodeChecks.done = done
+	pinger := a.NodePinger
+	if pinger == nil {
+		pinger = dataplane.NewTCPNodePinger()
+	}
+	a.nodeChecks.mu.Unlock()
+	retained = true
+	go a.runNodeChecks(ctx, cancel, done, release, id, request, service, pinger, source)
+	writeJSON(w, http.StatusAccepted, a.nodeCheckSnapshot())
+}
+
+func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done chan struct{}, release func(), id uint64, request nodeCheckJobRequest, service catalog.Service, pinger dataplane.NodePinger, source *legacyManualCandidateSource) {
+	defer close(done)
+	held := true
+	defer func() {
+		if held {
+			release()
+		}
+	}()
+	defer cancel()
+	var err error
+	if request.Feed != nil || request.FeedID != "" {
+		// No engine exists yet. The feed importer owns its own short store
+		// admissions and must not inherit this exclusive preparation lease.
+		release()
+		held = false
+		request.NodeIDs, err = a.fetchNodeCheckCandidates(ctx, id, request)
+		if err == nil {
+			release, err = a.bulkAdmission(ctx)
+			held = err == nil
+		}
+	}
+	profile := ""
+	if err == nil {
+		profile, err = a.freshNetworkProfile(ctx)
+	}
+	if err == nil && request.Mode == "service" {
+		// Source fetching has completed and no temporary checker is running.
+		// Release preparation admission before entering the shared fair queue.
+		release()
+		held = false
+		a.runServiceNodeQueue(ctx, id, request.NodeIDs, service, profile, false, source)
+		return
+	}
+	if err == nil {
+		workers := 1
+		if request.Mode == "tcp" {
+			workers = 2
+		}
+		work := make(chan string)
+		var joined sync.WaitGroup
+		for worker := 0; worker < workers; worker++ {
+			joined.Add(1)
+			go func() {
+				defer joined.Done()
+				for nodeID := range work {
+					if ctx.Err() != nil {
+						return
+					}
+					item := a.runNodeCheckItem(ctx, request.Mode, nodeID, service, profile, pinger)
+					a.nodeChecks.mu.Lock()
+					if a.nodeChecks.job != nil && a.nodeChecks.job.ID == id {
+						a.nodeChecks.job.Results = append(a.nodeChecks.job.Results, item)
+						a.nodeChecks.job.Completed++
+						if request.Mode == "tcp" {
+							if a.nodeChecks.pings == nil {
+								a.nodeChecks.pings = make(map[string]nodeCheckItem)
+							}
+							if len(a.nodeChecks.pings) >= nodestore.MaxNodes {
+								var oldest string
+								for key, value := range a.nodeChecks.pings {
+									if oldest == "" || value.CheckedAt.Before(a.nodeChecks.pings[oldest].CheckedAt) {
+										oldest = key
+									}
+								}
+								delete(a.nodeChecks.pings, oldest)
+							}
+							a.nodeChecks.pings[nodeID] = item
+						}
+					}
+					a.nodeChecks.mu.Unlock()
+				}
+			}()
+		}
+	send:
+		for _, nodeID := range request.NodeIDs {
+			select {
+			case work <- nodeID:
+			case <-ctx.Done():
+				break send
+			}
+		}
+		close(work)
+		joined.Wait()
+	}
+	a.nodeChecks.mu.Lock()
+	if a.nodeChecks.job != nil && a.nodeChecks.job.ID == id {
+		job := a.nodeChecks.job
+		finished := time.Now().UTC()
+		job.FinishedAt = &finished
+		previousMessage := job.Message
+		job.Phase = "finished"
+		job.State, job.Message = "completed", "Проверка завершена. Маршруты не применялись."
+		if ctx.Err() != nil {
+			job.State, job.Message = "canceled", "Проверка остановлена."
+		} else if err != nil {
+			job.State = "failed"
+			if job.ErrorCode != "" {
+				job.Message = previousMessage
+			} else {
+				job.Message = "Не удалось подтвердить текущую сеть. Повторите проверку."
+			}
+		} else if job.Total == 0 {
+			job.Message = "В источнике нет доступных кандидатов для проверки. Прежние узлы сохранены."
+		}
+		a.nodeChecks.cancel = nil
+	}
+	a.nodeChecks.mu.Unlock()
+}
+
+func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service catalog.Service, profile string, pinger dataplane.NodePinger) nodeCheckItem {
+	if mode == "connectivity" {
+		return a.runNodeConnectivity(ctx, id, profile)
+	}
+	item := nodeCheckItem{NodeID: id, NetworkProfile: profile, Message: "Проверка не завершена."}
+	if mode == "service" {
+		checkContext, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		// These rows never lead to Apply; check with the engine the node requires.
+		engine := a.checkOnlyNodeEngine(checkContext, id)
+		observation := nodeCheckObservation{ServiceID: service.ID, StartedAt: time.Now().UTC()}
+		if profile == "" {
+			var err error
+			profile, err = a.freshNetworkProfile(checkContext)
+			if err != nil {
+				return nodeCheckItemFromResult(id, profile, dataplane.NodeCheckResult{}, err, engine, observation)
+			}
+		}
+		result, _, err := a.checkAndRecordNodeForEngine(checkContext, engine, id, service, profile, 0)
+		observation.FinishedAt = time.Now().UTC()
+		return nodeCheckItemFromResult(id, profile, result, err, engine, observation)
+	}
+	current, err := a.freshNetworkProfile(ctx)
+	if err != nil || current != profile {
+		item.CheckedAt = time.Now().UTC()
+		item.Message = "Сеть изменилась. Повторите проверку."
+		return item
+	}
+	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
+	if err == nil {
+		eligible := false
+		for _, node := range snapshot.Nodes {
+			if node.ID == id && !node.Disabled && node.State != "expired" {
+				eligible = true
+			}
+		}
+		if !eligible {
+			err = nodestore.ErrDisabled
+		}
+	}
+	if err == nil {
+		err = a.Nodes.WithSecret(ctx, id, func(material []byte) error {
+			ping := pinger.Ping(ctx, material)
+			item.Reachable, item.LatencyMS, item.Message = ping.Reachable, ping.LatencyMS, ping.Message
+			return nil
+		})
+	}
+	if err != nil {
+		item.Message = nodeCheckFailureMessage(err)
+	}
+	if current, networkErr := a.freshNetworkProfile(ctx); networkErr != nil || current != profile {
+		item.Reachable, item.LatencyMS = false, 0
+		item.Message = "Сеть изменилась или проверка отменена. Повторите проверку."
+	}
+	item.CheckedAt = time.Now().UTC()
+	return item
+}
+
+func nodeCheckFailureMessage(err error) string {
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "Проверка остановлена."
+	case errors.Is(err, dataplane.ErrExactNodeNetworkChanged):
+		return "Сеть изменилась. Повторите проверку."
+	case errors.Is(err, dataplane.ErrExactNodeBusy):
+		return "Узел пропущен: выполняется другая точная проверка."
+	case errors.Is(err, dataplane.ErrNodeResourceDenied):
+		return "Разрешение на эту проверку не подтверждено. Проверьте исключения сервиса и обновите параметры проверки. Маршруты не включались."
+	case errors.Is(err, dataplane.ErrExactNodeRuntime):
+		return "Движок выбранного режима проверки недоступен. Проверьте установку компонента и журнал его запуска."
+	case errors.Is(err, dataplane.ErrExactNodeUnsupported):
+		return "Выбранный движок не поддерживает этот профиль подключения. Проверьте совместимость профиля и режима проверки."
+	case errors.Is(err, dataplane.ErrExactNodeUnavailable):
+		return "Модуль точной проверки недоступен. Проверьте компоненты и журнал запуска RAZVILKA."
+	case errors.Is(err, nodestore.ErrDisabled), errors.Is(err, nodestore.ErrNotFound):
+		return "Узел отключён, удалён или срок его действия истёк."
+	default:
+		return "Проверка не завершена. Повторите после обновления списка."
+	}
+}

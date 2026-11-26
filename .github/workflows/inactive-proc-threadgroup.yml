@@ -1,0 +1,78 @@
+name: Native process thread group regression
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/inactive-proc-threadgroup-20261116']
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Original procfs terminal proof (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Record exact source and compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; cc --version; unshare --version; } > artifacts/environment.txt
+          sha256sum scripts/fixtures/inactive-proc-threadgroup.c scripts/fixtures/inactive-proc-statx-fallback.c scripts/test-inactive-proc-native.sh > artifacts/source.sha256
+      - name: Process model refusals and diagnostic compatibility
+        shell: bash
+        env:
+          TEST_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$TEST_MODE" = race ]; then flags=(-race); fi
+          # These two existing opt-in tests require their own actual stock/
+          # dependency environment; they are not model-suite cases. The next
+          # step runs the genuine thread-group/mount proof in private procfs.
+          go test "${flags[@]}" ./internal/dataplane -count=1 \
+            -run '^Test(InactiveProc|Proxy.*Inactive|ScopedDNS.*Inactive|NFQWS.*Inactive)' \
+            -skip '^TestScopedDNSInactiveNative(ProcDependency|ReviewedStockDependency)$' -v 2>&1 | tee artifacts/models.log
+          if grep -F -- '--- SKIP:' artifacts/models.log; then exit 1; fi
+      - name: Isolated actual leader and worker lifecycle
+        shell: bash
+        env:
+          RAZVILKA_INACTIVE_PROC_TEST_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_INACTIVE_PROC_TEST_MODE="$RAZVILKA_INACTIVE_PROC_TEST_MODE" \
+            sh scripts/test-inactive-proc-native.sh 2>&1 | tee artifacts/native.log
+          if grep -F -- '--- SKIP:' artifacts/native.log; then exit 1; fi
+          grep -Fx 'INACTIVE_PROC_FORCED_STATX_ENOSYS observed=true process_tree_only=true' artifacts/native.log
+          test "$(grep -Fc -- '--- PASS: TestInactiveProcNativeThreadGroupClassification ' artifacts/native.log)" = 2
+      - name: Same-host original fdinfo and fresh statx leaf costs
+        shell: bash
+        env:
+          TEST_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$TEST_MODE" = race ]; then flags=(-race); fi
+          go test "${flags[@]}" ./internal/dataplane -run '^TestInactiveProcMountID' \
+            -bench '^BenchmarkInactiveProcMountIDPair$' -benchmem -benchtime=200ms -count=10 -v 2>&1 | tee artifacts/mount-id-pair.log
+          grep -F -- '--- PASS: TestInactiveProcMountIDActualParityAndFallback ' artifacts/mount-id-pair.log
+          grep -F -- '--- PASS: TestInactiveProcMountIDRefusesInvalidAndLostCustody ' artifacts/mount-id-pair.log
+          grep -F -- '--- PASS: TestInactiveProcMountIDDescriptorReuse ' artifacts/mount-id-pair.log
+          if grep -F -- '--- SKIP:' artifacts/mount-id-pair.log; then exit 1; fi
+      - name: Preserve all results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: inactive-proc-threadgroup-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/

@@ -1,0 +1,609 @@
+package dataplane
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+)
+
+// CheckExecutionRecovery only observes retained transaction records. Recovery
+// panels and installer authority may consult it before opening normal runtime.
+// It never settles a publication, changes networking or writes a journal.
+func (m *Manager) CheckExecutionRecovery(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if m == nil {
+		return ErrExecutionJournal
+	}
+	if err := m.checkExecutionRecoveryWithin(ctx); err != nil {
+		return errors.Join(err, ctx.Err())
+	}
+	return ctx.Err()
+}
+
+// ErrExecutionJournal means that a transaction's durable outcome cannot be
+// trusted. Callers must stop subsequent mutations even if live cleanup worked.
+var ErrExecutionJournal = errors.New("dataplane transaction journal is unavailable")
+
+func executionJournalError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %w", ErrExecutionJournal, err)
+}
+
+// checkExecutionRecovery is read-only. Restart must not erase an unfinished
+// rollback fence. The two independently published records must agree before
+// the old committed runtime may be reconciled or a new candidate may start.
+func (m *Manager) checkExecutionRecovery() error {
+	return m.checkExecutionRecoveryWithin(context.Background())
+}
+
+func (m *Manager) checkExecutionRecoveryWithin(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	var latest *Execution
+	exists, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-execution.json"), &latest)
+	if err != nil {
+		return executionJournalError(err)
+	}
+	if !exists {
+		return nil
+	} // Legacy state without transaction journals.
+	if latest == nil || latest.PlanID == "" || !filepath.IsLocal(latest.PlanID) || filepath.Base(latest.PlanID) != latest.PlanID || strings.ContainsAny(latest.PlanID, "/\\:") || latest.Digest == "" || latest.FinishedAt == "" {
+		return executionJournalError(errors.New("unfinished or invalid execution record"))
+	}
+	// A completed new attempt can still retain its original predecessors.
+	// Documentary bytes never reconstruct that multi-owner pool after restart.
+	if latest.DomainDNSCoexistence != nil {
+		return executionJournalError(m.checkKnownDomainPoolRecord(ctx, *latest))
+	}
+	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(ctx, *latest) == nil
+	switch latest.State {
+	case "committed", "rolled-back", "canary-failed", "network-stale", "temporary-complete":
+	case "resource-failed":
+		if !knownStandby {
+			return executionJournalError(errors.Join(errors.New("previous execution requires recovery"), ctx.Err()))
+		}
+	default:
+		return executionJournalError(errors.New("previous execution requires recovery"))
+	}
+	if err := validateExecutionResources(*latest, !knownStandby); err != nil {
+		return executionJournalError(err)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, latest.FinishedAt); err != nil {
+		return executionJournalError(errors.New("invalid execution finish time"))
+	}
+	for _, step := range latest.Steps {
+		if (step.State != "passed" && step.State != "failed") || step.FinishedAt == "" || (latest.State == "committed" && step.State != "passed") {
+			return executionJournalError(errors.New("unfinished execution step"))
+		}
+	}
+	var transaction *Execution
+	exists, err = readOptionalJournal(filepath.Join(m.StateRoot, "transactions", latest.PlanID, "execution.json"), &transaction)
+	if err != nil {
+		return executionJournalError(err)
+	}
+	if !exists || !reflect.DeepEqual(latest, transaction) {
+		return executionJournalError(errors.New("execution records disagree; recovery is required"))
+	}
+	if knownStandby {
+		return executionJournalError(m.checkKnownDomainStandbyRecord(ctx, *latest))
+	}
+	if err := m.checkRetainedNFQWSRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
+	if err := m.checkRetainedMihomoRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
+	if err := m.checkRetainedXrayRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
+	return nil
+}
+
+// settleCommittedPublication completes the one provable interruption of a
+// commit. finishCommit writes "committing" to both execution records, then
+// publishes the committed plan (latest and boot copies), then writes
+// "committed" to the transaction record and to the latest record. If power is
+// lost after the plan publication, every adapter step has passed and both plan
+// files name this execution's plan as committed: only the final records are
+// missing, so they are completed. Anything else (plan not published or only
+// partly, a failed or unfinished step, records of different executions) stays
+// fenced for review. It reports whether the records were completed.
+func (m *Manager) settleCommittedPublication() (bool, error) {
+	var latest, transaction *Execution
+	exists, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-execution.json"), &latest)
+	if err != nil || !exists || latest == nil || latest.State != "committing" || !validExecutionPlanID(latest.PlanID) {
+		return false, nil
+	}
+	exists, err = readOptionalJournal(filepath.Join(m.StateRoot, "transactions", latest.PlanID, "execution.json"), &transaction)
+	if err != nil || !exists || transaction == nil || transaction.PlanID != latest.PlanID || transaction.Digest != latest.Digest || transaction.StartedAt != latest.StartedAt || latest.Digest == "" {
+		return false, nil
+	}
+	if !reflect.DeepEqual(transaction.Steps, latest.Steps) || !reflect.DeepEqual(transaction.Resources, latest.Resources) || transaction.ResourcePlanID != latest.ResourcePlanID || len(latest.Steps) == 0 {
+		return false, nil
+	}
+	if validateExecutionResources(*latest, true) != nil || validateExecutionResources(*transaction, true) != nil {
+		return false, nil
+	}
+	// A documentary ACTIVE row cannot reconstruct the original live owner.
+	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil || m.checkRetainedMihomoRecord(*latest) != nil {
+		return false, nil
+	}
+	for _, step := range latest.Steps {
+		if step.State != "passed" || step.FinishedAt == "" {
+			return false, nil
+		}
+	}
+	settled := *latest
+	switch transaction.State {
+	case "committing":
+		settled.State, settled.FinishedAt = "committed", time.Now().UTC().Format(time.RFC3339Nano)
+	case "committed":
+		if _, err := time.Parse(time.RFC3339Nano, transaction.FinishedAt); err != nil {
+			return false, nil
+		}
+		settled = *transaction
+	default:
+		return false, nil
+	}
+	for _, name := range []string{"latest-plan.json", "latest-committed-plan.json"} {
+		plan, found, err := readPlanJournal(filepath.Join(m.StateRoot, name))
+		if err != nil || !found || plan.State != "committed" || plan.PlanID != latest.PlanID || plan.Digest != latest.Digest || validateDomainTransportForExecution(plan) != nil {
+			return false, nil
+		}
+	}
+	if err := m.writeExecution(filepath.Join(m.StateRoot, "transactions", latest.PlanID), settled); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func validExecutionPlanID(id string) bool {
+	return id != "" && filepath.IsLocal(id) && filepath.Base(id) == id && !strings.ContainsAny(id, "/\\:")
+}
+
+func (m *Manager) writeExecution(root string, execution Execution) error {
+	return m.writeExecutionOwned(root, execution, nil)
+}
+
+// scope is the actual original issuer passed by the serialized Manager
+// operation or scope.persist. A decoded resource never locates this receiver.
+func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
+	if execution.State == mihomoActiveCheckingState || execution.MihomoLiveHealthOperation != nil {
+		if scope == nil || scope.mihomoLive == nil || scope.mihomoLive.self != scope.mihomoLive || scope.mihomoLive.scope != scope || scope.execution == nil || execution.MihomoLiveHealthOperation == nil || scope.execution.MihomoLiveHealthOperation == nil || *execution.MihomoLiveHealthOperation != *scope.execution.MihomoLiveHealthOperation {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		r := scope.mihomoLive
+		c, a := r.healthCheck, r.transitHistory
+		checking := c != nil && c.self == c && c.owner == r && (c.open || c.stopping) && c.publishing
+		archiving := a != nil && a.self == a && a.owner == r && a.publishing
+		if !checking && !archiving {
+			return executionJournalError(ErrExecutionJournal)
+		}
+	}
+	// Reader8 documentary archives have an exclusive transaction-only writer.
+	// Neither generic writer may turn an archive into the current execution.
+	if execution.MihomoTransitHistoryArchive != nil {
+		return ErrExecutionJournal
+	}
+	// A documentary keeper does not allow an unrelated writer to hide the
+	// original baselines. Only the next actual successor may replace latest.
+	if execution.DomainDNSCoexistence == nil {
+		m.retainedXrayMu.Lock()
+		hasPool := m.domainPool != nil
+		m.retainedXrayMu.Unlock()
+		if hasPool {
+			return ErrDomainPolicyTCPCaptureRetirementPending
+		}
+	}
+	if execution.DomainDNSCoexistence != nil && (scope == nil || scope.domainSuccessor == nil || scope.domainSuccessor.scope != scope || scope.domainSuccessor.original() != nil) {
+		return ErrExecutionJournal
+	}
+	if scope != nil && (scope.manager != m || scope.root != root || scope.managerRoot != m.StateRoot || scope.execution == nil || scope.execution.PlanID != execution.PlanID || scope.execution.Digest != execution.Digest) {
+		return executionJournalError(ErrExecutionJournal)
+	}
+	terminal := execution.State == "committed" || execution.State == "committing" || execution.State == "rolled-back" || execution.State == "canary-failed" || execution.State == "network-stale" || execution.State == "temporary-complete"
+	if err := validateExecutionResources(execution, terminal); err != nil {
+		return executionJournalError(err)
+	}
+	// Typed network identities have a canonical compact wire form. Indenting
+	// their embedded object would produce a journal their decoder must refuse.
+	var data []byte
+	var err error
+	if executionHasNetworkIdentity(execution) {
+		data, err = json.Marshal(execution)
+	} else {
+		data, err = json.MarshalIndent(execution, "", "  ")
+	}
+	if err != nil {
+		return executionJournalError(err)
+	}
+	if scope != nil && scope.domainSuccessor != nil {
+		// Only the still-live finite producer uses generic scope.persist.
+		// Retained DNS detachment/retirement publish through their own SAME
+		// original holders with actual fresh cleanup contexts; cancellation
+		// here must not be converted into fresh forward admission.
+		return executionJournalError(scope.domainSuccessor.publish(scope.ctx, data))
+	}
+	m.retainedXrayMu.Lock()
+	pair := m.replacementXray
+	m.retainedXrayMu.Unlock()
+	if pair != nil && pair.self == pair && pair.prior != nil && !pair.closed.Load() && scope != nil && (scope == pair.scope || scope == pair.prior.scope) {
+		return executionJournalError(pair.publish(scope, data))
+	}
+	if scope != nil && len(scope.xraySelectedTCP)+len(scope.xrayDomainTCP) != 0 {
+		if len(scope.xraySelectedTCP)+len(scope.xrayDomainTCP) != 1 {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		for _, resource := range scope.xraySelectedTCP {
+			if resource == nil || resource.records == nil {
+				return executionJournalError(ErrExecutionJournal)
+			}
+			if err := resource.records.beforePublication(); err != nil {
+				return executionJournalError(err)
+			}
+		}
+		for _, resource := range scope.xrayDomainTCP {
+			if resource == nil || resource.records == nil {
+				return executionJournalError(ErrExecutionJournal)
+			}
+			if err := resource.records.beforePublication(); err != nil {
+				return executionJournalError(err)
+			}
+		}
+		publish := func(index int, path string) error {
+			for _, resource := range scope.xraySelectedTCP {
+				if err := resource.records.publicationFailure(); err != nil {
+					return err
+				}
+			}
+			for _, resource := range scope.xrayDomainTCP {
+				if err := resource.records.publicationFailure(); err != nil {
+					return err
+				}
+			}
+			file, err := writeDataplaneJournalRetained(path, data)
+			if err != nil {
+				return err
+			}
+			accepted := false
+			info, err := file.Stat()
+			if err == nil {
+				accepted, err = scope.captureOriginalXrayExecutionRecord(index, file, info, data)
+			}
+			if !accepted {
+				return errors.Join(err, file.Close())
+			}
+			return err // Original sink owns the new FD even when the old close failed.
+		}
+		transactionErr := publish(0, filepath.Join(root, "execution.json"))
+		latestErr := publish(1, filepath.Join(m.StateRoot, "latest-execution.json"))
+		return executionJournalError(errors.Join(transactionErr, latestErr))
+	}
+	if scope != nil && scope.wgOwner != nil {
+		if scope.wgRecords == nil || scope.wgRecords.scope != scope {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		if err := scope.wgRecords.beforePublication(); err != nil {
+			return executionJournalError(err)
+		}
+		return executionJournalError(errors.Join(scope.wgRecords.publishOriginal(0, data), scope.wgRecords.publishOriginal(1, data)))
+	}
+	// Attempt both records, including during cleanup. A successful UI record
+	// cannot compensate for a missing transaction record (or vice versa).
+	if scope != nil {
+		if scope.nfqQuarantine != nil {
+			return executionJournalError(scope.nfqQuarantine.publishExecution(data))
+		}
+		if scope.mihomoLive != nil {
+			return executionJournalError(scope.mihomoLive.publishRecords(data))
+		}
+		if scope.mihomo != nil {
+			return executionJournalError(scope.mihomo.publishRecords(data))
+		}
+		if probe, ok := scope.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.resource != nil && probe.resource.scope == scope && probe.records != nil {
+			return executionJournalError(probe.publishRecords(data))
+		}
+	}
+	transactionErr := writeDataplaneJournal(filepath.Join(root, "execution.json"), data)
+	latestErr := writeDataplaneJournal(filepath.Join(m.StateRoot, "latest-execution.json"), data)
+	return executionJournalError(errors.Join(transactionErr, latestErr))
+}
+
+func executionHasNetworkIdentity(execution Execution) bool {
+	if execution.DomainDNSCoexistence != nil {
+		return true
+	}
+	for _, resource := range execution.Resources {
+		if resource.SyntheticBaseline != nil || resource.MihomoLive != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
+			return true
+		}
+		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {
+			return true
+		}
+	}
+	return false
+}
+
+// preserveCommittedJournal keeps the previous boot recovery source before
+// latest-plan can be replaced. This also promotes the pre-v0.15 journal format.
+// The returned restoration is used only after an attempted commit publication;
+// writes may have reached rename before reporting an error.
+func (m *Manager) preserveCommittedJournal() (func() error, error) {
+	m.journalMu.Lock()
+	defer m.journalMu.Unlock()
+	path := filepath.Join(m.StateRoot, "latest-committed-plan.json")
+	data, err := os.ReadFile(path)
+	exists := err == nil
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, executionJournalError(err)
+	}
+	if exists {
+		if plan, _, err := readPlanJournal(path); err != nil || plan.State != "committed" {
+			return nil, executionJournalError(errors.Join(err, errors.New("invalid committed recovery source")))
+		}
+	} else {
+		plan, found, err := readPlanJournal(filepath.Join(m.StateRoot, "latest-plan.json"))
+		if err != nil {
+			return nil, executionJournalError(err)
+		}
+		if found && plan.State == "committed" {
+			data, err = json.MarshalIndent(plan, "", "  ")
+			if err == nil {
+				err = writeDataplaneJournal(path, data)
+			}
+			if err != nil {
+				return nil, executionJournalError(err)
+			}
+			exists = true
+		}
+	}
+	return func() error {
+		m.journalMu.Lock()
+		defer m.journalMu.Unlock()
+		if exists {
+			return executionJournalError(writeDataplaneJournal(path, data))
+		}
+		root, err := openJournalDirectory(filepath.Dir(path))
+		if err != nil {
+			return executionJournalError(err)
+		}
+		defer root.Close()
+		if err := root.Remove(filepath.Base(path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return executionJournalError(err)
+		}
+		return executionJournalError(syncDataplaneJournalDirectory(root))
+	}, nil
+}
+
+func openJournalDirectory(path string) (*ownedfs.Root, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	return ownedfs.Open(absolute)
+}
+
+func writeDataplaneJournal(path string, data []byte) error {
+	root, err := openJournalDirectory(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	if err := root.WriteAtomic(filepath.Base(path), data, 0o600); err != nil {
+		return err
+	}
+	// A renamed file without a synced directory is not a durable commit on
+	// the router. Failure here is uncertain publication and requires rollback.
+	return syncDataplaneJournalDirectory(root)
+}
+
+func writeDataplaneJournalRetained(path string, data []byte) (*os.File, error) {
+	root, err := openJournalDirectory(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	file, err := root.WriteAtomicRetained(filepath.Base(path), data, 0600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syncDataplaneJournalDirectory(root); err != nil {
+		return nil, errors.Join(err, file.Close())
+	}
+	return file, nil
+}
+
+func (m *Manager) prepareExecutionRoot(transactionRoot string) error {
+	if err := os.MkdirAll(transactionRoot, 0o700); err != nil {
+		return executionJournalError(err)
+	}
+	// Flush newly created transaction and state entries from child to parent
+	// before any adapter may mutate the network.
+	for _, path := range []string{transactionRoot, filepath.Dir(transactionRoot), m.StateRoot, filepath.Dir(m.StateRoot)} {
+		root, err := openJournalDirectory(path)
+		if err != nil {
+			return executionJournalError(err)
+		}
+		err = syncDataplaneJournalDirectory(root)
+		_ = root.Close()
+		if err != nil {
+			return executionJournalError(err)
+		}
+	}
+	return nil
+}
+
+// retireSettledAttempt moves out what a settled, failed earlier attempt of the
+// same plan left in its transaction root. Plan IDs follow the plan content, so
+// an identical retry (the autopilot's next round) reuses the root, and adapters
+// refuse to stage over the earlier attempt's receipts. Only attempts that ended
+// with every effect undone or never started are moved, to a sibling .retired
+// directory nothing reads; execution.json stays until the new attempt replaces
+// it, so the latest journal keeps a readable record.
+func (m *Manager) retireSettledAttempt(transactionRoot string) error {
+	id := filepath.Base(transactionRoot)
+	if !validExecutionPlanID(id) || filepath.Clean(transactionRoot) != filepath.Join(m.StateRoot, "transactions", id) {
+		return executionJournalError(errors.New("invalid retirement transaction root"))
+	}
+	// Hold the trusted state directory and each real child before reading a
+	// receipt or moving anything. Path-based renames used to follow symlinked
+	// transactions/.retired directories before the eventual sync rejected them.
+	stateInfo, err := os.Lstat(m.StateRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil // The first Apply creates its state tree after retirement.
+	}
+	if err != nil || !stateInfo.IsDir() || stateInfo.Mode()&os.ModeSymlink != 0 {
+		return executionJournalError(errors.Join(errors.New("invalid retirement state root"), err))
+	}
+	state, err := os.OpenRoot(m.StateRoot)
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer state.Close()
+	opened, err := state.Stat(".")
+	if err != nil || !os.SameFile(stateInfo, opened) {
+		return executionJournalError(errors.New("retirement state root changed"))
+	}
+	transactions, err := openRetirementChild(state, "transactions")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer transactions.Close()
+	source, err := openRetirementChild(transactions, id)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer source.Close()
+	info, err := source.Lstat("execution.json")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return executionJournalError(errors.New("invalid retirement execution record"))
+	}
+	data, err := source.ReadFile("execution.json")
+	var previous Execution
+	if err != nil || json.Unmarshal(data, &previous) != nil {
+		return nil // Unknown content stays for the adapters' own refusal.
+	}
+	switch previous.State {
+	case "rolled-back", "canary-failed", "network-stale", "rejected", "cancelled":
+	default:
+		return nil
+	}
+	directory, err := source.Open(".")
+	if err != nil {
+		return executionJournalError(err)
+	}
+	entries, err := directory.ReadDir(-1)
+	_ = directory.Close()
+	if err != nil {
+		return executionJournalError(err)
+	}
+	if err := transactions.Mkdir(".retired", 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return executionJournalError(err)
+	}
+	archive, err := openRetirementChild(transactions, ".retired")
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer archive.Close()
+	retired := fmt.Sprintf("%s-%d", id, time.Now().UnixNano())
+	var destination *os.Root
+	moved := false
+	for _, entry := range entries {
+		if entry.Name() == "execution.json" {
+			continue
+		}
+		if !moved {
+			if err := archive.Mkdir(retired, 0o700); err != nil {
+				return executionJournalError(err)
+			}
+			destination, err = openRetirementChild(archive, retired)
+			if err != nil {
+				return executionJournalError(err)
+			}
+			defer destination.Close()
+			moved = true
+		}
+		if err := errors.Join(checkRetirementChild(state, "transactions", transactions),
+			checkRetirementChild(transactions, id, source),
+			checkRetirementChild(transactions, ".retired", archive),
+			checkRetirementChild(archive, retired, destination)); err != nil {
+			return executionJournalError(err)
+		}
+		// os.Root also confines both sides if a path is replaced after checks.
+		if err := transactions.Rename(filepath.Join(id, entry.Name()), filepath.Join(".retired", retired, entry.Name())); err != nil {
+			return executionJournalError(err)
+		}
+	}
+	if !moved {
+		return nil
+	}
+	if runtime.GOOS != "windows" {
+		for _, root := range []*os.Root{source, destination, archive, transactions} {
+			directory, err := root.Open(".")
+			if err != nil {
+				return executionJournalError(err)
+			}
+			err = directory.Sync()
+			_ = directory.Close()
+			if err != nil {
+				return executionJournalError(err)
+			}
+		}
+	}
+	return nil
+}
+
+func openRetirementChild(parent *os.Root, name string) (*os.Root, error) {
+	info, err := parent.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("retirement directory is not a real directory")
+	}
+	child, err := parent.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := child.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		_ = child.Close()
+		return nil, errors.New("retirement directory changed while opening")
+	}
+	return child, nil
+}
+
+func checkRetirementChild(parent *os.Root, name string, held *os.Root) error {
+	current, err := parent.Lstat(name)
+	if err != nil {
+		return err
+	}
+	original, err := held.Stat(".")
+	if err != nil || !current.IsDir() || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(current, original) {
+		return errors.New("retirement directory ownership changed")
+	}
+	return nil
+}

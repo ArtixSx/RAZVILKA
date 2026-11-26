@@ -1,0 +1,283 @@
+package app
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
+)
+
+func TestFeedPruneFailureJournalTransitionsAndRecovery(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	if _, err := a.pruneExpiredFeedNodes(context.Background(), now); err != nil || output.Len() != 0 {
+		t.Fatalf("healthy no-op reported failure: %v %q", err, output.String())
+	}
+	if err := nodes.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.pruneExpiredFeedNodes(context.Background(), now.Add(feedPruneInterval)); err == nil {
+		t.Fatal("closed store did not refuse cleanup")
+	}
+	if strings.Count(output.String(), "code=FEED_PRUNE_FAILED") != 1 {
+		t.Fatal("missing failure transition", output.String())
+	}
+	// Both a rate-limited skip and a second real failure retain the warning,
+	// without claiming recovery or writing another copy of it.
+	_, _ = a.pruneExpiredFeedNodes(context.Background(), now.Add(feedPruneInterval+time.Second))
+	_, _ = a.pruneExpiredFeedNodes(context.Background(), now.Add(2*feedPruneInterval))
+	a.recordFeedPruneOutcome(errors.New("private-node-https://secret.invalid/?token=hidden"))
+	if strings.Count(output.String(), "code=FEED_PRUNE_FAILED") != 1 || strings.Contains(output.String(), "RECOVERED") || strings.Contains(output.String(), "secret.invalid") {
+		t.Fatal("repeated failure leaked or cleared warning", output.String())
+	}
+	// A healthy replacement store permits a real, empty cleanup attempt.
+	healthy, _, _ := nodeCapacityFixture(t)
+	a.Nodes = healthy.Nodes
+	if _, err := a.pruneExpiredFeedNodes(context.Background(), now.Add(3*feedPruneInterval)); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = a.pruneExpiredFeedNodes(context.Background(), now.Add(4*feedPruneInterval))
+	if strings.Count(output.String(), "code=FEED_PRUNE_RECOVERED") != 1 || a.autonomy.feedPruneFailed {
+		t.Fatal("successful cleanup did not settle warning once", output.String())
+	}
+}
+
+func feedURIs(host string, count int) string {
+	lines := make([]string, count)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("vless://123e4567-e89b-12d3-a456-%012d@%s-%d.example:443?security=tls", i, host, i)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// A profile carries at most 128 nodes; import larger catalogues in windows.
+func importFeedWindows(t *testing.T, nodes *nodestore.Store, source nodestore.Source, host string, count int, at time.Time) []string {
+	t.Helper()
+	ids := []string{}
+	for start := 0; start < count; start += 100 {
+		size := min(100, count-start)
+		snapshot, err := nodes.Import(context.Background(), source, feedURIs(fmt.Sprintf("%s%d", host, start), size), at, 24*time.Hour, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range snapshot.Nodes {
+			if !slices.Contains(ids, n.ID) && len(n.Origins) > 0 && n.Origins[len(n.Origins)-1].SourceID == source.ID && n.Origins[len(n.Origins)-1].ReceivedAt.Equal(at.UTC()) {
+				ids = append(ids, n.ID)
+			}
+		}
+	}
+	if len(ids) != count {
+		t.Fatalf("imported %d of %d", len(ids), count)
+	}
+	return ids
+}
+
+func nodeCapacityFixture(t *testing.T) (*App, *nodestore.Store, time.Time) {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "nodes"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := nodestore.Open(filepath.Join(root, "nodes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = nodes.Close() })
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &App{Nodes: nodes, Store: store}, nodes, time.Now().UTC()
+}
+
+func TestPruneExpiredFeedNodesFreesTheCatalogue(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	ctx := context.Background()
+	past := now.Add(-72 * time.Hour)
+	ids := importFeedWindows(t, nodes, nodestore.Source{ID: "feed-old", Kind: "community"}, "old", 400, past)
+	// The same server also imported by hand keeps the owner's origin.
+	if _, err := nodes.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, feedURIs("old0", 1), past, time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174999@own.example:443?security=tls", past, time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := nodes.Import(ctx, nodestore.Source{ID: "feed-new", Kind: "subscription"}, feedURIs("new", 2), now.Add(-time.Minute), 24*time.Hour, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = nodes.SetDisabled(ctx, ids[1], true, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = nodes.CreateGroup(ctx, "Reserve", "fallback", []string{ids[2]}, "", time.Minute, now); err != nil {
+		t.Fatal(err)
+	}
+	if err = a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "sing-box:" + ids[3]}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.SetAlias(ctx, ids[4], "My expired relay", now); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := a.pruneExpiredFeedNodes(ctx, now)
+	if err != nil || removed != 395 {
+		t.Fatalf("removed %d: %v", removed, err)
+	}
+	after, err := nodes.Snapshot(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := map[string]bool{}
+	for _, n := range after.Nodes {
+		kept[n.ID] = true
+	}
+	for i, why := range []string{"manual origin", "disabled", "group member", "selected route", "alias"} {
+		if !kept[ids[i]] {
+			t.Fatalf("%s node was removed", why)
+		}
+	}
+	for _, n := range fresh.Nodes {
+		if n.Origins[0].SourceID == "feed-new" && !kept[n.ID] {
+			t.Fatal("fresh feed node was removed")
+		}
+	}
+	// 5 protected old nodes, the owner's own node and 2 fresh ones.
+	if len(after.Nodes) != 8 {
+		t.Fatalf("kept %d nodes", len(after.Nodes))
+	}
+	// A feed can import a new window again.
+	if _, err = nodes.Import(ctx, nodestore.Source{ID: "feed-old", Kind: "community"}, feedURIs("next", 32), now, 24*time.Hour, false); err != nil {
+		t.Fatal("import after pruning:", err)
+	}
+}
+
+func TestPruneExpiredFeedNodesWaitsForPressureGraceAndInterval(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	ctx := context.Background()
+	importFeedWindows(t, nodes, nodestore.Source{ID: "feed-old", Kind: "community"}, "old", feedUncheckedBudget, now.Add(-72*time.Hour))
+	if removed, err := a.pruneExpiredFeedNodes(ctx, now); err != nil || removed != 0 {
+		t.Fatalf("pruned below pressure: %d %v", removed, err)
+	}
+	// Expired less than the grace period ago: a slow feed may still renew it.
+	importFeedWindows(t, nodes, nodestore.Source{ID: "feed-recent", Kind: "community"}, "recent", 300, now.Add(-24*time.Hour-time.Minute))
+	if removed, err := a.pruneExpiredFeedNodes(ctx, now); err != nil || removed != 0 {
+		t.Fatalf("interval not respected: %d %v", removed, err)
+	}
+	// The stale expired window goes; of the 300 recent never-checked
+	// candidates within grace, only the budget stays.
+	later := now.Add(feedPruneInterval)
+	removed, err := a.pruneExpiredFeedNodes(ctx, later)
+	if err != nil || removed != feedUncheckedBudget+300-feedUncheckedBudget {
+		t.Fatalf("grace not respected: %d %v", removed, err)
+	}
+	after, err := nodes.Snapshot(ctx, later)
+	if err != nil || len(after.Nodes) != feedUncheckedBudget {
+		t.Fatalf("kept %d: %v", len(after.Nodes), err)
+	}
+	for _, n := range after.Nodes {
+		if n.Origins[0].SourceID != "feed-recent" {
+			t.Fatal("a record expired beyond the grace period was kept")
+		}
+	}
+}
+
+func recordNodeCheck(t *testing.T, nodes *nodestore.Store, id, verdict, code string, at time.Time) {
+	t.Helper()
+	record := nodestore.CheckRecord{ProbeID: fmt.Sprintf("probe-%d", at.UnixNano()), ServiceID: "telegram", NetworkProfile: "wan-0123456789ab", RoutePathID: "sing-box:" + id,
+		TestLevel: "transport", Verdict: verdict, State: "unavailable", Stage: "transport", ErrorCode: code, CheckedAt: at, ExpiresAt: at.Add(time.Hour)}
+	if verdict == "PASS" {
+		record.TestLevel, record.State, record.Stage = "service", "available", "service"
+	}
+	if _, err := nodes.RecordCheck(context.Background(), id, record, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Pressure must not bypass the stronger failure and ownership gates.
+func TestPressureDoesNotDeleteSingleFailures(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	ctx := context.Background()
+	ids := importFeedWindows(t, nodes, nodestore.Source{ID: "feed-new", Kind: "community"}, "new", 400, now.Add(-time.Hour))
+	for i, id := range ids[:10] {
+		recordNodeCheck(t, nodes, id, "ERROR", []string{"node-transport-failed", "node-egress-failed"}[i%2], now.Add(-30*time.Minute))
+	}
+	recordNodeCheck(t, nodes, ids[10], "PASS", "", now.Add(-40*time.Minute))
+	recordNodeCheck(t, nodes, ids[10], "ERROR", "node-transport-failed", now.Add(-20*time.Minute))
+	recordNodeCheck(t, nodes, ids[11], "ERROR", "node-service-probe-failed", now.Add(-20*time.Minute))
+	removed, err := a.pruneExpiredFeedNodes(ctx, now)
+	// Keep the checked candidates. The unchecked budget still applies.
+	if err != nil || removed != 388-feedUncheckedBudget {
+		t.Fatalf("removed %d: %v", removed, err)
+	}
+	after, err := nodes.Snapshot(ctx, now)
+	if err != nil || len(after.Nodes) != 12+feedUncheckedBudget {
+		t.Fatalf("kept %d: %v", len(after.Nodes), err)
+	}
+	for _, id := range ids[:12] {
+		if !slices.ContainsFunc(after.Nodes, func(n nodestore.Node) bool { return n.ID == id }) {
+			t.Fatal("a checked candidate without a dead verdict was removed")
+		}
+	}
+}
+
+// Below pressure only the never-checked feed queue is bounded: the records a
+// feed sent longest ago go first; checked, manual, disabled and referenced
+// records stay.
+func TestPruneBoundsNeverCheckedFeedCandidates(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	ctx := context.Background()
+	old := importFeedWindows(t, nodes, nodestore.Source{ID: "feed-a", Kind: "community"}, "old", 60, now.Add(-5*time.Hour))
+	recent := importFeedWindows(t, nodes, nodestore.Source{ID: "feed-b", Kind: "subscription"}, "recent", 60, now.Add(-time.Hour))
+	recordNodeCheck(t, nodes, old[0], "ERROR", "node-service-probe-failed", now.Add(-2*time.Hour))
+	if _, err := nodes.SetAlias(ctx, old[4], "My named profile", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.SetDisabled(ctx, old[1], true, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "sing-box:" + old[2]}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, feedURIs("old0", 4), now, time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	a.nodeReadiness.entries = map[string]nodeReadinessEntry{old[5]: {Ready: true, PassAt: now}, old[6]: {}}
+	a.nodeReadiness.cursor = old[6]
+	_, cancel := context.WithCancel(ctx)
+	defer cancel()
+	a.nodeReadiness.cancel = cancel
+	// 120 records, 7 kept for their own reasons (checked, disabled, routed,
+	// manual origin, alias, warm reserve, active check), so 113 never-checked candidates compete for the budget.
+	removed, err := a.pruneExpiredFeedNodes(ctx, now)
+	if err != nil || removed != 113-feedUncheckedBudget {
+		t.Fatalf("removed %d: %v", removed, err)
+	}
+	after, err := nodes.Snapshot(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := map[string]bool{}
+	for _, n := range after.Nodes {
+		kept[n.ID] = true
+	}
+	for _, id := range append(slices.Clone(old[:7]), recent...) {
+		if !kept[id] {
+			t.Fatal("a protected or recently sent candidate was removed", id)
+		}
+	}
+	if removed, err = a.pruneExpiredFeedNodes(ctx, now.Add(feedPruneInterval)); err != nil || removed != 0 {
+		t.Fatal("the bounded queue shrank again", removed, err)
+	}
+}

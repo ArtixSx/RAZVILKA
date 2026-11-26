@@ -1,0 +1,231 @@
+//go:build linux
+
+package updatecheck
+
+import (
+	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/installpath"
+	"golang.org/x/sys/unix"
+)
+
+func checkRootOwnedPath(path string) error {
+	return checkOwnedAncestors(path, "/")
+}
+
+func checkOwnedAncestors(path, boundary string) error {
+	path, boundary = filepath.Clean(path), filepath.Clean(boundary)
+	rel, err := filepath.Rel(boundary, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+		return errors.New("unsafe-owner-or-path")
+	}
+	for current := path; ; current = filepath.Dir(current) {
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			if current == boundary {
+				return errors.New("unsafe-owner-or-path")
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != 0 || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0022 != 0 {
+			return errors.New("unsafe-owner-or-path")
+		}
+		if current == boundary {
+			return nil
+		}
+	}
+}
+
+func checkProductionPID(expected int, executable string) error {
+	data, err := os.ReadFile(installpath.Run + "/razvilka.pid")
+	if err != nil {
+		return errors.New("production-pid-unavailable")
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 1 || pid != expected {
+		return errors.New("production-process-mismatch")
+	}
+	actual, err := os.Readlink("/proc/" + strconv.Itoa(pid) + "/exe")
+	if err != nil || actual != executable {
+		return errors.New("production-process-mismatch")
+	}
+	return nil
+}
+
+func helperAlive(pid int) bool {
+	if pid <= 1 || syscall.Kill(pid, 0) != nil {
+		return false
+	}
+	// kill(0) also succeeds for zombies and an unrelated reused PID. Only the
+	// private helper command of our production executable owns this handoff.
+	data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
+	if err != nil || len(data) > 4096 {
+		return false
+	}
+	args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
+	if len(args) != 3 || args[0] != "/opt/bin/razvilka" || args[1] != "self-update-helper" || !jobIDPattern.MatchString(args[2]) {
+		return false
+	}
+	return true
+}
+
+func configureBoundedCommand(command *exec.Cmd) {
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.WaitDelay = 2 * time.Second
+	command.Cancel = func() error {
+		if command.Process == nil {
+			return os.ErrProcessDone
+		}
+		return syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+	}
+}
+
+func cleanupCommand(command *exec.Cmd) {
+	if command.Process != nil {
+		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+	}
+}
+
+func checkUpdateSpace(directory string, archiveBytes int64) error {
+	roots := []string{installpath.Config, installpath.State + "/dataplane", installpath.State + "/staging", installpath.State + "/dns"}
+	return checkUpdateSpaceScan(directory, archiveBytes, roots, func(path string) (uint64, int64, error) {
+		var stat unix.Statfs_t
+		err := unix.Statfs(path, &stat)
+		return uint64(stat.Bavail), int64(stat.Bsize), err
+	}, filepath.WalkDir)
+}
+
+// The production caller supplies only Statfs, WalkDir and the fixed backup
+// roots. Local parameters allow deterministic race tests without global hooks.
+func checkUpdateSpaceScan(directory string, archiveBytes int64, roots []string, statfs func(string) (uint64, int64, error), walk func(string, fs.WalkDirFunc) error) error {
+	if archiveBytes <= 0 || archiveBytes > MaximumArchiveBytes {
+		return errors.New("asset-size-or-digest-invalid")
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		availableBlocks, blockBytes, err := statfs(directory)
+		if err != nil || blockBytes <= 0 {
+			return errors.New("update-space-unavailable")
+		}
+		backupBytes := int64(0)
+		entries := 0
+		infoMissing := false
+		for _, root := range roots {
+			err := walk(root, func(path string, entry os.DirEntry, err error) error {
+				if errors.Is(err, os.ErrNotExist) {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				entries++
+				if entries > 20000 || entry.Type()&os.ModeSymlink != 0 {
+					return errors.New("backup-layout-refused")
+				}
+				if !entry.IsDir() {
+					info, err := entry.Info()
+					if err != nil {
+						infoMissing = errors.Is(err, os.ErrNotExist)
+						return err
+					}
+					size := info.Size()
+					if size < 0 || size > 2<<30-backupBytes {
+						return errors.New("backup-size-refused")
+					}
+					backupBytes += size
+				}
+				return nil
+			})
+			if err != nil {
+				if infoMissing {
+					break
+				}
+				return errors.New("update-backup-space-unavailable")
+			}
+		}
+		if infoMissing {
+			// An atomic writer can rename an enumerated temporary file before
+			// Info. Discard every partial total and allow one fresh full scan;
+			// never omit the unknown size or retry any other refusal.
+			continue
+		}
+		// Validated archive and backup bounds keep this sum below 5 GiB.
+		needed := uint64(archiveBytes + MaximumBinaryBytes*2 + backupBytes*2 + 32<<20)
+		blockSize := uint64(blockBytes)
+		neededBlocks := needed / blockSize
+		if needed%blockSize != 0 {
+			neededBlocks++
+		}
+		if availableBlocks < neededBlocks {
+			return errors.New("insufficient-update-space")
+		}
+		return nil
+	}
+	return errors.New("update-backup-entry-missing")
+}
+
+func launchInstallerHelper(ctx context.Context, id string, admission func(func() error) error) (int, error) {
+	if !jobIDPattern.MatchString(id) {
+		return 0, ErrReviewChanged
+	}
+	cmd := exec.Command("/opt/bin/razvilka", "self-update-helper", id)
+	cmd.Env = commandEnvironment()
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	closeNativeSource, bindErr := bindNativeModernInstaller(ctx, cmd, id)
+	if bindErr != nil {
+		return 0, bindErr
+	}
+	defer closeNativeSource()
+	// Reap preflight refusals while the original daemon remains alive. When
+	// the daemon exits during an actual install, init inherits the helper.
+	pid, _, err := startInstallerHelperCommand(ctx, cmd, admission)
+	return pid, err
+}
+
+func runTransactionalInstaller(command *exec.Cmd, timeout time.Duration) error {
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.WaitDelay = 2 * time.Second
+	if err := command.Start(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- command.Wait() }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			cleanupCommand(command)
+		}
+		return err
+	case <-timer.C:
+	}
+	// TERM the installer shell first: its trap owns transactional rollback.
+	_ = command.Process.Signal(syscall.SIGTERM)
+	grace := time.NewTimer(150 * time.Second)
+	defer grace.Stop()
+	select {
+	case <-done:
+	case <-grace.C:
+		// A stuck rollback cannot hold the application indefinitely. Never
+		// claim it restored the old version after this bounded cleanup.
+		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		<-done
+	}
+	return errInstallerTimeout
+}

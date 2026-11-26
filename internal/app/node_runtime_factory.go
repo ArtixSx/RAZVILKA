@@ -1,0 +1,65 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
+)
+
+// NodeRuntimeFactoryOptions contains trusted local owners. It is never decoded
+// from a panel request. The Manager supplies transient receipt registration to
+// each guarded health operation after this runtime is registered.
+type NodeRuntimeFactoryOptions struct {
+	ProxySidecar  string
+	HEVComponents *components.Manager
+	Configs       *engineconfig.Manager
+	Nodes         *nodestore.Store
+	StateRoot     string
+	FreshProfile  func(context.Context) (string, error)
+}
+
+// NewXrayNodeRuntime constructs one Xray owner for generic and exact-node plans
+// and its concrete router TUN HTTPS verifier. The sealed plan selects the mode
+// before effects; actual LAN witnesses retain their separate evidence path.
+func NewXrayNodeRuntime(options NodeRuntimeFactoryOptions) (*dataplane.ProxyTunnelAdapter, error) {
+	if options.Configs == nil || options.Nodes == nil || options.FreshProfile == nil ||
+		!filepath.IsAbs(options.StateRoot) || filepath.Clean(options.StateRoot) != options.StateRoot {
+		return nil, errors.New("Xray node runtime requires its private store, configs, absolute state root and fresh network owner")
+	}
+	materialize := func(ctx context.Context, requests []dataplane.NodeRouteRequest, profile string, now time.Time) (dataplane.NodeRouteMaterial, error) {
+		if ctx == nil || ctx.Err() != nil || len(requests) == 0 || len(requests) > 64 || profile == "" || now.IsZero() {
+			return dataplane.NodeRouteMaterial{}, errors.New("exact current Xray node materialization is required")
+		}
+		bindings := make([]nodestore.RouteBinding, len(requests))
+		for i, request := range requests {
+			bindings[i] = nodestore.RouteBinding{ServiceID: request.ServiceID, NodeID: request.NodeID, NetworkProfile: profile,
+				Domains: append([]string(nil), request.Domains...), Destinations: append([]string(nil), request.Destinations...)}
+		}
+		material, err := options.Nodes.MaterializeXray(ctx, bindings, now)
+		if err != nil {
+			return dataplane.NodeRouteMaterial{}, err
+		}
+		return dataplane.NodeRouteMaterial{EngineID: "xray", Config: material.Config, EndpointHosts: append([]string(nil), material.EndpointHosts...)}, nil
+	}
+	adapter, err := dataplane.NewXrayRuntimeAdapter(options.Configs, options.StateRoot, materialize)
+	if err != nil {
+		return nil, err
+	}
+	adapter.FreshProfile = options.FreshProfile
+	if err := config.ValidateProxySidecar(options.ProxySidecar); err != nil {
+		return nil, err
+	}
+	if config.EffectiveProxySidecar(options.ProxySidecar) == "hev" {
+		if err := dataplane.BindManagedHEVSidecar(context.Background(), adapter, options.HEVComponents); err != nil {
+			return nil, err
+		}
+	}
+	return adapter, nil
+}

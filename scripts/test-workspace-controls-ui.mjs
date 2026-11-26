@@ -1,0 +1,343 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
+
+const elements = new Map(), events = new Map();
+const $ = id => { if (!elements.has(id)) elements.set(id, { hidden: false, disabled: false, textContent: '', attributes: {}, handlers: {}, classList: { toggle() {} }, setAttribute(key, value) { this.attributes[key] = value; }, addEventListener(key, fn) { this.handlers[key] = fn; } }); return elements.get(id); };
+const state = { serviceControl: null, components: [] }, calls = [], notices = [], views = [], details = [];
+let request = async () => ({}), refreshes = 0;
+const storage = new Map();
+let confirmation=async()=>true;
+const context = vm.createContext({ state, $, Number, document: { hidden: false, addEventListener: (name, fn) => events.set(name, fn) },
+  crypto: webcrypto, Uint8Array, Date, sessionStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+  confirm:()=>{throw Error('native confirm must not run');},askConfirmation:(...args)=>confirmation(...args),
+  api: async (path, options) => { calls.push({ path, options }); return request(path, options); },
+  setTimeout: () => 1, clearTimeout() {}, esc: value => String(value ?? '').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
+  setView: name => views.push(name), showNotice: (...args) => notices.push(args), showDetails: (...args) => details.push(args), renderAudit() {}, refreshAfterMutation: async () => { refreshes++; }, renderOverviewQuickServices() {}, refreshComponents() {}, manageComponent() {} });
+vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/workspace-controls.js', import.meta.url), 'utf8') + '\nthis.control = workspaceControl;', context);
+context.bindWorkspaceControls();
+$('#authScreen').hidden = true;
+events.get('razvilka:auth-restored')();
+const snapshot = { config_revision: 10, mode: 'manual', runtime_state: 'unconfigured', running: false, resume_available: false };
+context.acceptWorkspaceControl(snapshot);
+await context.toggleWorkspaceRuntime();
+assert.deepEqual(views, ['services']); assert.equal(calls.length, 0, 'unconfigured power silently applied pending routes');
+assert.equal(context.acceptWorkspaceControl({ ...snapshot, config_revision: 9, mode: 'auto' }), false);
+assert.equal(state.serviceControl.mode, 'manual', 'old snapshot overrode newer mode');
+
+let release;
+request = () => new Promise(resolve => { release = resolve; });
+const first = context.changeWorkspaceMode('auto');
+await context.changeWorkspaceMode('auto');
+assert.equal(calls.length, 1, 'double click duplicated mode mutation');
+assert.deepEqual(JSON.parse(calls[0].options.body), { expected_revision: 10, mode: 'auto', confirm: 'SAVE_SERVICE_CONTROL' });
+release({ ...snapshot, config_revision: 11, mode: 'auto' }); await first;
+assert.equal(state.serviceControl.mode, 'auto'); assert.equal(refreshes, 1);
+
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 12, running: true, runtime_state: 'running' });
+request = async path => { if (path.endsWith('/runtime')) throw new Error('busy'); return state.serviceControl; };
+await context.toggleWorkspaceRuntime();
+assert.equal(state.serviceControl.running, true, 'refused stop displayed stopped');
+const stop = calls.find(call => call.path.endsWith('/runtime'));
+const stopBody = JSON.parse(stop.options.body);
+assert.match(stopBody.idempotency_key, /^[a-f0-9]{32}$/);
+assert.deepEqual({ ...stopBody, idempotency_key: undefined }, { expected_revision: 12, action: 'stop', confirm: 'STOP_OWNED_ROUTES', idempotency_key: undefined });
+context.control.runtimeRequest = null; // Lost response and reloaded script retains the same token.
+await context.toggleWorkspaceRuntime();
+assert.equal(JSON.parse(calls.filter(call => call.path.endsWith('/runtime')).at(-1).options.body).idempotency_key, stopBody.idempotency_key);
+
+const beforeBusy = state.serviceControl;
+request = async () => { throw Object.assign(new Error('checking'), { status: 409 }); };
+await context.refreshWorkspaceControl();
+assert.equal(state.serviceControl, beforeBusy, 'normal busy gate erased known runtime state');
+const countBeforeBusyMode = calls.length;
+await context.changeWorkspaceMode('auto');
+assert.equal(calls.length, countBeforeBusyMode, 'mode edit ignored active operation gate');
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 12, runtime_state: 'unknown', running: false, can_stop: true });
+assert.equal($('#projectPower').disabled, false, 'unknown runtime could not be stopped');
+assert.equal($('#projectPower').attributes['aria-label'], 'Остановить маршруты RAZVILKA');
+
+request = () => new Promise(resolve => { release = resolve; });
+const late = context.changeWorkspaceMode('auto');
+const noticesBefore = notices.length;
+events.get('razvilka:auth-required')();
+release({ ...snapshot, config_revision: 13, mode: 'auto' }); await late;
+assert.equal(state.serviceControl, null, 'late completion revived admin state');
+assert.equal(notices.length, noticesBefore, 'late completion displayed success after logout');
+assert.equal($('#projectPower').disabled, true);
+
+events.get('razvilka:auth-restored')();
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 14, runtime_state: 'stopped', safe_mode: true, resume_available: true });
+const countBeforeSafe = calls.length;
+await context.toggleWorkspaceRuntime();
+assert.equal(views.at(-1), 'settings');
+assert.equal(calls.length, countBeforeSafe, 'power silently bypassed safe mode');
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 15, runtime_state: 'running', running: true, safe_mode: true });
+request = async () => ({ ok: true, control: { ...snapshot, config_revision: 16, runtime_state: 'stopped' } });
+await context.toggleWorkspaceRuntime();
+assert.equal(calls.at(-1).path, '/api/v1/service-control/runtime', 'safe mode prevented stopping active routes');
+assert.equal(JSON.parse(calls.at(-1).options.body).action, 'stop');
+
+state.loadIssues = [{ section: 'sources', message: 'Источник недоступен' }];
+request = async () => ({ events: [{ outcome: 'failed', path: '/api/v1/test', status: 502 }] });
+const viewsBeforeLog = [...views], drawersBeforeLog = details.length;
+await $('#projectLog').handlers.click();
+assert.deepEqual(views, viewsBeforeLog, 'log button switched the current page in addition to opening a drawer');
+assert.equal(details.length, drawersBeforeLog + 1, 'log button did not open exactly one drawer');
+assert(calls.some(call => call.path === '/api/v1/audit/current?limit=40'), 'log waited for admission to read disk history');
+assert.equal(details.at(-1)[0].detail_kind, 'project-log');
+assert.equal(details.at(-1)[0].load_issues[0].section, 'sources');
+assert.equal(details.at(-1)[0].audit.events[0].outcome, 'failed');
+const latestNodeJob = { id: 809, mode: 'service', state: 'completed', completed: 32, total: 32, passed: 0 };
+const actualAutonomy = { schema: 1, state: 'retained', data: { runtime: { example: { state: 'searching', message: 'Подбор' } } } };
+request = async path => path === '/api/v1/panel/autonomy' ? actualAutonomy : path.includes('/node-checks/') ? { job: latestNodeJob } : path.includes('/audit') ? { available: true, events: [] } : { durable_jobs: [] };
+await context.openWorkspaceLog();
+assert.equal(details.at(-1)[0].node_job, latestNodeJob, 'latest legacy check was not read');
+assert.equal(details.at(-1)[0].autonomy, actualAutonomy, 'log omitted the actual read-only autonomy DTO');
+assert.equal(calls.at(-1).path, '/api/v1/panel/autonomy');
+assert.equal(calls.at(-1).options, undefined, 'project log mutated node checks');
+request = async path => { if (path.includes('/node-checks/')) throw new Error('private transport detail'); return path.includes('/audit') ? { available: true, events: [] } : { durable_jobs: [] }; };
+await context.openWorkspaceLog();
+assert.match(details.at(-1)[0].node_job_error, /Не удалось прочитать/);
+assert.equal(details.at(-1)[0].node_job, null, 'failed read replayed old job as fresh');
+assert.doesNotMatch(details.at(-1)[0].node_job_error, /private transport detail/);
+request = async path => { if (path === '/api/v1/panel/autonomy') throw new Error('private autonomy transport'); return path.includes('/audit') ? { available: true, events: [] } : { job: null, durable_jobs: [] }; };
+await context.openWorkspaceLog();
+assert.equal(details.at(-1)[0].autonomy, null, 'failed read replayed old autopilot state');
+assert.match(details.at(-1)[0].autonomy_error, /Не удалось получить состояние Автопилота/);
+assert.doesNotMatch(details.at(-1)[0].autonomy_error, /private autonomy transport/);
+request = path => path.includes('/audit') ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ durable_jobs: [] });
+const lateLog = context.openWorkspaceLog();
+const detailCount = details.length;
+events.get('razvilka:auth-required')();
+release({ events: [{ path: '/private' }] }); await lateLog;
+assert.equal(details.length, detailCount, 'late log opened after logout');
+
+events.get('razvilka:auth-restored')();
+request = path => path.includes('/node-checks/') ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ available: true, events: [], durable_jobs: [] });
+const lateChecksLog = context.openWorkspaceLog();
+const beforeLateChecks = details.length;
+events.get('razvilka:auth-required')();
+release({ job: latestNodeJob }); await lateChecksLog;
+assert.equal(details.length, beforeLateChecks, 'late node-check read reopened private log after logout');
+
+events.get('razvilka:auth-restored')();
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 20, running: true, runtime_state: 'running', can_stop: true });
+context.control.readBusy = true;
+context.renderWorkspaceControls();
+assert.equal($('#projectPower').disabled, false, 'busy check blocked queuing Stop');
+const queued = { id: 321, mode: 'service-stop', state: 'queued', message: 'saved' };
+request = async path => path.endsWith('/runtime') ? { persistent: true, job: queued } : { durable_jobs: [queued] };
+await context.toggleWorkspaceRuntime();
+assert.equal(context.control.runtimeJob.id, 321);
+assert.equal(state.serviceControl.running, true, '202 falsely proved Stop committed');
+assert.equal($('#projectPowerLabel').textContent, 'Останавливаем…');
+assert.equal($('#projectPower').disabled, true);
+assert.equal(storage.has('razvilka.runtime-request'), false, 'acknowledged token retained');
+const queuedCalls = calls.length;
+await context.toggleWorkspaceRuntime();
+assert.equal(calls.length, queuedCalls, 'accepted Stop duplicated');
+await context.refreshWorkspaceControl();
+assert.equal(calls.at(-1).path, '/api/v1/service-control/current', 'queued job polled a blocked Store');
+request = async path => path.endsWith('/current') ? { durable_jobs: [{ ...queued, state: 'completed', message: 'stopped' }] } : { ...snapshot, config_revision: 21, running: false, runtime_state: 'stopped', durable_jobs: [] };
+await context.refreshWorkspaceControl();
+assert.equal(state.serviceControl.runtime_state, 'stopped');
+assert.equal(context.control.runtimeJob, null);
+assert.equal(notices.at(-1)[0], 'success');
+// Reload discovers an accepted server job without a browser-local ACK.
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 21, durable_jobs: [{ ...queued, id: 322, mode: 'service-resume' }] });
+assert.equal($('#projectPowerLabel').textContent, 'Включаем…');
+request = () => new Promise(resolve => { release = resolve; });
+const lateJob = context.refreshWorkspaceControl();
+events.get('razvilka:auth-required')();
+const beforeLateJob = notices.length;
+release({ durable_jobs: [{ ...queued, id: 322, state: 'completed' }] }); await lateJob;
+assert.equal(context.control.runtimeJob, null);
+assert.equal(notices.length, beforeLateJob, 'private job appeared after logout');
+
+// A first login during recovery has no previous full /service-control read.
+// A protected retained snapshot may supply only a revision-fenced Stop intent.
+events.get('razvilka:auth-restored')();
+context.control.readBusy = true;
+state.savedPanel = { receivedAt: Date.now(), value: { schema: 1, state: 'retained', dataplane: 'not-checked',
+  data_age_ms: 30000, max_age_seconds: 900,
+  data: { config: { revision: 25, stopped: false, safe_mode: false, mode: 'auto' }, services: [{ applied: { enabled: true } }] } } };
+context.renderWorkspaceControls();
+assert.equal($('#projectPower').disabled, false, 'first busy login could not queue Stop');
+assert.equal($('#projectPowerLabel').textContent, 'Состояние обновляется', 'retained data claimed a working route');
+assert.equal($('#projectPower').attributes['aria-label'], 'Остановить маршруты RAZVILKA');
+assert.equal($('#projectModeManual').disabled, true, 'retained data authorized a mode change');
+const beforeSavedMode = calls.length;
+await context.changeWorkspaceMode('manual');
+assert.equal(calls.length, beforeSavedMode);
+request = async path => path.endsWith('/runtime') ? { persistent: true, job: { ...queued, id: 323 } } : { durable_jobs: [] };
+await context.toggleWorkspaceRuntime();
+const firstLoginStop = JSON.parse(calls.at(-1).options.body);
+assert.equal(firstLoginStop.action, 'stop');
+assert.equal(firstLoginStop.expected_revision, 25);
+assert.equal(state.serviceControl, null, 'retained presentation was promoted to live control');
+assert.equal(context.control.runtimeJob.id, 323);
+context.control.runtimeJob = null;
+for (const invalid of ['expired', 'stopped', 'empty-services', 'old-age']) {
+  const saved = state.savedPanel;
+  state.savedPanel = JSON.parse(JSON.stringify(saved));
+  if (invalid === 'expired') state.savedPanel.value.state = 'expired';
+  if (invalid === 'stopped') state.savedPanel.value.data.config.stopped = true;
+  if (invalid === 'empty-services') state.savedPanel.value.data.services = [];
+  if (invalid === 'old-age') state.savedPanel.value.data_age_ms = 900000;
+  context.renderWorkspaceControls();
+  assert.equal($('#projectPower').disabled, true, `${invalid} supplied routing authority`);
+  const before = calls.length; await context.toggleWorkspaceRuntime(); assert.equal(calls.length, before);
+  state.savedPanel = saved;
+}
+events.get('razvilka:auth-required')();
+assert.equal(state.savedPanel, null, 'logout retained Stop revision');
+assert.equal($('#projectPower').disabled, true);
+
+// Self-update Stop 202 revokes authority, but proves neither cleanup nor a
+// stopped runtime. Old running observations must not erase this receipt.
+events.get('razvilka:auth-restored')();
+const liveBeforeStop = { ...snapshot, config_revision: 30, running: true, runtime_state: 'running', can_stop: true };
+context.acceptWorkspaceControl(liveBeforeStop);
+const receipt = { stop_requested: true, authority_revoked: true, stopped_confirmed: false, cleanup_pending: true };
+request = async path => path.endsWith('/runtime') ? receipt : liveBeforeStop;
+const beforeReceipt = notices.length, beforeReceiptRefresh = refreshes;
+await context.toggleWorkspaceRuntime();
+assert.equal(notices.at(-1)[0], 'review', 'revocation 202 was presented as a failure or completed cleanup');
+assert.equal(notices.at(-1)[1], 'Остановка запрошена');
+assert.equal(notices.slice(beforeReceipt).some(item => item[0] === 'success' || item[0] === 'error'), false);
+assert.equal(refreshes, beforeReceiptRefresh, 'accepted receipt ran completion refresh');
+assert.equal(state.serviceControl.running, true, 'receipt invented stopped runtime');
+assert.equal($('#projectPowerLabel').textContent, 'Остановка запрошена');
+assert.match($('#projectPowerHint').textContent, /Очистка маршрутов ещё не подтверждена/);
+assert.equal($('#projectPower').disabled, true);
+assert.equal($('#projectModeAuto').disabled, true);
+const receiptCalls = calls.length;
+await context.toggleWorkspaceRuntime(); await context.changeWorkspaceMode('auto');
+assert.equal(calls.length, receiptCalls, 'pending cleanup admitted another runtime or mode write');
+await context.refreshWorkspaceControl();
+assert.equal($('#projectPowerLabel').textContent, 'Остановка запрошена', 'old running control erased the receipt');
+request = async path => path.includes('/audit') ? { available: true, events: [] } : { durable_jobs: [] };
+await context.openWorkspaceLog();
+assert.deepEqual({ ...details.at(-1)[0].stop_receipt }, receipt);
+context.acceptWorkspaceControl({ ...snapshot, config_revision: 31, runtime_state: 'stopped', running: false });
+assert.equal(context.control.stopReceipt, null, 'confirmed stopped control did not settle the receipt');
+context.control.stopReceipt = receipt;
+events.get('razvilka:auth-required')();
+assert.equal(context.control.stopReceipt, null, 'logout retained a private Stop receipt');
+events.get('razvilka:auth-restored')();
+context.acceptWorkspaceControl({ ...liveBeforeStop, config_revision: 32 });
+request = () => new Promise(resolve => { release = resolve; });
+const lateReceipt = context.toggleWorkspaceRuntime(), beforeLateReceipt = notices.length;
+events.get('razvilka:auth-required')();
+release(receipt);await lateReceipt;
+assert.equal(context.control.stopReceipt, null, 'late 202 restored a private receipt after logout');
+assert.equal(notices.length, beforeLateReceipt, 'late 202 displayed an acknowledgement after logout');
+
+state.components = [{ id: 'sing-box', installed: true, installed_version: '1.10', available_version: '1.11', update_available: true, can_update: true }];
+assert.match(context.engineVersionHTML({ id: 'sing-box', installed: true }), /1\.10[^]*→ 1\.11/);
+state.components[0].update_available = false;
+assert.doesNotMatch(context.engineVersionHTML({ id: 'sing-box', installed: true }), /→/);
+assert.match(context.engineVersionHTML({ id: 'unknown', installed: true }), /Версия не определена/);
+// Concurrent pollers share one service-control read; a finished read is not reused.
+{
+  let finishRead;
+  const before = calls.length;
+  request = () => new Promise(resolve => { finishRead = resolve; });
+  const first = context.readServiceControl(), second = context.readServiceControl();
+  assert.equal(calls.length, before + 1, 'concurrent service-control reads were not shared');
+  finishRead({ ...snapshot, config_revision: 20 });
+  assert.deepEqual(await first, await second);
+  request = async () => ({ ...snapshot, config_revision: 21 });
+  assert.equal((await context.readServiceControl()).config_revision, 21, 'finished read was reused');
+  assert.equal(calls.length, before + 2);
+}
+// Stop remains actionable for an unconfirmed runtime in simple mode, without
+// presenting that cleanup authority as successful bypass operation.
+context.document.body = { classList: { contains: name => name === 'rz-simple' } };
+Object.assign(context.control, { authenticated: true, busy: false, readBusy: false, runtimeJob: null, stopReceipt: null });
+state.serviceControl = { ...snapshot, config_revision: 30, runtime_state: 'unknown', running: false, can_stop: true };
+context.renderWorkspaceControls();
+assert.match($('#projectPowerLabel').textContent, /не подтверждена/);
+assert.equal($('#projectPower').disabled, false);
+assert.match($('#projectPower').attributes['aria-label'], /Остановить/);
+assert.equal($('#projectPower').attributes['aria-checked'], 'true');
+state.serviceControl = { ...state.serviceControl, runtime_state: 'running', running: true };
+context.renderWorkspaceControls();
+assert.equal($('#projectPowerLabel').textContent, 'Обход включён');
+state.serviceControl = { ...state.serviceControl, runtime_state: 'stopped', running: false, can_stop: false, resume_available: true };
+context.renderWorkspaceControls();
+assert.equal($('#projectPowerLabel').textContent, 'Обход выключен');
+console.log('Workspace controls: exact revision, no implicit routes, double-click/refusal/logout guards, shared reads and factual versions passed');
+
+// Async Stop confirmation owns one operation and cannot authorize a later session.
+for(const outcome of ['cancel','changed','logout','accept']){
+ events.get('razvilka:auth-required')();events.get('razvilka:auth-restored')();
+ const running={config_revision:100,mode:'auto',runtime_state:'running',running:true,resume_available:true};context.acceptWorkspaceControl(running);
+ let answer;confirmation=()=>new Promise(resolve=>answer=resolve);const before=calls.length;
+ request=async()=>({ok:true,control:{...running,config_revision:101,runtime_state:'stopped',running:false}});
+ const pending=context.toggleWorkspaceRuntime();await context.toggleWorkspaceRuntime();assert.equal(calls.length,before);assert.equal($('#projectPower').disabled,true);
+ if(outcome==='changed')context.acceptWorkspaceControl({...running,config_revision:101});
+ if(outcome==='logout'){events.get('razvilka:auth-required')();events.get('razvilka:auth-restored')();context.acceptWorkspaceControl({...running,config_revision:102});context.control.busy=true;}
+ answer(outcome!=='cancel');await pending;assert.equal(calls.length,before+(outcome==='accept'?1:0),'confirmation outcome '+outcome+' gained incorrect POST authority');
+ if(outcome==='logout')assert.equal(context.control.busy,true,'old confirmation unlocked a new session operation');else assert.equal(context.control.busy,false);
+}
+console.log('PASS Stop uses async confirmation with cancellation, single flight, revision and auth fences');
+// Busy polling must not present an earlier initial snapshot as missing setup.
+// Both modes recover their ordinary power label on the next accepted full read.
+for (const simple of [false, true]) {
+  context.document.body = { classList: { contains: name => simple && name === 'rz-simple' } };
+  for (const prior of ['unconfigured', 'running', 'unknown', 'stopped', 'missing']) {
+    events.get('razvilka:auth-required')(); events.get('razvilka:auth-restored')();
+    const old = prior === 'missing' ? null : { config_revision: 500, mode: 'auto', runtime_state: prior, running: prior === 'running', can_stop: prior === 'running' || prior === 'unknown', resume_available: prior === 'stopped' };
+    if (old) context.acceptWorkspaceControl(old);
+    request = async () => { throw Object.assign(new Error('operation busy'), { status: 409 }); };
+    const before = calls.length;
+    await context.refreshWorkspaceControl();
+    assert.equal(state.serviceControl, old, 'busy read replaced known snapshot');
+    assert.equal($('#projectPowerLabel').textContent, 'Состояние обновляется');
+    assert.doesNotMatch($('#projectPowerLabel').textContent, /Нужна настройка|включён|выключен/i);
+    assert.equal($('#projectPower').disabled, !old || !old.can_stop, 'busy presentation changed Stop availability');
+    assert.equal(calls.slice(before).every(call => !call.options?.method || call.options.method === 'GET'), true, 'busy presentation sent mutation');
+    if (old?.can_stop) assert.match($('#projectPowerHint').textContent, /остановку в очередь/);
+    context.acceptWorkspaceControl({ config_revision: 501, mode: 'auto', runtime_state: 'running', running: true, can_stop: true });
+    assert.equal(context.control.readBusy, false);
+    assert.equal($('#projectPowerLabel').textContent, simple ? 'Обход включён' : 'Проект включён');
+  }
+}
+// Project log must explicitly receive the freshness state of its control image.
+context.control.readBusy = true;
+request = async path => path.includes('/audit') ? { available: true, events: [] } : path === '/api/v1/panel/autonomy' ? {schema:1,state:'retained',data:{}} : {durable_jobs:[]};
+await context.openWorkspaceLog();
+assert.equal(details.at(-1)[0].control_read_busy, true);
+context.acceptWorkspaceControl({config_revision:502,mode:'auto',runtime_state:'stopped',running:false});
+await context.openWorkspaceLog();
+assert.equal(details.at(-1)[0].control_read_busy, false);
+console.log('PASS busy control read keeps prior snapshot and Stop authority without setup/running claims; fresh read restores both UI modes');
+
+for (const simple of [false, true]) {
+  events.get('razvilka:auth-required')(); events.get('razvilka:auth-restored')();
+  context.document.body = { classList: { contains: name => simple && name === 'rz-simple' } };
+  const preparing = { config_revision: 600, mode: 'auto', runtime_state: 'preparing', running: false, can_stop: true, resume_available: false };
+  const stopped = { ...preparing, config_revision: 601, runtime_state: 'stopped', can_stop: false, resume_available: true };
+  context.acceptWorkspaceControl(preparing);
+  assert.equal($('#projectPower').disabled, false);
+  assert.equal($('#projectPowerLabel').textContent, 'Авто подбирает подключение');
+  assert.match($('#projectPower').attributes['aria-label'], /Остановить автоподбор/);
+  confirmation = async title => { assert.match(title, /Остановить автоподбор/); return true; };
+  request = async () => ({ ok: true, live_applied: false, control: stopped });
+  await context.toggleWorkspaceRuntime();
+  assert.equal(JSON.parse(calls.at(-1).options.body).action, 'stop');
+  assert.equal(notices.at(-1)[1], 'Автоподбор остановлен');
+  request = async () => ({ ok: true, live_applied: false, control: { ...preparing, config_revision: 602 } });
+  await context.toggleWorkspaceRuntime();
+  assert.equal(JSON.parse(calls.at(-1).options.body).action, 'resume');
+  assert.equal(notices.at(-1)[1], 'Автоподбор возобновлён');
+  assert.equal($('#projectPowerLabel').textContent, 'Авто подбирает подключение');
+}
+context.acceptWorkspaceControl({config_revision:603,mode:'manual',runtime_state:'stopped',running:false,can_stop:false,resume_available:true});
+request = async () => ({ok:true,live_applied:false,control:{config_revision:604,mode:'manual',runtime_state:'unconfigured',running:false,can_stop:false,resume_available:false}});
+await context.toggleWorkspaceRuntime();
+assert.equal(notices.at(-1)[1],'Проект включён');
+console.log('PASS Stop/Resume before first Apply reports search control without claiming a live route');

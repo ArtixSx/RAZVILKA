@@ -1,0 +1,336 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
+)
+
+type ProcessSpec struct {
+	ID         string
+	Binary     string
+	Args       []string
+	Dir        string
+	PIDPath    string
+	LogPath    string
+	MatchArg   string
+	RouteProof bool
+}
+
+type ProcessController interface {
+	Start(context.Context, ProcessSpec) error
+	Stop(context.Context, ProcessSpec) error
+	Running(ProcessSpec) bool
+}
+
+type OSProcessController struct{}
+
+func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
+	return startManagedProcess(ctx, spec, nil)
+}
+
+// A retained starter transfers this exact Cmd's sole Wait before returning.
+// Ordinary Start keeps its original detached waiter and Stop semantics.
+func startManagedProcess(ctx context.Context, spec ProcessSpec, retain func(*exec.Cmd, []byte) error) error {
+	return startManagedProcessUnderControl(ctx, spec, retain, nil)
+}
+
+func startManagedProcessUnderControl(ctx context.Context, spec ProcessSpec, retain func(*exec.Cmd, []byte) error, control *operationgate.ControlEpochReview) (resultErr error) {
+	if err := validateProcessSpec(spec); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	controller := OSProcessController{}
+	if controller.Running(spec) {
+		return fmt.Errorf("managed process %s is already running", spec.ID)
+	}
+	if err := os.MkdirAll(spec.Dir, 0o700); err != nil {
+		return err
+	}
+	owned, err := ownedfs.Open(spec.Dir)
+	if err != nil {
+		return err
+	}
+	defer owned.Close()
+	pidName, _ := filepath.Rel(spec.Dir, spec.PIDPath)
+	logName, _ := filepath.Rel(spec.Dir, spec.LogPath)
+	configName, _ := filepath.Rel(spec.Dir, spec.MatchArg)
+	receiptName := pidName + routeidentity.ReceiptSuffix
+	configHash := ""
+	var receipt []byte
+	if spec.RouteProof {
+		data, err := owned.ReadLimited(configName, 8<<20)
+		if err != nil {
+			return fmt.Errorf("read managed route config: %w", err)
+		}
+		configHash = routeidentity.Hash(data)
+		if control == nil {
+			_ = owned.Remove(receiptName)
+		}
+	}
+	if control == nil {
+		_ = owned.Remove(pidName)
+	}
+	for _, name := range []string{pidName, logName} {
+		if parent := filepath.Dir(name); parent != "." {
+			if err := owned.MkdirAll(parent, 0o700); err != nil {
+				return err
+			}
+		}
+	}
+	logFile, err := owned.OpenFile(logName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	command := exec.Command(spec.Binary, spec.Args...)
+	command.Dir = spec.Dir
+	command.Stdout = logFile
+	command.Stderr = logFile
+	ready := false
+	defer func() {
+		if ready || command.Process == nil {
+			return
+		}
+		// Only the child started by this call is stopped; never a PID discovered
+		// later in a mutable PID file. Reap it on every startup failure.
+		_ = command.Process.Kill()
+		waitErr := command.Wait()
+		if control != nil && (!xraySelectedTCPWaitResult(command.Process.Pid, command.ProcessState, waitErr) || originalProcessPIDAbsent(command.Process.Pid) != nil) {
+			resultErr = errors.Join(resultErr, ErrOriginalProcessCleanup)
+			return
+		}
+		if control != nil && resultErr == ErrOriginalProcessCleanup {
+			// The original-token construction refused, but this launcher still
+			// held the actual Cmd and independently proved terminal cleanup.
+			resultErr = ErrReviewChanged
+		}
+		if savedPID, err := readManagedPID(spec); err == nil && savedPID == command.Process.Pid {
+			_ = owned.Remove(pidName)
+			_ = owned.Remove(receiptName)
+		}
+	}()
+	if control != nil {
+		err = control.WithStart(ctx, command.Start)
+	} else {
+		err = command.Start()
+	}
+	if err != nil {
+		_ = logFile.Close()
+		return err
+	}
+	pid := command.Process.Pid
+	if err := owned.WriteAtomic(pidName, []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
+		_ = command.Process.Kill()
+		_ = logFile.Close()
+		return err
+	}
+	_ = logFile.Close()
+	if control != nil && spec.RouteProof {
+		// Keep the predecessor's evidence until the guarded Start succeeded
+		// and the new PID is published. The old receipt cannot certify that PID.
+		if err := owned.Remove(receiptName); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if controller.Running(spec) {
+			if spec.RouteProof {
+				receipt, err = routeidentity.RecordStart(pid, spec.Binary, spec.Args, spec.MatchArg, configHash)
+				if err != nil {
+					return fmt.Errorf("record managed route identity: %w", err)
+				}
+				if err := owned.WriteAtomic(receiptName, receipt, 0o600); err != nil {
+					return err
+				}
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if retain != nil {
+				if err := retain(command, receipt); err != nil {
+					return err
+				}
+			} else {
+				go func() { _ = command.Wait() }()
+			}
+			ready = true
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(40 * time.Millisecond):
+		}
+	}
+	_ = owned.Remove(pidName)
+	return fmt.Errorf("managed process %s exited during startup", spec.ID)
+}
+
+func (OSProcessController) Stop(ctx context.Context, spec ProcessSpec) error {
+	if err := validateProcessSpec(spec); err != nil {
+		return err
+	}
+	owned, err := ownedfs.Open(spec.Dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer owned.Close()
+	pidName, _ := filepath.Rel(spec.Dir, spec.PIDPath)
+	// Invalidate proof before any stop attempt, including a cancelled stop.
+	if spec.RouteProof {
+		_ = owned.Remove(pidName + routeidentity.ReceiptSuffix)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	pid, err := readManagedPID(spec)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !processMatches(pid, spec) {
+		if !processExists(pid) {
+			_ = owned.Remove(pidName)
+			return nil
+		}
+		return fmt.Errorf("PID %d does not match managed process %s; refusing to signal it", pid, spec.ID)
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	_ = process.Signal(os.Interrupt)
+	deadline := time.Now().Add(4 * time.Second)
+	// Most owned children stop promptly after Interrupt. Observe those exits
+	// within the first 100ms, then retain the original cadence and grace bound.
+	// Each observation still checks the exact managed identity; elapsed time
+	// alone never establishes absence or grants cleanup authority.
+	pauses := [...]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond, 30 * time.Millisecond, 100 * time.Millisecond}
+	poll := 0
+	for time.Now().Before(deadline) {
+		if !processMatches(pid, spec) {
+			_ = owned.Remove(pidName)
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pauses[min(poll, len(pauses)-1)]):
+		}
+		poll++
+	}
+	if !processMatches(pid, spec) {
+		_ = owned.Remove(pidName)
+		return nil
+	}
+	if err := process.Kill(); err != nil {
+		return err
+	}
+	_ = owned.Remove(pidName)
+	return nil
+}
+
+func (OSProcessController) Running(spec ProcessSpec) bool {
+	if validateProcessSpec(spec) != nil {
+		return false
+	}
+	pid, err := readManagedPID(spec)
+	return err == nil && processMatches(pid, spec)
+}
+
+func validateProcessSpec(spec ProcessSpec) error {
+	if spec.ID == "" || spec.Binary == "" || spec.PIDPath == "" || spec.LogPath == "" || spec.Dir == "" || spec.MatchArg == "" {
+		return errors.New("incomplete managed process specification")
+	}
+	if strings.ContainsAny(spec.ID, "/\\\x00") {
+		return errors.New("invalid managed process id")
+	}
+	if !filepath.IsAbs(spec.Dir) || filepath.Clean(spec.Dir) == filepath.VolumeName(spec.Dir)+string(filepath.Separator) {
+		return errors.New("managed process needs a dedicated absolute directory")
+	}
+	for _, path := range []string{spec.PIDPath, spec.LogPath, spec.MatchArg} {
+		relative, err := filepath.Rel(spec.Dir, path)
+		if err != nil || !filepath.IsAbs(path) || !filepath.IsLocal(relative) || relative == "." {
+			return errors.New("managed process files must stay below its directory")
+		}
+	}
+	if _, err := os.Lstat(spec.Dir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	owned, err := ownedfs.Open(spec.Dir)
+	if err != nil {
+		return err
+	}
+	defer owned.Close()
+	for _, path := range []string{spec.PIDPath, spec.LogPath, spec.MatchArg, spec.PIDPath + routeidentity.ReceiptSuffix} {
+		relative, _ := filepath.Rel(spec.Dir, path)
+		if err := owned.Check(relative); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func readManagedPID(spec ProcessSpec) (int, error) {
+	owned, err := ownedfs.Open(spec.Dir)
+	if err != nil {
+		return 0, err
+	}
+	defer owned.Close()
+	name, err := filepath.Rel(spec.Dir, spec.PIDPath)
+	if err != nil {
+		return 0, err
+	}
+	data, err := owned.ReadLimited(name, 64)
+	if err != nil {
+		return 0, err
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 1 {
+		return 0, errors.New("invalid managed PID file")
+	}
+	return pid, nil
+}
+
+func processMatches(pid int, spec ProcessSpec) bool {
+	cmdline, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+	if err != nil {
+		return false
+	}
+	args := strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00")
+	if len(args) == 0 || !strings.EqualFold(filepath.Base(args[0]), filepath.Base(spec.Binary)) {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if arg == spec.MatchArg {
+			return true
+		}
+	}
+	return false
+}
+
+func processExists(pid int) bool {
+	_, err := os.Stat(filepath.Join("/proc", strconv.Itoa(pid)))
+	return err == nil
+}

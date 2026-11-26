@@ -1,0 +1,555 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/netip"
+	"reflect"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/netresolve"
+)
+
+const maxPolicyPrefixes = 1024
+
+// PolicyOwnershipSpec publishes the kernel resources reserved by each
+// transactional tunnel adapter. Engine Lab uses the same source of truth as
+// activation, so preflight cannot silently drift from runtime defaults.
+type PolicyOwnershipSpec struct {
+	Adapter            string
+	Interface          string
+	Table              int
+	PriorityBase       int
+	PriorityEnd        int
+	SharedPriorityBase int
+	SharedPriorityEnd  int
+	EndpointPriority   int
+	EndpointMark       uint32
+	// Network-policy transport pins must not outrank the LAN service default
+	// inside its table. Legacy receipts retain their recorded service table.
+	EndpointTable int
+}
+
+func PolicyOwnershipSpecs() []PolicyOwnershipSpec {
+	return []PolicyOwnershipSpec{
+		{Adapter: "warp-wg", Interface: "rz-warp", Table: 201, PriorityBase: 18100, PriorityEnd: 18100 + maxPolicyPrefixes - 1, SharedPriorityBase: 60, SharedPriorityEnd: 61, EndpointPriority: 50, EndpointMark: 0x01000000, EndpointTable: 211},
+		{Adapter: "usque", Interface: "rz-usque", Table: 202, PriorityBase: 20000, PriorityEnd: 20000 + maxPolicyPrefixes - 1, SharedPriorityBase: 62, SharedPriorityEnd: 63},
+		{Adapter: "sing-box", Interface: "rz-sing", Table: 203, PriorityBase: 22000, PriorityEnd: 22000 + maxPolicyPrefixes - 1, SharedPriorityBase: 64, SharedPriorityEnd: 65},
+		{Adapter: "xray", Interface: "rz-xray", Table: 204, PriorityBase: 24000, PriorityEnd: 24000 + maxPolicyPrefixes - 1, SharedPriorityBase: 66, SharedPriorityEnd: 67},
+		{Adapter: "amneziawg", Interface: "rz-awg", Table: 205, PriorityBase: 26000, PriorityEnd: 26000 + maxPolicyPrefixes - 1, SharedPriorityBase: 68, SharedPriorityEnd: 69, EndpointPriority: 51, EndpointMark: 0x02000000, EndpointTable: 212},
+		{Adapter: "wireguard", Interface: "rz-wg", Table: 206, PriorityBase: 28000, PriorityEnd: 28000 + maxPolicyPrefixes - 1, SharedPriorityBase: 70, SharedPriorityEnd: 71, EndpointPriority: 52, EndpointMark: 0x04000000, EndpointTable: 213},
+		{Adapter: "mihomo", Interface: "rz-mihomo", Table: 207, PriorityBase: 31200, PriorityEnd: 31200 + maxPolicyPrefixes - 1, SharedPriorityBase: 78, SharedPriorityEnd: 79},
+	}
+}
+
+type PrefixResolver func(context.Context, string) ([]netip.Addr, error)
+
+type PolicyState struct {
+	Interface    string `json:"interface"`
+	Table        int    `json:"table"`
+	PriorityBase int    `json:"priority_base"`
+	// Version 2 uses two disjoint early RPDB slots per adapter. PriorityBase
+	// remains the legacy identity; old snapshots retain indexed priorities.
+	RuleLayout         int          `json:"rule_layout,omitempty"`
+	SharedPriorityBase int          `json:"shared_priority_base,omitempty"`
+	Prefixes           []string     `json:"prefixes"`
+	Rules              []PolicyRule `json:"rules,omitempty"`
+	// WARP/AWG commit binds cleanup authority to the exact sanitized runtime.
+	// Absent in older states and unrelated proxy policies; absence is not a
+	// license to delete an interface merely because its name matches.
+	RuntimeConfigSHA256 string           `json:"runtime_config_sha256,omitempty"`
+	WireGuardEndpoint   *WGEndpointState `json:"wireguard_endpoint,omitempty"`
+	// Exclusions are exact public endpoint prefixes routed through main before
+	// the service rules. The private policy file is mode 0600 and is never a
+	// public DTO.
+	Exclusions []string `json:"exclusions,omitempty"`
+	// Forwarding is the private, exact client/TUN firewall intent. Older state
+	// remains removable, but cannot acquire new forwarding authority implicitly.
+	Forwarding              *ProxyForwardingState `json:"forwarding,omitempty"`
+	NetworkPolicyGeneration string                `json:"network_policy_generation,omitempty"`
+	NetworkDefault          bool                  `json:"network_default,omitempty"`
+}
+
+type PolicyRule struct {
+	Managed     bool   `json:"managed,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination"`
+	Ingress     string `json:"ingress,omitempty"`
+}
+
+func resolvePolicyPrefixes(ctx context.Context, plan Plan, adapter string, resolver PrefixResolver) ([]string, error) {
+	if resolver == nil {
+		resolver = func(ctx context.Context, domain string) ([]netip.Addr, error) {
+			return netresolve.LookupNetIP(ctx, "ip", domain)
+		}
+	}
+	prefixes := map[string]bool{}
+	domains := map[string]bool{}
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) != adapter {
+			continue
+		}
+		for _, value := range route.CIDRs {
+			prefix, err := netip.ParsePrefix(value)
+			if err != nil {
+				address, addressErr := netip.ParseAddr(value)
+				if addressErr != nil {
+					return nil, fmt.Errorf("invalid policy prefix %q", value)
+				}
+				prefix = netip.PrefixFrom(address.Unmap(), address.BitLen())
+			}
+			prefixes[prefix.Masked().String()] = true
+		}
+		for _, domain := range route.Domains {
+			domains[strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))] = true
+		}
+	}
+	type result struct {
+		addresses []netip.Addr
+		err       error
+	}
+	semaphore := make(chan struct{}, 8)
+	results := make(chan result, len(domains))
+	var wait sync.WaitGroup
+	for domain := range domains {
+		if domain == "" {
+			continue
+		}
+		wait.Add(1)
+		go func(domain string) {
+			defer wait.Done()
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-ctx.Done():
+				results <- result{err: ctx.Err()}
+				return
+			}
+			addresses, err := resolver(ctx, domain)
+			results <- result{addresses: addresses, err: err}
+		}(domain)
+	}
+	wait.Wait()
+	close(results)
+	resolved := 0
+	for result := range results {
+		if result.err != nil {
+			continue
+		}
+		for _, address := range result.addresses {
+			address = address.Unmap()
+			if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() {
+				continue
+			}
+			prefixes[netip.PrefixFrom(address, address.BitLen()).String()] = true
+			resolved++
+		}
+	}
+	if len(domains) > 0 && resolved == 0 && len(prefixes) == 0 {
+		return nil, errors.New("none of the service domains resolved to a public address")
+	}
+	if len(prefixes) > maxPolicyPrefixes {
+		return nil, fmt.Errorf("resolved policy contains %d prefixes; maximum is %d", len(prefixes), maxPolicyPrefixes)
+	}
+	out := make([]string, 0, len(prefixes))
+	for prefix := range prefixes {
+		out = append(out, prefix)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		left, _ := netip.ParsePrefix(out[i])
+		right, _ := netip.ParsePrefix(out[j])
+		if left.Addr().BitLen() != right.Addr().BitLen() {
+			return left.Addr().BitLen() < right.Addr().BitLen()
+		}
+		return out[i] < out[j]
+	})
+	return out, nil
+}
+
+func resolvePolicyRules(ctx context.Context, plan Plan, adapter string, resolver PrefixResolver) ([]string, []PolicyRule, error) {
+	generation, _, err := NetworkPolicyRouteAuthority(plan, adapter)
+	if err != nil {
+		return nil, nil, err
+	}
+	prefixSet := map[string]bool{}
+	ruleSet := map[string]PolicyRule{}
+	global := map[string]bool{}
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) != adapter {
+			continue
+		}
+		ingresses, err := routeIngresses(route)
+		if err != nil {
+			return nil, nil, err
+		}
+		prefixes, err := resolvePolicyPrefixes(ctx, Plan{Routes: []Route{route}}, adapter, resolver)
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolve %s policy for %s: %w", adapter, route.ServiceName, err)
+		}
+		sources := make([]netip.Prefix, 0, len(route.Sources))
+		for _, value := range route.Sources {
+			prefix, err := netip.ParsePrefix(value)
+			if err != nil {
+				address, addressErr := netip.ParseAddr(value)
+				if addressErr != nil {
+					return nil, nil, fmt.Errorf("invalid device source %q", value)
+				}
+				address = address.Unmap()
+				prefix = netip.PrefixFrom(address, address.BitLen())
+			}
+			sources = append(sources, prefix.Masked())
+		}
+		for _, destination := range prefixes {
+			prefixSet[destination] = true
+			destinationPrefix, _ := netip.ParsePrefix(destination)
+			for _, ingress := range ingresses {
+				globalKey := destination + "\x00" + ingress
+				if global[destination+"\x00"] {
+					continue
+				}
+				if len(sources) == 0 {
+					global[globalKey] = true
+					for key, rule := range ruleSet {
+						if rule.Destination == destination && (ingress == "" || rule.Ingress == ingress) {
+							delete(ruleSet, key)
+						}
+					}
+					ruleSet["\x00"+globalKey] = PolicyRule{Destination: destination, Ingress: ingress}
+					continue
+				}
+				if global[globalKey] || global[destination+"\x00"] {
+					continue
+				}
+				for _, source := range sources {
+					if source.Addr().Is4() != destinationPrefix.Addr().Is4() {
+						continue
+					}
+					rule := PolicyRule{Source: source.String(), Destination: destination, Ingress: ingress, Managed: generation != ""}
+					ruleSet[rule.Source+"\x00"+rule.Destination+"\x00"+rule.Ingress] = rule
+				}
+			}
+		}
+	}
+	prefixes := make([]string, 0, len(prefixSet))
+	for prefix := range prefixSet {
+		prefixes = append(prefixes, prefix)
+	}
+	sort.Strings(prefixes)
+	rules := make([]PolicyRule, 0, len(ruleSet))
+	for _, rule := range ruleSet {
+		rules = append(rules, rule)
+	}
+	sort.Slice(rules, func(i, j int) bool {
+		if rules[i].Destination == rules[j].Destination {
+			if rules[i].Source == rules[j].Source {
+				return rules[i].Ingress < rules[j].Ingress
+			}
+			return rules[i].Source < rules[j].Source
+		}
+		return rules[i].Destination < rules[j].Destination
+	})
+	if len(rules) == 0 && len(prefixes) > 0 {
+		return nil, nil, errors.New("device scopes do not match the destination address family")
+	}
+	if len(rules) > maxPolicyPrefixes {
+		return nil, nil, fmt.Errorf("policy contains %d source/destination rules; maximum is %d", len(rules), maxPolicyPrefixes)
+	}
+	return prefixes, rules, nil
+}
+
+func applyPolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
+	return applyRecordedPolicy(ctx, runner, ipCommand, state)
+}
+
+func removePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
+	return removeRecordedPolicy(ctx, runner, ipCommand, state)
+}
+
+func verifyPolicyEvidence(ctx context.Context, runner NFQWS2Runner, ipCommand string, state PolicyState) error {
+	if err := verifyPolicyPrecedence(ctx, runner, ipCommand, state, false); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	rules := effectivePolicyRules(state)
+	if runner == nil || ipCommand == "" || state.Interface == "" || len(rules) == 0 {
+		return errors.New("policy routing evidence is unavailable")
+	}
+	if (state.Forwarding != nil || state.NetworkPolicyGeneration != "") && len(rules) > proxyForwardingRuleLimit(state) {
+		return errors.New("proxy forwarding route evidence exceeds its safe rule bound")
+	}
+	checked := 0
+	ingresses := map[string]string{}
+	probeSources := map[string]netip.Addr{}
+	for _, rule := range rules {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		prefix, err := netip.ParsePrefix(rule.Destination)
+		if err != nil {
+			return err
+		}
+		destination, err := policyEvidenceDestination(state, rule, prefix)
+		if err != nil {
+			return err
+		}
+		args := []string{"route", "get", destination.String()}
+		if rule.Source != "" {
+			source, sourceErr := netip.ParsePrefix(rule.Source)
+			if sourceErr != nil {
+				return sourceErr
+			}
+			if source.Addr().Is4In6() || source.Addr().Is4() != prefix.Addr().Is4() {
+				return errors.New("device source and destination families do not match")
+			}
+			sourceAddress := source.Addr()
+			key := source.String() + "\x00" + rule.Ingress
+			ingress, known := ingresses[key]
+			if !known {
+				if source.Bits() != source.Addr().BitLen() {
+					if state.Forwarding != nil {
+						for _, grant := range state.Forwarding.Rules {
+							if grant.Source == source.String() && grant.Destination == rule.Destination && (rule.Ingress == "" || grant.Ingress == rule.Ingress) {
+								ingress = grant.Ingress
+								break
+							}
+						}
+					} else if state.NetworkPolicyGeneration != "" && rule.Managed {
+						// The checked frozen network rule supplies the ingress for
+						// this read-only sample. It grants no firewall authority.
+						ingress = rule.Ingress
+					}
+					if ingress == "" {
+						return errors.New("LAN route probe has no exact forwarding grant")
+					}
+					sourceAddress, sourceErr = policySubnetProbeSource(ctx, runner, ipCommand, source, state.Interface, ingress)
+				} else {
+					ingress, sourceErr = policySourceIngress(ctx, runner, ipCommand, source.Addr(), state.Interface)
+				}
+				if sourceErr != nil {
+					return sourceErr
+				}
+				if rule.Ingress != "" && ingress != rule.Ingress {
+					return ErrNetworkPolicyAuthority
+				}
+				ingresses[key] = ingress
+				probeSources[key] = sourceAddress
+			} else {
+				sourceAddress = probeSources[key]
+			}
+			args = append(args, "from", sourceAddress.String())
+			if ingress != "" {
+				// Without iif Linux resolves a locally originated packet and
+				// rejects the non-local address of an actual LAN client.
+				args = append(args, "iif", ingress)
+			}
+		} else if rule.Ingress != "" {
+			return ErrNetworkPolicyAuthority
+		}
+		if rule.Managed {
+			args = append(args, "mark", "0x20000000")
+		}
+		if prefix.Addr().Is6() {
+			args = append([]string{"-6"}, args...)
+		}
+		output, routeErr := runner.Run(ctx, ipCommand, args...)
+		if routeErr != nil || policyNonUnicast(output) || policyRouteDevice(output) != state.Interface {
+			return fmt.Errorf("kernel route evidence for %s does not use %s: %s", prefix, state.Interface, shortOutput(output, routeErr))
+		}
+		checked++
+		// Proxy grants are already bounded: verify every granted pair so an
+		// IPv6 or second-LAN rule cannot hide behind four IPv4 samples.
+		if state.Forwarding == nil && state.NetworkPolicyGeneration == "" && checked >= 4 {
+			break
+		}
+	}
+	return nil
+}
+
+// Default-route FIB observations use public unicast literals, never the
+// unspecified /0 base. This sends no packets and is not reachability proof.
+// Selection is bounded and excludes the policy's explicit bypass destinations
+// and the client subnet; it never retries a failed/wrong-interface observation.
+func policyEvidenceDestination(state PolicyState, rule PolicyRule, destination netip.Prefix) (netip.Addr, error) {
+	if destination.Bits() != 0 {
+		return destination.Addr(), nil
+	}
+	if state.NetworkPolicyGeneration == "" || !state.NetworkDefault || !rule.Managed || !validPolicyIngress(rule.Ingress) {
+		return netip.Addr{}, ErrNetworkPolicyAuthority
+	}
+	exclusions := make([]netip.Prefix, 0, len(state.Exclusions)+1)
+	for _, value := range append(append([]string(nil), state.Exclusions...), rule.Source) {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil || prefix != prefix.Masked() || prefix.Addr().Is4In6() {
+			return netip.Addr{}, ErrNetworkPolicyAuthority
+		}
+		exclusions = append(exclusions, prefix)
+	}
+	candidates := []string{"9.9.9.9", "1.1.1.1", "8.8.8.8", "208.67.222.222"}
+	if destination.Addr().Is6() {
+		candidates = []string{"2620:fe::fe", "2606:4700:4700::1111", "2001:4860:4860::8888", "2620:119:35::35"}
+	}
+	for _, value := range candidates {
+		address := netip.MustParseAddr(value)
+		if !destination.Contains(address) || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsUnspecified() {
+			return netip.Addr{}, ErrNetworkPolicyAuthority
+		}
+		excluded := false
+		for _, prefix := range exclusions {
+			if prefix.Contains(address) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			return address, nil
+		}
+	}
+	return netip.Addr{}, errors.New("no bounded unicast default-route observation destination is outside the reviewed exclusions")
+}
+
+// A reverse lookup is only an ingress hint. For a forwarded source it must
+// agree with one directly connected main-table interface: routed/asymmetric
+// clients need an explicit ingress contract and cannot be inferred from a WAN
+// default or another policy route. Forward lookup still must pick our tunnel.
+func policySourceIngress(ctx context.Context, runner NFQWS2Runner, ipCommand string, source netip.Addr, tunnel string) (string, error) {
+	if !source.IsValid() || source.IsUnspecified() || source.IsMulticast() || source.Is4In6() || source.IsLinkLocalUnicast() {
+		return "", errors.New("device source is not suitable for an ingress probe")
+	}
+	args := []string{"route", "get", source.String()}
+	if source.Is6() {
+		args = append([]string{"-6"}, args...)
+	}
+	output, err := runner.Run(ctx, ipCommand, args...)
+	device := policyRouteDevice(output)
+	if err != nil || device == "" || device == tunnel {
+		return "", errors.New("device source ingress could not be established")
+	}
+	fields := strings.Fields(string(output))
+	if len(fields) > 0 && fields[0] == "local" {
+		return "", nil // A router-owned source uses the local output lookup.
+	}
+	if device == "lo" || policyNonUnicast(output) || policyHasToken(fields, "via") || policyHasToken(fields, "nexthop") {
+		return "", errors.New("device source ingress is not a forwarding interface")
+	}
+	args = []string{"route", "show", "table", "main", "match", netip.PrefixFrom(source, source.BitLen()).String()}
+	if source.Is6() {
+		args = append([]string{"-6"}, args...)
+	}
+	connected, err := runner.Run(ctx, ipCommand, args...)
+	if err != nil || !policyConnectedSource(connected, source, device) {
+		return "", errors.New("device source ingress is not uniquely connected to the main table")
+	}
+	return device, nil
+}
+
+func policyConnectedSource(output []byte, source netip.Addr, device string) bool {
+	if len(output) > 64<<10 {
+		return false
+	}
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 512 {
+		return false
+	}
+	found := false
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || fields[0] == "default" {
+			continue
+		}
+		if fields[0] == "unicast" {
+			fields = fields[1:]
+		}
+		if len(fields) == 0 {
+			return false
+		}
+		prefix, err := netip.ParsePrefix(fields[0])
+		if err != nil {
+			address, addressErr := netip.ParseAddr(fields[0])
+			if addressErr != nil {
+				return false
+			}
+			prefix = netip.PrefixFrom(address, address.BitLen())
+		}
+		if prefix.Bits() == 0 || !prefix.Contains(source) {
+			continue
+		}
+		if policyHasToken(fields, "via") || policyHasToken(fields, "nexthop") || policyRouteDevice([]byte(line)) != device {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func policyHasToken(fields []string, wanted string) bool {
+	for _, field := range fields {
+		if field == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func policyNonUnicast(output []byte) bool {
+	fields := strings.Fields(string(output))
+	if len(fields) == 0 {
+		return true
+	}
+	switch fields[0] {
+	case "local", "broadcast", "multicast", "anycast", "blackhole", "unreachable", "prohibit", "throw", "nat":
+		return true
+	}
+	return false
+}
+
+func policyRouteDevice(output []byte) string {
+	fields := strings.Fields(string(output))
+	device := ""
+	for i := 0; i+1 < len(fields); i++ {
+		if fields[i] == "dev" {
+			if device != "" {
+				return ""
+			}
+			device = fields[i+1]
+		}
+	}
+	return device
+}
+
+func effectivePolicyRules(state PolicyState) []PolicyRule {
+	if len(state.Rules) > 0 {
+		return state.Rules
+	}
+	rules := make([]PolicyRule, 0, len(state.Prefixes))
+	for _, prefix := range state.Prefixes {
+		rules = append(rules, PolicyRule{Destination: prefix})
+	}
+	return rules
+}
+
+func samePolicy(left, right PolicyState) bool {
+	return left.NetworkPolicyGeneration == right.NetworkPolicyGeneration && left.NetworkDefault == right.NetworkDefault && left.RuleLayout == right.RuleLayout && left.SharedPriorityBase == right.SharedPriorityBase && left.Interface == right.Interface && left.Table == right.Table && left.PriorityBase == right.PriorityBase && reflect.DeepEqual(left.Prefixes, right.Prefixes) && reflect.DeepEqual(left.Exclusions, right.Exclusions) && reflect.DeepEqual(effectivePolicyRules(left), effectivePolicyRules(right)) && reflect.DeepEqual(left.Forwarding, right.Forwarding)
+}
+
+func replacePolicy(ctx context.Context, runner NFQWS2Runner, ipCommand string, oldState, newState PolicyState) error {
+	if samePolicy(oldState, newState) {
+		return nil
+	}
+	if err := removePolicy(ctx, runner, ipCommand, oldState); err != nil {
+		return fmt.Errorf("remove old policy: %w", err)
+	}
+	if err := applyPolicy(ctx, runner, ipCommand, newState); err != nil {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		removeErr := removePolicy(cleanup, runner, ipCommand, newState)
+		restoreErr := applyPolicy(cleanup, runner, ipCommand, oldState)
+		return errors.Join(fmt.Errorf("apply refreshed policy: %w", err), removeErr, restoreErr)
+	}
+	return nil
+}

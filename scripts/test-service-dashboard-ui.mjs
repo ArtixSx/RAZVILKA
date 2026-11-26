@@ -1,0 +1,533 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
+
+const source = readFileSync(new URL('../cmd/razvilka/web/service-dashboard-ui.js', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../cmd/razvilka/web/index.html', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
+const draftHelpers = ['serviceRouteOptionReviewHTML','serviceRouteOptionSelectable','serviceRouteReview','serviceDraftBody','confirmServiceDraftReceipt','writeServiceDraft','saveService'].map(name => {
+  const match = appSource.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`)); assert(match, name); return match[0];
+}).join('\n');
+const future = () => new Date(Date.now() + 60000).toISOString();
+const deferred = () => { let resolve, reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; }); return { promise, resolve, reject }; };
+const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+
+function fixture() {
+  const elements = new Map(), listeners = new Map(), calls = [], opened = [], timers = new Map();
+  let timerID = 0;
+  const document = { activeElement: null, addEventListener(name, fn) { const rows = listeners.get(name) || []; rows.push(fn); listeners.set(name, rows); } };
+  function element(id) {
+    if (!elements.has(id)) elements.set(id, {
+      id, value: '', checked: false, disabled: false, hidden: false, open: false, dataset: {}, listeners: {}, options: [], _html: '',
+      addEventListener(name, fn) { this.listeners[name] = fn; },
+      contains(item) { return item?.parentID === id; },
+      focus() { document.activeElement = this; },
+      add(option) { this.options.push(option); },
+      set innerHTML(value) { this._html = value; this.options = [...value.matchAll(/<option value="([^"]*)"/g)].map(match => ({ value: match[1] })); },
+      get innerHTML() { return this._html; },
+      querySelectorAll(selector) {
+        const attribute = selector.slice(1, -1);
+        return [...this._html.matchAll(/<(?:button|select)\b([^>]*)>/g)].filter(match => match[1].includes(attribute + '=')).map(match => {
+          const child = { parentID: id, dataset: {}, focus() { document.activeElement = this; } };
+          for (const item of match[1].matchAll(/data-([a-z-]+)="([^"]*)"/g)) child.dataset[item[1].replace(/-([a-z])/g, (_, ch) => ch.toUpperCase())] = item[2];
+          return child;
+        });
+      },
+    });
+    return elements.get(id);
+  }
+  const $ = id => element(id.replace(/^#/, ''));
+  const state = { status: { revision: 9 }, currentView: 'services', devices: [], routeOptions: [{ id: 'auto', selectable: true }, { id: 'direct', selectable: true }, { id: 'warp', name: 'WARP', selectable: false }], nodes: { nodes: [{ id: 'node-a', name: 'Швеция TCP' }] }, services: [
+    { id: 'youtube', name: 'YouTube', category: 'Видео', enabled: true, route: 'auto', applied_enabled: true, applied_route: 'auto', applied_state: { enabled: true, route: 'nfqws' }, applied_sources: ['192.168.1.40/32'], sources: ['192.168.1.40/32'], planned_engine: 'warp', observed_state: {}, domains: ['youtube.com'] },
+    { id: 'telegram', name: 'Telegram', category: 'Чаты', enabled: false, route: 'auto', applied_enabled: false, applied_state: { enabled: false, route: 'auto' }, planned_engine: 'warp', domains: ['telegram.org'] },
+  ] };
+  state.serviceControl = { config_revision: 9, schedule: { enabled: false, interval_seconds: 300, service_ids: ['youtube'] }, results: [], job: null };
+  let handler = async () => { throw new Error('Unexpected API call'); };
+  const dispatch = (name, detail) => { for (const fn of listeners.get(name) || []) fn({ detail }); };
+  const session = new Map();
+  const context = vm.createContext({ state, $, document, URL, Set, Date, Number, Math, JSON, Promise, AbortController,
+    crypto: webcrypto, sessionStorage: { getItem: key => session.get(key) || null, setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) },
+    Option: function(text, value) { this.text = text; this.value = value; },
+    setTimeout(fn) { timers.set(++timerID, fn); return timerID; }, clearTimeout(id) { timers.delete(id); }, queueMicrotask,
+    esc: value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
+    routeLabel: route => route, nodeScopeText: sources => sources.length ? sources.join(', ') : 'Вся локальная сеть', nodeDisplayName: node => node.name,
+    nodePassivePing: () => null, nodeBrowser: { pings: [] }, nodeCanCheck: node => !node.disabled && node.state !== 'expired', nodeSupportsTCPPing: node => !['wireguard', 'hysteria2'].includes(node.protocol),
+    populateServiceCategories() {}, serviceMatches: service => !$('#serviceSearch').value || service.name.includes($('#serviceSearch').value),
+    api: async (url, options = {}) => { calls.push({ url, ...options }); return handler(url, options); },
+    acceptWorkspaceControl(control) { if (state.serviceControl && control.config_revision < state.serviceControl.config_revision) return false; state.serviceControl = control; return true; },
+    setView(name) { dispatch('razvilka:view-change', name); state.currentView = name; },
+    openServiceScope: id => opened.push(['scope', id]), showServiceDetails: id => opened.push(['details', id]),
+    openCustomServiceDialog: id => opened.push(['custom', id]), openNodeCheck: (id, service) => opened.push(['node', id, service]),
+    renderStatus() {}, renderOverviewQuickServices() {}, renderOverviewServices() {}, renderReadiness() {}, renderSettings() {},
+  });
+  vm.runInContext(draftHelpers + '\n' + source, context);
+  const nodeSource = readFileSync(new URL('../cmd/razvilka/web/node-browser.js', import.meta.url), 'utf8');
+  vm.runInContext(nodeSource.slice(nodeSource.indexOf('let nodeCheckPendingRequest'),nodeSource.indexOf('async function pollNodeBrowserChecks')),context);
+  const dashboard = vm.runInContext('serviceDashboard', context);
+  context.bindServiceDashboard(); context.renderServiceDashboard();
+  const click = (id, data) => $(id).listeners.click({ target: { closest(selector) { if (selector === 'button') return { dataset: data, disabled: false }; const key = selector.slice(6, -1).replace(/-([a-z])/g, (_, ch) => ch.toUpperCase()); return data[key] !== undefined ? { dataset: data } : null; } } });
+  return { context, $, state, dashboard, document, calls, opened, timers, dispatch, click, setHandler(fn) { handler = fn; } };
+}
+
+// Applied state, exact service evidence and latency are three independent facts.
+{
+  const f = fixture(), service = f.state.services[0];
+  assert.equal(f.context.serviceDashboardSummary(service).route, 'nfqws');
+  assert.equal(f.context.serviceDashboardSummary(service).label, 'Не проверен');
+  assert.doesNotMatch(f.$('#serviceList').innerHTML, /<b>warp<\/b>/, 'calculated WARP became a working route');
+  assert.match(f.$('#serviceList').innerHTML, /Рекомендация пока не проверена/);
+  const proof = { service_id: 'youtube', kind: 'check', checked_route: 'nfqws', status: 'pass', available: true, config_revision: 9, checked_at: new Date(Date.now()-1000).toISOString(), valid_until: future(), freshness_verified: true, latency_ms: 2030 };
+  f.dashboard.control.results = [proof];
+  assert.equal(f.context.serviceDashboardSummary(service).label, 'Сервис доступен');
+  assert.equal(f.context.serviceDashboardSummary(service).pingLabel, 'Пинг: —');
+  assert.match(f.context.serviceDashboardCard(service), /Время проверки: 2030 мс · это не пинг/);
+  for (const change of [{ freshness_verified: false }, { stale: true }, { config_revision: 8 }, { valid_until: new Date(0).toISOString() }, { checked_route: 'warp' }, { available: false }, { kind: 'select', recommended_node_id: 'node-a' }]) {
+    f.dashboard.control.results = [{ ...proof, ...change }];
+    assert.notEqual(f.context.serviceDashboardSummary(service).label, 'Сервис доступен', JSON.stringify(change));
+  }
+  f.dashboard.control.results = [{ ...proof, kind: 'select', recommended_node_id: 'node-a', checked_route: 'sing-box:node-a' }];
+  assert.match(f.context.serviceDashboardRecommendation(service), /ещё не назначено/);
+  f.click('#serviceList', { sdUse: 'node-a', sdService: 'youtube' });
+  assert.deepEqual(f.opened, [['node', 'node-a', 'youtube']]);
+  f.state.status.revision = 10;
+  f.click('#serviceList', { sdUse: 'node-a', sdService: 'youtube' });
+  assert.equal(f.opened.length, 1, 'stale recommendation opened an apply flow');
+  f.state.serviceControl.runtime_state = 'stopped';
+  assert.equal(f.context.serviceDashboardSummary(service).route, '');
+  assert.equal(f.context.serviceDashboardSummary(service).label, 'Остановлен');
+  f.context.renderServiceDashboardControl();
+  assert.match(f.$('#serviceCheckStatus').textContent, /Проверка не включает их; применение включит выбранные сервисы после проверки/);
+}
+
+// A direct check without an applied route remains useful, including while a
+// different route is pending, but must never claim that pending bypass works.
+{
+  const f = fixture(), service = f.state.services[1];
+  service.enabled = true; service.route = 'warp'; service.dirty = true;
+  const proof = { service_id: 'telegram', kind: 'check', checked_route: 'direct', applied_route: '', scope_required: true, status: 'pass', available: true, config_revision: 9, checked_at: new Date(Date.now()-1000).toISOString(), valid_until: future(), freshness_verified: true };
+  f.dashboard.control.results = [proof];
+  let summary = f.context.serviceDashboardSummary(service);
+  assert.equal(summary.route, ''); assert.equal(summary.label, 'Напрямую: доступен');
+  assert.match(summary.detail, /с роутера/); assert.match(summary.detail, /Обход не включён/);
+  assert.match(summary.detail, /неприменённые настройки эта проверка не подтверждает/);
+  assert.match(f.context.serviceDashboardCard(service), /Применённый маршрут<\/small><b>Не включён<\/b>/);
+  for (const [status, available, label] of [['fail', false, 'Напрямую: недоступен'], ['inconclusive', false, 'Напрямую: результат неясен'], ['pass', false, 'Напрямую: результат неясен'], ['not-ready', false, 'Прямая проверка пропущена']]) {
+    f.dashboard.control.results = [{ ...proof, status, available, message: 'При активном туннеле прямой путь не подтверждён.' }];
+    summary = f.context.serviceDashboardSummary(service);
+    assert.equal(summary.route, ''); assert.equal(summary.label, label);
+    if (status === 'not-ready') assert.match(summary.detail, /При активном туннеле/);
+  }
+  for (const change of [{ stale: true }, { freshness_verified: false }, { valid_until: new Date(0).toISOString() }, { config_revision: 8 }, { kind: 'select' }, { checked_route: 'warp' }, { applied_route: 'direct' }, { recommended_node_id: 'node-a' }]) {
+    f.dashboard.control.results = [{ ...proof, ...change }];
+    summary = f.context.serviceDashboardSummary(service);
+    assert.equal(summary.route, ''); assert.equal(summary.label, 'Не включён', JSON.stringify(change));
+  }
+  f.dashboard.control.results = [proof];
+  service.applied_state = { enabled: true, route: 'warp' };
+  assert.notEqual(f.context.serviceDashboardSummary(service).label, 'Сервис доступен', 'direct probe confirmed a different applied route');
+  service.applied_state.enabled = false; f.state.serviceControl.runtime_state = 'stopped';
+  summary = f.context.serviceDashboardSummary(service);
+  assert.equal(summary.route, ''); assert.equal(summary.label, 'Напрямую: доступен');
+}
+
+// TCP ping is a real bounded node-check request for the applied node. It has no
+// implied service result and is never offered for UDP or an unapplied route.
+{
+  const f = fixture(), service = f.state.services[0];
+  service.applied_state.route = 'sing-box:node-a'; service.route = 'sing-box:node-other';
+  f.setHandler(() => ({ job: { id: 2, mode: 'tcp', state: 'running' } }));
+  await f.context.serviceDashboardPing('youtube');
+  assert.equal(f.calls[0].url, '/api/v1/node-checks');
+  const body = JSON.parse(f.calls[0].body);
+  assert.match(body.idempotency_key,/^[a-f0-9]{32}$/);
+  assert.deepEqual({ ...body, idempotency_key: undefined }, { node_ids: ['node-a'], mode: 'tcp', expected_revision: 9, idempotency_key: undefined });
+  assert.equal(f.$('#serviceCancelCheck').hidden, true, 'service cancellation should not cancel a different job type');
+  assert.notEqual(f.context.serviceDashboardSummary(service).label, 'Сервис доступен');
+  f.context.nodePassivePing = () => ({ reachable: true, latency_ms: 42 });
+  assert.equal(f.context.serviceDashboardSummary(service).pingLabel, 'Пинг TCP: 42 мс');
+  f.state.nodes.nodes[0].protocol = 'wireguard';
+  assert.equal(f.context.serviceDashboardPingNode(service), null);
+  service.applied_state.enabled = false;
+  assert.equal(f.context.serviceDashboardPingNode(service), null);
+}
+
+// No re-render closes details or steals focus; an open native select survives.
+{
+  const f = fixture();
+  f.click('#serviceList', { sdExpand: 'youtube' });
+  f.document.activeElement = { parentID: 'serviceList', dataset: { sdFocus: 'check-youtube' } };
+  f.context.renderServiceDashboard();
+  assert.equal(f.document.activeElement.dataset.sdFocus, 'check-youtube');
+  assert.match(f.$('#serviceList').innerHTML, /aria-expanded="true" aria-controls="sd-details-youtube"/);
+  const before = f.$('#serviceList').innerHTML;
+  f.document.activeElement = { parentID: 'serviceList', matches: selector => selector === '[data-sd-route]' };
+  f.state.services[0].name = '<script>';
+  f.context.renderServiceDashboard(); assert.equal(f.$('#serviceList').innerHTML, before);
+  f.document.activeElement = null; f.context.renderServiceDashboard();
+  assert.match(f.$('#serviceList').innerHTML, /&lt;script&gt;/); assert.doesNotMatch(f.$('#serviceList').innerHTML, /<script>/);
+}
+
+// Jobs bind the exact requested services and shown revision, admit one request,
+// and never chain automatically into a route mutation.
+{
+  const f = fixture(), pending = deferred(); f.setHandler(() => pending.promise);
+  const first = f.context.serviceDashboardStart('check', ['youtube']);
+  await f.context.serviceDashboardStart('select', ['telegram']);
+  assert.equal(f.calls.length, 1);
+  const payload = JSON.parse(f.calls[0].body);
+  assert.match(payload.idempotency_key, /^[a-f0-9]{32}$/);
+  delete payload.idempotency_key;
+  assert.deepEqual(payload, { kind: 'check', service_ids: ['youtube'], expected_revision: 9 });
+  pending.resolve({ job: { id: 17, state: 'running', mode: 'service-check' } }); await first;
+  assert.equal(f.context.serviceDashboardJobActive(), true);
+  assert.equal(f.$('#serviceCheckAll').disabled, true);
+  assert.equal(f.calls.filter(call => call.url.includes('/apply')).length, 0);
+  const cancel = deferred(); f.setHandler((url, options) => options.method === 'DELETE' ? cancel.promise : { job: { id: 18, state: 'running', mode: 'service-check' } });
+  const cancellation = f.context.serviceDashboardCancel();
+  assert.equal(f.calls.at(-1).url, '/api/v1/service-control/current?job_id=17');
+  cancel.resolve({}); await cancellation;
+  assert.equal(f.dashboard.control.job.id, 18);
+  assert.equal(f.calls.filter(call => call.method === 'DELETE').length, 1, 'cancel retried against a replacement job');
+}
+// A lost POST response retains its token across reload; an acknowledged job or
+// logout clears it. An interrupted server task is still active, never a new POST.
+{
+  const f = fixture();
+  f.setHandler(() => { throw new Error('response lost'); });
+  await f.context.serviceDashboardStart('check', ['youtube']);
+  const first = JSON.parse(f.calls.at(-1).body).idempotency_key;
+  f.dashboard.pendingRequest = null; // reload, sessionStorage remains
+  await f.context.serviceDashboardStart('check', ['youtube']);
+  assert.equal(JSON.parse(f.calls.at(-1).body).idempotency_key, first);
+  f.setHandler(() => ({ job: { id: 54, state: 'queued', mode: 'service-check' } }));
+  await f.context.serviceDashboardStart('check', ['youtube']);
+  assert.equal(JSON.parse(f.calls.at(-1).body).idempotency_key, first);
+  assert.equal(f.dashboard.pendingRequest, null);
+  f.dashboard.control.job.state = 'interrupted';
+  assert.equal(f.context.serviceDashboardJobActive(), true);
+  f.context.serviceDashboardRequestToken('private reference');
+  f.dispatch('razvilka:auth-required');
+  assert.equal(f.dashboard.pendingRequest, null);
+  assert.equal(f.context.sessionStorage.getItem('razvilka.service-job-request'), null);
+}
+for (const event of ['razvilka:auth-required', 'razvilka:view-change']) {
+  const f = fixture(), pending = deferred();
+  f.setHandler((url, options) => options.method === 'POST' ? pending.promise : url.endsWith('/current') ? { job: null } : f.state.serviceControl);
+  const request = f.context.serviceDashboardStart('select', ['youtube']);
+  f.dispatch(event, 'overview'); pending.resolve({ job: { id: 17, state: 'running', mode: 'service-select' } }); await request;
+  assert.equal(f.dashboard.operation, null);
+  assert.equal(f.dashboard.control?.job?.id, undefined, `late job response survived ${event}`);
+  assert.equal(f.calls[0].signal.aborted, true);
+}
+
+// Memory status is safe while the checker owns the stores. It cannot refresh
+// evidence or make a recommendation current without the full verified endpoint.
+{
+  const f = fixture();
+  f.setHandler(url => { assert.equal(url, '/api/v1/service-control/current'); return { job: { id: 3, mode: 'service-select', state: 'running' }, results: [{ service_id: 'youtube', available: true, status: 'pass', checked_at: new Date(Date.now()-1000).toISOString(), valid_until: future(), freshness_verified: false }], pings: [] }; });
+  await f.context.refreshServiceControl();
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.dashboard.control.results.length, 0);
+  assert.equal(f.context.serviceDashboardSummary(f.state.services[0]).label, 'Не проверен');
+}
+
+// Changing an interval preserves the saved service list. Revision conflicts do
+// not re-submit the timer with a newer authority or expand it to new services.
+{
+  const f = fixture();
+  f.$('#serviceScheduleInterval').value = '900'; f.$('#serviceScheduleInterval').listeners.change();
+  f.state.services.push({ id: 'new', name: 'New' }); f.state.serviceControl.config_revision = 10;
+  let writes = 0;
+  f.setHandler((url, options) => {
+    if (options.method === 'PUT') { writes++; assert.deepEqual(JSON.parse(options.body), { expected_revision: 9, schedule: { enabled: false, interval_seconds: 900, service_ids: ['youtube'] }, confirm: 'SAVE_SERVICE_CONTROL' }); const error = new Error('Настройки изменились'); error.status = 409; throw error; }
+    return url.endsWith('/current') ? { job: null } : f.state.serviceControl;
+  });
+  await f.context.serviceDashboardSaveSchedule();
+  assert.equal(writes, 1); assert.equal(f.dashboard.scheduleDirty, false);
+}
+
+// Editor input is captured before a request; a later UI selection or logout
+// cannot change which service/scope was saved or publish stale fetched state.
+{
+  const f = fixture(), pending = deferred(); f.setHandler(() => pending.promise);
+  const request = f.context.serviceDashboardEdit('youtube', { route: 'direct' });
+  f.state.services[0].sources = ['192.168.1.90/32'];
+  await f.context.serviceDashboardEdit('telegram', { enabled: true });
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(JSON.parse(f.calls[0].body), { enabled: true, route: 'direct', sources: ['192.168.1.40/32'] });
+  f.dispatch('razvilka:auth-required'); pending.resolve({ id: 'youtube', ok: true }); await request;
+  assert.equal(f.calls.length, 1, 'logout continued staging into follow-up reads');
+  assert.equal(f.state.services[0].route, 'auto', 'an unconfirmed save changed local applied/desired state');
+}
+
+// Website lookup sends hostnames only, never URL tokens, and never creates or
+// enables a service until the existing explicit custom-service dialog is used.
+{
+  const f = fixture();
+  assert.deepEqual([...f.context.serviceWebsiteHosts('https://www.YouTube.com/watch?v=private#token\ntelegram.org')], ['www.youtube.com', 'telegram.org']);
+  for (const input of ['https://user:secret@youtube.com', 'file:///etc/passwd', '127.0.0.1', 'localhost', 'https://[::1]', Array(13).fill('a.example').join('\n')]) assert.throws(() => f.context.serviceWebsiteHosts(input));
+  f.$('#serviceWebsiteInput').value = 'https://youtube.com/watch?v=secret\nunknown.example';
+  f.setHandler(url => url.endsWith('q=youtube.com') ? { matches: [{ service_id: 'youtube', service_name: 'YouTube', matched_rule: 'youtube.com' }] } : { matches: [] });
+  await f.context.discoverServiceWebsites();
+  assert.deepEqual(f.calls.map(call => call.url), ['/api/v1/diagnostics/domain?q=youtube.com', '/api/v1/diagnostics/domain?q=unknown.example']);
+  assert.equal(f.calls.filter(call => call.method && call.method !== 'GET').length, 0);
+  assert.equal(f.opened.length, 0);
+  f.click('#serviceWebsiteResults', { sdCreate: '1' });
+  assert.deepEqual(f.opened, [['custom', undefined]]);
+  assert.equal(f.$('#customServiceDomains').value, 'unknown.example');
+  assert.equal(f.$('#customServiceProbe').value, 'https://unknown.example/');
+  assert.equal(f.calls.length, 2);
+}
+{
+  const f = fixture(), pending = deferred(); f.$('#serviceWebsiteInput').value = 'old.example'; f.setHandler(() => pending.promise);
+  const request = f.context.discoverServiceWebsites();
+  f.$('#serviceWebsiteInput').value = 'new.example'; f.$('#serviceWebsiteInput').listeners.input();
+  pending.resolve({ matches: [] }); await request;
+  assert.equal(f.dashboard.lookupResults.length, 0, 'late lookup restored results for edited input');
+  assert.equal(f.calls[0].signal.aborted, true);
+  assert.equal(f.$('#serviceWebsiteFind').disabled, false);
+}
+
+for (const id of ['serviceCheckAll', 'serviceAutoPickTarget', 'serviceScheduleAll', 'serviceWebsiteInput', 'serviceWebsiteResults']) assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${id} is not unique`);
+assert.match(html, /service-dashboard-ui\.js/);
+console.log('Service dashboard: applied/evidence/ping distinction, focus/details, job identity and cancellation, stale schedule scope, auth/edit fences, and hostname-only confirmed discovery passed');
+
+// R3: an expiry alone cannot prove a check happened; future/missing timestamps
+// must not paint a service green. Group summaries use this same function.
+{
+ const f=fixture(),service=f.state.services[0];
+ service.observed_state={route:'nfqws',status:'pass',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(Date.now()-1000).toISOString(),fresh_until:future()};
+ assert.equal(f.context.serviceDashboardSummary(service).kind,'good');
+ for(const checked of ['', 'broken', new Date(Date.now()+30000).toISOString()]) {
+  service.observed_state.checked_at=checked;
+  assert.notEqual(f.context.serviceDashboardSummary(service).kind,'good');
+ }
+ const p={kind:'check',service_id:'youtube',status:'pass',available:true,checked_route:'nfqws',config_revision:9,freshness_verified:true,valid_until:future(),checked_at:new Date(Date.now()-1000).toISOString()};
+ f.dashboard.control.results=[p];assert.equal(f.context.serviceDashboardSummary(service).kind,'good');
+ for(const checked_at of ['', 'invalid', new Date(Date.now()+10000).toISOString()]) {
+  f.dashboard.control.results=[{...p,checked_at}];
+  assert.notEqual(f.context.serviceDashboardSummary(service).kind,'good');
+ }
+}
+console.log('R3 service evidence timestamp regression: passed');
+
+// Manual checks and autonomous observations are ordered by the time of the
+// actual probe. Neither old success nor old failure can hide a newer result.
+{
+ const f=fixture(), s=f.state.services[0], now=Date.now();
+ const proof={kind:'check',service_id:s.id,status:'pass',available:true,checked_route:'nfqws',config_revision:9,freshness_verified:true,valid_until:future(),checked_at:new Date(now-10000).toISOString()};
+ f.dashboard.control.results=[proof];
+ const observed={route:'nfqws',status:'pass',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(now-1000).toISOString(),fresh_until:future()};
+ for(const change of [{status:'fail',outcome:'transport_error',level:'runtime'}, {status:'inconclusive',level:'runtime'}, {status:'partial'}, {status:undefined}]) {
+  s.observed_state={...observed,...change};
+  assert.notEqual(f.context.serviceDashboardSummary(s).kind,'good',JSON.stringify(change));
+ }
+ f.dashboard.control.results=[{...proof,status:'fail',available:false}]; s.observed_state=observed;
+ assert.equal(f.context.serviceDashboardSummary(s).kind,'good','new autonomous success lost to old manual failure');
+ f.dashboard.control.results=[{...proof,status:'fail',available:false,checked_at:new Date(now-500).toISOString()}];
+ assert.equal(f.context.serviceDashboardSummary(s).kind,'bad','new manual failure lost to old autonomous success');
+ s.presentation_only=true;
+ assert.equal(f.context.serviceDashboardSummary(s).kind,'unknown','saved settings reused a live health result');
+}
+
+function serviceReadFixture() {
+ const f=fixture(); f.context.panelLoad={generation:1,request:null};
+ f.context.panelSnapshotCurrent=n=>n===f.context.panelLoad.generation;
+ f.state.dataLoad={services:{updatedAt:0,phase:'ready'}};
+ f.context.acceptPanelSection=(key,rows)=>{ assert.equal(key,'services');assert(Array.isArray(rows));f.state.services=rows;f.state.dataLoad.services={updatedAt:Date.now(),phase:'ready'}; };
+ f.context.renderPanelSection=()=>{};f.context.renderPanelLoad=()=>{};
+ f.context.panelBusy=e=>e.status===409;
+ f.context.panelSectionState=(key,phase)=>{f.state.dataLoad[key].phase=phase;};
+ return f;
+}
+{
+ const f=serviceReadFixture(); const updated=[{...f.state.services[0],name:'Updated proof'}];
+ f.setHandler(url=>url.endsWith('/current')?{job:null}:url.endsWith('/services')?updated:f.state.serviceControl);
+ f.state.currentView='overview'; await f.context.refreshServiceControl();
+ assert.equal(f.state.services,updated); assert.equal(f.calls.filter(c=>c.url.endsWith('/services')).length,1);
+ await f.context.refreshServiceControl();
+ assert.equal(f.calls.filter(c=>c.url.endsWith('/services')).length,1,'service list reread inside 30-second interval');
+ const before=f.calls.length;f.document.hidden=true;await f.context.refreshServiceControl();assert.equal(f.calls.length,before);
+}
+for(const invalidate of ['new-generation','logout','full-read','edit']) {
+ const f=serviceReadFixture(), pending=deferred(), original=f.state.services;
+ f.setHandler(url=>url.endsWith('/current')?{job:null}:url.endsWith('/services')?pending.promise:f.state.serviceControl);
+ const read=f.context.refreshServiceControl();await flush();assert(f.calls.some(c=>c.url.endsWith('/services')));
+ if(invalidate==='new-generation')f.context.panelLoad.generation++;
+ if(invalidate==='logout')f.dispatch('razvilka:auth-required');
+ if(invalidate==='full-read')f.context.panelLoad.request=Promise.resolve();
+ if(invalidate==='edit')f.dashboard.edit={};
+ pending.resolve([{id:'late'}]);await read;assert.equal(f.state.services,original,invalidate);
+}
+{
+ const f=serviceReadFixture(), original=f.state.services;
+ f.setHandler(url=>{if(url.endsWith('/services'))throw Object.assign(Error('busy'),{status:409});return url.endsWith('/current')?{job:null}:f.state.serviceControl;});
+ await f.context.refreshServiceControl();assert.equal(f.state.services,original);assert.equal(f.state.dataLoad.services.phase,'busy');
+}
+{
+ const f=fixture();f.state.currentView='overview';
+ f.setHandler(url=>url.endsWith('/current')?{job:null}:f.state.serviceControl);
+ f.dispatch('razvilka:view-change','overview');await flush();assert.equal(f.calls.length,2);
+ const tick=[...f.timers.values()][0];f.timers.clear();await tick();assert.equal(f.calls.length,4);
+ f.document.hidden=true;f.dispatch('visibilitychange');assert.equal(f.timers.size,0);
+ const count=f.calls.length;await tick();assert.equal(f.calls.length,count);
+ f.document.hidden=false;f.dispatch('visibilitychange');await flush();assert.equal(f.calls.length,count+2);
+}
+console.log('Autonomous observations: latest result, home polling, bounded reads, visibility and mutation fences passed');
+
+const wgRevision = 'a'.repeat(64), nextWGRevision = 'b'.repeat(64);
+const wgOption = (revision = wgRevision) => ({ id:'wireguard:private', name:'WireGuard · Личный', kind:'wireguard-profile', selectable:true, configured:true, installed:false, ready:false, running:false, wireguard_profile_revision:revision });
+const wgSelect = (revision = wgRevision, config = '9') => ({ value:'wireguard:private', dataset:{configRevision:config}, selectedOptions:[{value:'wireguard:private',disabled:false,dataset:{routeKind:'wireguard-profile',routeSelectable:'true',profileRevision:revision}}] });
+function wgResponder(f, revision = wgRevision) {
+  return (url, options={}) => {
+    if(options.method==='PUT') {
+      const body=JSON.parse(options.body), service=f.state.services[0];
+      assert.equal(body.expected_revision,9);assert.equal(body.expected_profile_revision,revision);
+      Object.assign(service,{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:revision,dirty:true,route_dirty:true});
+      return {id:service.id,ok:true,state:{enabled:body.enabled,route:body.route,sources:body.sources,wireguard_profile_revision:revision}};
+    }
+    if(url==='/api/v1/status')return {...f.state.status};
+    if(url==='/api/v1/services')return structuredClone(f.state.services);
+    if(url==='/api/v1/routes/options')return [wgOption(nextWGRevision)];
+    throw new Error('Unexpected WG call '+url);
+  };
+}
+{
+  const f=fixture();f.state.routeOptions.push(wgOption());
+  const markup=f.context.serviceDashboardRouteSelect(f.state.services[0]);
+  assert.match(markup,/data-config-revision="9"/);assert.match(markup,/только формат · в черновик/);
+  assert.doesNotMatch(markup,/<option value="wireguard:private"[^>]* disabled/,'not installed/ready prevented syntax-only draft selection');
+  const select=wgSelect();f.state.routeOptions=[wgOption(nextWGRevision)];f.state.status.revision=10;
+  // The old open select carries both revisions the user reviewed; it cannot
+  // borrow a newer hash/config revision from a passive in-memory update.
+  f.setHandler((url,options)=>{if(options.method==='PUT'){const body=JSON.parse(options.body);assert.equal(body.expected_profile_revision,wgRevision);assert.equal(body.expected_revision,9);throw Object.assign(new Error('CAS'),{status:409});}throw new Error(url);});
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},select);
+  assert.equal(f.calls.length,1);assert.equal(f.dashboard.draftUnconfirmed.has('youtube'),true);
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect(nextWGRevision,'10'));
+  assert.equal(f.calls.length,1,'409 caused a replay or enabled another write without explicit read');
+  assert.match(f.$('#serviceList').innerHTML,/Перечитать выбор/);
+  f.setHandler(wgResponder(f));await f.context.serviceDashboardReadDraft('youtube');
+  assert.equal(f.calls.length,4);assert.equal(f.dashboard.draftUnconfirmed.has('youtube'),false);assert.equal(f.state.routeOptions[0].wireguard_profile_revision,nextWGRevision);
+}
+{
+  const f=fixture();f.state.routeOptions.push(wgOption());f.setHandler(wgResponder(f));
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect());
+  const body=JSON.parse(f.calls[0].body);
+  assert.deepEqual(body,{enabled:true,route:'wireguard:private',sources:['192.168.1.40/32'],expected_revision:9,expected_profile_revision:wgRevision});
+  assert.equal(f.state.services[0].applied_state.route,'nfqws','draft save changed applied route');
+  assert.match(f.dashboard.message,/в черновике/);assert.match(f.dashboard.message,/только формат/);
+  assert.match(f.context.serviceDashboardCard(f.state.services[0]),new RegExp(wgRevision));
+  // Retained route/scope/toggle writes use the saved binding, not the current
+  // catalog hash; replacing the catalog must trigger backend CAS refusal.
+  f.state.routeOptions=[wgOption(nextWGRevision)];
+  const retained=f.context.serviceDraftBody(f.state.services[0],{sources:['192.168.1.41/32']});
+  assert.equal(retained.expected_profile_revision,wgRevision);
+  await f.context.saveService({...f.state.services[0],enabled:false});
+  assert.equal(JSON.parse(f.calls.at(-1).body).expected_profile_revision,wgRevision);
+  const direct=f.context.serviceDraftBody(f.state.services[0],{route:'direct'});
+  assert.deepEqual(JSON.parse(JSON.stringify(direct)),{enabled:false,route:'direct',sources:['192.168.1.40/32']},'obsolete WG revision escaped with another route');
+  f.state.services[0].applied_state={enabled:true,route:'wireguard:private'};
+  f.state.services[0].observed_state={route:'wireguard:private',status:'pass',level:'service-confirmed',outcome:'service_accepted',checked_at:new Date(Date.now()-1000).toISOString(),fresh_until:future()};
+  assert.notEqual(f.context.serviceDashboardSummary(f.state.services[0]).label,'Сервис доступен','ID-only proof promoted syntax-only profile metadata');
+}
+for(const tamper of [select=>select.dataset.configRevision='',select=>select.selectedOptions[0].dataset.profileRevision='',select=>select.selectedOptions[0].dataset.profileRevision='A'.repeat(64),select=>select.selectedOptions[0].dataset.routeKind='engine',select=>select.selectedOptions[0].disabled=true]) {
+  const f=fixture(), select=wgSelect();tamper(select);await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},select);assert.equal(f.calls.length,0);
+}
+{
+  const f=fixture();await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'});assert.equal(f.calls.length,0,'ID-only writer admitted a named route');
+  const legacy={...f.state.services[0],route:'wireguard:removed',wireguard_profile_revision:undefined};
+  assert.equal(f.context.serviceDraftBody(legacy,{enabled:false}).expected_revision,9);
+  assert.throws(()=>f.context.serviceDraftBody(legacy,{enabled:true}));
+}
+for(const reply of [{ok:true,id:'youtube',state:{enabled:true,route:'wireguard:private',wireguard_profile_revision:nextWGRevision}},{ok:true,id:'other',state:{enabled:true,route:'wireguard:private',wireguard_profile_revision:wgRevision}},new Error('lost reply')]) {
+  const f=fixture();f.setHandler(()=>{if(reply instanceof Error)throw reply;return reply;});
+  await f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect());
+  assert.equal(f.calls.length,1);assert.equal(f.dashboard.draftUnconfirmed.has('youtube'),true);assert.equal(f.state.services[0].route,'auto');
+  await f.context.serviceDashboardEdit('youtube',{enabled:false});assert.equal(f.calls.length,1);
+}
+{
+  const f=fixture(), pending=deferred();f.setHandler(()=>pending.promise);
+  const write=f.context.serviceDashboardEdit('youtube',{route:'wireguard:private'},wgSelect());
+  f.dispatch('razvilka:auth-required');pending.resolve({ok:true,id:'youtube',state:{enabled:true,route:'wireguard:private',sources:['192.168.1.40/32'],wireguard_profile_revision:wgRevision}});await write;
+  assert.equal(f.calls.length,1);assert.equal(f.state.services[0].route,'auto');assert.equal(f.dashboard.message,'');
+  const readFixture=fixture(), late=deferred();readFixture.dashboard.draftUnconfirmed.add('youtube');readFixture.setHandler(()=>late.promise);
+  const read=readFixture.context.serviceDashboardReadDraft('youtube');readFixture.dispatch('razvilka:auth-required');late.resolve([]);await read;
+  assert.equal(readFixture.dashboard.draftUnconfirmed.has('youtube'),true,'old read reopened write permission after logout');
+}
+console.log('PASS named WG draft writer: frozen config/profile CAS, syntax-only options, retained binding and withdrawal, no obsolete hash, unconfirmed-write readback and auth fences');
+
+function loadDraftHandlers(f, names) {
+  vm.runInContext(names.map(name=>{const match=appSource.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];}).join('\n'),f.context);
+  f.context.refreshCoreAfterEdit=async()=>{};f.context.refreshDevices=async()=>{};f.context.showPlan=async()=>{};
+  f.context.showDetails=()=>{};
+}
+{
+  const f=fixture(),service=f.state.services[0];Object.assign(service,{route:'wireguard:private',wireguard_profile_revision:wgRevision});
+  loadDraftHandlers(f,['openServiceScope','closeServiceScope','renderServiceScopeDevices','saveServiceScope']);
+  f.$('#serviceScopeDialog').showModal=()=>{};f.$('#serviceScopeDialog').close=()=>{};
+  f.context.openServiceScope(service.id);f.state.status.revision=10;service.route='direct';service.wireguard_profile_revision=nextWGRevision;
+  f.$('#serviceScopeSources').value='192.168.1.41/32';f.setHandler(wgResponder(f));
+  await f.context.saveServiceScope({preventDefault(){}});
+  assert.equal(f.calls.length,1);const body=JSON.parse(f.calls[0].body);
+  assert.equal(body.route,'wireguard:private');assert.equal(body.expected_revision,9);assert.equal(body.expected_profile_revision,wgRevision);assert.deepEqual(body.sources,['192.168.1.41/32']);
+}
+{
+  const f=fixture(),service=f.state.services[0];Object.assign(service,{route:'wireguard:private',wireguard_profile_revision:wgRevision});
+  f.state.devices=[{id:'device',ips:['192.168.1.42'],group:''}];loadDraftHandlers(f,['saveDevicePolicy']);
+  f.$('#devicePolicyID').value='device';f.$('#devicePolicyService').value=service.id;f.$('#devicePolicyScope').value='device';f.$('#devicePolicyDialog').close=()=>{};
+  f.context.askConfirmation=async()=>{f.state.status.revision=10;service.route='direct';service.wireguard_profile_revision=nextWGRevision;return true;};
+  f.setHandler(wgResponder(f));await f.context.saveDevicePolicy({preventDefault(){}});
+  assert.equal(f.calls.length,1);const body=JSON.parse(f.calls[0].body);assert.equal(body.route,'wireguard:private');assert.equal(body.expected_revision,9);assert.equal(body.expected_profile_revision,wgRevision);assert.deepEqual(body.sources,['192.168.1.42']);
+}
+console.log('PASS named WG scoped writers: actual service scope and device confirmation preserve the frozen route/revision pair');
+{
+  const f=fixture(),service=f.state.services[0],saved=[];
+  loadDraftHandlers(f,['openServiceScope','closeServiceScope','renderServiceScopeDevices','saveServiceScope']);
+  const dialog=f.$('#serviceScopeDialog');
+  dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};
+  f.context.openServiceScope(service.id,{allLAN:true,sources:[],save:async scope=>{saved.push(JSON.parse(JSON.stringify(scope)));return true;}});
+  assert.equal(f.$('#serviceScopeMode').value,'all');
+  assert.match(f.$('#serviceScopeDescription').textContent,/режиме Auto/);
+  f.$('#serviceScopeMode').value='selected';
+  await f.context.saveServiceScope({preventDefault(){}});
+  assert.equal(saved.length,0,'empty selected scope was submitted');
+  f.$('#serviceScopeSources').value='192.168.1.41/32';
+  await f.context.saveServiceScope({preventDefault(){}});
+  assert.deepEqual(saved,[{allLAN:false,sources:['192.168.1.41/32']}]);
+  assert.equal(f.calls.length,0,'Auto scope unexpectedly wrote a manual draft');
+  assert.equal(dialog.open,false);
+}
+{
+  const f=fixture(),service=f.state.services[0];
+  loadDraftHandlers(f,['openServiceScope','closeServiceScope','loadAutonomyScopeDevices','renderServiceScopeDevices']);
+  f.state.authenticated=true;
+  f.context.deviceDisplayName=device=>device.name;
+  const dialog=f.$('#serviceScopeDialog');
+  dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};
+  f.setHandler(()=>({devices:[{id:'selected-device',name:'Ноутбук',ips:['192.0.2.40']}]}));
+  f.context.openServiceScope(service.id,{allLAN:true,sources:[],save:async()=>true});
+  assert.equal(f.calls.length,0,'whole-LAN scope unnecessarily loaded the device list');
+  f.$('#serviceScopeMode').value='selected';
+  await f.context.loadAutonomyScopeDevices();
+  assert.equal(f.calls[0].url,'/api/v1/devices?view=status');
+  assert.match(f.$('#serviceScopeDevices').innerHTML,/Ноутбук/);
+  assert.equal(f.$('#serviceScopeSources').value,'','discovery automatically selected a device');
+  assert.deepEqual(f.state.devices,[],'scope discovery overwrote the general device list');
+}
+{
+  const f=fixture();loadDraftHandlers(f,['renderServiceScopeDevices','changeServiceScopeDevice','bindServiceScopeControls']);
+  f.context.deviceDisplayName=device=>device.name;
+  f.state.devices=[{id:'test-device',name:'Тест',ips:['192.0.2.40']}];
+  f.$('#serviceScopeMode').value='all';f.$('#serviceScopeSources').value='';f.context.renderServiceScopeDevices();f.context.bindServiceScopeControls();
+  assert.equal(f.$('#serviceScopeSources').disabled,true);assert.equal(f.$('#serviceScopeDevices').hidden,true);
+  f.$('#serviceScopeMode').value='selected';f.$('#serviceScopeMode').listeners.change();
+  assert.equal(f.$('#serviceScopeSources').disabled,false);assert.equal(f.$('#serviceScopeDevices').hidden,false);assert.match(f.$('#serviceScopeSummary').textContent,/Пустой выбор не включает всю сеть/);
+  f.$('#serviceScopeSources').value='192.0.2.40/32';f.$('#serviceScopeSources').listeners.input();
+  assert.match(f.$('#serviceScopeDevices').innerHTML,/checked/);assert.match(f.$('#serviceScopeSummary').textContent,/192\.0\.2\.40\/32/);
+  f.$('#serviceScopeDevices').listeners.change({target:{closest:()=>({dataset:{serviceScopeDevice:'test-device'},checked:false})}});
+  assert.equal(f.$('#serviceScopeSources').value,'');assert.doesNotMatch(f.$('#serviceScopeDevices').innerHTML,/ checked/);
+  f.$('#serviceScopeMode').value='all';f.$('#serviceScopeMode').listeners.change();assert.equal(f.$('#serviceScopeSources').disabled,true);assert.equal(f.$('#serviceScopeDevices').hidden,true);
+  assert.equal(f.calls.length,0,'scope form interaction sent an API write');
+}
+console.log('PASS scope UI controls: all/selected updates enabled fields, manual addresses and checkbox changes without API writes');

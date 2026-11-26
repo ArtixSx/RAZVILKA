@@ -1,0 +1,325 @@
+#!/bin/sh
+# Minimal network bootstrap for Keenetic / Netcraze routers with Entware.
+# Downloads the official release bundle, verifies its SHA-256 and delegates all
+# writes to the transactional installer shipped in that exact release.
+set -eu
+umask 077
+
+BASE="${RAZVILKA_BASE:-/opt}"
+case "$BASE" in /*) ;; *) echo "RAZVILKA_BASE must be an absolute directory" >&2; exit 1 ;; esac
+# Entware commonly exposes /opt through a link. Resolve only this explicit
+# installation root; a link resolving to / is never a valid installation.
+[ -d "$BASE" ] || { echo "Entware directory is missing: $BASE" >&2; exit 10; }
+BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
+[ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 10; }
+PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
+export PATH
+export RAZVILKA_BASE="$BASE"
+REPOSITORY="${RAZVILKA_REPOSITORY:-ArtixSx/RAZVILKA}"
+# This file is fetched from a release tag, so by default it installs, removes
+# and rolls back exactly that release. "latest" floats between generations
+# with different layouts and is accepted only as an explicit installation.
+# scripts/test-bootstrap.sh and internal/projectmeta keep this equal to VERSION.
+RELEASE_TAG=v0.20.0
+VERSION="${RAZVILKA_VERSION:-$RELEASE_TAG}"
+FROM_ARTEM=0
+WITH_COMPONENTS=0
+PURGE=0
+ACTION=install
+
+if [ -t 1 ]; then
+  C_BLUE='\033[1;36m'; C_GREEN='\033[1;32m'; C_YELLOW='\033[1;33m'; C_DIM='\033[2m'; C_RESET='\033[0m'
+else
+  C_BLUE=''; C_GREEN=''; C_YELLOW=''; C_DIM=''; C_RESET=''
+fi
+step() { printf '%b[%s]%b %s\n' "$C_BLUE" "$1" "$C_RESET" "$2"; }
+ok() { printf '%b[OK]%b %s\n' "$C_GREEN" "$C_RESET" "$1"; }
+warn() { printf '%b[! ]%b %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
+
+printf '%b\n' "$C_BLUE"
+echo '+============================================================+'
+echo '|                    RAZVILKA для Entware                    |'
+echo '|        Единая панель сервисов, обходов и маршрутов         |'
+echo '+============================================================+'
+printf '%b' "$C_RESET"
+
+for ARG in "$@"; do
+  case "$ARG" in
+    --uninstall|--rollback)
+      [ "$ACTION" = install ] || { echo "Choose only one action: --uninstall or --rollback" >&2; exit 2; }
+      ACTION="${ARG#--}"
+      ;;
+    --from-artem-flow) FROM_ARTEM=1 ;;
+    --purge) PURGE=1 ;;
+    --with-components|--starter-pack) WITH_COMPONENTS=1 ;;
+    --without-components) WITH_COMPONENTS=0 ;; # legacy compatibility; UI-only is now the default
+    -h|--help)
+      echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack] | --uninstall [--purge] | --rollback"
+      echo "Default: install/update the panel. --uninstall keeps data; managed 0.20 removal refuses before Stop."
+      echo "Managed 0.20 refuses retained-data removal: export settings, then use --uninstall --purge for a clean install."
+      echo "--uninstall --purge then moves all RAZVILKA data to /opt/razvilka-removed-<UTC> for a clean reinstall."
+      echo "--rollback explicitly restores the last pre-update snapshot."
+      echo "Optional environment: RAZVILKA_VERSION=v<release-tag> (default: $RELEASE_TAG; latest only for installation)"
+      echo "Architecture override: RAZVILKA_ARCH=arm64|mips|mipsle (mipsel is also accepted)"
+      echo "Example: RAZVILKA_ARCH=mipsle sh /opt/tmp/razvilka-setup.sh"
+      exit 0
+      ;;
+    *) echo "Unknown option: $ARG" >&2; exit 2 ;;
+  esac
+done
+[ "$ACTION" = install ] || { [ "$FROM_ARTEM" -eq 0 ] && [ "$WITH_COMPONENTS" -eq 0 ]; } || { echo "Component/migration options apply only to installation" >&2; exit 2; }
+[ "$PURGE" -eq 0 ] || [ "$ACTION" = uninstall ] || { echo "--purge applies only to --uninstall" >&2; exit 2; }
+# Validate the release before Entware or the network is touched. The tag is
+# part of the download URL and of the archive directory checked below.
+if [ "$VERSION" = latest ]; then
+  [ "$ACTION" = install ] || {
+    echo "--$ACTION must use the release of the installed version; latest is not accepted" >&2
+    echo "Укажите версию установленной панели (/opt/bin/razvilka -version): RAZVILKA_VERSION=v<версия> sh $0 --$ACTION" >&2
+    exit 2
+  }
+else
+  case "$VERSION" in v*) : ;; *) VERSION="v$VERSION" ;; esac
+  case "$VERSION" in
+    v[0-9]*[!0-9A-Za-z.+-]*|*..*) echo "Invalid RAZVILKA_VERSION: use v<release-tag>, for example $RELEASE_TAG" >&2; exit 2 ;;
+    v[0-9]*) : ;;
+    *) echo "Invalid RAZVILKA_VERSION: use v<release-tag>, for example $RELEASE_TAG" >&2; exit 2 ;;
+  esac
+fi
+
+step '1/5' 'Проверяю Entware и системные инструменты…'
+[ "$(id -u)" = 0 ] || { echo "Run this command as the Entware administrator (root)." >&2; exit 10; }
+OPKG=""
+for OPKG_CANDIDATE in "$BASE/bin/opkg" "$BASE/sbin/opkg"; do
+  if [ -f "$OPKG_CANDIDATE" ] && [ -x "$OPKG_CANDIDATE" ]; then
+    OPKG="$OPKG_CANDIDATE"
+    break
+  fi
+done
+[ -n "$OPKG" ] || {
+  echo "ОШИБКА: opkg не найден в $BASE. Установка Entware не завершена или каталог не подключён." >&2
+  exit 11
+}
+# The firmware may provide its own opkg in PATH. It must never receive Entware
+# package operations, including after changing to the private workspace.
+readonly OPKG
+PACKAGES=""
+NEED_HTTPS_WGET=0
+need_package() {
+  case " $PACKAGES " in *" $1 "*) ;; *) PACKAGES="${PACKAGES:+$PACKAGES }$1" ;; esac
+}
+command -v curl >/dev/null 2>&1 || need_package curl
+# opkg uses wget independently from curl. The firmware BusyBox wget may only
+# support HTTP, leaving third-party HTTPS feeds unavailable after installation.
+case "$(wget --version 2>/dev/null || true)" in
+  *+https*) ;;
+  *) need_package wget-ssl; NEED_HTTPS_WGET=1 ;;
+esac
+command -v sha256sum >/dev/null 2>&1 || need_package coreutils-sha256sum
+command -v tar >/dev/null 2>&1 || need_package tar
+command -v gzip >/dev/null 2>&1 || need_package gzip
+command -v mktemp >/dev/null 2>&1 || need_package coreutils-mktemp
+command -v readlink >/dev/null 2>&1 || need_package coreutils-readlink
+supports_timeout() {
+  command -v timeout >/dev/null 2>&1 && timeout -k 1 2 sh -c 'exit 0' >/dev/null 2>&1
+}
+supports_timeout || need_package coreutils-timeout
+for TOOL in awk dd od pidof grep; do
+  command -v "$TOOL" >/dev/null 2>&1 || need_package busybox
+done
+[ -x "$BASE/sbin/start-stop-daemon" ] || need_package busybox
+supports_stock_ip_full() {
+  # BusyBox ip can pass the address probe while lacking the reviewed policy
+  # tool. Let opkg own its alternative; do not rewrite a user's link here.
+  [ -x "$BASE/libexec/ip-full" ] && command -v readlink >/dev/null 2>&1 || return 1
+  IP_FULL_MAIN="$(readlink -f "$BASE/libexec/ip-full" 2>/dev/null)" || return 1
+  IP_FULL_ALIAS="$(readlink -f "$BASE/sbin/ip" 2>/dev/null)" || return 1
+  [ -n "$IP_FULL_MAIN" ] && [ "$IP_FULL_ALIAS" = "$IP_FULL_MAIN" ] || return 1
+  IP_FULL_VERSION="$("$BASE/libexec/ip-full" -Version 2>&1)" || return 1
+  [ "$IP_FULL_VERSION" = 'ip utility, iproute2-ss4.4.0-11-entware' ]
+}
+if ! supports_stock_ip_full || ! command -v ip >/dev/null 2>&1 || ! ip -4 -o addr show >/dev/null 2>&1; then
+  need_package ip-full
+fi
+if [ ! -r "$BASE/etc/ssl/certs/ca-certificates.crt" ] && [ ! -r "$BASE/etc/ssl/cert.pem" ]; then
+  need_package ca-bundle
+fi
+if [ -n "$PACKAGES" ]; then
+  step '1/5' "Устанавливаю недостающие инструменты: $PACKAGES"
+  (
+  # Entware opkg falls back to the caller's cwd when TMPDIR is absent. The
+  # firmware cwd may be read-only, and mktemp/coreutils may themselves be among
+  # the missing packages. Claim one private directory using only BusyBox mkdir;
+  # never adopt a colliding path. Keep this environment local to dependency
+  # installation so the caller's later download TMPDIR is preserved.
+  OPKG_TMP="$BASE/.razvilka-opkg.$$"
+  readonly OPKG_TMP
+  mkdir "$OPKG_TMP" || { echo "Cannot create private Entware package workspace" >&2; exit 12; }
+  cleanup_opkg() {
+    OPKG_STATUS=$?
+    if ! rm -rf "$OPKG_TMP"; then
+      echo "Cannot clean private Entware package workspace: $OPKG_TMP" >&2
+      [ "$OPKG_STATUS" -ne 0 ] || OPKG_STATUS=12
+    fi
+    exit "$OPKG_STATUS"
+  }
+  trap cleanup_opkg EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  TMPDIR="$OPKG_TMP"
+  export TMPDIR
+  cd -- "$OPKG_TMP"
+  if ! "$OPKG" update; then
+    if [ "$NEED_HTTPS_WGET" -eq 1 ]; then
+      # Entware's HTTP index may have refreshed while existing HTTPS feeds
+      # failed. Bootstrap only its fixed TLS downloader, then require a clean
+      # refresh; do not silently continue with failed package metadata.
+      warn 'Подготавливаю wget-ssl для HTTPS-каталогов Entware…'
+      "$OPKG" install wget-ssl
+      "$OPKG" update
+    else
+      echo "Не удалось обновить каталог Entware. Проверьте доступность репозиториев." >&2
+      exit 12
+    fi
+  fi
+  # Package names are exclusively the fixed allowlist above. No global upgrade.
+  "$OPKG" install $PACKAGES
+  )
+  hash -r 2>/dev/null || true
+fi
+for TOOL in curl sha256sum tar gzip mktemp readlink timeout awk dd od pidof grep ip; do
+  command -v "$TOOL" >/dev/null 2>&1 || { echo "Required tool is still unavailable after opkg: $TOOL" >&2; exit 12; }
+done
+supports_timeout || { echo "Entware timeout must support -k; check coreutils-timeout and PATH." >&2; exit 12; }
+case "$(wget --version 2>/dev/null || true)" in
+  *+https*) ;;
+  *) echo "Для HTTPS-каталогов opkg нужен wget-ssl. Проверьте PATH и установку пакета." >&2; exit 12 ;;
+esac
+if [ ! -x "$BASE/sbin/start-stop-daemon" ] || ! supports_stock_ip_full || ! ip -4 -o addr show >/dev/null 2>&1; then
+  echo "Entware service/IP tools are incomplete; check busybox and ip-full packages." >&2
+  exit 12
+fi
+ok "Entware готов; платформа ядра: $(uname -m)"
+echo 'Точную архитектуру сборки, включая MIPS/MIPSel, проверит установщик из архива.'
+
+if [ "$VERSION" = latest ]; then
+  DOWNLOAD_BASE="https://github.com/$REPOSITORY/releases/latest/download"
+else
+  DOWNLOAD_BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
+fi
+
+check_private_cache() {
+  for PRIVATE_DIR in "$BASE/razvilka" "$BASE/razvilka/cache"; do
+    [ ! -L "$PRIVATE_DIR" ] && { [ ! -e "$PRIVATE_DIR" ] || [ -d "$PRIVATE_DIR" ]; } || { echo "Unsafe private bootstrap directory: $PRIVATE_DIR" >&2; exit 12; }
+    if [ -d "$PRIVATE_DIR" ]; then
+      PRIVATE_OWNER="$(LC_ALL=C ls -nd -- "$PRIVATE_DIR" | awk '
+        NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+        END { if (NR != 1 || !ok) exit 1 }
+      ')" && [ "$PRIVATE_OWNER" = "$(id -u)" ] || { echo "Unsafe private bootstrap owner or permissions: $PRIVATE_DIR" >&2; exit 12; }
+    fi
+  done
+}
+check_private_cache
+if [ -n "${TMPDIR:-}" ]; then
+  TMP_ROOT="$TMPDIR"
+elif [ "$PURGE" -eq 1 ]; then
+  # Purge moves /opt/razvilka aside, private cache included. Extract into
+  # Entware's own temporary folder so neither the running helper nor this
+  # cleanup refers to the moved tree.
+  TMP_ROOT="$BASE/tmp"
+else
+  TMP_ROOT="$BASE/razvilka/cache"
+fi
+mkdir -p "$TMP_ROOT"
+[ -n "${TMPDIR:-}" ] || [ "$PURGE" -eq 1 ] || check_private_cache
+TMP_ROOT="$(CDPATH= cd -- "$TMP_ROOT" && pwd -P)"
+WORKDIR="$(mktemp -d "$TMP_ROOT/razvilka-install.XXXXXX")"
+cleanup() {
+  case "$WORKDIR" in "$TMP_ROOT"/razvilka-install.*) rm -rf "$WORKDIR" ;; esac
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+BUNDLE="$WORKDIR/RAZVILKA-entware.tar.gz"
+CHECKSUM="$WORKDIR/RAZVILKA-entware.tar.gz.sha256"
+
+download() {
+  URL="$1"
+  DEST="$2"
+  curl -fsSL --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 300 --retry 2 --output "$DEST" "$URL"
+}
+
+step '2/5' "Загружаю проверенный релиз ${VERSION}…"
+download "$DOWNLOAD_BASE/RAZVILKA-entware.tar.gz" "$BUNDLE"
+download "$DOWNLOAD_BASE/RAZVILKA-entware.tar.gz.sha256" "$CHECKSUM"
+
+step '3/5' 'Проверяю SHA-256 архива…'
+EXPECTED="$(awk '
+  NF { sub(/\r$/, ""); count++; name=$2; sub(/^\*/, "", name)
+    if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-fA-F]+$/ || name != "RAZVILKA-entware.tar.gz") bad=1
+    hash=tolower($1)
+  }
+  END { if (count != 1 || bad) exit 1; print hash }
+' "$CHECKSUM")" || { echo "Invalid release archive checksum manifest" >&2; exit 13; }
+ACTUAL="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+[ "$EXPECTED" = "$ACTUAL" ] || { echo "Release archive checksum mismatch" >&2; exit 13; }
+ok 'Контрольная сумма совпала'
+
+step '4/5' 'Распаковываю релиз во временную папку…'
+# Reject links, special files, path traversal and ambiguous roots before any
+# extraction. Release archives contain only one RAZVILKA directory and files.
+# BusyBox can normalize dangerous ../ or absolute names while listing them,
+# reporting that only on stderr. Never validate its rewritten stdout alone.
+if ! tar -tzf "$BUNDLE" >"$WORKDIR/archive.paths" 2>"$WORKDIR/archive.paths.errors" || [ -s "$WORKDIR/archive.paths.errors" ]; then
+  echo "Release archive path listing failed or reported unsafe normalization" >&2
+  exit 16
+fi
+RELEASE_NAME="$(awk '
+  { if (NF != 1 || $0 ~ /\\/ || $0 ~ /^\// || $0 ~ /(^|\/)\.\.?($|\/)/) bad=1
+    split($0, p, "/"); if (p[1] !~ /^RAZVILKA-[0-9A-Za-z._+-]+$/) bad=1
+    if (root != "" && root != p[1]) bad=1; root=p[1]
+  }
+  END { if (bad || root == "") exit 1; print root }
+' "$WORKDIR/archive.paths")" || { echo "Unsafe release archive paths" >&2; exit 16; }
+if ! tar -tvzf "$BUNDLE" >"$WORKDIR/archive.types" 2>"$WORKDIR/archive.types.errors" || [ -s "$WORKDIR/archive.types.errors" ]; then
+  echo "Release archive type listing failed or reported warnings" >&2
+  exit 16
+fi
+awk 'substr($0,1,1) != "-" && substr($0,1,1) != "d" {bad=1} END {exit bad}' "$WORKDIR/archive.types" || { echo "Release archive contains links or special files" >&2; exit 16; }
+# The checksum sidecar comes from the same place as the archive, so it proves
+# integrity only. A pinned release must also be the requested one: its single
+# top directory is RAZVILKA-<tag without v>, never another generation.
+if [ "$VERSION" != latest ] && [ "$RELEASE_NAME" != "RAZVILKA-${VERSION#v}" ]; then
+  echo "Release archive version does not match the requested release: $RELEASE_NAME, expected RAZVILKA-${VERSION#v}" >&2
+  exit 16
+fi
+tar -xzf "$BUNDLE" -C "$WORKDIR"
+HELPER="$WORKDIR/$RELEASE_NAME/scripts/$ACTION-entware.sh"
+[ -f "$HELPER" ] && [ ! -L "$HELPER" ] || { echo "Release helper is missing: $ACTION" >&2; exit 15; }
+if [ "$ACTION" = uninstall ]; then
+  if [ "$PURGE" -eq 1 ] && ! grep -q '^# RAZVILKA_UNINSTALL_PURGE_MOVES_DATA=1$' "$HELPER"; then
+    echo "This release has no purge option. Select a current release; no uninstall was started." >&2
+    exit 15
+  fi
+  grep -q '^# RAZVILKA_UNINSTALL_PRESERVES_DATA=1$' "$HELPER" || {
+    echo "This release predates safe panel removal. Select a current release; no uninstall was started." >&2
+    exit 15
+  }
+fi
+
+case "$ACTION" in
+  install) step '5/5' 'Устанавливаю панель со снимком и автоматическим возвратом при ошибке…' ;;
+  uninstall)
+    if [ "$PURGE" -eq 1 ]; then
+      step '5/5' 'Удаляю панель и её маршруты, затем переношу все данные RAZVILKA в отдельную папку…'
+    else
+      step '5/5' 'Удаляю панель и её маршруты; настройки и подключения сохраняются…'
+    fi ;;
+  rollback) step '5/5' 'Возвращаю явно выбранный предыдущий снимок…' ;;
+esac
+set --
+if [ "$FROM_ARTEM" -eq 1 ]; then set -- "$@" --from-artem-flow; fi
+if [ "$WITH_COMPONENTS" -eq 1 ]; then set -- "$@" --with-components; fi
+if [ "$PURGE" -eq 1 ]; then set -- "$@" --purge; fi
+sh "$HELPER" "$@"

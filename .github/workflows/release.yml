@@ -1,0 +1,236 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-status:
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.lookup.outputs.exists }}
+    steps:
+      - name: Check for a release or draft with this tag
+        id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          existing="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq -er --arg tag "$GITHUB_REF_NAME" 'if (add // [] | any(.tag_name == $tag)) then "true" else "false" end')"
+          echo "exists=$existing" >> "$GITHUB_OUTPUT"
+
+  build-release:
+    needs: release-status
+    if: needs.release-status.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    # The full gate runs Go tests twice (normal and race), about 100 UI tests,
+    # four cross-builds and the Entware transaction. On the Linux test VM the
+    # updatecheck/app race and app normal runs alone took over 20 minutes.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Verify the pinned Go toolchain and install the native parser fixture
+        run: |
+          go version
+          test "$(go env GOVERSION)" = "$(sed -n 's/^toolchain //p' go.mod)"
+          sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static
+
+      - name: Run checks and cross-build
+        shell: bash
+        run: |
+          SOURCE_VERSION="$(tr -d '\r\n' < VERSION)"
+          RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          SOURCE_BASE="${SOURCE_VERSION%-dev}"
+          if [[ "$SOURCE_BASE" != "$RELEASE_VERSION" && ! "$RELEASE_VERSION" =~ ^"$SOURCE_BASE"-rc\.[1-9][0-9]*$ ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match canonical VERSION $SOURCE_VERSION" >&2
+            exit 1
+          fi
+          # The raw bootstrap at this tag installs, removes and rolls back its
+          # RELEASE_TAG by default. A stable tag must name itself; a candidate
+          # tag is installed only with an explicit RAZVILKA_VERSION pin.
+          if [[ "$RELEASE_VERSION" == "$SOURCE_BASE" ]] && ! grep -qx "RELEASE_TAG=$GITHUB_REF_NAME" scripts/bootstrap.sh; then
+            echo "scripts/bootstrap.sh does not default to $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          export RAZVILKA_VERSION="$RELEASE_VERSION"
+          export RAZVILKA_COMMIT="$GITHUB_SHA"
+          export RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export RAZVILKA_DIRTY=false
+          # Native recovery tests verify root-owned router processes. Running
+          # them as runner would correctly refuse their non-root candidate.
+          # Keep the complete gate, including normal/race native tests.
+          sudo env PATH="$PATH" GOTOOLCHAIN="$GOTOOLCHAIN" \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_VERSION="$RAZVILKA_VERSION" RAZVILKA_COMMIT="$RAZVILKA_COMMIT" \
+            RAZVILKA_BUILD_TIME="$RAZVILKA_BUILD_TIME" RAZVILKA_DIRTY="$RAZVILKA_DIRTY" \
+            ./scripts/check.sh
+
+      - name: Package Entware bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          BINARY_VERSION="$(./dist/razvilka-linux-amd64 -version)"
+          if [[ "$VERSION" != "$BINARY_VERSION" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match binary version $BINARY_VERSION" >&2
+            exit 1
+          fi
+          STAGE="RAZVILKA-${VERSION}"
+          mkdir -p "$STAGE"
+          cp -a \
+            VERSION README.md README_RU.md README_EN.md LAB.md CHANGELOG.md LICENSE SECURITY.md THIRD_PARTY.md \
+            configs docs dist scripts "$STAGE"/
+          # Internal delivery logs, research notes and lab diagnostics stay in
+          # Git only: they describe the owner's test network and devices and
+          # are not needed to install or run RAZVILKA on a router.
+          rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/docs/measurements" "$STAGE/scripts/diagnostics"
+          test -x "$STAGE/scripts/install-entware.sh"
+          test -x "$STAGE/scripts/upgrade-entware.sh"
+          test -x "$STAGE/scripts/rollback-entware.sh"
+          test -x "$STAGE/scripts/uninstall-entware.sh"
+          test -x "$STAGE/scripts/S99razvilka"
+          test -x "$STAGE/scripts/test-entware-transaction.sh"
+          test -f "$STAGE/configs/config.example.json"
+          test -f "$STAGE/docs/INSTALL_RU.md"
+          test -f "$STAGE/README_EN.md"
+          (cd "$STAGE" && sha256sum -c dist/SHA256SUMS)
+          # Validate the staged tree, not just Git-tracked names: generated
+          # runtime files and links must never enter either release archive.
+          node --input-type=module - "$STAGE" <<'RELEASE_TREE_GUARD'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const root = path.resolve(process.argv[2]);
+          const privateDirectories = new Set(['.hil', '.git', '.ssh', '__pycache__', 'nodes-private', 'native-enrollment', 'configs/local']);
+          const privateName = /(?:\.(?:private|secret)(?:\.|$)|\.(?:token|key|pem|p12|pfx|log|pid|bak|pyc)$|^\.env(?:\.|$)|^admin\.credentials\.json$|^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$))/i;
+          const internalMaterial = /^(?:docs\/(?:(?:delivery|research|implementation)-|measurements(?:\/|$))|scripts\/diagnostics(?:\/|$))/i;
+          function visit(directory) {
+            for (const item of fs.readdirSync(directory, {withFileTypes: true})) {
+              const filename = path.join(directory, item.name);
+              const relative = path.relative(root, filename).split(path.sep).join('/');
+              const stat = fs.lstatSync(filename);
+              if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile()) ||
+                  privateDirectories.has(item.name.toLowerCase()) || privateDirectories.has(relative.toLowerCase()) ||
+                  privateName.test(item.name)) {
+                throw new Error('Refusing unsafe/private release entry: ' + relative);
+              }
+              if (internalMaterial.test(relative)) {
+                throw new Error('Refusing internal delivery/research/diagnostic release entry: ' + relative);
+              }
+              if (stat.isDirectory()) visit(filename);
+            }
+          }
+          visit(root);
+          RELEASE_TREE_GUARD
+          tar -czf "RAZVILKA-${VERSION}-entware.tar.gz" "$STAGE"
+          zip -qr "RAZVILKA-${VERSION}-entware.zip" "$STAGE"
+          cp "RAZVILKA-${VERSION}-entware.tar.gz" RAZVILKA-entware.tar.gz
+          sha256sum RAZVILKA-entware.tar.gz > RAZVILKA-entware.tar.gz.sha256
+          sha256sum "RAZVILKA-${VERSION}-entware.tar.gz" "RAZVILKA-${VERSION}-entware.zip" > "RAZVILKA-${VERSION}.SHA256SUMS"
+          # The uploaded binary manifest sits next to flat downloads, so it uses
+          # bare names; the archive keeps dist/SHA256SUMS with dist/ paths for
+          # the installer and self-update. Both must list identical digests.
+          (cd dist && sha256sum razvilka-linux-amd64 razvilka-linux-arm64 razvilka-linux-mips razvilka-linux-mipsle) > SHA256SUMS
+          sed 's#^\([0-9a-f]\{64\}\) \([ *]\)#\1 \2dist/#' SHA256SUMS | cmp -s - dist/SHA256SUMS || {
+            echo "Flat binary manifest differs from dist/SHA256SUMS" >&2; exit 1;
+          }
+          (cd dist && sha256sum -c ../SHA256SUMS)
+
+      - name: Prepare pinned AMD64 HEV vendor assets with complete source and notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Preparation only: this does not change the application's default
+          # component catalog, qualify ARM64, or publish a component release.
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y curl ca-certificates make patch python3 xz-utils
+          python3 scripts/test-prepare-hev-vendor-assets.py
+          # The pinned fault-test executable embeds its C input path in assert
+          # messages. Build at the same checkout path as the qualification job.
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          hev_build="$GITHUB_WORKSPACE/artifacts/hev-lab"
+          sh scripts/build-hev-runtime-altstack-lab.sh "$hev_build"
+          python3 scripts/prepare-hev-vendor-assets.py \
+            --repo "$GITHUB_WORKSPACE" --build-dir "$hev_build" \
+            --output "$RUNNER_TEMP/hev-vendor-assets"
+          (cd "$RUNNER_TEMP/hev-vendor-assets" && sha256sum -c razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS)
+
+      - name: Attest release provenance
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: |
+            dist/razvilka-linux-amd64
+            dist/razvilka-linux-arm64
+            dist/razvilka-linux-mips
+            dist/razvilka-linux-mipsle
+            SHA256SUMS
+            RAZVILKA-*-entware.tar.gz
+            RAZVILKA-*-entware.zip
+            RAZVILKA-*.SHA256SUMS
+            RAZVILKA-entware.tar.gz
+            RAZVILKA-entware.tar.gz.sha256
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-linux-amd64
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz
+            ${{ runner.temp }}/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS
+
+      - name: Prepare draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES_OPTION="--generate-notes"
+          if [[ -f "docs/releases/${VERSION}.md" ]]; then
+            python3 scripts/prepare-release-notes.py --root . \
+              --version "$VERSION" --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" \
+              --notes "docs/releases/${VERSION}.md" --output "$RUNNER_TEMP/razvilka-release-notes.md"
+            NOTES_OPTION="--notes-file=$RUNNER_TEMP/razvilka-release-notes.md"
+          fi
+          RELEASE_OPTIONS=(--verify-tag)
+          # Promote only after the exact attached artifacts pass router checks.
+          # A tag/build alone must not replace the release used by installers.
+          RELEASE_OPTIONS+=(--draft --latest=false)
+          if [[ "$VERSION" == *-* ]]; then
+            RELEASE_OPTIONS+=(--prerelease --latest=false)
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "RAZVILKA $GITHUB_REF_NAME" \
+            "${RELEASE_OPTIONS[@]}" \
+            "$NOTES_OPTION" \
+            dist/razvilka-linux-amd64 \
+            dist/razvilka-linux-arm64 \
+            dist/razvilka-linux-mips \
+            dist/razvilka-linux-mipsle \
+            SHA256SUMS \
+            "RAZVILKA-${VERSION}-entware.tar.gz" \
+            "RAZVILKA-${VERSION}-entware.zip" \
+            "RAZVILKA-${VERSION}.SHA256SUMS" \
+            RAZVILKA-entware.tar.gz \
+            RAZVILKA-entware.tar.gz.sha256 \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-linux-amd64" \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz" \
+            "$RUNNER_TEMP/hev-vendor-assets/razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS"

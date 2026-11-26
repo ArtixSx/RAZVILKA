@@ -1,0 +1,153 @@
+package app
+
+import (
+	"context"
+	"reflect"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/autonomy"
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+)
+
+// NFQWS2 is the standard route of the services from the reviewed
+// nfqws2-keenetic list, as in z2k where the whole list goes through NFQWS2.
+// The autopilot returns such a service to NFQWS2 when its exact node is gone
+// (origin expired, disabled or removed), or when the owner already chose
+// NFQWS2 in the draft. It never replaces a working node or another choice.
+// NFQWS2 cannot be limited to selected devices, so this applies only to an
+// autopilot scope of the whole LAN.
+
+// standardRoute is the route a service returns to when its choice fails.
+func standardRoute(service catalog.Service) string {
+	if catalog.IsNFQWS2Starter(service) {
+		return "nfqws2"
+	}
+	return ""
+}
+
+// nfqws2StandardScope reports whether the service may use its standard route.
+func nfqws2StandardScope(service catalog.Service, s autonomy.Service) bool {
+	return catalog.IsNFQWS2Starter(service) && len(s.Sources) == 0
+}
+
+// nfqws2StandardDraft reports whether the owner's draft returns an NFQWS2-list
+// service to its standard route for the whole LAN.
+func nfqws2StandardDraft(service catalog.Service, s autonomy.Service, draft config.ServiceState) bool {
+	return nfqws2StandardScope(service, s) && draft.Enabled && selectedRoute(draft) == "nfqws2" && len(draft.Sources) == 0
+}
+
+// adoptNFQWS2StandardDraft records the owner's return to NFQWS2 as the
+// autopilot's expectation, so the pending change is applied by the scoped
+// autopilot transaction instead of pausing automation as a manual change.
+func (a *App) adoptNFQWS2StandardDraft(ctx context.Context, p autonomy.Policy, s autonomy.Service, draft config.ServiceState) (autonomy.Service, bool) {
+	return a.updateAutonomyService(ctx, p, s, func(next *autonomy.Service) {
+		next.ExpectedRoute = "nfqws2"
+		next.DraftFingerprint = autonomyDraftFingerprint(draft)
+	})
+}
+
+// adoptReviewedDefinition accepts a new definition of a service from the
+// reviewed NFQWS2 list shipped with RAZVILKA (for example, extra Discord
+// domains in an update) or a refresh of a service imported from the
+// allowlisted community catalogue. Other definitions still require
+// confirmation.
+func (a *App) adoptReviewedDefinition(ctx context.Context, p autonomy.Policy, s autonomy.Service, service catalog.Service) (autonomy.Service, bool) {
+	if !catalog.IsNFQWS2Starter(service) && !communityImported(service) {
+		return s, false
+	}
+	return a.updateAutonomyService(ctx, p, s, func(next *autonomy.Service) { next.Definition = autonomyDefinition(service) })
+}
+
+// communityImported reports a service imported from the community catalogue.
+// Its refresh (preview with the exact source SHA-256, then import) replaces the
+// domains and networks of the same catalogue entry; the owner's scope, route
+// choice and consent stay in the autopilot record.
+func communityImported(service catalog.Service) bool {
+	p := service.Provenance
+	return p != nil && p.EntryID != "" && service.ID == "custom-"+p.EntryID && service.ProbeURL != "" &&
+		slices.Equal(service.SourceRefs, []string{"community:" + p.EntryID}) &&
+		len(p.SHA256) == 64 && strings.Trim(p.SHA256, "0123456789abcdef") == ""
+}
+
+// updateAutonomyService changes the saved autopilot record only if it is still
+// exactly the record this round started with.
+func (a *App) updateAutonomyService(ctx context.Context, p autonomy.Policy, s autonomy.Service, change func(*autonomy.Service)) (autonomy.Service, bool) {
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	current, ok := a.autonomy.doc.Services[s.ID]
+	if a.autonomy.blocked || a.autonomy.doc.Policy.Revision != p.Revision || !ok || !reflect.DeepEqual(current, s) {
+		return s, false
+	}
+	current.Sources = append([]string(nil), current.Sources...)
+	change(&current)
+	a.autonomy.doc.Services[s.ID] = current
+	if a.persistAutonomyLocked(context.WithoutCancel(ctx)) != nil {
+		a.autonomy.doc.Services[s.ID] = s
+		return s, false
+	}
+	return current, true
+}
+
+// committedServiceCurrent reports whether the committed route of the service
+// was applied with its current definition (domains, networks, probe).
+func committedServiceCurrent(plan dataplane.Plan, service catalog.Service) bool {
+	for _, route := range plan.Routes {
+		if route.ServiceID == service.ID {
+			return nodeRecoveryServiceMatches(route, service)
+		}
+	}
+	return false
+}
+
+func (a *App) nfqws2RouteReady() bool {
+	for _, o := range a.nodeRouteOptions() {
+		if o.ID == "nfqws2" && o.Ready {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) nfqws2RouteRunning() bool {
+	for _, o := range a.nodeRouteOptions() {
+		if o.ID == "nfqws2" && o.Running {
+			return true
+		}
+	}
+	return false
+}
+
+// returnToNFQWS2Standard replaces an unavailable exact node of an NFQWS2-list
+// service with NFQWS2. The node gives no path at all, so the standard route is
+// applied even when the web check through NFQWS2 is not confirmed yet; later
+// rounds keep NFQWS2 and never switch the service to another node.
+func (a *App) returnToNFQWS2Standard(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, service catalog.Service, cfg config.Config, profile string) autonomy.Runtime {
+	finish := func(state, message string) autonomy.Runtime { r.State, r.Message = state, message; return r }
+	observation := a.autonomyProbeRouteObservation(ctx, service, "nfqws2", profile)
+	if observation.pause(&r) {
+		return r
+	}
+	verdict := observation.Verdict
+	r.CheckedAt = time.Now().UTC()
+	if ctx.Err() != nil || !a.autonomyConsent(p, s) || !reflect.DeepEqual(a.Store.Get(), cfg) {
+		return finish("paused", "Проверка отменена или изменились настройки. Сеть не изменена.")
+	}
+	if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
+		return finish("rate-limited", "Узел сервиса недоступен. Лимит применений исчерпан; возврат на NFQWS2 отложен.")
+	}
+	r.State, r.Message = "applying", "Узел сервиса недоступен. Возвращаем штатный NFQWS2."
+	a.autonomyRuntime(p.Revision, s.ID, r)
+	if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "nfqws2"); err != nil {
+		return finish(autonomyLegacyApplyRefused(err, &r, "Возврат на NFQWS2 не подтверждён после применения. Использована штатная защита и откат."))
+	}
+	r.Failures, r.FirstFailure, r.LastFailure = 0, time.Time{}, time.Time{}
+	r.Reserves = nil
+	if verdict != "PASS" {
+		return finish("applied", "Узел сервиса был недоступен: сервис возвращён на штатный NFQWS2. Веб-проверка через NFQWS2 пока не подтверждена; назначение сохранено.")
+	}
+	return finish("applied", "Узел сервиса был недоступен: сервис возвращён на штатный NFQWS2 и проверен.")
+}

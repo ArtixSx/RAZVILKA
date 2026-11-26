@@ -1,0 +1,286 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"slices"
+	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/autonomy"
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+)
+
+// Only explicit creation/enabling by the user calls this hook. Startup, feed
+// refresh and profile/backup import must never enroll arbitrary old drafts.
+func (a *App) inheritAutonomyService(ctx context.Context, id string) error {
+	if err := a.loadAutonomy(ctx); err != nil {
+		return err
+	}
+	p := a.autonomyPolicy()
+	if !p.SetupComplete {
+		return nil
+	}
+	service, ok := a.autonomyService(id)
+	if !ok {
+		return errors.New("unknown service")
+	}
+	cfg := a.Store.Get()
+	draft := cfg.Services[id]
+	allLAN, scope := p.AllLAN, p.DefaultSources
+	if draft.Enabled && len(draft.Sources) != 0 {
+		allLAN, scope = false, draft.Sources
+	}
+	sources, err := config.NormalizeSources(scope)
+	if err != nil {
+		return err
+	}
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	if a.autonomy.doc.Policy.Revision != p.Revision {
+		return dataplane.ErrReviewChanged
+	}
+	previous, exists := a.autonomy.doc.Services[id]
+	var next autonomy.Service
+	message := "Новый сервис унаследовал подтверждённые настройки. Ожидается проверка."
+	if exists {
+		if !previous.Removing || previous.DeleteDefinition || !draft.Enabled || selectedRoute(draft) != "auto" {
+			return nil
+		}
+		if previous.Definition != autonomyDefinition(service) {
+			return dataplane.ErrReviewChanged
+		}
+		// A new enable supersedes a queued disable. Keep the original consented
+		// scope unless this save explicitly includes a new device list.
+		next = previous
+		next.Removing, next.Enabled, next.ExpectedRoute = false, true, "auto"
+		if len(draft.Sources) != 0 {
+			next.AllLAN, next.Sources = false, sources
+			next.ManagedLANOnly = false
+		}
+		message = "Сервис снова включён в Auto. Ожидается проверка."
+	} else {
+		if !p.InheritNewServices {
+			return nil
+		}
+		if len(a.autonomy.doc.Services) >= autonomy.MaxServices {
+			return errors.New("autonomy service limit")
+		}
+		next = autonomy.Service{ID: id, Enabled: true, AllLAN: allLAN, ManagedLANOnly: allLAN && p.ManagedLANOnly, Sources: sources,
+			Definition: autonomyDefinition(service), ExpectedRoute: selectedRoute(draft)}
+	}
+	if p.Revision == ^uint64(0) {
+		return dataplane.ErrReviewChanged
+	}
+	next.DraftFingerprint = autonomyDraftFingerprint(draft)
+	previousRuntime, hadRuntime := a.autonomy.doc.Runtime[id]
+	a.autonomy.doc.Services[id] = next
+	a.autonomy.doc.Runtime[id] = autonomy.Runtime{State: "pending", Message: message}
+	a.autonomy.doc.Policy.Revision++
+	if err := a.persistAutonomyLocked(ctx); err != nil {
+		a.autonomy.doc.Policy.Revision = p.Revision
+		if exists {
+			a.autonomy.doc.Services[id] = previous
+		} else {
+			delete(a.autonomy.doc.Services, id)
+		}
+		if hadRuntime {
+			a.autonomy.doc.Runtime[id] = previousRuntime
+		} else {
+			delete(a.autonomy.doc.Runtime, id)
+		}
+		return err
+	}
+	return nil
+}
+
+// Deletion is a persistent intent, not deletion of the live configuration. The
+// catalog entry remains until a scoped dataplane transaction completes.
+func (a *App) requestAutonomyRemoval(ctx context.Context, id string, deleteDefinition bool) (bool, error) {
+	return a.requestReviewedAutonomyRemoval(ctx, id, deleteDefinition, nil)
+}
+
+// A renewed explicit delete reviews the current definition, never a later
+// definition observed by the worker. HTTP admission serializes catalog edits;
+// the policy revision is checked again under the actual publication mutex.
+func (a *App) requestReviewedAutonomyRemoval(ctx context.Context, id string, deleteDefinition bool, expectedRevision *uint64) (bool, error) {
+	if err := a.loadAutonomy(ctx); err != nil {
+		return false, err
+	}
+	cfg := a.Store.Get()
+	service, known := a.autonomyService(id)
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	if expectedRevision != nil && a.autonomy.doc.Policy.Revision != *expectedRevision {
+		return false, dataplane.ErrReviewChanged
+	}
+	s, exists := a.autonomy.doc.Services[id]
+	if !exists {
+		return false, nil
+	}
+	if a.autonomy.doc.Policy.Revision == ^uint64(0) {
+		return true, dataplane.ErrReviewChanged
+	}
+	s.Removing, s.Enabled, s.DeleteDefinition = true, true, deleteDefinition
+	if deleteDefinition && known {
+		s.Definition = autonomyDefinition(service)
+	}
+	s.DraftFingerprint = autonomyDraftFingerprint(cfg.Services[id])
+	a.autonomy.doc.Services[id] = s
+	a.autonomy.doc.Runtime[id] = autonomy.Runtime{State: "removal-pending", Message: "Сначала будут сняты собственные маршруты сервиса. Остальные сервисы сохраняются."}
+	a.autonomy.doc.Policy.Revision++
+	return true, a.persistAutonomyLocked(ctx)
+}
+
+func (a *App) autonomyRemove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		methodNotAllowed(w)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/autonomy/services/")
+	var req struct {
+		ExpectedRevision uint64 `json:"expected_revision"`
+		Confirm          string `json:"confirm"`
+		DeleteDefinition bool   `json:"delete_definition"`
+	}
+	if !decodeAutonomyRequest(w, r, &req) {
+		return
+	}
+	if a.loadAutonomy(r.Context()) != nil {
+		writeJSON(w, 503, map[string]any{"error": "Хранилище недоступно."})
+		return
+	}
+	p := a.autonomyPolicy()
+	if req.Confirm != "REMOVE_SERVICE" || !autonomy.ValidID(id) || req.ExpectedRevision != p.Revision {
+		writeJSON(w, 409, map[string]any{"error": "Подтвердите удаление для актуальной редакции настроек."})
+		return
+	}
+	handled, err := a.requestReviewedAutonomyRemoval(r.Context(), id, req.DeleteDefinition, &req.ExpectedRevision)
+	if err != nil {
+		if errors.Is(err, dataplane.ErrReviewChanged) {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Настройки изменились. Повторно подтвердите удаление."})
+			return
+		}
+		writeJSON(w, 503, map[string]any{"error": "Запрос удаления не сохранён; рабочая сеть не изменена."})
+		return
+	}
+	if !handled {
+		writeJSON(w, 404, map[string]any{"error": "Сервис не управляется автономным режимом."})
+		return
+	}
+	a.wakeReconciler()
+	writeJSON(w, 202, map[string]any{"ok": true, "pending": true, "live_applied": false, "notice": "Снятие маршрута выполняется в очереди. Safe Mode, ручной режим и пауза автоматики сохраняют запрет изменений."})
+}
+
+func (a *App) runAutonomyRemoval(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime) autonomy.Runtime {
+	finish := func(state, message string) autonomy.Runtime { r.State, r.Message = state, message; return r }
+	if !s.Removing || !a.autonomyConsent(p, s) {
+		return finish("paused", "Удаление отменено.")
+	}
+	base := a.Store.Get()
+	status, err := a.Dataplane.Status()
+	if err != nil || status.Execution != nil && status.Execution.State == "rollback-failed" {
+		return finish("requires-review", "Сначала требуется восстановить журнал применения.")
+	}
+	service, known := a.autonomyService(s.ID)
+	if known && autonomyDefinition(service) != s.Definition {
+		return finish("definition-changed", "Состав сервиса изменён. Повторно подтвердите удаление.")
+	}
+	if autonomyDraftFingerprint(base.Services[s.ID]) != s.DraftFingerprint && (base.Services[s.ID].Enabled || base.AppliedServices[s.ID].Enabled) {
+		return finish("manual-change", "После запроса удаления сервис изменён вручную.")
+	}
+	if base.AppliedServices[s.ID].Enabled {
+		if !known {
+			return finish("requires-review", "Каталог не соответствует применённому маршруту; автоматическое удаление остановлено.")
+		}
+		hypothetical := nodeRouteConfigForScope(base, s.ID, "unused", s.Sources)
+		target := hypothetical.Services[s.ID]
+		target.Enabled = false
+		hypothetical.Services[s.ID] = target
+		plan, e := a.buildDataplanePlanForScopeContext(ctx, hypothetical, a.nodeRouteOptions(), changeScopeNode, "")
+		if e != nil || !plan.Ready {
+			return finish("removal-blocked", "Снятие маршрута не прошло предварительную проверку. Конфигурация сохранена.")
+		}
+		committed := false
+		guard := func(ctx context.Context) error {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+				return dataplane.ErrReviewChanged
+			}
+			cfg := a.Store.Get()
+			revision := base.Revision
+			if committed {
+				revision++
+			}
+			if cfg.Revision != revision || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" {
+				return dataplane.ErrReviewChanged
+			}
+			cat, ok := a.autonomyService(s.ID)
+			if !ok || autonomyDefinition(cat) != s.Definition {
+				return dataplane.ErrReviewChanged
+			}
+			return nil
+		}
+		if e = guard(ctx); e != nil {
+			return finish("removal-blocked", "Разрешение или настройки изменились.")
+		}
+		_, e = a.applyDataplane(dataplane.WithReviewGuard(ctx, guard), plan, func() (func() error, error) {
+			if e := guard(ctx); e != nil {
+				return nil, e
+			}
+			undo, e := a.Store.ApplyAutonomyRemovalWithRollback(s.ID, s.DeleteDefinition, base.Revision)
+			if e == nil {
+				committed = true
+			}
+			return undo, e
+		})
+		if e != nil {
+			return finish("removal-blocked", "Снятие маршрута не подтверждено; использован общий откат.")
+		}
+	} else {
+		// Cancel a pending own draft as well as applied routes. The fingerprint
+		// above fences a newer manual edit; this commit touches only this ID.
+		if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+			return finish("paused", "Разрешение отозвано.")
+		}
+		if _, e := a.Store.ApplyAutonomyRemovalWithRollback(s.ID, s.DeleteDefinition, base.Revision); e != nil {
+			return finish("removal-pending", "Не удалось снять ожидающий выбор. Настройки сохранены.")
+		}
+	}
+	// Catalog removal is deliberately last; failure is safely retried. An
+	// already absent definition after a crash is idempotent when no path remains.
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	if !a.autonomyConsentLocked(p, s) {
+		return finish("paused", "Запрос на снятие маршрута изменился. Автопилот продолжит с актуальными настройками.")
+	}
+	if s.DeleteDefinition && known && a.CustomServices != nil && a.CustomServices.Has(s.ID) {
+		if e := a.CustomServices.Delete(s.ID); e != nil {
+			return finish("removal-pending", "Маршрут снят, но удаление записи каталога нужно повторить.")
+		}
+	}
+	delete(a.autonomy.doc.Services, s.ID)
+	delete(a.autonomy.doc.Runtime, s.ID)
+	a.autonomy.doc.Policy.Revision++
+	err = a.persistAutonomyLocked(context.WithoutCancel(ctx))
+	if err != nil {
+		return finish("requires-review", "Маршрут снят; запись завершения не подтверждена.")
+	}
+	r.Reserves = slices.Clone([]string{})
+	return finish("removed", "Сервис исключён из автономного управления после снятия его маршрутов.")
+}
+
+// Re-enrollment is explicit. This helper does not pretend that a pending removal
+// has already affected the live network.
+func (a *App) autonomyManaged(ctx context.Context, id string) bool {
+	if a.loadAutonomy(ctx) != nil {
+		return false
+	}
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	_, ok := a.autonomy.doc.Services[id]
+	return ok
+}

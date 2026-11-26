@@ -1,0 +1,412 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"net"
+	"net/netip"
+	"reflect"
+	"slices"
+	"sync"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+)
+
+// Actual opened listener/backend, bound by the original registered capture
+// owner. No exported constructor, DTO import or source reconstruction exists.
+type DomainPolicyTCPCapture struct {
+	self         *DomainPolicyTCPCapture
+	policy       *DomainPolicy
+	spec         DomainPolicyTCPCaptureSpec
+	owner        DomainPolicyTCPCaptureOwner
+	xray         *DomainPolicyTCPXray
+	listener     *net.TCPListener
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mu           sync.Mutex
+	closed       bool
+	mappings     map[*dnscontrol.SyntheticDNSMapping]*DomainPolicyTCPCaptureMapping
+	reservations map[*dnscontrol.SyntheticDNSMapping]*domainPolicyTCPCapturePreparation
+	preparing    sync.WaitGroup
+	closeDone    chan struct{}
+	closeErr     error
+	directMu     sync.Mutex
+	directError  error
+	retirement   *DomainPolicyTCPCaptureRetirement
+}
+
+func (*DomainPolicyTCPCapture) String() string   { return "[original synthetic TCP capture]" }
+func (*DomainPolicyTCPCapture) GoString() string { return "[original synthetic TCP capture]" }
+
+// Only RunDomainPolicyTCP supplies production intent, already LAN-validated.
+// Socket-model tests use a real loopback listener, never a production grant.
+func newDomainPolicyTCPCapture(ctx context.Context, p *DomainPolicy, spec DomainPolicyTCPCaptureSpec, owner DomainPolicyTCPCaptureOwner, xray *DomainPolicyTCPXray, listener *net.TCPListener) (*DomainPolicyTCPCapture, error) {
+	if ctx == nil || ctx.Err() != nil || p == nil || spec.Xray.Generation != p.generation || owner == nil || !xray.matches(spec.Xray) || listener == nil || listener.Addr().(*net.TCPAddr).AddrPort() != spec.Listen {
+		return nil, ErrDomainPolicyTCPConsumer
+	}
+	if err := xray.check(ctx); err != nil {
+		return nil, err
+	}
+	life, cancel := context.WithCancel(ctx)
+	c := &DomainPolicyTCPCapture{policy: p, spec: spec, owner: owner, xray: xray, listener: listener, ctx: life, cancel: cancel, mappings: make(map[*dnscontrol.SyntheticDNSMapping]*DomainPolicyTCPCaptureMapping), reservations: make(map[*dnscontrol.SyntheticDNSMapping]*domainPolicyTCPCapturePreparation), closeDone: make(chan struct{})}
+	c.self = c
+	c.retirement = newDomainPolicyTCPCaptureRetirement(c)
+	return c, nil
+}
+
+// Address is an observation of this actual listener, never permission to
+// redirect traffic or publish DNS. Current also needs original registration.
+func (c *DomainPolicyTCPCapture) Address() (netip.AddrPort, error) {
+	if c == nil || c.self != c || c.listener == nil {
+		return netip.AddrPort{}, ErrDomainPolicyTCPConsumer
+	}
+	return c.listener.Addr().(*net.TCPAddr).AddrPort(), nil
+}
+
+func (c *DomainPolicyTCPCapture) Current(ctx context.Context) error {
+	return c.currentWithFiles(ctx, nil)
+}
+func (c *DomainPolicyTCPCapture) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if c == nil || c.self != c || ctx == nil || ctx.Err() != nil || c.ctx.Err() != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	c.mu.Lock()
+	closed := c.closed
+	c.mu.Unlock()
+	if closed {
+		return ErrDomainPolicyTCPConsumer
+	}
+	address, err := c.Address()
+	if err != nil || address != c.spec.Listen {
+		return errors.Join(ErrDomainPolicyTCPConsumer, err)
+	}
+	raw, err := c.listener.SyscallConn()
+	if err != nil {
+		return err
+	}
+	if err := raw.Control(func(uintptr) {}); err != nil {
+		return err
+	}
+	if original, ok := c.owner.(*DomainTCPOriginalScope); ok {
+		return c.currentOriginalResource(ctx, original, files)
+	}
+	if err := c.owner.CheckCapture(ctx, c); err != nil {
+		return err
+	}
+	return errors.Join(c.xray.checkWithFiles(ctx, files), ctx.Err(), c.ctx.Err())
+}
+
+// Prepare does not publish. The concrete original owner must install/read back
+// the exact synthetic selector under the SAME inventory, with its prepared
+// baseline transition dependency, before this handle can pass Current.
+func (c *DomainPolicyTCPCapture) PrepareSyntheticMapping(ctx context.Context, source *dnscontrol.SyntheticDNSMapping) (prepared *DomainPolicyTCPCaptureMapping, result error) {
+	if c == nil || c.self != c || ctx == nil || ctx.Err() != nil || c.ctx.Err() != nil {
+		return nil, ErrDomainPolicyTCPConsumer
+	}
+	observation, err := source.Observation(ctx)
+	if err != nil || !c.matchesObservation(observation) {
+		return nil, errors.Join(ErrDomainPolicyTCPConsumer, err)
+	}
+	if err := c.Current(ctx); err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, ErrDomainPolicyTCPConsumer
+	}
+	if pending := c.reservations[source]; pending != nil {
+		c.mu.Unlock()
+		select {
+		case <-pending.done:
+			if pending.err != nil || pending.mapping == nil {
+				return nil, errors.Join(pending.err, ErrDomainPolicyTCPConsumer)
+			}
+			return pending.mapping, pending.mapping.Current(ctx)
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-c.ctx.Done():
+			return nil, ErrDomainPolicyTCPConsumer
+		}
+	}
+	if existing := c.mappings[source]; existing != nil {
+		c.mu.Unlock()
+		return existing, existing.Current(ctx)
+	}
+	if len(c.mappings)+len(c.reservations) >= 256 {
+		c.mu.Unlock()
+		return nil, ErrDomainPolicyTCPConsumer
+	}
+	pending := &domainPolicyTCPCapturePreparation{done: make(chan struct{})}
+	c.reservations[source] = pending
+	c.preparing.Add(1)
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		pending.mapping, pending.err = prepared, result
+		// Failed preparations can have partially installed selectors. Keep
+		// their original failure fenced until the capture owner retires them.
+		if prepared != nil {
+			delete(c.reservations, source)
+		}
+		close(pending.done)
+		c.mu.Unlock()
+		c.preparing.Done()
+	}()
+	prepareCtx, cancelPreparation := context.WithCancel(ctx)
+	defer cancelPreparation()
+	stop := context.AfterFunc(c.ctx, cancelPreparation)
+	defer stop()
+	if c.ctx.Err() != nil {
+		cancelPreparation()
+	}
+	ctx = prepareCtx
+	if err := c.owner.PrepareSyntheticCapture(ctx, c, source); err != nil {
+		return nil, err
+	}
+	if err := c.observePreparationClosing(ctx, source, func(observed context.Context, files *xrayDomainTCPFileObservation) error {
+		if err := source.Current(observed); err != nil {
+			return err
+		}
+		if err := c.currentWithFiles(observed, files); err != nil {
+			return err
+		}
+		if files != nil {
+			original, ok := c.owner.(*DomainTCPOriginalScope)
+			if !ok || original == nil {
+				return ErrDomainPolicyTCPConsumer
+			}
+			return original.currentSyntheticCaptureWithFiles(observed, c, source, files)
+		}
+		return c.owner.CurrentSyntheticCapture(observed, c, source)
+	}); err != nil {
+		return nil, err
+	}
+	life, cancel := context.WithCancel(c.ctx)
+	observation.CNAMEChain = slices.Clone(observation.CNAMEChain)
+	m := &DomainPolicyTCPCaptureMapping{capture: c, source: source, observation: observation, ctx: life, cancel: cancel, connections: make(map[*net.TCPConn]context.CancelFunc), watchDone: make(chan struct{}), closeDone: make(chan struct{})}
+	m.self = m
+	// Done is revocation only. No observation flag or TTL can grant forwarding.
+	go func() {
+		defer close(m.watchDone)
+		select {
+		case <-source.Done():
+			cancel()
+		case <-life.Done():
+		}
+	}()
+	if err := c.observePreparationClosing(ctx, source, func(observed context.Context, files *xrayDomainTCPFileObservation) error {
+		return m.currentWithFiles(observed, files)
+	}); err != nil {
+		_ = m.Close()
+		return nil, err
+	}
+	c.mu.Lock()
+	if c.closed || ctx.Err() != nil || m.ctx.Err() != nil || c.reservations[source] != pending || c.mappings[source] != nil {
+		err := errors.Join(ErrDomainPolicyTCPConsumer, ctx.Err(), m.ctx.Err())
+		c.mu.Unlock()
+		_ = m.Close()
+		return nil, err
+	}
+	c.mappings[source] = m
+	c.mu.Unlock()
+	return m, nil
+}
+
+type domainPolicyTCPCapturePreparation struct {
+	done    chan struct{}
+	mapping *DomainPolicyTCPCaptureMapping
+	err     error
+}
+
+func (c *DomainPolicyTCPCapture) matchesObservation(o dnscontrol.SyntheticDNSMappingObservation) bool {
+	s := c.spec
+	return o.Authority.Generation == s.Xray.Generation && o.PublicationID != "" && o.Client == s.Client.Address && o.DeviceID == s.DeviceID && o.MAC == s.Client.MAC && o.Ingress == s.Client.Interface && o.QName == s.Xray.Name &&
+		o.RealIPv4 == s.Xray.RealIP && domainPolicyTCPPublicIPv4(o.RealIPv4) && domainPolicyTCPSyntheticPool.Contains(o.Synthetic) && !o.ExpiresAt.IsZero()
+}
+
+// Close publication before closing the listener or waiting for accepted flows.
+// A failed accept loop is enough to revoke new DNS answers independently of
+// the process and retirement paths, which can still be running during cleanup.
+func (c *DomainPolicyTCPCapture) stopAccepting() {
+	if owner, ok := c.owner.(*DomainTCPOriginalScope); ok {
+		owner.mu.Lock()
+		if owner.capture == c {
+			owner.publicationOpen = false
+		}
+		c.cancel()
+		owner.mu.Unlock()
+	} else {
+		c.cancel()
+	}
+	_ = c.listener.Close()
+}
+
+// Close closes the listener and joins preparation and admitted mapping flows.
+// The original retirement carrier additionally waits for ALL outer handlers.
+// The coordinator removes active selectors BEFORE Close and retains standby
+// DNAT afterwards. This is never cache/conntrack settlement or Manager Stop.
+func (c *DomainPolicyTCPCapture) Close() error {
+	if c == nil || c.self != c {
+		return ErrDomainPolicyTCPConsumer
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		<-c.closeDone
+		return c.closeErr
+	}
+	c.closed = true
+	c.mu.Unlock()
+	defer close(c.closeDone)
+	c.stopAccepting()
+	c.preparing.Wait()
+	c.mu.Lock()
+	mappings := make([]*DomainPolicyTCPCaptureMapping, 0, len(c.mappings))
+	for _, mapping := range c.mappings {
+		mappings = append(mappings, mapping)
+	}
+	c.mu.Unlock()
+	for _, mapping := range mappings {
+		c.closeErr = errors.Join(c.closeErr, mapping.Close())
+	}
+	c.closeErr = errors.Join(c.closeErr, c.directFailure())
+	return c.closeErr
+}
+
+type DomainPolicyTCPCaptureMapping struct {
+	self                 *DomainPolicyTCPCaptureMapping
+	capture              *DomainPolicyTCPCapture
+	source               *dnscontrol.SyntheticDNSMapping
+	observation          dnscontrol.SyntheticDNSMappingObservation
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	mu                   sync.Mutex
+	closed               bool
+	connections          map[*net.TCPConn]context.CancelFunc
+	flows                sync.WaitGroup
+	watchDone, closeDone chan struct{}
+}
+
+func (*DomainPolicyTCPCaptureMapping) String() string {
+	return "[original prepared synthetic TCP mapping]"
+}
+func (*DomainPolicyTCPCaptureMapping) GoString() string {
+	return "[original prepared synthetic TCP mapping]"
+}
+
+func (m *DomainPolicyTCPCaptureMapping) Current(ctx context.Context) error {
+	return m.currentWithFiles(ctx, nil)
+}
+func (m *DomainPolicyTCPCaptureMapping) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if m == nil || m.self != m || ctx == nil || ctx.Err() != nil || m.ctx.Err() != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	m.mu.Lock()
+	closed := m.closed
+	m.mu.Unlock()
+	if closed {
+		return ErrDomainPolicyTCPConsumer
+	}
+	actual, err := m.source.Observation(ctx)
+	if err != nil || !m.capture.matchesObservation(actual) || !reflect.DeepEqual(immutableSyntheticTCPObservation(actual), immutableSyntheticTCPObservation(m.observation)) {
+		return errors.Join(ErrDomainPolicyTCPConsumer, err)
+	}
+	if err := m.capture.currentWithFiles(ctx, files); err != nil {
+		return err
+	}
+	// This lower original readback MUST NOT call the DNS publication combiner,
+	// which calls this Current. NET mapping.Current itself has no such cycle.
+	if files != nil {
+		original, ok := m.capture.owner.(*DomainTCPOriginalScope)
+		if !ok {
+			return ErrDomainPolicyTCPConsumer
+		}
+		return errors.Join(original.currentSyntheticCaptureWithFiles(ctx, m.capture, m.source, files), ctx.Err(), m.ctx.Err())
+	}
+	return errors.Join(m.capture.owner.CurrentSyntheticCapture(ctx, m.capture, m.source), ctx.Err(), m.ctx.Err())
+}
+
+func immutableSyntheticTCPObservation(o dnscontrol.SyntheticDNSMappingObservation) dnscontrol.SyntheticDNSMappingObservation {
+	o.PossiblyIssued = false
+	o.LastPossiblyIssuedAt = time.Time{}
+	o.LastPossiblyIssuedTTLBound = 0
+	return o
+}
+
+func (m *DomainPolicyTCPCaptureMapping) flowComparison() domainPolicyTCPSyntheticMapping {
+	o, s := m.observation, m.capture.spec
+	return domainPolicyTCPSyntheticMapping{Generation: o.Authority.Generation, PublicationID: o.PublicationID, Name: o.QName, ServiceID: s.Xray.ServiceID, NodeID: s.Xray.NodeID, Client: s.Client, SyntheticIP: o.Synthetic, RealIP: o.RealIPv4, ExpiresAt: o.ExpiresAt}
+}
+
+func (m *DomainPolicyTCPCaptureMapping) enterFlow(parent context.Context, conn *net.TCPConn) (context.Context, func(), error) {
+	if m == nil || m.self != m || parent == nil || parent.Err() != nil || conn == nil {
+		return nil, nil, ErrDomainPolicyTCPConsumer
+	}
+	m.mu.Lock()
+	if m.closed || m.ctx.Err() != nil || m.connections[conn] != nil {
+		m.mu.Unlock()
+		return nil, nil, ErrDomainPolicyTCPConsumer
+	}
+	// The accepted flow's parent carries current admission/operation values.
+	// Capture startup values cannot replace that authority. Mapping lifetime
+	// adds revocation and only a stricter deadline to this SAME parent.
+	var life context.Context
+	var cancel context.CancelFunc
+	if deadline, bounded := m.ctx.Deadline(); bounded {
+		if parentDeadline, parentBounded := parent.Deadline(); !parentBounded || deadline.Before(parentDeadline) {
+			life, cancel = context.WithDeadline(parent, deadline)
+		}
+	}
+	if life == nil {
+		life, cancel = context.WithCancel(parent)
+	}
+	// Register the original flow cancel while holding the same Close lock.
+	// No admitted flow can be missed between lifetime creation and shutdown.
+	m.flows.Add(1)
+	m.connections[conn] = cancel
+	m.mu.Unlock()
+	stop := context.AfterFunc(m.ctx, cancel)
+	if m.ctx.Err() != nil {
+		cancel()
+	}
+	return life, func() {
+		stop()
+		cancel()
+		_ = conn.Close()
+		m.mu.Lock()
+		delete(m.connections, conn)
+		m.mu.Unlock()
+		m.flows.Done()
+	}, nil
+}
+
+func (m *DomainPolicyTCPCaptureMapping) Close() error {
+	if m == nil || m.self != m {
+		return ErrDomainPolicyTCPConsumer
+	}
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		<-m.closeDone
+		return nil
+	}
+	m.closed = true
+	m.cancel()
+	connections := make([]*net.TCPConn, 0, len(m.connections))
+	for conn, cancel := range m.connections {
+		// Parent-derived flow contexts are not synchronous children of m.ctx.
+		// Revoke each flow before its FD closes; AfterFunc alone is asynchronous.
+		cancel()
+		connections = append(connections, conn)
+	}
+	m.mu.Unlock()
+	defer close(m.closeDone)
+	for _, conn := range connections {
+		_ = conn.Close()
+	}
+	m.flows.Wait()
+	<-m.watchDone
+	return nil
+}

@@ -1,0 +1,1949 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"embed"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"io/fs"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/app"
+	"github.com/ArtixSx/razvilka/internal/auditlog"
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/community"
+	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/conntrack"
+	"github.com/ArtixSx/razvilka/internal/customservices"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/devices"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/engine"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/enginelab"
+	"github.com/ArtixSx/razvilka/internal/installpath"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
+	"github.com/ArtixSx/razvilka/internal/routeprobe"
+	"github.com/ArtixSx/razvilka/internal/routerstats"
+	"github.com/ArtixSx/razvilka/internal/security"
+	"github.com/ArtixSx/razvilka/internal/smartroute"
+	"github.com/ArtixSx/razvilka/internal/sources"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
+	"github.com/ArtixSx/razvilka/internal/telemetry"
+	"github.com/ArtixSx/razvilka/internal/testlab"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
+	"github.com/ArtixSx/razvilka/internal/usquediag"
+	"github.com/ArtixSx/razvilka/internal/warp"
+	"github.com/ArtixSx/razvilka/internal/wireguardprofile"
+)
+
+//go:embed web/*
+var embedded embed.FS
+
+func main() {
+	if code := mainWithSelfUpdateJournalRoots(productionSelfUpdateJournalRoots()); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCode int) {
+	if handled, code := runExecutionReadCommand(os.Args[1:]); handled {
+		return code
+	}
+	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
+		os.Exit(code)
+	}
+	if handled, code := runSelfUpdateJournalReadCommand(os.Args[1:], journalRoots); handled {
+		os.Exit(code)
+	}
+	if handled, code := runCommandWithSelfUpdateJournalRoots(os.Args[1:], journalRoots); handled {
+		os.Exit(code)
+	}
+	defaultCfg := getenv("RAZVILKA_CONFIG", "/opt/etc/razvilka/config.json")
+	defaultCatalog := getenv("RAZVILKA_CATALOG", "/opt/etc/razvilka/service-catalog.json")
+	defaultSources := getenv("RAZVILKA_SOURCES", "/opt/etc/razvilka/sources.json")
+	defaultCache := getenv("RAZVILKA_CACHE", installpath.Cache)
+	defaultStage := getenv("RAZVILKA_STAGE", installpath.State+"/staging")
+	defaultBackups := getenv("RAZVILKA_BACKUPS", installpath.State+"/backups")
+	defaultToken := getenv("RAZVILKA_TOKEN_FILE", "/opt/etc/razvilka/admin.token")
+	defaultCredentials := getenv("RAZVILKA_CREDENTIALS_FILE", "/opt/etc/razvilka/admin.credentials.json")
+	defaultCustomServices := getenv("RAZVILKA_CUSTOM_SERVICES", "/opt/etc/razvilka/custom-services.json")
+	defaultCommunityCatalog := getenv("RAZVILKA_COMMUNITY_CATALOG", "/opt/etc/razvilka/community-catalog.json")
+	defaultWarpState := getenv("RAZVILKA_WARP_STATE", installpath.State+"/warp")
+	defaultSmartRouteState := getenv("RAZVILKA_SMART_ROUTE_STATE", installpath.State+"/smart-route.json")
+	defaultDataplaneState := getenv("RAZVILKA_DATAPLANE_STATE", installpath.State+"/dataplane")
+	defaultDevices := getenv("RAZVILKA_DEVICES", "/opt/etc/razvilka/devices.json")
+	defaultMetricsHistory := getenv("RAZVILKA_METRICS_HISTORY", installpath.State+"/metrics/history.jsonl")
+	defaultStrategyLabState := getenv("RAZVILKA_STRATEGY_LAB_STATE", installpath.State+"/strategy-lab.json")
+	defaultAuditLog := getenv("RAZVILKA_AUDIT_LOG", installpath.State+"/audit/events.jsonl")
+	defaultDNSState := getenv("RAZVILKA_DNS_STATE", installpath.State+"/dns/state.json")
+	defaultZ2KRoot := getenv("RAZVILKA_Z2K_ROOT", "/opt/zapret2")
+	defaultUSQUEInit := getenv("RAZVILKA_USQUE_INIT", "/opt/etc/init.d/S51usque")
+	defaultUSQUENDMC := getenv("RAZVILKA_USQUE_NDMC", "/bin/ndmc")
+	defaultUSQUEShell := getenv("RAZVILKA_USQUE_SHELL", "/bin/sh")
+	defaultUSQUERepairState := getenv("RAZVILKA_USQUE_REPAIR_STATE", installpath.State+"/usque-repair")
+	cfgPath := flag.String("config", defaultCfg, "config path")
+	catalogPath := flag.String("catalog", defaultCatalog, "service catalog path")
+	sourcesPath := flag.String("sources", defaultSources, "sources registry path")
+	cachePath := flag.String("cache", defaultCache, "validated list cache directory")
+	stagePath := flag.String("stage", defaultStage, "engine config staging directory")
+	backupPath := flag.String("backups", defaultBackups, "engine config backup directory")
+	tokenPath := flag.String("token-file", defaultToken, "administrator token path")
+	credentialsPath := flag.String("credentials-file", defaultCredentials, "administrator credentials path")
+	customServicesPath := flag.String("custom-services", defaultCustomServices, "custom services path")
+	communityCatalogPath := flag.String("community-catalog", defaultCommunityCatalog, "allowlisted community catalog path")
+	warpStatePath := flag.String("warp-state", defaultWarpState, "WARP generator state directory")
+	cloudflareStatePath := flag.String("cloudflare-state", getenv("RAZVILKA_CLOUDFLARE_STATE", ""), "private Cloudflare copies directory (default: cloudflare-private beside config)")
+	smartRouteStatePath := flag.String("smart-route-state", defaultSmartRouteState, "Smart Route evidence state path")
+	dataplaneStatePath := flag.String("dataplane-state", defaultDataplaneState, "dataplane transaction journal directory")
+	devicesPath := flag.String("devices", defaultDevices, "local device names and groups path")
+	metricsHistoryPath := flag.String("metrics-history", defaultMetricsHistory, "bounded router metrics history path")
+	strategyPackKeys := flag.String("strategy-pack-keys", "", "Owner-provisioned JSON public keys for signed strategy packs (no online sending)")
+	strategyLabStatePath := flag.String("strategy-lab-state", defaultStrategyLabState, "NFQWS2 Strategy Lab state path")
+	auditLogPath := flag.String("audit-log", defaultAuditLog, "bounded control-plane audit journal path")
+	dnsStatePath := flag.String("dns-state", defaultDNSState, "DNS profile draft and probe state path")
+	nodeStatePath := flag.String("node-state", getenv("RAZVILKA_NODE_STATE", ""), "private proxy node store directory (default: nodes-private beside config)")
+	componentState := flag.String("component-state", getenv("RAZVILKA_COMPONENT_STATE", ""), "explicit absolute component journal/receipt directory (default: /opt/razvilka/state/components)")
+	componentBin := flag.String("component-bin", getenv("RAZVILKA_COMPONENT_BIN", ""), "explicit absolute managed component binary directory (default: /opt/bin)")
+	componentInit := flag.String("component-init", getenv("RAZVILKA_COMPONENT_INIT", ""), "explicit absolute component init directory (default: /opt/etc/init.d)")
+	componentRepo := flag.String("component-repo", getenv("RAZVILKA_COMPONENT_REPO", ""), "explicit absolute component repository directory (default: /opt/etc/opkg)")
+	componentInfo := flag.String("component-info", getenv("RAZVILKA_COMPONENT_INFO", ""), "explicit absolute component conffile metadata directory (default: /opt/lib/opkg/info)")
+	selfInstallation := flag.String("self-update-installation", getenv("RAZVILKA_SELF_UPDATE_INSTALLATION", ""), "explicit absolute application installation root (default: /opt)")
+	selfFiles := flag.String("self-update-file-state", getenv("RAZVILKA_SELF_UPDATE_FILE_STATE", ""), "explicit absolute retained application file journal directory")
+	selfHelper := flag.String("self-update-helper-state", getenv("RAZVILKA_SELF_UPDATE_HELPER_STATE", ""), "explicit absolute retained application helper receipt directory")
+	selfControl := flag.String("self-update-control-state", getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE", ""), "fixed absolute control authority root outside rollback images")
+	selfJob := flag.String("self-update-job", "", "matching supervised application startup job")
+	selfWorker := flag.Int("self-update-helper-pid", 0, "matching self-update command worker PID")
+	z2kRoot := flag.String("z2k-root", defaultZ2KRoot, "read-only z2k migration source root")
+	listen := flag.String("listen", "", "listen override, e.g. 192.168.1.1:8787")
+	checkOnly := flag.Bool("check", false, "validate config, catalog and sources without changing files or starting the server")
+	migrateConfig := flag.Bool("migrate-config", false, "validate inputs and atomically migrate config to the current schema without starting the server")
+	recoverPrivateRestore := flag.Bool("recover-private-restore", false, "settle the private restore journal without loading settings or starting the server")
+	healthURL := flag.String("healthcheck", "", "check a running RAZVILKA status URL and exit")
+	healthPID := flag.Int("healthcheck-pid", 0, "require the status response to match this process ID")
+	healthDataplane := flag.Bool("healthcheck-require-dataplane", false, "require a committed non-direct dataplane to have current runtime recovery evidence")
+	healthWait := flag.Duration("healthcheck-wait", 0, "wait up to this duration for readiness (maximum 10m; busy at timeout exits 75 without restarting)")
+	healthPrior := flag.Bool("healthcheck-prior", false, "classify the routes of a running process of any release before an upgrade (exit 0 confirmed, 10 known degradation, 75 busy, 76 fenced journal, 1 unknown)")
+	showVersion := flag.Bool("version", false, "print version and exit")
+	installComponents := flag.Bool("install-components", false, "install or update recommended bypass components and exit")
+	stopOwnedRoutes := flag.Bool("stop-owned-routes", false, "finish an owned NFQWS2 Stop and durably record stopped routes, while the panel is stopped")
+	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
+	retireDataplaneForRemoval := flag.Bool("retire-dataplane-for-removal", false, "retire owned restart metadata for application removal; requires deactivate-dataplane")
+	retryRollbackPlan := flag.String("retry-rollback-plan", "", "retry an intact failed rollback for this exact plan, while the panel is stopped")
+	retryRollbackDigest := flag.String("retry-rollback-digest", "", "reviewed digest required with retry-rollback-plan")
+	closeRollbackPlan := flag.String("close-rollback-plan", "", "close an intact failed rollback that can no longer be retried (for example after a reboot) by deactivating its owned runtime, while the panel is stopped")
+	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
+	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
+	strategyLabReadVersion := flag.Bool("strategy-lab-read-version", false, "print supported StrategyLab state reader version without opening stores")
+	privateSnapshotReadVersion := flag.Bool("self-update-private-snapshot-read-version", false, "print supported private update snapshot reader version without opening stores")
+	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
+	nodeHistoryReadVersion := flag.Bool("node-history-read-version", false, "print the supported exact node history read capability and exit")
+	checkNodeHistory := flag.Bool("check-node-history-state", false, "check retained node history compatibility without changing files and exit")
+	nodeHistoryConfigRoot := flag.String("node-history-config-root", "/opt/etc/razvilka", "absolute trusted retained node history config root")
+	nodeHistoryStateRoot := flag.String("node-history-state-root", installpath.State, "absolute trusted retained node history state root")
+	componentUpdateSchema := flag.Bool("component-update-schema", false, "print the supported durable component update schema and exit")
+	flag.Bool("check-component-update-state", false, "check retained component journal and receipt readability without startup")
+	selfUpdateSchema := flag.Bool("self-update-schema", false, "print the supported application replacement capability and exit")
+	flag.Bool("self-update-read-version", false, "standalone immutable self update journal reader capability")
+	flag.Bool("self-update-offline-restore-read-version", false, "standalone immutable offline pair restore reader capability")
+	flag.Bool("check-self-update-state", false, "standalone read-only retained self update check at fixed production roots")
+	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
+	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
+	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
+	registerBootRetirementFlags(flag.CommandLine)
+	flag.Parse()
+	if *retireDataplaneForRemoval && !*deactivateDataplane {
+		log.Fatal("retire-dataplane-for-removal requires deactivate-dataplane")
+	}
+	if *strategyLabReadVersion {
+		fmt.Println(updatecheck.StrategyLabReadVersion)
+		return
+	}
+	if *privateSnapshotReadVersion {
+		fmt.Println(updatecheck.PrivateSnapshotReadVersion)
+		return
+	}
+	if *nodeHistoryReadVersion {
+		fmt.Println(nodestore.ExactHistoryReadVersion)
+		return
+	}
+	if *checkNodeHistory {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if checkNodeHistoryState(ctx, *nodeHistoryConfigRoot, *nodeHistoryStateRoot, nodestore.ExactHistoryReadVersion) != nil {
+			log.Print(errNodeHistoryState)
+			os.Exit(1)
+		}
+		fmt.Println(`{"ok":true}`)
+		return
+	}
+	if *selfUpdateSchema {
+		// Capability2 requires the complete owned-runtime and stopped recovery
+		// consumer. Missing owner proofs/stopped settlement remain fenced.
+		fmt.Println("0")
+		return
+	}
+	if *componentUpdateSchema {
+		fmt.Println(components.MihomoReleaseReadVersion)
+		return
+	}
+	if *subscriptionSchema {
+		fmt.Println("1")
+		return
+	}
+	if *nativeEnrollmentSchema {
+		fmt.Println("1")
+		return
+	}
+
+	if *showVersion {
+		fmt.Println(app.Version)
+		return
+	}
+	modes := 0
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *stopOwnedRoutes, *deactivateDataplane, *retryRollbackPlan != "", *closeRollbackPlan != "", bootRetirementCLIRequested(), *adoptNFQWS2Init, *checkDNSState, *checkAutonomyState} {
+		if enabled {
+			modes++
+		}
+	}
+	if modes > 1 {
+		log.Fatal("check, migration, recovery, health, installation, Stop and deactivation modes are mutually exclusive")
+	}
+	if (*selfJob == "") != (*selfWorker == 0) || *selfWorker < 0 || *selfWorker == 1 || *selfJob != "" && modes != 0 {
+		log.Fatal("self update startup requires a matching job and command worker in ordinary daemon mode")
+	}
+	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") || (*closeRollbackPlan == "") != (*closeRollbackDigest == "") {
+		log.Fatal("rollback recovery requires both plan and digest")
+	}
+	if err := bootRetirementCLIFlagError(); err != nil {
+		log.Fatal(err)
+	}
+	if *checkDNSState {
+		if err := dnscontrol.CheckState(*dnsStatePath); err != nil {
+			log.Fatal("DNS state is not compatible with this version")
+		}
+		fmt.Println(`{"ok":true}`)
+		return
+	}
+	if *checkAutonomyState {
+		if err := app.CheckAutonomyState(*cfgPath + ".automation.json.autonomy.json"); err != nil {
+			log.Fatal("Autonomy state is not compatible with this version")
+		}
+		fmt.Println(`{"ok":true}`)
+		return
+	}
+	if *healthPID < 0 {
+		log.Fatal("-healthcheck-pid must not be negative")
+	}
+	if *healthPID != 0 && *healthURL == "" {
+		log.Fatal("-healthcheck-pid requires -healthcheck")
+	}
+	if *healthDataplane && *healthURL == "" {
+		log.Fatal("-healthcheck-require-dataplane requires -healthcheck")
+	}
+	if *healthWait < 0 || *healthWait > maxHealthWait {
+		log.Fatal("-healthcheck-wait must be between 0 and 10m")
+	}
+	if *healthWait != 0 && *healthURL == "" {
+		log.Fatal("-healthcheck-wait requires -healthcheck")
+	}
+	if *healthPrior {
+		if *healthURL == "" || *healthPID <= 0 || *healthDataplane {
+			log.Fatal("-healthcheck-prior requires -healthcheck and -healthcheck-pid, without -healthcheck-require-dataplane")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), *healthWait)
+		code, label, err := classifyPriorRoutes(ctx, *healthURL, *healthPID, time.Second)
+		cancel()
+		if err != nil {
+			log.Print(err)
+		}
+		fmt.Printf("prior-routes: %s\n", label)
+		os.Exit(code)
+	}
+	if *healthURL != "" {
+		version, err := checkHealthWithWait(*healthURL, *healthPID, *healthDataplane, *healthWait)
+		if errors.Is(err, errHealthBusy) {
+			log.Print(err)
+			os.Exit(75) // EX_TEMPFAIL: not healthy, but do not restart an active import.
+		}
+		if errors.Is(err, errHealthRecovery) {
+			log.Print(err)
+			os.Exit(76) // Not healthy; keep the process so its panel stays reachable.
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("healthy: %s\n", version)
+		return
+	}
+	// The outer Stop journal precedes every ordinary startup/mutation effect,
+	// including legacy permission repair and private restore opening. Readers
+	// remain available, and only the separate explicit command can retry it.
+	if !*checkOnly {
+		if err := checkOfflineNFQWS2StopMutation(*dataplaneStatePath, *stopOwnedRoutes); err != nil {
+			log.Print(app.ErrOfflineNFQWS2Stop)
+			return 1
+		}
+	}
+	if !allowSelfUpdateJournalCommand(journalRoots) {
+		os.Exit(1)
+	}
+	selfFileState, err := configuredSelfUpdateFiles(*selfInstallation, *selfFiles, *selfHelper, *selfControl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	configuredComponentOwner, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+	if err != nil {
+		log.Fatal(err)
+	}
+	selfFileState.RecoveryGuard = func(c context.Context) error {
+		return errors.Join(independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath), configuredComponentOwner.CheckHEVReleaseIdle(c), configuredComponentOwner.CheckMihomoReleaseIdle(c))
+	}
+	if *selfJob != "" && selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
+		log.Fatal("matching self update startup authority unavailable; preserve retained files")
+	}
+	if selfFileState.Pending() {
+		// Observe retained file/helper journals before permission repairs,
+		// private restore, default creation or any runtime recovery can write.
+		if modes != 0 {
+			log.Fatal("self update recovery required; preserve retained journals and application files")
+		}
+		if selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
+			manager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+			if err != nil {
+				log.Fatal(err)
+			}
+			a, err := selfUpdateRecoveryApp(selfFileState, *cfgPath, *tokenPath, *credentialsPath, manager, *dataplaneStatePath)
+			if err != nil {
+				log.Fatal("self update recovery bootstrap unavailable; files preserved: ", err)
+			}
+			log.Print("self update requires matching recovery; automatic startup writes are paused")
+			if err := serveSelfUpdateRecovery(a, *listen); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+	}
+	if mihomoLiveParentRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoLiveParentRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		}, selfFileState.ControlRoot)
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoLiveRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo live retirement result could not be written")
+			return 1
+		}
+		return
+	}
+	if mihomoLiveBootRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoLiveBootRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		})
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoLiveRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo live retirement result could not be written")
+			return 1
+		}
+		return
+	}
+	if mihomoBootRetirementCLIRequested() || mihomoParentRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+		}, mihomoParentRetirementCLIRequested())
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoProbeRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo retirement result could not be written")
+			return 1
+		}
+		return
+	}
+	if *stopOwnedRoutes {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runOfflineNFQWS2StopCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		})
+		cancel()
+		if err != nil {
+			log.Print(app.ErrOfflineNFQWS2Stop, ": ", err)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("owned-route Stop result could not be written")
+			return 1
+		}
+		return
+	}
+	// Older releases could leave per-engine draft directories at 0755. Repair
+	// only the fixed RAZVILKA staging layout before opening recovery targets.
+	if !*checkOnly && !bootRetirementCLIRequested() {
+		if err := engineconfig.NormalizeLegacyStagePermissions(*stagePath); err != nil {
+			log.Fatal("engine staging permission repair: ", err)
+		}
+	}
+	if *recoverPrivateRestore {
+		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
+		if err != nil {
+			log.Fatal("private draft recovery gate: ", err)
+		}
+		defer legacyRecovery.Close()
+		defer privateRecovery.Close()
+		if err := json.NewEncoder(os.Stdout).Encode(struct {
+			OK            bool                   `json:"ok"`
+			LegacyOutcome restorejournal.Outcome `json:"legacy_outcome"`
+			Outcome       restorejournal.Outcome `json:"outcome"`
+		}{OK: true, LegacyOutcome: legacyOutcome, Outcome: outcome}); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if *installComponents {
+		manager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
+		defer cancel()
+		report := manager.InstallRecommended(ctx)
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(report); err != nil {
+			log.Fatal(err)
+		}
+		if !report.OK {
+			os.Exit(3)
+		}
+		return
+	}
+	if *deactivateDataplane {
+		engineConfigs := engineconfig.New(*stagePath, *backupPath)
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdRemovalDataplaneManager(context.Background(), *dataplaneStatePath, engineConfigs, *cfgPath, componentManager)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Runtime removal must also know DNS ownership when settings are absent.
+		if err := registerScopedDNS(dataplaneManager, nil); err != nil {
+			log.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := recoverExactNodeCheckersForRemoval(ctx, *dataplaneStatePath, *retireDataplaneForRemoval); err != nil {
+			log.Print("Exact node checker removal refused; retained ownership and panel files must be preserved")
+			return 1
+		}
+		if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
+			log.Fatal("stock NFQWS2 native owner unavailable")
+		}
+		_, closeSources, err := runtimeManagerSourcesBound(ctx, func() (*dataplane.Manager, error) { return dataplaneManager, nil }, *dnsStatePath)
+		if err != nil {
+			// Existing adapters retain their own cleanup proofs on other
+			// platforms/layouts. A first-start lease must independently refuse
+			// its cleanup without the actual source; never erase it here.
+			log.Print("Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: ", selfUpdateRuntimeManagerFailureStage(err))
+		}
+		report, deactivateErr := deactivateDataplaneWithHookRecovery(ctx, dataplaneManager, *dnsStatePath, *retireDataplaneForRemoval)
+
+		if closeSources != nil {
+			deactivateErr = errors.Join(deactivateErr, closeSources())
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(report); err != nil {
+			log.Fatal(err)
+		}
+		if deactivateErr != nil {
+			log.Fatal(deactivateErr)
+		}
+		return
+	}
+	if *adoptNFQWS2Init {
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineconfig.New(*stagePath, *backupPath), *cfgPath, componentManager)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		previous, adopted, err := dataplaneManager.AdoptNFQWS2PackageInit(ctx, "")
+		if err != nil {
+			log.Fatal("adopt NFQWS2 init: ", err)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(struct {
+			OK       bool   `json:"ok"`
+			Changed  bool   `json:"changed"`
+			Previous string `json:"previous_init_hash"`
+			Adopted  string `json:"init_hash"`
+		}{OK: true, Changed: previous != adopted, Previous: previous, Adopted: adopted}); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if *checkOnly || *migrateConfig {
+		if *migrateConfig {
+			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
+			if err != nil {
+				log.Fatal("private draft recovery gate: ", err)
+			}
+			defer legacyRecovery.Close()
+			defer privateRecovery.Close()
+			if err := legacyRecovery.StartRuntime(); err != nil {
+				log.Fatal("private draft recovery gate: ", err)
+			}
+			if err := privateRecovery.StartRuntime(); err != nil {
+				log.Fatal("private draft recovery gate: ", err)
+			}
+		}
+		report, err := preflight(*cfgPath, *catalogPath, *sourcesPath, *communityCatalogPath, *migrateConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(report); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	// Private draft recovery precedes ALL Store loads, token creation and any
+	// runtime initialization. Keep the OS journal lease until server shutdown.
+	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
+	if err != nil {
+		log.Fatal("private draft recovery gate: ", err)
+	}
+	defer legacyRecovery.Close()
+	defer privateRecovery.Close()
+	if err := legacyRecovery.StartRuntime(); err != nil {
+		log.Fatal("private draft recovery gate: ", err)
+	}
+	if err := privateRecovery.StartRuntime(); err != nil {
+		log.Fatal("private draft recovery gate: ", err)
+	}
+	if legacyOutcome != "clean" || privateOutcome != "clean" {
+		log.Print("private draft boot recovery completed; live profiles and routes were not changed")
+	}
+	loadConfig := config.Load
+	if selfFileState.Pending() || bootRetirementCLIRequested() {
+		loadConfig = config.LoadExisting
+	}
+	store, err := loadConfig(*cfgPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// An explicit old-boot retirement holds every private recovery lifetime
+	// lease, but must not create credentials, defaults or unrelated stores.
+	// It never starts workers or serves HTTP, and changes no runtime effects.
+	if bootRetirementCLIRequested() {
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		manager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineconfig.New(*stagePath, *backupPath), *cfgPath, componentManager)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		// Mixed legacy Stop retirement requires the same concrete admitted NFQ
+		// absence sources as ordinary runtime inspection. Its assembly has fixed
+		// production coordinates; never silently inspect a different private root.
+		var closeSources func() error
+		if plan, found, readErr := manager.Latest(); readErr == nil && found && (slices.Contains(plan.Adapters, "nfqws2") || slices.Equal(plan.RetiringAdapters, []string{"nfqws2", "sing-box"})) {
+			if *cfgPath != selfUpdateDefaultPath("/opt/etc/razvilka/config.json") || *dataplaneStatePath != selfUpdateDefaultPath(installpath.State+"/dataplane") {
+				log.Fatal("mixed post-reboot retirement requires the fixed production roots")
+			}
+			manager, closeSources, err = selfUpdateRuntimeManagerBound(ctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		result, err := runBootRetirementCLI(ctx, manager, *cfgPath, store)
+		if closeSources != nil {
+			err = errors.Join(err, closeSources())
+		}
+		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
+			log.Fatal(encodeErr)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	gate, _, tokenCreated, err := security.LoadOrCreateToken(*tokenPath)
+	if err != nil {
+		log.Fatalf("administrator security gate: %v", err)
+	}
+	if tokenCreated {
+		log.Printf("created administrator recovery token at %s", *tokenPath)
+	}
+	if err := gate.ConfigureCredentials(*credentialsPath); err != nil {
+		log.Fatalf("administrator credentials: %v", err)
+	}
+	if err := gate.ConfigureRememberedSessions(filepath.Join(filepath.Dir(*credentialsPath), "admin.sessions.json")); err != nil {
+		log.Printf("remembered panel sessions not loaded: %v", err)
+	}
+	cat, err := loadCatalog(*catalogPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	custom, err := customservices.Load(*customServicesPath)
+	if err != nil {
+		log.Fatalf("custom services: %v", err)
+	}
+	deviceManager, err := devices.Load(*devicesPath)
+	if err != nil {
+		log.Fatalf("device registry: %v", err)
+	}
+	communityCatalog, err := loadCommunityCatalog(*communityCatalogPath)
+	if err != nil {
+		log.Printf("community catalog disabled: %v", err)
+	}
+	reg, err := loadSources(*sourcesPath)
+	var sm *sources.Manager
+	if err != nil {
+		log.Printf("sources registry disabled: %v", err)
+	} else {
+		sm = sources.NewManager(reg, *cachePath, filepath.Join(filepath.Dir(*sourcesPath), "source-state.json"))
+	}
+	cfg := store.Get()
+	addr := cfg.Listen
+	if *listen != "" {
+		addr = *listen
+	}
+	sub, err := fs.Sub(embedded, "web")
+	if err != nil {
+		log.Fatal(err)
+	}
+	engineConfigs := engineconfig.New(*stagePath, *backupPath)
+	warpManager := warp.New(*warpStatePath, filepath.Join(*backupPath, "warp"), engineConfigs)
+	smartRouteManager, err := smartroute.New(*smartRouteStatePath)
+	if err != nil {
+		log.Fatalf("Smart Route state: %v", err)
+	}
+	smartRouteManager.Profile = func() string {
+		profile, err := systemprobe.FreshWANProfile(context.Background())
+		if err != nil {
+			return "network-unknown"
+		}
+		return profile.ID
+	}
+	// This narrow recovery cannot contain DNS. Do not open or migrate its
+	// settings before returning to the previously installed application.
+	if *retryRollbackPlan != "" || *closeRollbackPlan != "" {
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineConfigs, *cfgPath, componentManager)
+		if err != nil {
+			log.Fatal(err)
+		}
+		guard, err := rollbackRecoveryGuard(*cfgPath, store)
+		if err != nil {
+			log.Fatal("rollback settings unavailable")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		recoverRollback := func() (dataplane.Execution, error) {
+			if *retryRollbackPlan != "" {
+				return dataplaneManager.RetryFailedRollback(ctx, *retryRollbackPlan, *retryRollbackDigest, guard)
+			}
+			return dataplaneManager.CloseFailedRollback(ctx, *closeRollbackPlan, *closeRollbackDigest, guard)
+		}
+		// Latest only selects observer assembly. The recovery independently
+		// rechecks its exact reviewed plan/history and applied-settings guard.
+		latest, found, err := dataplaneManager.Latest()
+		if err != nil {
+			log.Fatal(err)
+		}
+		var result dataplane.Execution
+		if found && slices.Contains(latest.Adapters, "nfqws2") {
+			if err := registerScopedDNS(dataplaneManager, nil); err != nil {
+				log.Fatal(err)
+			}
+			componentManager, componentErr := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+			if componentErr != nil {
+				log.Fatal(componentErr)
+			}
+			if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
+				log.Fatal("stock NFQWS2 native owner unavailable")
+			}
+			// Hold the original finite operation's observers through rollback
+			// and verification, then close them before reporting success.
+			result, err = withOfflineRollbackRuntime(ctx, dataplaneManager, *dnsStatePath, recoverRollback, runtimeManagerSourcesBound)
+		} else {
+			result, err = recoverRollback()
+		}
+		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
+			log.Fatal(encodeErr)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	nodeStore, err := openNodeStore(*cfgPath, *nodeStatePath)
+	if err != nil {
+		log.Print("Private node store disabled: existing bypasses are unchanged")
+	} else {
+		defer nodeStore.Close()
+	}
+	componentManager := configuredComponentOwner
+	hevRecoveryContext, finishHEVRecovery := context.WithTimeout(context.Background(), 15*time.Second)
+	_, hevRecoveryErr := componentManager.RecoverHEVRelease(hevRecoveryContext)
+	finishHEVRecovery()
+	if hevRecoveryErr != nil {
+		log.Print("HEV component recovery remains pending; its managed sidecar cannot start")
+	}
+	mihomoRecoveryContext, finishMihomoRecovery := context.WithTimeout(context.Background(), 15*time.Second)
+	_, mihomoRecoveryErr := componentManager.RecoverMihomoRelease(mihomoRecoveryContext)
+	finishMihomoRecovery()
+	if mihomoRecoveryErr != nil {
+		log.Print("Mihomo component recovery remains pending; serving the recovery panel")
+	}
+	proxySidecarBoot := config.EffectiveProxySidecar(store.Get().ProxySidecar)
+	dataplaneManager, err := newDataplaneManagerWithNodes(*dataplaneStatePath, engineConfigs, nodeStore, func(ctx context.Context) (string, error) {
+		profile, err := systemprobe.FreshWANProfile(ctx)
+		return profile.ID, err
+	}, proxySidecarStartup{backend: proxySidecarBoot, components: componentManager})
+	if err != nil {
+		if proxySidecarBoot != "hev" {
+			log.Fatal(err)
+		}
+		log.Print("Selected HEV owner is unavailable; serving the recovery panel without starting runtime adapters")
+		recovery, recoveryErr := selfUpdateRecoveryApp(selfFileState, *cfgPath, *tokenPath, *credentialsPath, componentManager, *dataplaneStatePath)
+		if recoveryErr != nil {
+			log.Fatal(recoveryErr)
+		}
+		recovery.ProxySidecarBoot = "hev"
+		if err := serveSelfUpdateRecovery(recovery, *listen); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	dnsManager, err := dnscontrol.New(*dnsStatePath)
+	if err != nil {
+		log.Fatalf("DNS profile state: %v", err)
+	}
+	if err := registerScopedDNS(dataplaneManager, dnsManager); err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		// Unlike external proxy daemons, this DNS listener dies with the panel.
+		// Keep it alive through worker rollback, then remove DNAT before closing.
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := dataplaneManager.CloseScopedDNS(ctx); err != nil {
+			log.Print("DNS shutdown cleanup could not be confirmed; startup recovery is required")
+		}
+	}()
+	strategyLabManager, err := strategylab.New(*strategyLabStatePath)
+	if err != nil {
+		log.Fatalf("Strategy Lab state: %v", err)
+	}
+	// Only the genuine managed-source constructor below can enable supervised
+	// compatibility. An unavailable component never falls back to PATH execution.
+	strategyLabManager.Validator = strategylab.CompatibleValidator{}
+	// The legacy SystemProbeExecutor cannot consume these managed source and
+	// list/client/negative owners. Leave probing closed until its actual scoped
+	// constructor exists; compatibility alone cannot enable packet interception.
+	strategyLabManager.Executor = nil
+	strategyLabManager.PackKeys, err = strategylab.LoadPackKeys(*strategyPackKeys)
+	if err != nil {
+		log.Fatal("strategy pack public-key configuration rejected")
+	}
+
+	routeProber := routeprobe.New(engineConfigs)
+	routeProber.DataplaneRoot = *dataplaneStatePath
+	telemetryStore := telemetry.NewStore()
+	statsSampler := routerstats.New(routerstats.Collector{WANDetector: systemprobe.DetectWANInterface})
+	statsSampler.Interval = 10 * time.Second
+	if err := statsSampler.EnablePersistence(*metricsHistoryPath); err != nil {
+		log.Printf("router metrics history disabled: %v", err)
+	}
+	engineLab := enginelab.New(engineConfigs)
+	engineLab.OwnsPolicyRule = dataplaneManager.OwnsPolicyRule
+	engineLab.OwnsPolicyRoute = dataplaneManager.OwnsPolicyRoute
+	engineLab.OwnsPolicyRouteInTable = dataplaneManager.OwnsPolicyRouteInTable
+	engineLab.EnablePolicyInspection()
+	usqueDoctor := usquediag.New()
+	usqueDoctor.EvidencePath = filepath.Join(*dataplaneStatePath, "usque", "evidence.json")
+	usqueDoctor.InitPath = defaultUSQUEInit
+	usqueDoctor.NDMCPath = defaultUSQUENDMC
+	usqueDoctor.ShellPath = defaultUSQUEShell
+	usqueDoctor.RepairRoot = defaultUSQUERepairState
+	cloudflareStore, err := openCloudflareStore(*cfgPath, *cloudflareStatePath)
+	if err != nil {
+		// An optional copy store must not prevent established routes from starting.
+		log.Print("Cloudflare account copies disabled: private store unavailable; existing bypasses are unchanged")
+	} else {
+		defer cloudflareStore.Close()
+	}
+	if nodeStore != nil {
+		if err := dataplaneManager.ConfigureSingBoxNodeRoutes(func(ctx context.Context, requests []dataplane.NodeRouteRequest, profile string, now time.Time) (dataplane.NodeRouteMaterial, error) {
+			bindings := make([]nodestore.RouteBinding, 0, len(requests))
+			for _, request := range requests {
+				bindings = append(bindings, nodestore.RouteBinding{ServiceID: request.ServiceID, NodeID: request.NodeID, NetworkProfile: profile, Domains: request.Domains, Destinations: request.Destinations})
+			}
+			material, materialErr := nodeStore.MaterializeSingBox(ctx, bindings, now)
+			return dataplane.NodeRouteMaterial{Config: material.Config, EndpointHosts: material.EndpointHosts}, materialErr
+		}, func(ctx context.Context) (string, error) {
+			profile, err := systemprobe.FreshWANProfile(ctx)
+			return profile.ID, err
+		}); err != nil {
+			log.Print("Node-scoped Sing-box routes disabled: ", err)
+		}
+	}
+	nodeDispatch, nodeViews, err := configuredNodeCheckers(*dataplaneStatePath)
+	if err != nil {
+		log.Fatal("exact node dispatcher configuration: ", err)
+	}
+	if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
+		log.Fatal("stock NFQWS2 native parameter owner unavailable: ", err)
+	}
+	sourceContext, cancelSources := context.WithTimeout(context.Background(), 30*time.Second)
+	sourceLifetime, stopSourceLifetime := context.WithCancel(context.Background())
+	defer stopSourceLifetime()
+	_, closeRuntimeSources, sourceErr := runtimeManagerSourcesBoundLifetime(sourceContext, sourceLifetime, func() (*dataplane.Manager, error) { return dataplaneManager, nil }, *dnsStatePath)
+	cancelSources()
+	if sourceErr != nil {
+		log.Print("Runtime ownership observation unavailable; controlled NFQWS2 startup remains fenced: ", selfUpdateRuntimeManagerFailureStage(sourceErr))
+	} else {
+		defer func() {
+			if err := closeRuntimeSources(); err != nil {
+				log.Print("Runtime ownership source closure failed")
+			}
+		}()
+	}
+	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: componentManager, Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
+	// Panel actions wait briefly for background work instead of failing with
+	// "busy" at once; the operation holding the gate is named if they still fail.
+	a.AdmissionPatience = 20 * time.Second
+	a.ProxySidecarBoot = proxySidecarBoot
+	a.Cloudflare = cloudflareStore
+	updateExecutable, _ := os.Executable()
+	_, updatePort, _ := net.SplitHostPort(addr)
+	updateNodePath, _ := nodeStorePath(*cfgPath, *nodeStatePath)
+	updateCloudflarePath, _ := cloudflareStorePath(*cfgPath, *cloudflareStatePath)
+	a.SelfUpdate = updatecheck.NewUpdater(app.Version, filepath.Dir(*dataplaneStatePath), updatecheck.Deployment{Executable: updateExecutable, Port: updatePort, Paths: map[string]string{
+		"config": *cfgPath, "catalog": *catalogPath, "sources": *sourcesPath, "community": *communityCatalogPath,
+		"token": *tokenPath, "credentials": *credentialsPath, "custom": *customServicesPath, "devices": *devicesPath,
+		"cloudflare": updateCloudflarePath, "nodes": updateNodePath, "stage": *stagePath, "backups": *backupPath, "warp": *warpStatePath, "dataplane": *dataplaneStatePath,
+		"dns": *dnsStatePath,
+	}})
+	a.SelfUpdate.StrategyLabStatePath = *strategyLabStatePath
+	a.SelfUpdate.ExecutionHistoryReader = dataplane.InspectRetainedExecutionReadVersion
+	a.SelfUpdate.Directory = selfFileState.Helper.Directory
+	if selfFileState.Adapter != nil {
+		a.SelfUpdate.FileAuthorityReview = selfUpdateAuthorityReview(selfFileState.ControlRoot)
+		a.SelfUpdate.FileEffectAdmission = selfUpdateEffectAdmission
+	}
+	selfFileState.Helper = a.SelfUpdate
+	a.SelfUpdateFiles = selfFileState
+	a.SelfUpdateStartupJobID, a.SelfUpdateStartupHelperPID = *selfJob, *selfWorker
+	a.Nodes = nodeStore
+	if err := a.ConfigureDefaultConsent(*cfgPath, updateNodePath); err != nil {
+		log.Printf("default network policy consent reader unavailable")
+	}
+	defer a.CloseDefaultConsent()
+	historyAdmission := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)
+	if nodeStore != nil {
+		feedRoot, feedPathErr := filepath.Abs(filepath.Join(filepath.Dir(*cfgPath), "subscriptions-private"))
+		if err := os.MkdirAll(feedRoot, 0700); err == nil && feedPathErr == nil {
+			a.NodeFeeds, err = providerfeed.Open(nodeStore, feedRoot)
+			if err == nil {
+				defer a.NodeFeeds.Close()
+			} else {
+				log.Print("Private subscriptions disabled: store unavailable")
+			}
+		} else {
+			log.Print("Private subscriptions disabled: directory unavailable")
+		}
+	}
+	if err := bindNodeHistoryWriteAdmission(a, historyAdmission.CheckWrite); err != nil {
+		log.Fatal("node history admission startup binding unavailable")
+	}
+	a.NodeChecker = nodeViews["sing-box"]
+	a.NodeCheckers = nodeViews
+	if err := a.InitializeComponentRecoveryGate(); err != nil {
+		log.Fatal("component recovery admission could not be initialized")
+	}
+	a.TestLab.Profile = smartRouteManager.Profile
+	a.PrivateRestore = privateRecovery
+	a.CloudflareLegacy, err = cloudflareLegacySources(*cfgPath, *warpStatePath)
+	if err != nil {
+		log.Print("Cloudflare legacy copy locations disabled; existing bypasses are unchanged")
+	}
+	a.ComponentHistory = updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)
+	componentManager.AdmitXrayCoreWrite = a.AdmitXrayCoreWrite
+	a.ExecutionHistory = updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
+	mihomoProvider := a.Dataplane.MihomoLiveStartupProvider()
+	if mihomoProvider == nil {
+		mihomoProvider = netidentity.NewProcProvider()
+	}
+	if err := a.ConfigureMihomoProbe(mihomoProvider); err != nil {
+		log.Print("Isolated Mihomo service check unavailable: original registration refused")
+	}
+	componentReadContext, cancelComponentRead := context.WithTimeout(context.Background(), 10*time.Second)
+	componentReadErr := checkComponentReadState(componentReadContext, a.Components.StateDir, app.ManagedComponentReadVersion)
+	cancelComponentRead()
+	if componentReadErr != nil {
+		a.Operations.FenceJournal()
+		log.Print("Retained component state requires review; automatic changes are paused")
+	}
+	runtimeContext, stopRuntime := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopRuntime()
+	_, compatibilityErr := configureManagedNFQCompatibility(runtimeContext, a)
+	defer a.CloseManagedNFQControl()
+	if compatibilityErr != nil {
+		if errors.Is(compatibilityErr, strategylab.ErrCompatibilityQuiescenceUnknown) {
+			a.Operations.FenceJournal()
+		}
+		log.Print("Managed NFQ compatibility source is unavailable; its retained state requires review")
+	}
+	// The original held tools must remain alive while signal cancellation
+	// stops HTTP/workers and their cleanup joins. This service lifetime ends
+	// only after the SAME runtime confirms native and COMMON retirement.
+	managedNFQLifetime, cancelManagedNFQLifetime := context.WithCancel(context.Background())
+	managedNFQList, managedNFQListErr := configureManagedNFQList(managedNFQLifetime, a)
+	if managedNFQListErr != nil {
+		log.Printf("Managed NFQ list startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedNFQListErr))
+	}
+	managedXrayList, managedXrayListErr := configureManagedXraySelectedTCPList(managedNFQLifetime, a)
+	if managedXrayListErr != nil {
+		log.Printf("Selected Xray TCP startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedXrayListErr))
+	}
+	managedWGList, managedWGListErr := configureManagedWGList(managedNFQLifetime, a)
+	if managedWGListErr != nil {
+		log.Printf("Managed WG startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedWGListErr))
+	}
+	mihomoLiveContext, cancelMihomoLive := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := a.ConfigureMihomoLive(mihomoLiveContext); err != nil {
+		log.Print("Persistent Mihomo runtime unavailable: original startup binding refused")
+	}
+	cancelMihomoLive()
+	managedNFQCloseAttempted := false
+	closeManagedNFQList := func(ctx context.Context) error {
+		if managedNFQCloseAttempted {
+			return nil
+		}
+		if managedWGList != nil {
+			if err := managedWGList.Close(ctx); err != nil {
+				return err
+			}
+		}
+		if managedXrayList != nil {
+			if err := managedXrayList.Close(ctx); err != nil {
+				log.Print("Selected Xray retirement remains unconfirmed; original tools and cleanup owner were not released")
+				return err
+			}
+		}
+		if managedNFQList != nil {
+			if err := managedNFQList.Close(ctx); err != nil {
+				log.Print("Managed NFQ retirement remains unconfirmed; original tools and cleanup owner were not released")
+				return err
+			}
+		}
+		if err := a.CloseManagedListStartup(ctx); err != nil {
+			return err
+		}
+		managedNFQCloseAttempted = true
+		cancelManagedNFQLifetime()
+		return nil
+	}
+	defer func() {
+		stopRuntime()
+		retainManagedListRetirement(closeManagedNFQList)
+	}()
+	hookRecoveryErr := checkNFQWS2RecoveryJournals(dataplaneManager.StateRoot)
+	if hookRecoveryErr != nil {
+		a.Operations.FenceJournal()
+		log.Print(hookRecoveryErr)
+	}
+	a.StartSelfUpdate(runtimeContext)
+	selfRecoveryPending := a.PendingSelfUpdateRecovery()
+	if !selfRecoveryPending && hookRecoveryErr == nil {
+		nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
+		if err := nodeDispatch.Recover(nodeRecoveryContext); err != nil {
+			// Each concrete checker preserves its own poison fence. Recover
+			// attempts both; a failed engine never aliases the other engine.
+			log.Print("Exact node checker recovery requires review: temporary runtime cleanup could not be confirmed")
+		}
+		cancelNodeRecovery()
+	}
+	componentRecoveryPending := a.PendingComponentRecovery()
+	if !componentRecoveryPending && !selfRecoveryPending && hookRecoveryErr == nil {
+		usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
+		usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
+		cancelUSQUERecovery()
+		if usqueRecoveryErr != nil {
+			log.Print("USQUE repair recovery gate: unfinished repair requires manual review")
+			return 1
+		}
+		if usqueRecovery != restorejournal.Clean {
+			log.Printf("USQUE repair recovery completed: %s", usqueRecovery)
+		}
+		retryFailedRollbackAtStart(runtimeContext, dataplaneManager, *cfgPath, store, a.Audit)
+	}
+	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
+	var recovery dataplane.Recovery
+	var recoveryErr error
+	if hookRecoveryErr != nil {
+		recovery.State = "nfqws2-hook-recovery-required"
+		recovery.Guarded = true
+		recoveryErr = hookRecoveryErr
+	} else if selfRecoveryPending {
+		recovery.State = "self-update-recovery-required"
+		log.Print("Unfinished application update: automatic network recovery is paused")
+	} else if componentRecoveryPending {
+		recovery.State = "component-recovery-required"
+		log.Print("Unfinished component update: automatic network recovery is paused; the panel and explicit Stop remain available")
+	} else if retained, preserve, preserveErr := a.ObservePendingNFQRecoveryStop(recoveryContext); preserve {
+		// Keep the exact failed-boot evidence available for explicit recovery
+		// Stop. The observation proves inactivity; it does not restart routes,
+		// clear Safe Mode, or turn the failed recovery into a success.
+		recovery, recoveryErr = retained, preserveErr
+	} else {
+		review, reviewErr := bootRecoveryGuardForManager(*cfgPath, store, dataplaneManager)
+		if reviewErr != nil {
+			// Journal cleanup still runs. Only a committed runtime restart
+			// needs current settings; missing settings never become a grant.
+			review = func(dataplane.Plan) error { return reviewErr }
+		}
+		recovery, recoveryErr = dataplaneManager.Recover(dataplane.WithRecoveryReview(recoveryContext, review))
+	}
+	cancelRecovery()
+	if errors.Is(recoveryErr, dataplane.ErrExecutionJournal) {
+		// Keep the panel readable, but do not let a restart reopen admission
+		// after an unfinished or inconsistently recorded network transaction.
+		a.Operations.FenceJournal()
+	}
+	if recoveryErr != nil && recovery.State != "network-stale" && recovery.State != "degraded" && !recovery.Guarded {
+		// An unclassified recovery failure may not have a durable recovery
+		// record. Keep admission closed rather than treating its flag as legacy.
+		a.Operations.FenceJournal()
+	}
+	if recovery.State == "network-stale" {
+		log.Print("dataplane boot recovery requires fresh node checks in the current network")
+		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "network-stale", Actor: "system", RemoteIP: "local"})
+	} else if recoveryErr != nil {
+		log.Printf("dataplane boot recovery %s: %v", recovery.State, recoveryErr)
+		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "failed", Actor: "system", RemoteIP: "local"})
+	} else if recovery.State == "recovered" {
+		log.Printf("dataplane boot recovery completed for %s", recovery.PlanID)
+		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "ok", Actor: "system", RemoteIP: "local"})
+	}
+	if !selfRecoveryPending && !componentRecoveryPending && hookRecoveryErr == nil {
+		if err := settleRecoverySafeMode(store, recovery, recoveryErr); err != nil {
+			// A failed safety-state write must not leave workers admitted.
+			a.Operations.FenceJournal()
+			log.Printf("preserve boot recovery protection: %v", err)
+		}
+	}
+	// Publish the initial settings before collectors/automation can take
+	// admission for a long first operation. Recovery above has already finished.
+	if err := a.PreparePanelAutonomy(runtimeContext); err != nil {
+		log.Print("Autopilot permissions are unavailable after boot recovery; panel remains available")
+	}
+	a.StartPanelSnapshots(runtimeContext)
+	statsSampler.Start(runtimeContext)
+	connectionCollector := conntrack.New(telemetryStore, store, func() catalog.Catalog {
+		services := append([]catalog.Service(nil), cat.Services...)
+		services = append(services, custom.List()...)
+		return catalog.Catalog{Services: services}
+	})
+	connectionCollector.Devices = deviceManager
+	connectionCollector.Operations = &a.Operations
+	connectionCollector.LatestPlan = dataplaneManager.Latest
+	connectionCollector.WANInterface = func() string { return systemprobe.Probe().WANInterface }
+	connectionCollector.Start(operationgate.WithLabel(runtimeContext, "сбор активных соединений"))
+	log.Println(app.StartupMessage(addr, *cfgPath, *catalogPath))
+	srv := newPanelHTTPServer(runtimeContext, addr, a.Handler(http.FileServer(http.FS(sub))))
+	serverErrors := make(chan error, 1)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Print(err)
+		return 1
+	}
+	a.StartNodeChecks(runtimeContext)
+	a.StartNodeFeeds(runtimeContext)
+	go func() { serverErrors <- srv.Serve(listener) }()
+	a.StartSelfUpdateNodeRecovery(runtimeContext)
+	a.StartServiceReconciler(runtimeContext)
+	select {
+	case serverErr := <-serverErrors:
+		if !errors.Is(serverErr, http.ErrServerClosed) {
+			log.Print(serverErr)
+			exitCode = 1
+		}
+	case <-runtimeContext.Done():
+		// HTTP requests and all workers share one total grace period for the
+		// already-entered kernel phase, its rollback, and final publication.
+		shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), dataplane.GracefulShutdownBudget)
+		defer cancelShutdown()
+		if err := srv.Shutdown(shutdownContext); err != nil {
+			log.Printf("HTTP shutdown: %v", err)
+		}
+		nodeShutdownContext := shutdownContext
+		if err := a.WaitPanelSnapshots(nodeShutdownContext); err != nil {
+			log.Print("Panel snapshot publisher did not finish before shutdown")
+		}
+		if err := a.WaitServiceReconciler(nodeShutdownContext); err != nil {
+			log.Print("Service automation cleanup did not finish before shutdown")
+		}
+		if err := a.WaitNodeRecovery(nodeShutdownContext); err != nil {
+			log.Print("Applied node recovery cleanup did not finish before shutdown")
+		}
+		if err := a.WaitNodeChecks(nodeShutdownContext); err != nil {
+			log.Print("Node checks cleanup did not finish before shutdown")
+		}
+		if err := a.WaitSelfUpdate(nodeShutdownContext); err != nil {
+			log.Print("Application update preparation cleanup did not finish before shutdown")
+		}
+		if err := a.WaitManagedStrategyCompatibility(nodeShutdownContext); err != nil {
+			log.Print("Managed NFQ compatibility completion remains unconfirmed; original operation was not released")
+		}
+		if err := a.WaitManagedStrategyProbes(nodeShutdownContext); err != nil {
+			log.Print("Managed NFQ probe cleanup remains unconfirmed; original resources were retained")
+		}
+		if err := a.WaitNodeAutofallback(nodeShutdownContext); err != nil {
+			log.Print("Node autofallback cleanup did not finish before shutdown")
+		}
+		if err := a.WaitNodeFeeds(nodeShutdownContext); err != nil {
+			log.Print("Subscription update cleanup did not finish before shutdown")
+		}
+		if err := closeManagedNFQList(shutdownContext); err != nil {
+			log.Print("Managed list shutdown will continue with the original cleanup owners")
+		}
+	}
+	return exitCode
+}
+
+func runCommand(args []string) (bool, int) {
+	return runCommandWithSelfUpdateJournalRoots(args, productionSelfUpdateJournalRoots())
+}
+
+func runCommandWithSelfUpdateJournalRoots(args []string, journalRoots selfUpdateJournalRoots) (bool, int) {
+	if len(args) > 0 && strings.ToLower(strings.TrimSpace(args[0])) == "nfqws-managed-process-supervisor" {
+		if args[0] != "nfqws-managed-process-supervisor" {
+			return true, 2
+		}
+		return true, runNFQWSManagedProcessCommand(args[1:], func(id, state, control string) int {
+			if !allowSelfUpdateJournalCommand(journalRoots) {
+				return 3
+			}
+			// Preserve the producer's no-write missing-intent refusal. This
+			// observation only denies a launch; a present or unreadable file
+			// still needs every fence and the original typed owner review.
+			if _, err := os.Lstat(filepath.Join(state, "ownership.json")); errors.Is(err, os.ErrNotExist) {
+				return 1
+			}
+			if err := checkOfflineNFQWS2StopCommand(args); err != nil {
+				fmt.Fprintln(os.Stderr, app.ErrOfflineNFQWS2Stop)
+				return 3
+			}
+			return dataplane.RunNFQWSManagedProcessSupervisor(id, state, control)
+		})
+	}
+	// Several fixed native helpers dispatch before ordinary flag parsing.
+	// Fence them here before any supervisor, restore or updater can write.
+	if err := checkOfflineNFQWS2StopCommand(args); err != nil {
+		fmt.Fprintln(os.Stderr, app.ErrOfflineNFQWS2Stop)
+		return true, 3
+	}
+	if handled, code := runCleanInstallControlCommand(args, journalRoots); handled {
+		return true, code
+	}
+	if handled, code := runExternalBootstrapCommand(args, journalRoots); handled {
+		return true, code
+	}
+	if handled, code := runPairedRestoreCommand(args, journalRoots); handled {
+		return true, code
+	}
+	if handled, code := runComponentReadCommand(args, productionComponentStateDirectory); handled {
+		return handled, code
+	}
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return false, 0
+	}
+	command := strings.ToLower(strings.TrimSpace(args[0]))
+	switch command {
+	case "nfqws-compatibility-supervisor":
+		if args[0] != command {
+			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
+		return true, runNFQWSCompatibilityCommand(args[1:], strategylab.RunCompatibilitySupervisor)
+	case "component-package-supervisor":
+		if len(args) != 4 {
+			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
+		if f, err := productionSelfUpdateFiles(); err != nil || f.Pending() {
+			return true, 3
+		}
+		return true, components.RunPackageSupervisor(args[1], args[2], args[3])
+	case "component-package-supervision-probe":
+		if len(args) != 1 {
+			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
+		if err := components.ProbePackageSupervision(); err != nil {
+			fmt.Fprintln(os.Stderr, "package supervision unavailable")
+			return true, 3
+		}
+		return true, writeCommandJSON(map[string]any{"package_supervision": 1})
+	case "self-update-helper":
+		if len(args) != 2 {
+			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
+		return true, runSelfUpdateFileHelper(args[1])
+	case "self-update-command-helper":
+		if len(args) != 3 {
+			return true, 2
+		}
+		if !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
+		return true, runSelfUpdateCommandHelper(args[1], args[2])
+	case "self-update-runtime-quiesce":
+		return true, runSelfUpdateRuntimeQuiesceWithJournalRoots(args[1:], journalRoots)
+	case "self-update-files":
+		if len(args) == 4 && !allowSelfUpdateJournalCommand(journalRoots) {
+			return true, 3
+		}
+		return true, runSelfUpdateFileCommand(args[1:])
+	case "version", "v":
+		fmt.Println(app.Version)
+		return true, 0
+	case "status", "s":
+		payload := map[string]any{
+			"ok": true, "version": app.Version,
+			"system": systemprobe.Probe(), "bypasses": engine.Visible((engine.Detector{}).Inventory()),
+		}
+		return true, writeCommandJSON(payload)
+	case "doctor", "diag", "d":
+		if len(args) == 2 && args[1] == "--network-policy" {
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			return true, writeNetworkPolicyDiagnostic(ctx, os.Stdout, collectNetworkPolicyDiagnostic)
+		}
+		if len(args) != 1 {
+			fmt.Fprintln(os.Stderr, "usage: razvilka doctor [--network-policy]")
+			return true, 2
+		}
+		snapshot := systemprobe.Probe()
+		issues := make([]string, 0, 6)
+		if !snapshot.OptReady {
+			issues = append(issues, "Entware /opt is not ready")
+		}
+		if !snapshot.Opkg {
+			issues = append(issues, "opkg is not available")
+		}
+		if !snapshot.IPCommand {
+			issues = append(issues, "ip command is not available")
+		}
+		if snapshot.WANInterface == "" {
+			issues = append(issues, "WAN interface was not detected")
+		}
+		payload := map[string]any{"ok": len(issues) == 0, "version": app.Version, "system": snapshot, "issues": issues}
+		code := writeCommandJSON(payload)
+		if code == 0 && len(issues) > 0 {
+			code = 3
+		}
+		return true, code
+	case "components", "bypasses":
+		refresh := len(args) == 2 && args[1] == "--refresh"
+		if len(args) > 2 || (len(args) == 2 && !refresh) {
+			fmt.Fprintln(os.Stderr, "usage: razvilka components [--refresh]")
+			return true, 2
+		}
+		if refresh && selfUpdatePendingFromEnv() {
+			return true, 3
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if refresh && boundedSelfUpdateJournalState(ctx, journalRoots) != nil {
+			fmt.Fprintln(os.Stderr, errSelfUpdateJournalState)
+			return true, 3
+		}
+		manager, err := componentsFromEnv()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		views, err := manager.List(ctx, refresh)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		return true, writeCommandJSON(views)
+	case "component":
+		if len(args) < 4 || args[1] != "plan" {
+			fmt.Fprintln(os.Stderr, "usage: razvilka component plan <id> <install|update|remove> [--refresh]")
+			return true, 2
+		}
+		refresh := len(args) == 5 && args[4] == "--refresh"
+		if len(args) > 5 || (len(args) == 5 && !refresh) {
+			fmt.Fprintln(os.Stderr, "usage: razvilka component plan <id> <install|update|remove> [--refresh]")
+			return true, 2
+		}
+		if refresh && selfUpdatePendingFromEnv() {
+			return true, 3
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if refresh && boundedSelfUpdateJournalState(ctx, journalRoots) != nil {
+			fmt.Fprintln(os.Stderr, errSelfUpdateJournalState)
+			return true, 3
+		}
+		manager, err := componentsFromEnv()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		plan, err := manager.Plan(ctx, args[2], args[3], refresh)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return true, 3
+		}
+		return true, writeCommandJSON(plan)
+	case "help", "h":
+		fmt.Println("RAZVILKA commands: status, doctor [--network-policy], components [--refresh], component plan <id> <action>, version")
+		return true, 0
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q; run 'razvilka help'\n", args[0])
+		return true, 2
+	}
+}
+
+func componentsFromEnv() (*components.Manager, error) {
+	return configuredComponents(os.Getenv("RAZVILKA_COMPONENT_STATE"), os.Getenv("RAZVILKA_COMPONENT_BIN"), os.Getenv("RAZVILKA_COMPONENT_INIT"), os.Getenv("RAZVILKA_COMPONENT_REPO"), os.Getenv("RAZVILKA_COMPONENT_INFO"))
+}
+
+// Overrides are explicit; config relocation never relocates retained journals.
+// Do not create paths or normalize/resolve links here: ownedfs remains the gate.
+func configuredComponents(state, bin, init, repo, info string) (*components.Manager, error) {
+	m := components.New()
+	for _, item := range []struct {
+		name, value string
+		target      *string
+	}{
+		{"state", state, &m.StateDir}, {"bin", bin, &m.BinDir}, {"init", init, &m.InitDir}, {"repo", repo, &m.RepoDir}, {"info", info, &m.InfoDir},
+	} {
+		if item.value == "" {
+			continue
+		}
+		if !filepath.IsAbs(item.value) || strings.TrimSpace(item.value) != item.value {
+			return nil, fmt.Errorf("component-%s requires an explicit absolute directory", item.name)
+		}
+		*item.target = item.value
+	}
+	return m, nil
+}
+
+func writeCommandJSON(value any) int {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(value); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*dataplane.Manager, error) {
+	return newDataplaneManagerWithNodes(stateRoot, configs, nil, nil)
+}
+
+// Ordinary startup binds the same private catalog to the registered Xray
+// runtime before any Apply/health work. Cold recovery keeps its nil-store
+// observer constructor and never opens a catalog to manufacture absence.
+type proxySidecarStartup struct {
+	recovery   bool
+	backend    string
+	components *components.Manager
+}
+
+func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manager, nodes *nodestore.Store, freshProfile func(context.Context) (string, error), sidecars ...proxySidecarStartup) (*dataplane.Manager, error) {
+	if len(sidecars) > 1 {
+		return nil, errors.New("one original sidecar startup choice required")
+	}
+	sidecar := proxySidecarStartup{backend: "sing-box"}
+	if len(sidecars) == 1 {
+		sidecar = sidecars[0]
+	}
+	if err := config.ValidateProxySidecar(sidecar.backend); err != nil {
+		return nil, err
+	}
+	manager := dataplane.New(stateRoot)
+	wireGuardAdapter := dataplane.NewWireGuardAdapter(configs, stateRoot)
+	// One explicit startup Store is shared by the catalog and runtime owner.
+	// Construction is read-only; HTTP never discovers or relocates this path.
+	wireGuardAdapter.Profiles = wireguardprofile.New(filepath.Join(stateRoot, "profiles", "wireguard"))
+	nfqws2Adapter := dataplane.NewNFQWS2Adapter()
+	nfqws2Adapter.Configs = configs
+	if err := manager.Register(nfqws2Adapter); err != nil {
+		return nil, fmt.Errorf("register NFQWS2 dataplane adapter: %w", err)
+	}
+	for _, adapter := range []dataplane.Adapter{
+		dataplane.NewWARPWireGuardAdapter(configs, stateRoot),
+		dataplane.NewAmneziaWGAdapter(configs, stateRoot),
+		wireGuardAdapter,
+	} {
+		if err := manager.Register(adapter); err != nil {
+			return nil, fmt.Errorf("register %s dataplane adapter: %w", adapter.ID(), err)
+		}
+	}
+	for _, engineID := range []string{"usque", "sing-box", "xray"} {
+		var adapter *dataplane.ProxyTunnelAdapter
+		var err error
+		if engineID == "xray" && nodes != nil {
+			adapter, err = app.NewXrayNodeRuntime(app.NodeRuntimeFactoryOptions{Configs: configs, Nodes: nodes, StateRoot: stateRoot, FreshProfile: freshProfile, ProxySidecar: sidecar.backend, HEVComponents: sidecar.components})
+		} else {
+			adapter, err = dataplane.NewProxyTunnelAdapter(engineID, configs, stateRoot)
+			if err == nil && config.EffectiveProxySidecar(sidecar.backend) == "hev" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if sidecar.recovery {
+					err = dataplane.BindHEVSidecarForRecovery(ctx, adapter, sidecar.components)
+				} else {
+					err = dataplane.BindManagedHEVSidecar(ctx, adapter, sidecar.components)
+				}
+				cancel()
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("configure %s dataplane adapter: %w", engineID, err)
+		}
+		if err := manager.Register(adapter); err != nil {
+			return nil, fmt.Errorf("register %s dataplane adapter: %w", engineID, err)
+		}
+	}
+	return manager, nil
+}
+
+func registerScopedDNS(manager *dataplane.Manager, dns *dnscontrol.Manager) error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	adapter := dataplane.NewScopedDNSAdapter(context.Background(), dns, manager.StateRoot)
+	adapter.ScopeCheck, adapter.HealthProbe = adapter.CheckLAN, adapter.ProbeDirect
+	return manager.Register(adapter)
+}
+
+func rollbackAppliedSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {
+	// This legacy comparison has no retained list/client owner. A desired
+	// policy must be reviewed by the actual list executor before any
+	// restoration. Whole-network site exclusions saved after the previous plan
+	// do not close it: a rollback returns the last applied state, and the
+	// saved list stays a pending change the panel offers.
+	if cfg.ServiceControl.Stopped || cfg.SafeMode || cfg.AppliedRevision != previous.Revision || cfg.AppliedNetworkPolicy != nil || cfg.NetworkPolicy != nil {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, route := range previous.Routes {
+		state := cfg.AppliedServices[route.ServiceID]
+		selected := state.Route
+		if selected == "" {
+			selected = state.Mode
+		}
+		if selected == "" {
+			selected = "auto"
+		}
+		left, right := slices.Clone(state.Sources), slices.Clone(route.Sources)
+		slices.Sort(left)
+		slices.Sort(right)
+		if !state.Enabled || seen[route.ServiceID] || selected != route.Selected || !slices.Equal(left, right) {
+			return false
+		}
+		seen[route.ServiceID] = true
+	}
+	for id, state := range cfg.AppliedServices {
+		if state.Enabled && !seen[id] {
+			return false
+		}
+	}
+	return len(seen) > 0
+}
+
+// rollbackRecoveryGuard binds a rollback recovery to the settings on disk
+// now: they must stay unchanged and still describe the previous plan. Every
+// start with an unrecovered journal enables Recovery Safe Mode and fences the
+// panel, so Safe Mode cannot be cleared first; recovery accepts it and leaves
+// it enabled.
+func rollbackRecoveryGuard(cfgPath string, store *config.Store) (func(dataplane.Plan) error, error) {
+	baseline, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return nil, err
+	}
+	return func(previous dataplane.Plan) error {
+		current, readErr := os.ReadFile(cfgPath)
+		if readErr != nil || !bytes.Equal(baseline, current) || !closeRollbackSettingsMatch(store.Get(), previous) {
+			return errors.New("applied settings changed or do not match the previous plan")
+		}
+		return nil
+	}, nil
+}
+
+// Boot may restore only the current applied legacy intent, never a desired
+// draft, suspended Stop snapshot, or old permission from the autonomy policy.
+// A managed list/client owner needs its own retained executor review.
+func bootRecoveryGuard(cfgPath string, store *config.Store) (func(dataplane.Plan) error, error) {
+	baseline, err := os.ReadFile(cfgPath)
+	if err != nil || store == nil {
+		return nil, errors.New("boot applied settings are unavailable")
+	}
+	return func(committed dataplane.Plan) error {
+		cfg := store.Get()
+		if committed.State != "committed" || !committed.Ready || committed.Noop || committed.SafeMode || !rollbackAppliedSettingsMatch(cfg, committed) || !dataplane.PlanHonoursLegacyExclusions(cfg, committed) {
+			return errors.New("current applied settings do not authorize boot recovery")
+		}
+		observation, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		return store.WithResourceExclusionObservation(observation, cfg, func(config.EffectiveExclusionSet) error {
+			current, err := os.ReadFile(cfgPath)
+			if err != nil || !bytes.Equal(current, baseline) {
+				return errors.New("boot applied settings changed")
+			}
+			return nil
+		})
+	}, nil
+}
+
+// retryFailedRollbackAtStart retries a rollback that could not be verified
+// once per start, with the checks of -retry-rollback-plan: only an exact
+// restoration of the recorded state closes the journal, and a plan outside
+// that narrow recovery is refused untouched. Otherwise the journal fence and
+// Recovery Safe Mode apply as before. Without it every such journal needed a
+// person with SSH (0.19.2 on the owner's router).
+func retryFailedRollbackAtStart(ctx context.Context, manager *dataplane.Manager, cfgPath string, store *config.Store, audit *auditlog.Journal) {
+	guard, err := rollbackRecoveryGuard(cfgPath, store)
+	if err != nil {
+		return
+	}
+	retryContext, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	result, attempted, err := manager.RetryLatestFailedRollback(retryContext, guard)
+	if !attempted {
+		return
+	}
+	outcome := "ok"
+	if err != nil {
+		outcome = "failed"
+		log.Printf("automatic retry of failed rollback %s did not close it; journal review is required", result.PlanID)
+	} else {
+		log.Printf("failed rollback %s retried and closed at startup", result.PlanID)
+	}
+	if audit != nil {
+		_ = audit.Append(auditlog.Event{Action: "ROLLBACK_RETRY", Path: "dataplane", Outcome: outcome, Actor: "system", RemoteIP: "local"})
+	}
+}
+
+// settleRecoverySafeMode retains the hidden live-write gate when boot recovery
+// failed. The removed settings toggle must not remove the boot-loop guard's
+// effect on later workers and Apply. Fresh-node-proof recovery remains the
+// existing network-stale path; it does not create or clear a recovery flag.
+func settleRecoverySafeMode(store *config.Store, recovery dataplane.Recovery, recoveryErr error) error {
+	if recovery.Guarded || recoveryErr != nil && recovery.State != "network-stale" {
+		return store.SetSafeMode(true)
+	}
+	if recoveryErr == nil {
+		retireSafeMode(store)
+	}
+	return nil
+}
+
+// retireSafeMode clears a legacy flag only after settled successful recovery.
+// An unfinished update or failed boot recovery keeps its hidden protection.
+func retireSafeMode(store *config.Store) {
+	if !store.Get().SafeMode {
+		return
+	}
+	if err := store.SetSafeMode(false); err != nil {
+		log.Printf("clear retired Safe Mode flag: %v", err)
+		return
+	}
+	log.Print("retired Safe Mode flag cleared")
+}
+
+// closeRollbackSettingsMatch is rollbackAppliedSettingsMatch without the Safe
+// Mode refusal, for the explicit recovery modes run while the panel is
+// stopped. Older builds enabled Safe Mode on a fenced boot and the fence then
+// blocked clearing it, so requiring it off made a retry impossible after any
+// restart (0.19.2 on the owner's router). Closing only deactivates owned runtime;
+// retrying restores the snapshot and verifies it strictly. Both leave Safe
+// Mode enabled; only a later exact verified-retry review followed by successful
+// committed runtime recovery may retire that flag.
+func closeRollbackSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {
+	cfg.SafeMode = false
+	return rollbackAppliedSettingsMatch(cfg, previous)
+}
+
+type preflightReport struct {
+	OK               bool                   `json:"ok"`
+	Version          string                 `json:"version"`
+	Config           config.MigrationReport `json:"config"`
+	CatalogServices  int                    `json:"catalog_services"`
+	Sources          int                    `json:"sources"`
+	CommunityEntries int                    `json:"community_entries"`
+	Migrated         bool                   `json:"migrated"`
+}
+
+func preflight(configPath, catalogPath, sourcesPath, communityPath string, migrate bool) (preflightReport, error) {
+	cfg, configReport, err := config.Inspect(configPath)
+	if err != nil {
+		return preflightReport{}, fmt.Errorf("config preflight: %w", err)
+	}
+	if err := config.CheckManagedNFQReleaseUpdate(cfg); err != nil {
+		return preflightReport{}, fmt.Errorf("config preflight: %w", err)
+	}
+	cat, err := loadCatalogFile(catalogPath)
+	if err != nil {
+		return preflightReport{}, fmt.Errorf("catalog preflight: %w", err)
+	}
+	reg, err := sources.LoadRegistry(sourcesPath)
+	if err != nil {
+		return preflightReport{}, fmt.Errorf("sources preflight: %w", err)
+	}
+	communityCatalog, err := community.Load(communityPath)
+	if err != nil {
+		return preflightReport{}, fmt.Errorf("community catalog preflight: %w", err)
+	}
+	if migrate {
+		configReport, err = config.Migrate(configPath)
+		if err != nil {
+			return preflightReport{}, fmt.Errorf("config migration: %w", err)
+		}
+	}
+	return preflightReport{OK: true, Version: app.Version, Config: configReport, CatalogServices: len(cat.Services), Sources: len(reg.Sources), CommunityEntries: len(communityCatalog.Search("", nil)), Migrated: migrate && configReport.Changed}, nil
+}
+
+func loadCatalog(path string) (catalog.Catalog, error) {
+	c, err := loadCatalogFile(path)
+	if err == nil {
+		return c, nil
+	}
+	for _, p := range []string{"configs/service-catalog.json", filepath.Join(filepath.Dir(os.Args[0]), "service-catalog.json")} {
+		if c, e := loadCatalogFile(p); e == nil {
+			return c, nil
+		}
+	}
+	return catalog.Catalog{}, err
+}
+
+func loadCatalogFile(path string) (catalog.Catalog, error) {
+	local, err := catalog.Load(path)
+	if err != nil {
+		return catalog.Catalog{}, err
+	}
+	return catalog.WithWebDefaults(local), nil
+}
+
+func loadSources(path string) (sources.Registry, error) {
+	r, err := sources.LoadRegistry(path)
+	if err == nil {
+		return r, nil
+	}
+	for _, p := range []string{"configs/sources.json", filepath.Join(filepath.Dir(os.Args[0]), "sources.json")} {
+		if r, e := sources.LoadRegistry(p); e == nil {
+			return r, nil
+		}
+	}
+	return sources.Registry{}, err
+}
+
+func loadCommunityCatalog(path string) (*community.Manager, error) {
+	m, err := community.Load(path)
+	if err == nil {
+		return m, nil
+	}
+	for _, candidate := range []string{"configs/community-catalog.json", filepath.Join(filepath.Dir(os.Args[0]), "community-catalog.json")} {
+		if fallback, fallbackErr := community.Load(candidate); fallbackErr == nil {
+			return fallback, nil
+		}
+	}
+	return nil, err
+}
+
+var errHealthBusy = errors.New("RAZVILKA is busy with private restore; readiness is temporarily unavailable, do not restart")
+var errHealthPending = errors.New("healthcheck committed dataplane has no current runtime evidence")
+var errHealthNodeReview = errors.New("healthcheck applied node recovery requires review")
+
+// Exit codes of -healthcheck-prior. The installer runs the NEW binary against
+// the previous process and relaxes the final route check only for a known
+// degradation of an identified process. Busy, fenced, unreachable, wrong or
+// ambiguous answers keep the strict route check.
+const (
+	priorRoutesConfirmed = 0
+	priorRoutesUnknown   = 1
+	priorRoutesDegraded  = 10
+	priorRoutesBusy      = 75
+	priorRoutesFenced    = 76
+)
+
+func classifyPriorRoutes(ctx context.Context, rawURL string, expectedPID int, interval time.Duration) (int, string, error) {
+	busy := false
+	for {
+		_, err := checkHealthIdentity(ctx, rawURL, expectedPID, true, "")
+		switch {
+		case err == nil:
+			return priorRoutesConfirmed, "confirmed", nil
+		case errors.Is(err, errHealthPending), errors.Is(err, errHealthNodeReview):
+			return priorRoutesDegraded, "degraded", err
+		case errors.Is(err, errHealthRecovery):
+			return priorRoutesFenced, "fenced", err
+		case errors.Is(err, errHealthBusy):
+			busy = true
+		case busy && errors.Is(err, errHealthRequest):
+			// A request cut short after a genuine busy answer does not
+			// prove the operation ended; it stays busy, never unknown.
+		default:
+			return priorRoutesUnknown, "unknown", err
+		}
+		if ctx.Err() != nil {
+			return priorRoutesBusy, "busy", err
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return priorRoutesBusy, "busy", err
+		case <-timer.C:
+		}
+	}
+}
+
+var errHealthRequest = errors.New("healthcheck transport is unavailable")
+var errHealthRecovery = errors.New("RAZVILKA is running with a fenced network transaction journal; review is required and a restart will not settle it")
+
+const maxHealthWait = 10 * time.Minute
+
+func checkHealthWithWait(rawURL string, expectedPID int, requireDataplane bool, wait time.Duration) (string, error) {
+	if wait < 0 || wait > maxHealthWait {
+		return "", errors.New("healthcheck wait must be between 0 and 10m")
+	}
+	if wait == 0 {
+		return checkHealth(rawURL, expectedPID, requireDataplane)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
+	defer cancel()
+	return waitForHealth(ctx, rawURL, expectedPID, requireDataplane, time.Second)
+}
+
+// A busy response identifies the supervised process but cannot disclose which
+// exclusive operation owns admission. Wait for a fresh, complete status; never
+// call a busy response healthy or turn its deadline into a rollback/restart.
+func waitForHealth(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool, interval time.Duration) (string, error) {
+	var last error
+	timedOut := func() (string, error) {
+		if last != nil {
+			return "", fmt.Errorf("healthcheck readiness deadline reached: %w", last)
+		}
+		return "", ctx.Err()
+	}
+	for {
+		if ctx.Err() != nil {
+			return timedOut()
+		}
+		version, err := checkHealthContext(ctx, rawURL, expectedPID, requireDataplane)
+		if err == nil {
+			return version, nil
+		}
+		if errors.Is(err, errHealthBusy) || errors.Is(err, errHealthPending) {
+			last = err
+		} else if !errors.Is(err, errHealthRequest) {
+			// Wrong identity/PID, invalid JSON, recovery fences and journal
+			// failures are not readiness transitions and must fail immediately.
+			return "", err
+		} else if last == nil {
+			// A cut or slow request proves nothing either way. Retry within the
+			// bounded wait; at its deadline this remains a failure (rollback).
+			last = err
+		}
+		// A request timeout after a genuine busy observation does not prove
+		// that the private operation has ended. Preserve its exit-75 fence.
+		if ctx.Err() != nil {
+			return timedOut()
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return timedOut()
+		case <-timer.C:
+		}
+	}
+}
+
+func checkHealth(rawURL string, expectedPID int, requireDataplane bool) (string, error) {
+	return checkHealthContext(context.Background(), rawURL, expectedPID, requireDataplane)
+}
+
+func checkHealthContext(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool) (string, error) {
+	return checkHealthIdentity(ctx, rawURL, expectedPID, requireDataplane, app.Version)
+}
+
+// An empty expectedVersion accepts a RAZVILKA process of any release; the
+// installer classifies the previous version before replacing it.
+func checkHealthIdentity(ctx context.Context, rawURL string, expectedPID int, requireDataplane bool, expectedVersion string) (string, error) {
+	// The status handler inspects owned runtime with its own eight-second
+	// bound for every caller, not only the strict check. The client must let
+	// it finish; the parent still owns the overall deadline and cancellation.
+	requestTimeout := 12 * time.Second
+	client := &http.Client{
+		Timeout: requestTimeout,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("healthcheck request: %w", err)
+	}
+	req.Header.Set("User-Agent", "RAZVILKA-healthcheck/"+app.Version)
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", errHealthRequest, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusServiceUnavailable {
+		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
+	}
+	var status struct {
+		Name              string `json:"name"`
+		Version           string `json:"version"`
+		ProcessID         int    `json:"process_id"`
+		DataplaneState    string `json:"dataplane_state"`
+		DataplaneAdapters *int   `json:"dataplane_adapters"`
+		DataplaneError    string `json:"dataplane_error"`
+		LiveActive        *bool  `json:"live_active"`
+		Code              string `json:"code"`
+		NotStarted        bool   `json:"not_started"`
+		RecoveryRequired  bool   `json:"recovery_required"`
+		NodeRecovery      struct {
+			State string `json:"state"`
+		} `json:"node_recovery"`
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+	if err != nil {
+		var networkError net.Error
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkError) && networkError.Timeout() {
+			return "", fmt.Errorf("%w: %w", errHealthRequest, err)
+		}
+		return "", fmt.Errorf("healthcheck response: %w", err)
+	}
+	if len(body) > 64<<10 {
+		return "", errors.New("healthcheck response exceeds 64 KiB")
+	}
+	if err := json.Unmarshal(body, &status); err != nil {
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
+		}
+		return "", fmt.Errorf("healthcheck response: %w", err)
+	}
+	if status.Name != "RAZVILKA" || status.Version == "" || expectedVersion != "" && status.Version != expectedVersion {
+		return "", fmt.Errorf("healthcheck identity mismatch: got %q %q", status.Name, status.Version)
+	}
+	if expectedPID > 0 && status.ProcessID != expectedPID {
+		return "", fmt.Errorf("healthcheck process mismatch: got %d, want %d", status.ProcessID, expectedPID)
+	}
+	if resp.StatusCode != http.StatusOK {
+		if status.Code == "RESTORE_OPERATION_BUSY" && status.NotStarted && !status.RecoveryRequired && status.ProcessID > 0 {
+			return "", errHealthBusy
+		}
+		// A private restore fence is settled by the next start, so it stays an
+		// ordinary failure. A journal fence survives restarts: report it apart.
+		if resp.StatusCode == http.StatusServiceUnavailable && (status.Code == "DATAPLANE_RECOVERY_REQUIRED" || status.Code == "COMPONENT_RECOVERY_REQUIRED" || status.Code == "SELF_UPDATE_RECOVERY_REQUIRED") && status.NotStarted && status.RecoveryRequired && status.ProcessID > 0 {
+			return "", errHealthRecovery
+		}
+		return "", fmt.Errorf("healthcheck returned HTTP %d", resp.StatusCode)
+	}
+	if requireDataplane {
+		if status.DataplaneError != "" || status.DataplaneState == "journal-error" {
+			return "", errors.New("healthcheck dataplane journal is unavailable")
+		}
+		if status.DataplaneState == "" || status.DataplaneAdapters == nil || *status.DataplaneAdapters < 0 || status.LiveActive == nil {
+			return "", errors.New("healthcheck response lacks valid dataplane evidence fields")
+		}
+		// adapters describes the committed plan; state may instead describe a
+		// later failed attempt. A rolled-back attempt cannot waive live proof.
+		if *status.DataplaneAdapters > 0 && !*status.LiveActive {
+			if status.NodeRecovery.State == "requires-review" {
+				return "", errHealthNodeReview
+			}
+			return "", errHealthPending
+		}
+	}
+	return status.Version, nil
+}
+
+func getenv(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
+}

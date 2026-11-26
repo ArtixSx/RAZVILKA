@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-labelledby="t d">
+  <title id="t">Как RAZVILKA выбирает путь</title>
+  <desc id="d">Трафик выбранных устройств к сервисам из активного списка идёт через выбранный обход; исключённые устройства и сайты, а также всё остальное идут обычным маршрутом роутера.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1424"/>
+      <stop offset="1" stop-color="#111c33"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1fb6d9"/>
+      <stop offset="1" stop-color="#5fe1ff"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e09a2b"/>
+      <stop offset="1" stop-color="#ffc260"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="ac" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5fe1ff"/></marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ffc260"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8aa0c2"/></marker>
+  </defs>
+  <rect width="960" height="420" rx="18" fill="url(#bg)"/>
+  <g font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+    <text x="40" y="52" font-size="24" font-weight="700" fill="#eef4ff">Как RAZVILKA выбирает путь</text>
+    <text x="40" y="78" font-size="14" fill="#8aa0c2">Обход только для того, что вы включили. Всё остальное — как раньше.</text>
+
+    <!-- devices -->
+    <g>
+      <rect x="40" y="130" width="170" height="170" rx="14" fill="#16233d" stroke="#2a3b5e"/>
+      <text x="125" y="160" text-anchor="middle" font-size="15" font-weight="600" fill="#eef4ff">Устройства</text>
+      <text x="125" y="186" text-anchor="middle" font-size="13" fill="#cfe0ff">💻 Компьютер</text>
+      <text x="125" y="210" text-anchor="middle" font-size="13" fill="#cfe0ff">📱 Телефон</text>
+      <text x="125" y="234" text-anchor="middle" font-size="13" fill="#cfe0ff">📺 Телевизор</text>
+      <text x="125" y="272" text-anchor="middle" font-size="12" fill="#8aa0c2">выбранные в панели</text>
+    </g>
+
+    <path d="M212 215 H291" stroke="#8aa0c2" stroke-width="3" fill="none" marker-end="url(#ag)"/>
+
+    <!-- router -->
+    <g>
+      <rect x="296" y="120" width="276" height="190" rx="16" fill="#132038" stroke="#3a5280"/>
+      <text x="434" y="152" text-anchor="middle" font-size="16" font-weight="700" fill="#eef4ff">Роутер · RAZVILKA</text>
+      <rect x="312" y="168" width="244" height="34" rx="8" fill="#1b2c4c"/>
+      <text x="434" y="190" text-anchor="middle" font-size="13" fill="#cfe0ff">1. Сервис в активном списке?</text>
+      <rect x="312" y="210" width="244" height="34" rx="8" fill="#1b2c4c"/>
+      <text x="434" y="232" text-anchor="middle" font-size="13" fill="#cfe0ff">2. Устройство или сайт исключены?</text>
+      <rect x="312" y="252" width="244" height="34" rx="8" fill="#1b2c4c"/>
+      <text x="434" y="274" text-anchor="middle" font-size="13" fill="#cfe0ff">3. Какой обход работает сейчас?</text>
+    </g>
+
+    <!-- bypass branch -->
+    <path d="M574 180 C 625 180, 640 135, 690 135" stroke="url(#cyan)" stroke-width="4" fill="none" filter="url(#glow)" marker-end="url(#ac)"/>
+    <rect x="695" y="98" width="240" height="80" rx="12" fill="#0f2a38" stroke="#1fb6d9"/>
+    <text x="815" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="#5fe1ff">Обход</text>
+    <text x="815" y="148" text-anchor="middle" font-size="12" fill="#cfefff">NFQWS2 · VLESS · WireGuard · WARP</text>
+    <text x="815" y="166" text-anchor="middle" font-size="11" fill="#8fbfd2">только включённые сервисы</text>
+
+    <!-- normal branch -->
+    <path d="M574 250 C 625 250, 640 295, 690 295" stroke="url(#amber)" stroke-width="4" fill="none" filter="url(#glow)" marker-end="url(#aa)"/>
+    <rect x="695" y="255" width="240" height="80" rx="12" fill="#2d2310" stroke="#e09a2b"/>
+    <text x="815" y="283" text-anchor="middle" font-size="15" font-weight="700" fill="#ffc260">Обычный маршрут</text>
+    <text x="815" y="305" text-anchor="middle" font-size="12" fill="#ffe6bf">исключения, остальной интернет,</text>
+    <text x="815" y="323" text-anchor="middle" font-size="12" fill="#ffe6bf">ваш собственный VPN — без изменений</text>
+
+    <text x="480" y="375" text-anchor="middle" font-size="13" fill="#8aa0c2">Исключения всегда сильнее: исключённое устройство или сайт никогда не попадают в обход.</text>
+    <text x="480" y="398" text-anchor="middle" font-size="13" fill="#8aa0c2">Пустой список — никакого перехвата.</text>
+  </g>
+</svg>

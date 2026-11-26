@@ -1,0 +1,75 @@
+name: WG original tool observation full manual ABBA
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/wg-tool-comparison-20261117']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Disposable native NFQUEUE fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+      - name: Same independently reviewed legacy tool bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=$(sudo mktemp -d /tmp/razvilka-managed-packages.XXXXXX)
+          case "$packages" in /tmp/razvilka-managed-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$packages/iptables.deb" "$packages/libip4tc2.deb" \
+            "$packages/libip6tc2.deb" "$packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+      - name: Original full manual scenarios, joined production and race ABBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            python3 scripts/wg-tools-comparison/compare-wg-tools.py \
+              "$GITHUB_WORKSPACE" "$RUNNER_TEMP/wg-tool-comparison"
+      - name: Hand bounded public evidence to the runner
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo python3 - "$RUNNER_TEMP" "$(id -u)" "$(id -g)" <<'PY'
+          import os,pathlib,stat,sys
+          parent=pathlib.Path(sys.argv[1]); out=parent/'wg-tool-comparison'
+          if not parent.is_absolute() or parent!=parent.resolve():raise SystemExit('canonical runner temp required')
+          if not out.exists():raise SystemExit(0)
+          if out.is_symlink() or out!=out.resolve() or not out.is_dir():raise SystemExit('foreign evidence root')
+          entries=[out,*out.rglob('*')]
+          if len(entries)>128:raise SystemExit('evidence entry bound')
+          total=0
+          for p in entries:
+              s=p.lstat()
+              if not (stat.S_ISDIR(s.st_mode) or stat.S_ISREG(s.st_mode)):raise SystemExit('foreign evidence entry')
+              if stat.S_ISREG(s.st_mode):
+                  if s.st_nlink!=1:raise SystemExit('linked evidence file')
+                  total+=s.st_size
+          if total>64<<20:raise SystemExit('evidence byte bound')
+          uid,gid=int(sys.argv[2]),int(sys.argv[3])
+          if uid<=0 or gid<=0:raise SystemExit('nonroot runner identity required')
+          for p in entries:os.chown(p,uid,gid,follow_symlinks=False)
+          PY
+      - name: Preserve every outcome including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wg-tool-comparison-${{ github.sha }}
+          path: ${{ runner.temp }}/wg-tool-comparison/
+          if-no-files-found: error
+          retention-days: 14

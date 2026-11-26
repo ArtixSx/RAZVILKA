@@ -1,0 +1,54 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestEntwareUpgradeDoesNotRequireArchiveScriptModeBits(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	upgrade, err := os.ReadFile(filepath.Join(root, "scripts", "upgrade-entware.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	install, err := os.ReadFile(filepath.Join(root, "scripts", "install-entware.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradeText := string(upgrade)
+	for _, required := range []string{
+		`[ -r "$BIN_SOURCE" ]`,
+		`if [ ! -x "$BIN_SOURCE" ]; then`,
+		`chmod 755 "$BIN_SOURCE"`,
+		`[ -r "$INIT_SOURCE" ]`,
+		`[ -r "$ROLLBACK" ]`,
+		`sh "$ROLLBACK" "$BACKUP" --auto`,
+		`install_atomic "$INIT_SOURCE" "$RAZ_INIT" 755`,
+		`"$STATEDIR/staging/usque"`,
+		`chmod 700 "$DIR"`,
+		`stage 1 "Останавливаем текущую версию`,
+		`stage 4 "Сохраняем и отключаем только принадлежащий RAZVILKA dataplane`,
+		`stage 6 "Запускаем новую версию и ждём готовности панели`,
+		`stage 7 "Проверяем процесс и ждём подтверждённого восстановления маршрутов`,
+		// Strict route evidence stays the default; it is relaxed only when the
+		// previous version answered but could not confirm routes either.
+		`PRIOR_ROUTES_CONFIRMED=1`,
+		`"$BIN_SOURCE" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-prior -healthcheck-wait 3m`,
+		`ROUTE_EVIDENCE=-healthcheck-require-dataplane`,
+		`-healthcheck-pid "$RUNNING_PID" ${ROUTE_EVIDENCE:+"$ROUTE_EVIDENCE"} -healthcheck-wait 9m`,
+	} {
+		if !strings.Contains(upgradeText, required) {
+			t.Fatalf("upgrade script lost archive-mode safeguard %q", required)
+		}
+	}
+	for _, forbidden := range []string{`[ -x "$BIN_SOURCE" ] ||`, `[ -x "$INIT_SOURCE" ]`, `[ -x "$ROLLBACK" ]`} {
+		if strings.Contains(upgradeText, forbidden) {
+			t.Fatalf("upgrade script still requires preserved executable bits: %q", forbidden)
+		}
+	}
+	if !strings.Contains(string(install), `exec sh "$HERE/upgrade-entware.sh"`) {
+		t.Fatal("install wrapper must work when an archive did not preserve executable bits")
+	}
+}

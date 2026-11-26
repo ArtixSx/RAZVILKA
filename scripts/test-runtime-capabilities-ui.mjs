@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const model=require('../cmd/razvilka/web/console-autonomy.js');
+const view=(state,available,message)=>({capabilities:{schema:1,availability:{automatic_initial_apply:{state,available,message}}}});
+assert.equal(model.capabilityPresentation({}).state,'unknown');
+assert.equal(model.capabilityPresentation({capabilities:{automatic_initial_apply:true}}).state,'unknown');
+assert.equal(model.capabilityPresentation(view('requires-service-plan',true,'bad')).state,'unknown');
+assert.equal(model.capabilityPresentation(view('requires-service-plan',null,'Нужна проверка сервиса')).state,'requires-service-plan');
+assert.equal(model.capabilityPresentation(view('blocked',false,'Остановлено')).message,'Остановлено');
+assert.equal(model.capabilityPresentation(view('blocked',null,'bad')).state,'unknown');
+console.log('autonomy capability presentation: OK');

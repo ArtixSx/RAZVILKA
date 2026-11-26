@@ -1,0 +1,114 @@
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+const require=createRequire(import.meta.url);
+const {validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML}=require('../cmd/razvilka/web/autonomy-ui.js');
+let count=0;
+function test(name,fn){fn();count++;console.log(`PASS ${name}`);}
+function policy(){return {schema:1,revision:1,setup_complete:true,enabled:true,timezone:'Europe/Berlin',all_lan:false,default_sources:['192.168.1.50/32'],source_ids:['feed-fixture'],protocols:['vless','hysteria2','tuic','shadowsocks'],preferred_routes:['nfqws2','usque'],check_seconds:120,reserve_seconds:300,reserve_target:3,candidates_per_round:2,failure_confirm_seconds:20,max_switches_per_hour:6,application:{mode:'check',start:'03:00',end:'04:00',days:[1,2,3,4,5]},components:{mode:'check',start:'04:00',end:'05:00',days:[0,6]}};}
+test('valid policy',()=>assert.equal(validatePolicy(policy()).reserve_target,3));
+for(const [name,change] of [
+ ['empty scope',p=>p.default_sources=[]],['ambiguous scope',p=>p.all_lan=true],['global CIDR',p=>p.default_sources=['0.0.0.0/0']],['domain as source',p=>p.default_sources=['google.com']],['localhost',p=>p.default_sources=['127.0.0.1']],['no sources or local routes',p=>{p.source_ids=[];p.preferred_routes=[]}],['source URL not ID',p=>p.source_ids=['https://private/?key=123']],['unknown protocol',p=>p.protocols=['trojan']],['empty protocol',p=>p.protocols=[]],['fast check',p=>p.check_seconds=1],['fast reserve',p=>p.reserve_seconds=60],['unbounded batch',p=>p.candidates_per_round=99],['unbounded reserve',p=>p.reserve_target=99],['no zone',p=>p.timezone=''],['unknown zone',p=>p.timezone='No/SuchZone'],['local zone',p=>p.timezone='Local'],['unknown mode',p=>p.application.mode='upgrade'],['unsupported component prepare',p=>p.components.mode='prepare'],['empty days',p=>p.application.days=[]],['equal window',p=>p.application.end=p.application.start],['bad time',p=>p.application.start='24:00'],['unknown preferred',p=>p.preferred_routes=['shell']],['bad switches',p=>p.max_switches_per_hour=100],['bad quorum',p=>p.failure_confirm_seconds=1]
+])test(name,()=>{const p=policy();change(p);assert.throws(()=>validatePolicy(p));});
+test('local routes do not require subscriptions',()=>{const p=policy();p.source_ids=[];assert.doesNotThrow(()=>validatePolicy(p))});
+for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+ const {validatePolicy:validate,selectedRouteOrder,definitionChecks}=require('../cmd/razvilka/web/'+file);
+ test(file+' describes reviewed probes including response requirements',()=>{
+  assert.deepEqual(definitionChecks({probe_url:'https://example.org/',probes:[{label:'Вход',url:'https://example.org/auth',required:true,expect:{status_codes:[200,204],redirect_policy:'none',json_fields:['ok']}}]}),
+   ['https://example.org/','Вход · https://example.org/auth · обязательная · коды HTTP — 200, 204 · переходы — none · поля JSON — ok']);
+ });
+ test(file+' keeps existing route priority when adding and removing methods',()=>{
+  const existing=Object.freeze(['warp-wg','usque']);
+  assert.deepEqual(selectedRouteOrder(existing,['usque','warp-wg']),['warp-wg','usque']);
+  assert.deepEqual(selectedRouteOrder(existing,['nfqws2','usque','wireguard']),['usque','nfqws2','wireguard']);
+  assert.deepEqual(selectedRouteOrder(existing,[]),[]);
+ });
+
+ test(`${file} validates ordered source priority within existing consent`,()=>{
+  const p=policy();p.source_ids=['manual','feed-fixture'];p.preferred_source_ids=['feed-fixture','manual'];assert.doesNotThrow(()=>validate(p));
+  for(const ids of [['missing'],['manual','manual'],'manual',null])assert.throws(()=>validate({...p,preferred_source_ids:ids}));
+  assert.doesNotThrow(()=>validate({...p,preferred_source_ids:[]}));
+ });
+}
+{
+ const {policyConsentRequired,validatePolicy:validate}=require('../cmd/razvilka/web/console-autonomy.js');
+ test('reordering already permitted sources grants no new authority',()=>{
+  const p=policy();p.source_ids=['manual','feed-fixture'];p.preferred_source_ids=['manual'];
+  assert.equal(policyConsentRequired(p,{...p,preferred_source_ids:['feed-fixture','manual']}),false);
+  assert.equal(policyConsentRequired(p,{...p,preferred_source_ids:['unapproved']}),true);
+ });
+ test('new component installation consent is distinct from updates',()=>{
+  const saved=policy();
+  saved.components.mode='install';
+  assert.equal(policyConsentRequired(saved,{...saved,install_missing_components:true}),true);
+  assert.equal(policyConsentRequired(saved,{...saved,install_missing_components:false}),false);
+  assert.equal(policyConsentRequired({...saved,install_missing_components:false},saved),true);
+  assert.doesNotThrow(()=>validate({...saved,install_missing_components:null}));
+  assert.throws(()=>validate({...saved,install_missing_components:'true'}));
+ });
+ test('lowering the consecutive removal threshold requires review',()=>{
+  const saved=policy();
+  assert.equal(policyConsentRequired(saved,{...saved,public_node_failure_threshold:2}),true);
+  assert.equal(policyConsentRequired(saved,{...saved,public_node_failure_threshold:4}),false);
+  assert.doesNotThrow(()=>validate({...saved,public_node_failure_threshold:8}));
+  for(const threshold of [1,9,3.5,'3'])assert.throws(()=>validate({...saved,public_node_failure_threshold:threshold}));
+ });
+}
+test('explicit all LAN',()=>{const p=policy();p.all_lan=true;p.default_sources=[];assert.doesNotThrow(()=>validatePolicy(p));});
+test('cross midnight',()=>{const p=policy();p.application.start='23:50';p.application.end='01:10';assert.doesNotThrow(()=>validatePolicy(p));});
+test('prepare only application',()=>{const p=policy();p.application.mode='prepare';assert.doesNotThrow(()=>validatePolicy(p));});
+for(const input of ['http://example.org','https://name:secret@example.org','https://localhost','https://192.168.1.1','https://[::1]','https://host.local','https://example.org:8443','javascript:alert(1)','']) test(`reject website ${input}`,()=>assert.throws(()=>websiteDefinition('Site',input)));
+test('generic service no hardcoding',()=>assert.deepEqual(websiteDefinition('Новый произвольный сервис','www.example.org/account?secret=x').domains,['www.example.org']));
+test('no query secret in probe',()=>assert.equal(websiteDefinition('Site','https://example.org/path?token=hidden').probe_url,'https://example.org/'));
+test('normalizes hostname',()=>assert.equal(websiteDefinition('Site','HTTPS://ExAmPlE.org.').domains[0],'example.org'));
+test('missing name',()=>assert.throws(()=>websiteDefinition('','example.org')));
+test('safe escaping',()=>assert.equal(escapeHTML('<img src=x onerror="bad">'), '&lt;img src=x onerror=&quot;bad&quot;&gt;'));
+test('deduplicates user selection',()=>assert.deepEqual(splitValues('a,b; a\n c'),['a','b','c']));
+test('strict minutes',()=>assert.equal(minutes('02:55'),175));
+test('invalid minute',()=>assert.equal(minutes('24:00'),-1));
+for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+ const {maintenanceModeText}=require('../cmd/razvilka/web/'+file);
+ test(`${file} describes component installation as requiring acceptance`,()=>{
+  assert.match(maintenanceModeText('install',true),/подтверждение результата в журнале/);
+  assert.doesNotMatch(maintenanceModeText('install',true),/сама|автоматический откат/);
+  assert.match(maintenanceModeText('install'),/при сбое.*журнала/);
+  assert.equal(maintenanceModeText('off',true),'Выключено');
+  assert.equal(maintenanceModeText('check',true),'Проверка каталога');
+  assert.equal(maintenanceModeText('prepare'),'Подготовка, без установки');
+ });
+ const {candidateCooldownText}=require('../cmd/razvilka/web/'+file);
+ const now=Date.parse('2026-09-27T01:00:00Z');
+ const failure={code:'http-403',observed_at:new Date(now-60000).toISOString(),until:new Date(now+240000).toISOString()};
+ test(`${file} explains scoped cooldown`,()=>assert.match(candidateCooldownText({candidate_failures:[failure]},now),/1.*403\/451.*4 мин/));
+ for(const [name,change] of [['expired',{until:new Date(now).toISOString()}],['future',{observed_at:new Date(now+1000).toISOString()}],['unbounded',{until:new Date(now+600000).toISOString()}],['partial',{code:'http-429'}]]) {
+  test(`${file} hides ${name} cooldown`,()=>assert.equal(candidateCooldownText({candidate_failures:[{...failure,...change}]},now),''));
+ }
+}
+{
+ const fs=require('node:fs');
+ const all=['nfqws2','usque','warp-wg','amneziawg','wireguard','sing-box','xray'];
+ const html=fs.readFileSync('cmd/razvilka/web/index.html','utf8');
+ for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+  const {validatePolicy:validate}=require('../cmd/razvilka/web/'+file);
+  test(`${file} accepts every local route with a probe`,()=>{const p=policy();p.preferred_routes=all;assert.deepEqual(validate(p).preferred_routes,all);});
+ }
+ test('every local route can be chosen before node selection',()=>{for(const id of all)assert.equal(html.split(`name="preferred" type="checkbox" value="${id}"`).length-1,1,id);});
+}
+for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+ const {stateLabels}=require('../cmd/razvilka/web/'+file);
+ test(`${file} labels every autopilot runtime state`,()=>{
+  for(const state of ['pending','checking','applying','healthy','applied','searching','unconfirmed','service-unconfirmed','paused','manual-change','network-unknown','apply-refused','capability-refused','excluded','component-unavailable','component-stopped','component-window','component-retry','rate-limited','requires-review','scope-pending','origin-expired','definition-changed','unsupported-scenario','checker-unavailable','catalog-unavailable','removal-pending','removal-blocked','removed'])
+   assert.ok(typeof stateLabels[state]==='string'&&stateLabels[state]&&stateLabels[state]!==state,state);
+  assert.doesNotMatch(stateLabels['capability-refused'],/повтор/);
+  assert.equal(stateLabels['masque-component-unavailable'],'Компонент MASQUE недоступен');
+  assert.equal(stateLabels['masque-publication-unconfirmed'],'Компонент MASQUE ожидает повторной проверки');
+  assert.equal(stateLabels['masque-session-unavailable'],'Сессия MASQUE недоступна');
+  assert.equal(stateLabels['warp-registration-unreachable'],'Адрес регистрации WARP недоступен');
+  assert.equal(stateLabels['warp-registration-pending'],'Результат регистрации WARP требует проверки');
+  for(const state of ['warp-registration-timeout','warp-registration-budget','warp-profile-conflict','warp-service-unconfirmed'])
+   assert.ok(typeof stateLabels[state]==='string'&&stateLabels[state]!==state,state);
+ });
+}
+console.log(`AUTONOMY_UI_PURE_TESTS=${count}`);
+
+const currentLabels=require('../cmd/razvilka/web/console-autonomy.js').stateLabels;
+assert.equal(currentLabels['domain-route-unavailable'],'Нет подтверждённого обхода для доменного сервиса');

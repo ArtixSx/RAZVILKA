@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 230" width="960" height="230" role="img" aria-labelledby="t d">
+  <title id="t">Установка RAZVILKA за три шага</title>
+  <desc id="d">1. Подготовьте Entware на роутере. 2. Выполните одну команду установки. 3. Откройте панель на порту 8787 и пройдите мастер.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1424"/>
+      <stop offset="1" stop-color="#111c33"/>
+    </linearGradient>
+    <linearGradient id="line" gradientUnits="userSpaceOnUse" x1="170" y1="98" x2="790" y2="98">
+      <stop offset="0" stop-color="#1fb6d9"/>
+      <stop offset="1" stop-color="#ffc260"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="230" rx="18" fill="url(#bg)"/>
+  <path d="M170 98 H790" stroke="url(#line)" stroke-width="3" stroke-dasharray="8 8" fill="none"/>
+  <g font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" text-anchor="middle">
+    <g>
+      <circle cx="170" cy="98" r="34" fill="#0f2a38" stroke="#1fb6d9" stroke-width="3"/>
+      <text x="170" y="109" font-size="28" font-weight="700" fill="#5fe1ff">1</text>
+      <text x="170" y="160" font-size="16" font-weight="700" fill="#eef4ff">Entware</text>
+      <text x="170" y="182" font-size="12" fill="#8aa0c2">накопитель USB, /opt,</text>
+      <text x="170" y="198" font-size="12" fill="#8aa0c2">доступ по SSH</text>
+    </g>
+    <g>
+      <circle cx="480" cy="98" r="34" fill="#16233d" stroke="#8fb6ff" stroke-width="3"/>
+      <text x="480" y="109" font-size="28" font-weight="700" fill="#cfe0ff">2</text>
+      <text x="480" y="160" font-size="16" font-weight="700" fill="#eef4ff">Одна команда</text>
+      <text x="480" y="182" font-size="12" fill="#8aa0c2">скачивает выпуск, сверяет SHA-256</text>
+      <text x="480" y="198" font-size="12" fill="#8aa0c2">и ставит службу</text>
+    </g>
+    <g>
+      <circle cx="790" cy="98" r="34" fill="#2d2310" stroke="#e09a2b" stroke-width="3"/>
+      <text x="790" y="109" font-size="28" font-weight="700" fill="#ffc260">3</text>
+      <text x="790" y="160" font-size="16" font-weight="700" fill="#eef4ff">Панель :8787</text>
+      <text x="790" y="182" font-size="12" fill="#8aa0c2">мастер: устройства, сервисы,</text>
+      <text x="790" y="198" font-size="12" fill="#8aa0c2">способы обхода</text>
+    </g>
+  </g>
+</svg>

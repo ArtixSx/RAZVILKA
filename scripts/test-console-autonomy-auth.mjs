@@ -1,0 +1,1006 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+
+const source=readFileSync(new URL('../cmd/razvilka/web/console-autonomy.js',import.meta.url),'utf8');
+const quickSource=readFileSync(new URL('../cmd/razvilka/web/autopilot-settings.js',import.meta.url),'utf8');
+const coreSource=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
+const hideAuthSource=coreSource.slice(coreSource.indexOf('function hideAuth() {'),coreSource.indexOf('\nasync function submitSetup('));
+const showAuthSource=coreSource.slice(coreSource.indexOf('function showAuth('),coreSource.indexOf('\nfunction hideAuth() {')).replace('function showAuth(', 'function actualShowAuth(');
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
+function snapshot(revision=1){
+ const window={mode:'check',start:'02:00',end:'03:00',days:[1]};
+ return {policy:{revision,enabled:true,setup_complete:true,timezone:'UTC',all_lan:false,default_sources:['192.0.2.1/32'],source_ids:['feed-fixture'],protocols:['vless'],preferred_routes:[],reserve_target:2,candidates_per_round:2,check_seconds:300,reserve_seconds:600,application:window,components:window},services:{},runtime:{},catalog_services:[],source_presets:[],server_time:'2026-09-13T10:00:00Z'};
+}
+function fixture(authenticated=true,staticInputs=[],includeQuick=false){
+ const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),intervals=new Map(),published=[],inputs=new Map([['static',staticInputs.map(input=>({closest:()=>({}),...input}))]]);
+ let timerID=0,authCalls=0,createdElementID=0;
+ function element(id){
+  if(!elements.has(id)){const classes=new Set();elements.set(id,{value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,options:[],dataset:{},open:false,children:[],parentNode:null,
+   appendChild(child){
+    if(child.parentNode){const siblings=child.parentNode.children;siblings.splice(siblings.indexOf(child),1);}
+    child.parentNode=this;this.children.push(child);return child;
+   },
+   append(...children){for(const child of children)this.appendChild(child);},events:new Map(),classList:{toggle(){},add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)},addEventListener(type,fn){this.events.set(type,fn);},setAttribute(){},removeAttribute(){},close(){this.open=false;},showModal(){this.open=true;},focus(){},reset(){}});}
+  const result=elements.get(id);
+  result.contains=target=>target===result;
+  result.closest=selector=>id==='a1-confirmConsent'&&selector==='.check-row'?element('a1-confirmConsentRow'):null;
+  if(['a1-starterItems','a1-initialExtras','a1-appDays','a1-engineDays','a1-wizardSources'].includes(id)&&!Object.getOwnPropertyDescriptor(result,'innerHTML').get){
+   let html='';Object.defineProperty(result,'innerHTML',{get:()=>html,set(value){html=value;inputs.set(id,[...value.matchAll(/<input\b([^>]+)>/g)].map(([,attrs])=>({name:/name="([^"]*)"/.exec(attrs)?.[1],value:/value="([^"]*)"/.exec(attrs)?.[1],checked:/\bchecked\b/.test(attrs),closest:()=>({})})));}});
+  }
+  return result;
+ }
+ function listen(map,type,fn){if(!map.has(type))map.set(type,[]);map.get(type).push(fn);}
+ function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
+ const document={hidden:false,createElement:tag=>{const node=element(`created-${++createdElementID}`);node.tagName=tag.toUpperCase();return node;},getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.startsWith('#a1-wizardForm ')||!input.otherForm)&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
+ const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
+ const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>{throw Error('native confirm must not run');},askConfirmation:async()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
+  setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval(fn,ms){const id=++timerID;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id),
+  showAuth(){authCalls++;document.dispatchEvent({type:'razvilka:auth-required'});},
+  fetch(path,options){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
+ };
+ element('a1-advancedServices').append(element('a1-starterReview'));
+ vm.runInNewContext(source,context);
+ vm.runInNewContext(hideAuthSource+'\n'+showAuthSource,context);
+ if(includeQuick){
+  context.addEventListener=window.addEventListener;context.dispatchEvent=window.dispatchEvent;
+  context.interfaceRequest=async(path,options={})=>{const response=await context.fetch(path,options),data=await response.json();if(!response.ok)throw Object.assign(new Error(data.error||'request failed'),{status:response.status});return data;};
+  vm.runInNewContext(quickSource,context);
+ }
+ return {requests,timeouts,published,contextView:()=>context.state.currentView,confirmWith:fn=>{context.askConfirmation=fn;},e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
+  hideAuth:()=>context.hideAuth(),actualShowAuth:status=>context.actualShowAuth(status||null,'Войдите снова.'),coreElement:element,
+  event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
+  navigate(view){context.state.currentView=view;document.dispatchEvent({type:'razvilka:view-change',detail:view});},
+  poll(){const timer=[...intervals.values()].find(timer=>timer.ms===15000);assert.ok(timer,'presentation poll missing');timer.fn();},
+  hidden(value){document.hidden=value;},
+  readback:detail=>window.dispatchEvent({type:'razvilka:autonomy-policy-readback',detail}),
+  respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
+  delayedBody(index,status){const body=deferred();requests[index].resolve({status,ok:status>=200&&status<300,json:()=>body.promise});return body;},
+  clickTarget:target=>document.dispatchEvent({type:'click',target}),
+  click(id){element('a1-'+id).events.get('click')({preventDefault(){}});},
+  runRetry(){const entry=[...timeouts.entries()].find(([,value])=>value.ms===1500);assert.ok(entry,'retry timer missing');timeouts.delete(entry[0]);entry[1].fn();}
+ };
+}
+{
+ const html=readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');
+ assert.match(html,/<div class="check-row"><input id="a1-confirmConsent"[^>]*\/><label for="a1-confirmConsent">/,'fixture must model the real sibling checkbox and label');
+ assert.match(html,/<div id="a1-advancedServices">\s*<section\b[^>]*\bid="a1-starterReview"/,'the service picker starts in advanced setup');
+}
+let passed=0;
+async function test(name,fn){await fn();passed++;console.log('PASS',name);}
+
+for(const text of ['Failed to fetch','NetworkError when attempting to fetch resource.','Load failed'])await test('lost panel read has useful wording: '+text,async()=>{
+ const f=fixture();f.requests[0].reject(new TypeError(text));await flush();
+ assert.match(f.e('notice').textContent,/Нет связи с панелью/);assert.doesNotMatch(f.e('notice').textContent,/Failed to fetch|NetworkError|Load failed/);
+ assert.equal(f.requests.length,1);assert.equal(f.published.filter(e=>e.type==='razvilka:autonomy-state').length,0);
+});
+
+await test('lost mutation response cannot announce completion or replay the write',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();f.click('pauseButton');
+ f.requests[1].reject(new TypeError('Failed to fetch'));await flush();
+ assert.match(f.e('notice').textContent,/Нет связи с панелью.*Результат действия не подтверждён/);
+ assert.doesNotMatch(f.e('notice').textContent,/Автоматика на паузе|Автоматика разрешена/);
+ assert.equal(f.requests.length,2);assert.equal([...f.timeouts.values()].filter(t=>t.ms===1500).length,0);
+});
+
+await test('auth abort stays silent while same-session timeout retains its own wording',async()=>{
+ const f=fixture();f.event('razvilka:auth-required');const notice=f.e('notice').textContent;
+ f.requests[0].reject(Object.assign(new Error('Failed to fetch'),{name:'AbortError'}));await flush();
+ assert.equal(f.e('notice').textContent,notice);
+ const next=fixture();next.requests[0].reject(Object.assign(new Error('The operation was aborted.'),{name:'AbortError'}));await flush();
+ assert.match(next.e('notice').textContent,/Ответ не получен/);assert.doesNotMatch(next.e('notice').textContent,/Нет связи/);
+});
+
+await test('consent row hides unchanged authority and returns for broader device permission',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]);const initial=snapshot();initial.policy.update_channel='stable';f.respond(0,200,initial);await flush();
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ assert.equal(f.e('confirmConsentRow').hidden,true,'unchanged authority left an unnecessary required-looking checkbox');
+ f.e('scopeMode').value='all';f.e('wizardForm').events.get('change')();
+ assert.equal(f.e('confirmConsentRow').hidden,false,'broader scope hid the required consent');assert.equal(f.e('confirmConsent').checked,false);
+});
+
+await test('MASQUE method alone leaves registration off and explicit consent reaches the reviewed payload',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'},{name:'preferred',value:'usque'}]);
+ const current=snapshot();
+ Object.assign(current.policy,{update_channel:'stable',failure_confirm_seconds:20,max_switches_per_hour:6});
+ f.respond(0,200,current);await flush();
+ const method=f.inputs('preferred')[0], consent=f.e('masqueRegistrationConsent'), row=f.e('masqueRegistrationConsentRow');
+ const change=f.e('wizardForm').events.get('change');
+ assert.equal(row.hidden,true);assert.equal(consent.checked,false);
+ method.checked=true;change({target:method});
+ assert.equal(row.hidden,false);assert.equal(consent.checked,false);
+ consent.checked=true;change({target:consent});
+ method.checked=false;change({target:method});
+ assert.equal(row.hidden,true);assert.equal(consent.checked,false,'disabling the method retained stale consent');
+ method.checked=true;change({target:method});
+ consent.checked=true;change({target:consent});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ assert.equal(f.e('confirmConsentRow').hidden,false);
+ assert.match(f.e('reviewSummary').innerHTML,/Первая регистрация MASQUE.*Разрешена/);
+ f.e('confirmConsent').checked=true;
+ f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const put=f.requests.find(request=>request.options?.method==='PUT');
+ assert.ok(put,f.e('wizardError').textContent);
+ const {policy}=JSON.parse(put.options.body);
+ assert.equal(policy.allow_initial_masque_registration,true);
+ assert.deepEqual(policy.preferred_routes,['usque']);
+ f.respond(f.requests.indexOf(put),200,{});
+ await flush();
+ f.respond(f.requests.length-1,200,{...current,policy:{...policy,revision:2}});
+ await flush();
+ assert.equal(consent.checked,true,'readback dropped saved consent');
+});
+
+await test('MASQUE consent can be revoked without changing the selected method',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'},{name:'preferred',value:'usque'}]);
+ const current=snapshot();
+ Object.assign(current.policy,{update_channel:'stable',preferred_routes:['usque'],allow_initial_masque_registration:true,failure_confirm_seconds:20,max_switches_per_hour:6});
+ f.respond(0,200,current);await flush();
+ const consent=f.e('masqueRegistrationConsent');
+ assert.equal(consent.checked,true);
+ consent.checked=false;f.e('wizardForm').events.get('change')({target:consent});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ assert.equal(f.e('confirmConsentRow').hidden,true);
+ f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const put=f.requests.find(request=>request.options?.method==='PUT');
+ assert.ok(put,f.e('wizardError').textContent);
+ const {policy}=JSON.parse(put.options.body);
+ assert.equal(policy.allow_initial_masque_registration,false);
+ assert.deepEqual(policy.preferred_routes,['usque']);
+ f.respond(f.requests.indexOf(put),200,{});
+ await flush();
+ f.respond(f.requests.length-1,200,{...current,policy:{...policy,revision:2}});
+ await flush();
+ assert.equal(consent.checked,false);
+});
+
+await test('initial setup discovery is not canceled by an early protected autonomy read',async()=>{
+ const f=fixture(false);assert.equal(f.requests.length,0,'protected request ran before core authentication discovery');
+ f.event('razvilka:panel-refresh');f.event('razvilka:view-change','subscription-settings');
+ assert.equal(f.requests.length,0,'unauthenticated navigation started protected reads');
+ f.actualShowAuth({authenticated:false,setup_required:true,username:''});
+ assert.equal(f.coreElement('authSetupPanel').hidden,false);assert.equal(f.coreElement('authLoginPanel').hidden,true);
+ f.event('razvilka:view-change','autopilot');assert.equal(f.requests.length,0);
+ f.hideAuth();assert.equal(f.requests.length,1);assert.equal(f.requests[0].path,'/api/v1/panel/autonomy');
+ f.respond(0,200,snapshot(1));await flush();assert.equal(f.e('workspace').hidden,false);
+});
+
+await test('auth notice creates a keyboard button that dismisses the notice',async()=>{
+ const f=fixture();f.respond(0,401,{});await flush();
+ const close=f.e('notice').children.at(-1);assert.equal(close.tagName,'BUTTON');assert.equal(close.type,'button');assert.equal(close.className,'notice-close');
+ assert.equal(f.e('notice').hidden,false);close.events.get('click')();assert.equal(f.e('notice').hidden,true);
+});
+
+await test('initial 401 notice clears on restored login and fresh state is requested',async()=>{
+ const f=fixture();f.respond(0,401,{});await flush();
+ assert.equal(f.authCalls(),1);assert.match(f.e('notice').textContent,/Войдите/);assert.equal(f.e('workspace').hidden,true);
+ f.event('razvilka:auth-restored');assert.equal(f.e('notice').textContent,'');assert.equal(f.requests.length,2);
+ f.respond(1,200,snapshot(2));await flush();
+ assert.equal(f.e('workspace').hidden,false);assert.equal(f.e('authRequired').hidden,true);assert.equal(f.e('notice').textContent,'');
+ assert.match(f.e('connectionLabel').textContent,/Состояние роутера/);
+});
+
+await test('late pre-login 401 cannot reopen authentication or undo current loading admission',async()=>{
+ const f=fixture();f.event('razvilka:auth-restored');
+ assert.equal(f.requests[0].options.signal.aborted,true);assert.equal(f.requests.length,2);
+ f.respond(0,401,{});await flush();
+ assert.equal(f.authCalls(),0);assert.equal(f.e('notice').textContent,'');
+ f.click('reloadButton');assert.equal(f.requests.length,2,'old finally cleared the current loading flag');
+ f.respond(1,200,snapshot(3));await flush();assert.equal(f.e('workspace').hidden,false);
+});
+
+await test('authentication epoch checked again after delayed JSON parsing',async()=>{
+ const f=fixture(),oldBody=f.delayedBody(0,401);await flush();
+ f.event('razvilka:auth-restored');f.respond(1,200,snapshot(4));await flush();
+ oldBody.resolve({error:'old-session-error'});await flush();
+ assert.equal(f.authCalls(),0);assert.equal(f.e('notice').textContent,'');assert.equal(f.e('workspace').hidden,false);
+});
+
+for(const mode of ['http-error','network-error','success'])await test('logout rejects late refresh '+mode,async()=>{
+ const f=fixture();f.event('razvilka:auth-required');const notice=f.e('notice').textContent;
+ if(mode==='network-error')f.requests[0].reject(new Error('obsolete-network-error'));
+ else f.respond(0,mode==='success'?200:503,mode==='success'?snapshot():{error:'obsolete-server-error'});
+ await flush();assert.equal(f.e('notice').textContent,notice);assert.equal(f.e('workspace').hidden,true);
+ assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-state').length,0);
+ assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-error').length,1);
+});
+
+await test('late source failure cannot replace a post-login notice or source state',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ const oldSource=f.requests.findIndex(request=>request.path==='/api/v1/node-feeds');assert.notEqual(oldSource,-1);
+ f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
+ const latestSource=f.requests.findLastIndex(request=>request.path==='/api/v1/node-feeds');
+ const latestState=f.requests.findLastIndex(request=>request.path==='/api/v1/panel/autonomy');
+ f.respond(latestSource,200,{sources:[]});f.respond(latestState,200,snapshot(2));await flush();
+ f.requests[oldSource].reject(new Error('obsolete-source-error'));await flush();
+ assert.equal(f.e('notice').textContent,'');assert.match(f.e('sourcesList').innerHTML,/Подписки пока не сохранены/);
+});
+
+for(const reason of ['stale revision','busy without not_started','logout'])await test('service enrollment conflict: '+reason,async()=>{
+ const f=fixture(),initial=snapshot(1),id='telegram-web';
+ initial.catalog_services=[{id,name:'Telegram Web'}];
+ f.respond(0,200,initial);await flush();
+ const click=()=>{f.e('catalogSelect').value=id;f.e('enrollForm').events.get('submit')({preventDefault(){}});};
+ click();await flush();
+ const first=JSON.parse(f.requests[1].options.body);
+ assert.equal(first.expected_revision,1);assert.equal(first.service_id,id);
+ const busy={error:'Другая операция ещё выполняется.',code:'RESTORE_OPERATION_BUSY'};
+ f.respond(1,409,reason==='busy without not_started'?busy:{error:'Проверьте сервис и завершите мастер.'});await flush();
+ assert.equal(f.requests[2].options.method,'GET');assert.equal(f.requests[2].path,'/api/v1/autonomy');
+ assert.equal([...f.timeouts.values()].filter(timer=>timer.ms===1500).length,0);
+ if(reason==='logout')f.event('razvilka:auth-required');
+ const fresh=structuredClone(initial);fresh.policy.revision=reason==='busy without not_started'?1:2;
+ f.respond(2,200,fresh);await flush();
+ assert.equal(f.requests.length,3,'readback automatically repeated enrollment');
+ if(reason==='logout'){assert.doesNotMatch(f.e('notice').textContent,/Проверьте обновлённый/);return;}
+ if(reason==='busy without not_started'){assert.equal(f.e('notice').textContent,busy.error);return;}
+ assert.match(f.e('notice').textContent,/Проверьте обновлённый список/);
+ click();await flush();
+ assert.deepEqual(JSON.parse(f.requests[3].options.body),{...first,expected_revision:2});
+ f.respond(3,200,{ok:true,live_applied:false});await flush();
+ fresh.services[id]={enabled:true};fresh.policy.revision++;
+ f.respond(4,200,fresh);await flush();
+ assert.equal(f.requests.filter(r=>r.options.method==='POST').length,2);
+ assert.match(f.e('notice').textContent,/Сервис передан в очередь/);
+});
+
+for(const session of ['same','new'])await test('certified unstarted enrollment retry: '+session+' session',async()=>{
+ const f=fixture(),current=snapshot(1);
+ current.catalog_services=[{id:'telegram-web',name:'Telegram Web'},{id:'discord',name:'Discord'}];
+ f.respond(0,200,current);await flush();
+ f.e('catalogSelect').value='telegram-web';f.e('enrollForm').events.get('submit')({preventDefault(){}});await flush();
+ const original=f.requests[1];
+ f.respond(1,409,{code:'RESTORE_OPERATION_BUSY',not_started:true});await flush();
+ assert.equal(f.requests.length,2);
+ if(session==='new'){
+  f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
+ }else{
+  f.event('razvilka:panel-refresh');
+ }
+ const fresh=structuredClone(current);fresh.policy.revision=2;
+ f.respond(f.requests.length-1,200,fresh);await flush();
+ f.e('catalogSelect').value='discord';
+ f.runRetry();await flush();
+ const writes=f.requests.filter(r=>r.options.method==='POST');
+ if(session==='new'){assert.equal(writes.length,1);return;}
+ assert.equal(writes.length,2);
+ assert.equal(writes[1].path,original.path);
+ assert.equal(writes[1].options.body,original.options.body,'busy retry changed enrolled service or revision');
+ f.respond(f.requests.indexOf(writes[1]),409,{error:'Разрешения изменились.'});await flush();
+ assert.equal(f.requests.at(-1).path,'/api/v1/autonomy');
+ f.respond(f.requests.length-1,200,fresh);await flush();
+ assert.equal([...f.timeouts.values()].filter(timer=>timer.ms===1500).length,0);
+ assert.equal(f.requests.filter(r=>r.options.method==='POST').length,2);
+});
+
+await test('late busy mutation is rejected before scheduling an automatic retry',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();f.click('pauseButton');
+ const oldMutation=f.requests.findIndex(request=>request.options.method==='PUT');assert.notEqual(oldMutation,-1);
+ f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
+ const fresh=f.requests.length-1;f.respond(fresh,200,snapshot(2));await flush();
+ f.respond(oldMutation,409,{not_started:true,code:'RESTORE_OPERATION_BUSY'});await flush();
+ assert.equal([...f.timeouts.values()].filter(timer=>timer.ms===1500).length,0);
+ assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,1);
+ assert.equal(f.e('notice').textContent,'');
+});
+
+await test('already scheduled retry cannot replay a mutation in a new session',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();f.click('pauseButton');
+ f.respond(1,409,{not_started:true,code:'RESTORE_OPERATION_BUSY'});await flush();
+ f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
+ f.runRetry();await flush();assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,1);
+ f.respond(f.requests.length-1,200,snapshot(2));await flush();assert.equal(f.e('notice').textContent,'');
+});
+
+await test('pause completion cannot announce success after logout during its readback',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();f.click('pauseButton');
+ f.respond(1,200,{});await flush();assert.equal(f.requests[2].path,'/api/v1/autonomy');
+ f.event('razvilka:auth-required');const notice=f.e('notice').textContent;
+ f.respond(2,200,snapshot(2));await flush();assert.equal(f.e('notice').textContent,notice);assert.equal(f.e('workspace').hidden,true);
+});
+
+await test('ordinary core refresh hideAuth calls preserve active mutation and open inspector',async()=>{
+ const f=fixture();f.actualShowAuth();
+ // The initial visible auth screen causes exactly one restoration transition.
+ f.hideAuth();assert.equal(f.requests[0].options.signal.aborted,true);assert.equal(f.requests.length,2);
+ f.respond(1,200,snapshot(2));await flush();
+ f.coreElement('detailsPanel').classList.add('open');f.click('pauseButton');
+ const mutation=f.requests[2];assert.equal(mutation.options.method,'PUT');
+ // refreshAll calls this twice during an ordinary authenticated refresh.
+ f.hideAuth();f.hideAuth();
+ assert.equal(mutation.options.signal.aborted,false);assert.equal(f.requests.length,3);
+ assert.equal(f.coreElement('detailsPanel').classList.contains('open'),true);
+ f.respond(2,200,{});await flush();f.respond(3,200,snapshot(3));await flush();
+ assert.match(f.e('notice').textContent,/Автоматика на паузе/);
+});
+
+await test('actual logout and login still invalidate the previous mutation and close inspector',async()=>{
+ const f=fixture();f.actualShowAuth();f.hideAuth();f.respond(1,200,snapshot(2));await flush();f.click('pauseButton');
+ f.coreElement('detailsPanel').classList.add('open');f.actualShowAuth();
+ assert.equal(f.requests[2].options.signal.aborted,true);assert.equal(f.coreElement('authScreen').hidden,false);
+ f.hideAuth();assert.equal(f.requests.length,4);assert.equal(f.coreElement('detailsPanel').classList.contains('open'),false);
+ f.respond(3,200,snapshot(3));await flush();f.respond(2,401,{});await flush();
+ assert.equal(f.coreElement('authScreen').hidden,true);assert.equal(f.e('notice').textContent,'');
+ assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,1);
+});
+
+await test('reserve shows the current checker status and hides retained or paused observations',async()=>{
+ for(const mode of ['available','retained','paused']){
+  const f=fixture(),s=snapshot();
+  s.policy.enabled=mode!=='paused';s.node_readiness={message:'Требуется движок для проверки VLESS.'};
+  f.respond(0,200,{schema:1,instance_id:'a'.repeat(32),revision:1,observed_at:s.server_time,data_age_ms:0,state:mode==='retained'?'retained':'available',dataplane:'not-checked',data:s});await flush();
+  assert.equal(f.e('poolStatus').hidden,mode!=='available');
+  assert.equal(f.e('poolStatus').textContent,mode==='available'?s.node_readiness.message:'');
+ }
+});
+
+await test('before first setup the hero action opens the wizard without writing',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;initial.policy.enabled=false;
+ f.respond(0,200,initial);await flush();
+ assert.equal(f.e('pauseButton').textContent,'Начать настройку');assert.equal(f.e('pauseButton').disabled,false);
+ const before=f.requests.length;f.click('pauseButton');await flush();
+ assert.equal(f.requests.length,before,'opening the wizard must not send a request');
+});
+
+await test('quick start saves a whole-network policy through the shared consent path',async()=>{
+ // The protocol boxes are static wizard markup that fillWizard checks.
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();initial.policy.setup_complete=false;initial.policy.enabled=false;initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ initial.initial_scope_mode='all';
+ initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'youtube',name:'YouTube',domains:1},{id:'discord',name:'Discord',domains:1}],optional_ids:['reviewed-site']};
+ initial.catalog_services=[{id:'reviewed-site',name:'Reviewed site'},{id:'unreviewed-site',name:'Unreviewed site'}];
+ f.respond(0,200,initial);await flush();
+ assert.equal(f.e('quickStart').hidden,false);assert.equal(f.e('wizardLayout').hidden,true);
+ assert.equal(f.e('starterReview').parentNode,f.e('quickServices'));
+ assert.deepEqual(f.inputs('initial-starter').filter(x=>x.checked).map(x=>x.value),[]);
+ assert.deepEqual(f.inputs('initial-extra').map(x=>[x.value,x.checked]),[['reviewed-site',false]]);
+ assert.match(f.e('quickScopeHint').textContent,/Стандарт — все устройства.*включая новые/);
+ f.e('quickConsent').checked=true;
+ const youtube=f.inputs('initial-starter').find(x=>x.value==='youtube'),extra=f.inputs('initial-extra')[0];
+ youtube.checked=true;f.e('quickStart').events.get('change')({target:youtube});
+ assert.equal(f.e('quickConsent').checked,false,'changing service choice did not invalidate consent');
+ extra.checked=true;f.e('quickStart').events.get('change')({target:extra});
+ const before=f.requests.length;f.click('quickStartButton');await flush();
+ assert.equal(f.requests.length,before,'without consent nothing is sent');assert.match(f.e('quickError').textContent,/Отметьте разрешение/);
+ f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();
+ const put=f.requests.find(r=>r.options?.method==='PUT');assert.ok(put,'policy was not saved: '+f.e('quickError').textContent);
+ const body=JSON.parse(put.options.body);
+ assert.equal(put.path,'/api/v1/autonomy');assert.equal(body.confirm,'SAVE_AUTONOMY');
+ assert.equal(body.use_network_scope,true);assert.equal(body.policy.enabled,true);assert.equal(body.policy.setup_complete,true);
+ assert.ok(!Object.hasOwn(body.policy,'all_lan'));assert.ok(!Object.hasOwn(body.policy,'default_sources'));
+ assert.equal(body.policy.install_missing_components,true,'the reviewed quick setup must prepare missing allowed components immediately');
+ assert.equal(body.policy.allow_initial_warp_registration,false);
+ assert.equal(body.policy.allow_initial_masque_registration,false);
+ assert.equal(body.policy.source_ids.includes('manual'),false,'public subscription consent cannot authorize personally imported profiles');
+ assert.equal(body.starter_sha256,initial.starter.sha256);assert.deepEqual(body.starter_service_ids,['youtube']);assert.deepEqual(body.initial_service_ids,['reviewed-site']);
+});
+
+await test('quick setup preserves a declined first installation and reviews changed choices',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();
+ initial.policy.setup_complete=false;initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'youtube',name:'YouTube',domains:1}]};
+ f.respond(0,200,initial);await flush();
+ const firstInstall=f.e('quickFirstInstall');
+ assert.equal(firstInstall.checked,true);
+ f.e('quickConsent').checked=true;
+ firstInstall.checked=false;f.e('quickStart').events.get('change')({target:firstInstall});
+ assert.equal(f.e('quickConsent').checked,false);
+ f.click('quickStartButton');await flush();
+ assert.ok(f.requests.every(request=>request.options.method==='GET'));
+ const manual=f.e('quickManualSources');
+ assert.equal(manual.checked,false);
+ f.e('quickConsent').checked=true;
+ manual.checked=true;f.e('quickStart').events.get('change')({target:manual});
+ assert.equal(f.e('quickConsent').checked,false);
+ f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();
+ const put=f.requests.find(request=>request.options.method==='PUT');
+ assert.ok(put,f.e('quickError').textContent);
+ const {policy,starter_service_ids}=JSON.parse(put.options.body);
+ assert.equal(policy.install_missing_components,false);
+ assert.equal(policy.source_ids.includes('manual'),true);
+ assert.deepEqual(starter_service_ids,[]);
+});
+
+await test('quick setup saves both WARP registration choices in its one policy write',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'},{name:'preferred',value:'warp-wg'},{name:'preferred',value:'usque'}]),initial=snapshot();
+ Object.assign(initial.policy,{setup_complete:false,enabled:false,failure_confirm_seconds:20,max_switches_per_hour:6});
+ f.respond(0,200,initial);await flush();
+ assert.equal(f.e('quickWARPRegistration').checked,false);assert.equal(f.e('quickMASQUERegistration').checked,false);
+ for(const id of ['quickWARPRegistration','quickMASQUERegistration']){
+  f.e('quickConsent').checked=true;
+  const checkbox=f.e(id);checkbox.checked=true;f.e('quickStart').events.get('change')({target:checkbox});
+  assert.equal(f.e('quickConsent').checked,false,'changed registration must be part of the reviewed setup');
+ }
+ f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();
+ const writes=f.requests.filter(request=>request.options.method==='PUT');assert.equal(writes.length,1,f.e('quickError').textContent);
+ assert.equal(writes[0].path,'/api/v1/autonomy');
+ const {policy}=JSON.parse(writes[0].options.body);
+ assert.deepEqual(policy.preferred_routes,['warp-wg','usque']);
+ assert.equal(policy.allow_initial_warp_registration,true);assert.equal(policy.allow_initial_masque_registration,true);
+ assert.equal(policy.install_missing_components,true);
+ assert.ok(f.requests.every(request=>!request.path.includes('/warp/health/policy')),'wizard must not rewrite independent recovery settings');
+});
+
+await test('advanced WARP consent preserves a saved legacy choice and allows explicit revocation',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'},{name:'preferred',value:'warp-wg'}]),current=snapshot();
+ Object.assign(current.policy,{update_channel:'stable',preferred_routes:['warp-wg'],failure_confirm_seconds:20,max_switches_per_hour:6});
+ current.warp_initial_registration_allowed=true;
+ f.respond(0,200,current);await flush();
+ const consent=f.e('warpRegistrationConsent');assert.equal(consent.checked,true);assert.equal(f.e('warpRegistrationConsentRow').hidden,false);
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ assert.equal(f.e('confirmConsentRow').hidden,true,'saved legacy permission must not ask for the same authorization again');
+ consent.checked=false;f.e('wizardForm').events.get('change')({target:consent});
+ assert.equal(f.e('confirmConsentRow').hidden,true,'revocation must not require broader authority');
+ f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const put=f.requests.find(request=>request.options.method==='PUT');assert.ok(put,f.e('wizardError').textContent);
+ const {policy}=JSON.parse(put.options.body);
+ assert.equal(policy.allow_initial_warp_registration,false);assert.deepEqual(policy.preferred_routes,['warp-wg']);
+ assert.match(f.e('reviewSummary').innerHTML,/Первая регистрация WARP WireGuard.*Выключена/);
+});
+
+await test('quick setup refusal survives opening advanced setup',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'}]),initial=snapshot();initial.policy.setup_complete=false;
+ f.respond(0,200,initial);await flush();
+ f.e('quickFirstInstall').checked=false;f.e('quickStart').events.get('change')({target:f.e('quickFirstInstall')});
+ f.click('quickAdvanced');
+ assert.equal(f.e('firstInstall').value,'off','advanced setup re-enabled a declined first install');
+});
+
+await test('advanced setup keeps the full four-step wizard',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'}]),initial=snapshot();
+ Object.assign(initial.policy,{setup_complete:false,failure_confirm_seconds:60,max_switches_per_hour:6});
+ initial.network_scope_mode='selected_devices';
+ initial.initial_scope_mode='selected';
+ initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'youtube',name:'YouTube',domains:1}]};
+ f.respond(0,200,initial);await flush();f.click('quickAdvanced');
+ assert.equal(f.e('quickStart').hidden,true);assert.equal(f.e('wizardLayout').hidden,false);
+ assert.equal(f.e('savedScope').hidden,true);assert.equal(f.e('initialScope').hidden,false);
+ assert.match(f.e('initialScopeHint').textContent,/Разрешённые устройства.*общей политикой/);
+ assert.equal(f.e('starterReview').parentNode,f.e('advancedServices'));assert.equal(f.e('quickServices').children.length,0);
+ const [youtube]=f.inputs('initial-starter');youtube.checked=true;f.e('wizardForm').events.get('change')({target:youtube});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');f.e('confirmConsent').checked=true;
+ void f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const put=f.requests.find(request=>request.options.method==='PUT');assert.ok(put,f.e('wizardError').textContent);
+ const body=JSON.parse(put.options.body);
+ assert.equal(body.use_network_scope,true);
+ assert.ok(!Object.hasOwn(body.policy,'all_lan'));assert.ok(!Object.hasOwn(body.policy,'default_sources'));
+ assert.deepEqual(body.starter_service_ids,['youtube']);
+});
+
+await test('initial setup shows a preserved empty scope and clears outdated consent',async()=>{
+ const f=fixture(),initial=snapshot();
+ Object.assign(initial.policy,{setup_complete:false,all_lan:false,default_sources:[]});
+ initial.initial_scope_mode='empty';
+ f.respond(0,200,initial);await flush();
+ assert.match(f.e('quickScopeHint').textContent,/Список устройств пуст/);
+ f.click('quickAdvanced');f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ assert.match(f.e('reviewSummary').innerHTML,/Список устройств пуст/);
+ f.e('confirmConsent').checked=true;
+ f.event('razvilka:view-change','onboard');f.respond(1,200,{...initial,initial_scope_mode:'existing'});await flush();
+ assert.equal(f.e('confirmConsent').checked,false);
+ assert.match(f.e('reviewSummary').innerHTML,/Действующая область домашней сети/);
+ assert.doesNotMatch(f.e('reviewSummary').innerHTML,/Стандарт — все устройства/);
+});
+
+await test('ordinary settings preserve an empty saved device scope',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'}]),initial=snapshot();
+ Object.assign(initial.policy,{all_lan:false,default_sources:[],failure_confirm_seconds:60,max_switches_per_hour:6});
+ f.respond(0,200,initial);await flush();
+ assert.equal(f.e('savedScope').hidden,false);assert.equal(f.e('initialScope').hidden,true);
+ assert.equal(f.e('scopeMode').value,'selected');
+ f.e('checkInterval').value='180';f.e('wizardForm').events.get('input')({});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');f.e('confirmConsent').checked=true;
+ void f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const put=f.requests.find(request=>request.options.method==='PUT');assert.ok(put,f.e('wizardError').textContent);
+ const body=JSON.parse(put.options.body);
+ assert.ok(!Object.hasOwn(body,'use_network_scope'));
+ assert.equal(body.policy.all_lan,false);assert.deepEqual(body.policy.default_sources,[]);
+});
+
+await test('quick setup can submit only a reviewed optional service',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();
+ initial.policy.setup_complete=false;initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ initial.starter={eligible:true,sha256:'b'.repeat(64),items:[],optional_ids:['reviewed-site']};
+ initial.catalog_services=[{id:'reviewed-site',name:'Reviewed site'},{id:'unreviewed-site',name:'Unreviewed site'}];
+ f.respond(0,200,initial);await flush();
+ assert.equal(f.e('starterReview').hidden,false);assert.equal(f.inputs('initial-starter').length,0);
+ const [extra]=f.inputs('initial-extra');assert.equal(extra.value,'reviewed-site');assert.equal(extra.checked,false);
+ extra.checked=true;f.e('quickStart').events.get('change')({target:extra});
+ f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();
+ const put=f.requests.find(r=>r.options?.method==='PUT');assert.ok(put,'optional-only policy was not saved: '+f.e('quickError').textContent);
+ const body=JSON.parse(put.options.body);
+ assert.equal(body.starter_sha256,initial.starter.sha256);assert.deepEqual(body.starter_service_ids,[]);assert.deepEqual(body.initial_service_ids,['reviewed-site']);
+});
+
+await test('changed starter definition preserves subset and revokes previous consent',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;
+ initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'one',name:'One',domains:1},{id:'two',name:'Two',domains:2}]};
+ f.respond(0,200,initial);await flush();assert.equal(f.inputs('initial-starter').filter(x=>x.checked).length,0);
+ f.inputs('initial-starter')[0].checked=true;f.e('confirmConsent').checked=true;f.e('quickConsent').checked=true;f.e('wizardForm').events.get('input')();
+ f.event('razvilka:view-change','onboard');
+ const changed=structuredClone(initial);changed.starter.sha256='b'.repeat(64);changed.starter.items.push({id:'three',name:'Three',domains:3});
+ f.respond(1,200,changed);await flush();
+ assert.deepEqual(f.inputs('initial-starter').filter(x=>x.checked).map(x=>x.value),['one']);
+ assert.equal(f.e('confirmConsent').checked,false);assert.equal(f.e('quickConsent').checked,false);
+ for(const error of ['wizardError','quickError'])assert.match(f.e(error).textContent,/Доступный список сервисов изменился/);
+});
+
+await test('unchanged starter refresh keeps choice and consent',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'one',name:'One',domains:1},{id:'two',name:'Two',domains:2}]};
+ f.respond(0,200,initial);await flush();const [one]=f.inputs('initial-starter');one.checked=true;f.e('confirmConsent').checked=true;f.e('wizardForm').events.get('input')();
+ f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ assert.deepEqual(f.inputs('initial-starter').filter(x=>x.checked).map(x=>x.value),['one']);assert.equal(f.e('confirmConsent').checked,true);
+ assert.equal(f.inputs('initial-starter')[0],one,'a polling read must not replace focused service controls');
+});
+
+await test('a withdrawn starter review invalidates an unsaved initial selection',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'one',name:'One',domains:1}]};
+ f.respond(0,200,initial);await flush();f.inputs('initial-starter')[0].checked=true;
+ f.e('quickConsent').checked=true;f.e('wizardForm').events.get('input')();
+ f.event('razvilka:view-change','onboard');f.respond(1,200,{...initial,starter:{eligible:false}});await flush();
+ assert.equal(f.e('starterReview').hidden,true);assert.equal(f.inputs('initial-starter').length,0);
+ assert.equal(f.e('quickConsent').checked,false);
+ assert.match(f.e('quickError').textContent,/Доступный список сервисов изменился/);
+});
+
+await test('forced read waits for earlier poll and then obtains a newer snapshot',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();
+ f.event('razvilka:view-change','onboard');f.click('reloadButton');f.click('reloadButton');assert.equal(f.requests.length,2,'forced reload overlapped poll');
+ f.respond(1,200,snapshot(2));await flush();assert.equal(f.requests.length,3,'forced reload was dropped');
+ f.respond(2,200,snapshot(3));await flush();assert.match(f.e('revisionLabel').textContent,/3/);assert.equal(f.requests.length,3,'repeated clicks queued redundant forced reads');
+});
+
+await test('queued forced read is discarded across authentication change',async()=>{
+ const f=fixture();f.click('reloadButton');f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
+ f.respond(0,200,snapshot(1));await flush();assert.equal(f.requests.length,2,'old-session reload was replayed');
+ f.respond(1,200,snapshot(2));await flush();assert.match(f.e('revisionLabel').textContent,/2/);
+});
+
+await test('services navigation publishes settled runtime through the normal cached read',async()=>{
+ const f=fixture(),pending=snapshot();
+ pending.catalog_services=[{id:'telegram',name:'Telegram'}];
+ pending.services.telegram={enabled:true,all_lan:true,sources:[]};
+ pending.runtime.telegram={state:'pending',message:'Ожидает проверки.'};
+ f.respond(0,200,pending);await flush();
+ f.navigate('services');
+ assert.equal(f.requests.length,2,'services navigation did not request a fresh publication');
+ assert.equal(f.requests[1].path,'/api/v1/panel/autonomy');
+ const settled=structuredClone(pending);settled.server_time='2026-09-13T10:00:15Z';
+ settled.runtime.telegram={state:'domain-route-unavailable',message:'Для доменного сервиса нужен NFQWS2.'};
+ f.respond(1,200,settled);await flush();
+ assert.equal(f.published.at(-1).type,'razvilka:autonomy-state');
+ assert.equal(f.published.at(-1).detail.runtime.telegram.state,'domain-route-unavailable');
+ assert.match(f.e('serviceRows').innerHTML,/Для доменного сервиса нужен NFQWS2/);
+ assert.doesNotMatch(f.e('serviceRows').innerHTML,/Ожидает проверки/);
+ assert.ok(f.requests.every(request=>request.options.method==='GET'),'presentation navigation performed a write');
+});
+
+for(const [state,label,message] of [
+ ['masque-registration-pending','Результат регистрации MASQUE требует проверки'],
+ ['masque-target-excluded','Адрес проверки MASQUE исключён'],
+ ['masque-target-unavailable','Разрешённые адреса проверки MASQUE не подтверждены'],
+ ['masque-component-unavailable','Компонент MASQUE недоступен','Для MASQUE требуется управляемый Sing-box.'],
+ ['masque-publication-unconfirmed','Компонент MASQUE ожидает повторной проверки','Не подтверждено сохранение проверенного файла USQUE.'],
+]){
+ await test('service status names the MASQUE condition '+state,async()=>{
+  const f=fixture(),pending=snapshot();
+  pending.catalog_services=[{id:'sample',name:'MASQUE fixture'}];
+  pending.services.sample={enabled:true,all_lan:true,sources:[]};
+  pending.runtime.sample={state,message,next_check:message?'2026-09-13T10:25:00Z':undefined};
+  f.respond(0,200,pending);await flush();
+  for(const id of ['serviceRows','overviewServices']){
+   const html=f.e(id).innerHTML;
+   assert.ok(html.includes(label));
+   assert.ok(!html.includes(state));
+   if(message){assert.ok(html.includes(message));assert.match(html,/Следующая попытка — .*10:25/);}
+  }
+ });
+}
+
+await test('services polling keeps reading runtime without navigation and coalesces in-flight reads',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.navigate('services');f.respond(1,200,snapshot());await flush();
+ f.poll();assert.equal(f.requests.length,3,'visible services view did not poll');
+ assert.equal(f.requests[2].path,'/api/v1/panel/autonomy');
+ f.poll();assert.equal(f.requests.length,3,'poll overlapped its pending read');
+ const settled=snapshot();settled.server_time='2026-09-13T10:00:30Z';
+ settled.runtime.telegram={state:'domain-route-unavailable'};
+ f.respond(2,200,settled);await flush();
+ assert.equal(f.published.at(-1).detail.runtime.telegram.state,'domain-route-unavailable');
+ f.hidden(true);f.poll();assert.equal(f.requests.length,3,'hidden services view polled');
+ f.hidden(false);f.navigate('diagnostics');f.poll();assert.equal(f.requests.length,3,'unrelated view polled');
+ assert.ok(f.requests.every(request=>request.options.method==='GET'));
+});
+
+await test('services refresh stays behind authentication and rejects late old-session publication',async()=>{
+ const loggedOut=fixture(false);loggedOut.navigate('services');loggedOut.poll();
+ assert.equal(loggedOut.requests.length,0,'services presentation bypassed authentication discovery');
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.navigate('services');const request=f.requests[1];
+ f.event('razvilka:auth-required');assert.equal(request.options.signal.aborted,true);
+ f.poll();assert.equal(f.requests.length,2,'logged-out services poll performed a read');
+ f.event('razvilka:auth-restored');assert.equal(f.requests.length,3);
+ const fresh=snapshot(3);f.respond(2,200,fresh);await flush();
+ const publications=f.published.filter(event=>event.type==='razvilka:autonomy-state').length;
+ f.respond(1,200,snapshot(2));await flush();
+ assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-state').length,publications);
+ assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-state').at(-1).detail.policy.revision,3);
+ assert.ok(f.requests.every(request=>request.options.method==='GET'));
+});
+
+await test('ordinary polling uses published snapshot and retained data cannot report enabled',async()=>{
+ const f=fixture();assert.equal(f.requests[0].path,'/api/v1/panel/autonomy');f.respond(0,200,snapshot(1));await flush();
+ f.event('razvilka:view-change','onboard');
+ f.respond(1,200,{schema:1,instance_id:'a'.repeat(32),revision:2,state:'retained',dataplane:'not-checked',data_age_ms:10,observed_at:'2026-09-13T10:00:01Z',data:snapshot(1)});await flush();
+ assert.equal(f.e('heroState').textContent,'Состояние обновляется');assert.equal(f.e('healthyCount').textContent,'—');
+ assert.equal(f.e('pauseButton').disabled,false,'pause must remain available during a long operation');
+ assert.equal(f.published.at(-1).type,'razvilka:autonomy-error');
+});
+
+await test('poll preceding completed write cannot overwrite its direct readback',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();f.click('pauseButton');
+ f.respond(1,200,{});await flush();assert.equal(f.requests[2].path,'/api/v1/autonomy');
+ const changed=snapshot(2);changed.policy.enabled=false;changed.server_time='2026-09-13T10:00:02Z';
+ f.respond(2,200,changed);await flush();f.event('razvilka:view-change','onboard');
+ f.respond(3,200,snapshot(1));await flush();
+ assert.match(f.e('revisionLabel').textContent,/2/);assert.equal(f.e('pauseButton').textContent,'Возобновить автоматику');
+});
+
+await test('expired or malformed publication never starts an unprotected live fallback',async()=>{
+ for(const response of [{state:'expired'},{schema:1,state:'available',data:snapshot()},{}]) {
+  const f=fixture();f.respond(0,200,response);await flush();
+  assert.equal(f.requests.length,1);assert.equal(f.published.filter(x=>x.type==='razvilka:autonomy-state').length,0);
+  assert.equal(f.e('connectionLabel').textContent,'Нет свежего ответа');
+ }
+});
+
+await test('source removal readback preserves unsaved wizard fields',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();
+ f.e('scopeAddresses').value='192.168.1.77/32';f.e('wizardForm').events.get('input')();
+ f.event('razvilka:source-consent-changed');assert.equal(f.requests[1].path,'/api/v1/autonomy');
+ const changed=snapshot(2);changed.policy.default_sources=['192.168.1.88/32'];f.respond(1,200,changed);await flush();
+ assert.equal(f.e('scopeAddresses').value,'192.168.1.77/32','background readback discarded local work');
+});
+
+await test('login during worker operation shows saved permissions with stale status',async()=>{
+ const f=fixture();f.respond(0,200,{schema:1,instance_id:'b'.repeat(32),revision:1,state:'retained',dataplane:'not-checked',data_age_ms:5000,observed_at:'2026-09-13T10:00:00Z',data:snapshot(1)});await flush();
+ assert.equal(f.e('workspace').hidden,false);assert.equal(f.e('heroState').textContent,'Состояние обновляется');
+ assert.equal(f.e('scopeAddresses').value,'192.0.2.1/32');assert.equal(f.e('pauseButton').disabled,false);
+ assert.match(f.e('connectionLabel').textContent,/Последние настройки/);
+});
+
+await test('home navigation and panel refresh retry an unavailable publication without replacing edits',async()=>{
+ const f=fixture();f.respond(0,200,{state:'expired'});await flush();
+ f.event('razvilka:view-change','overview');assert.equal(f.requests.length,2);
+ assert.equal(f.requests[1].path,'/api/v1/panel/autonomy');
+ f.event('razvilka:panel-refresh');assert.equal(f.requests.length,2,'refresh overlapped the admitted read');
+ f.respond(1,200,snapshot(1));await flush();
+ assert.equal(f.published.at(-1).type,'razvilka:autonomy-state');
+ f.e('scopeAddresses').value='192.168.1.77/32';f.e('wizardForm').events.get('input')();
+ f.event('razvilka:panel-refresh');assert.equal(f.requests[2].path,'/api/v1/panel/autonomy');
+ const changed=snapshot(2);changed.policy.default_sources=['192.168.1.88/32'];f.respond(2,200,changed);await flush();
+ assert.equal(f.e('scopeAddresses').value,'192.168.1.77/32');
+ assert.equal(f.e('workspace').hidden,false);
+});
+
+await test('logout fences a late read started by the general refresh button',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(1));await flush();
+ f.event('razvilka:panel-refresh');assert.equal(f.requests.length,2);
+ f.event('razvilka:auth-required');f.respond(1,200,snapshot(2));await flush();
+ assert.equal(f.e('workspace').hidden,true);
+ assert.equal(f.published.filter(x=>x.type==='razvilka:autonomy-state').length,1);
+});
+
+await test('dirty source form keeps rendered revision across a newer source read',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ let reads=f.requests.map((r,i)=>({r,i})).filter(x=>x.r.path==='/api/v1/node-feeds');
+ const saved={source_id:'feed-example',saved:true,revision:1,enabled:true,refresh_interval_minutes:60};
+ f.respond(reads.at(-1).i,200,{sources:[saved]});await flush();
+ const html=f.e('sourcesList').innerHTML;
+ f.e('sourcesList').events.get('input')({});
+ f.event('razvilka:view-change','subscription-settings');
+ reads=f.requests.map((r,i)=>({r,i})).filter(x=>x.r.path==='/api/v1/node-feeds');
+ f.respond(reads.at(-1).i,200,{sources:[{...saved,revision:2,enabled:false}]});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+ const form={dataset:{feedForm:'feed-example'},elements:{enabled:{value:'true'},interval:{value:'90'}}};
+ f.e('sourcesList').events.get('submit')({preventDefault(){},target:{closest:()=>form}});
+ const write=f.requests.at(-1);assert.equal(write.options.method,'PUT');
+ assert.equal(JSON.parse(write.options.body).revision,1,'new server revision must not authorize old form');
+ assert.equal(JSON.parse(write.options.body).refresh_interval_minutes,90);
+ f.respond(f.requests.length-1,409,{error:'Источник изменился'});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+});
+
+await test('older source reload cannot replace a newer response or later edits',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ f.event('razvilka:view-change','subscription-settings');
+ let reads=f.requests.map((r,i)=>({r,i})).filter(x=>x.r.path==='/api/v1/node-feeds');
+ f.respond(reads.at(-1).i,200,{sources:[{source_id:'newer',saved:true,revision:2}]});await flush();
+ const html=f.e('sourcesList').innerHTML;
+ f.respond(reads.at(-2).i,200,{sources:[{source_id:'older',saved:true,revision:1}]});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+ f.click('reloadSources');await flush();
+ f.e('sourcesList').events.get('input')({});
+ f.respond(f.requests.length-1,200,{sources:[{source_id:'after-edit',saved:true,revision:3}]});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+});
+
+await test('one-off preset opens existing save form without fetching or writing',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ const index=f.requests.findIndex(r=>r.path==='/api/v1/node-feeds');
+ f.respond(index,200,{presets:[{id:'example'}],sources:[{source_id:'feed-example',saved:false}]});await flush();
+ let changed=0;f.coreElement('nodeFeedPreset').dispatchEvent=()=>changed++;
+ f.coreElement('nodeSubscriptions').scrollIntoView=()=>{};
+ const before=f.requests.length;
+ f.clickTarget({closest:selector=>selector==='[data-feed-add]'?{dataset:{feedAdd:'feed-example'}}:selector==='[data-autonomy]'?{}:null});
+ assert.equal(f.coreElement('nodeFeedPreset').value,'example');assert.equal(changed,1);
+ assert.equal(f.coreElement('nodeSubscriptions').hidden,false);assert.equal(f.requests.length,before);
+});
+
+await test('custom one-off keeps source context without reconstructing secret URL',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ const index=f.requests.findIndex(r=>r.path==='/api/v1/node-feeds');
+ f.respond(index,200,{presets:[],sources:[{source_id:'custom-source',name:'My source',saved:false,url:'https://redacted.example/'}]});await flush();
+ f.e('subscriptionForm').scrollIntoView=()=>{};
+ const before=f.requests.length;
+ f.clickTarget({closest:selector=>selector==='[data-feed-add]'?{dataset:{feedAdd:'custom-source'}}:selector==='[data-autonomy]'?{}:null});
+ assert.equal(f.e('subscriptionName').value,'My source');assert.equal(f.e('subscriptionURL').value,'');
+ assert.equal(f.requests.length,before);assert.match(f.e('notice').textContent,/полный HTTPS/);
+});
+
+await test('editing while source save is pending preserves dirty form after success',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ const i=f.requests.findIndex(r=>r.path==='/api/v1/node-feeds');
+ f.respond(i,200,{sources:[{source_id:'feed-example',saved:true,revision:1}]});await flush();
+ const html=f.e('sourcesList').innerHTML;
+ const form={dataset:{feedForm:'feed-example'},elements:{enabled:{value:'true'},interval:{value:'90'}}};
+ f.e('sourcesList').events.get('input')({});
+ f.e('sourcesList').events.get('submit')({preventDefault(){},target:{closest:()=>form}});
+ const count=f.requests.length;
+ form.elements.interval.value='120';f.e('sourcesList').events.get('input')({});
+ f.respond(count-1,200,{ok:true});await flush();
+ assert.equal(form.elements.interval.value,'120');assert.equal(f.e('sourcesList').innerHTML,html);
+ assert.equal(f.requests.length,count,'success must not clear newer dirty edits and reload');
+});
+
+await test('wizard explicit discard does not discard edits made during its read',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');f.respond(1,200,snapshot());await flush();
+ f.e('checkInterval').value='600';f.e('wizardForm').events.get('input')({});
+ f.click('reloadButton');await flush();const i=f.requests.length-1;
+ f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
+ f.respond(i,200,snapshot(2));await flush();
+ assert.equal(f.e('checkInterval').value,'777');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
+});
+
+await test('wizard discard waits for pending poll without consuming newer edits',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');
+ f.click('reloadButton');f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
+ f.respond(1,200,snapshot());await flush();
+ f.respond(2,200,snapshot(2));await flush();
+ assert.equal(f.e('checkInterval').value,'777');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
+});
+
+await test('wizard ordinary confirmed discard loads the new revision',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');f.respond(1,200,snapshot());await flush();
+ f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
+ f.click('reloadButton');await flush();f.respond(f.requests.length-1,200,snapshot(2));await flush();
+ assert.equal(f.e('checkInterval').value,300);assert.equal(f.e('revisionLabel').textContent,'Редакция 2');
+});
+
+for(const edit of [false,true])await test('wizard preserves the saved route order and appends newly checked routes: '+edit,async()=>{
+ const inputs=['nfqws2','usque','warp-wg','wireguard'].map(value=>({name:'preferred',value}));
+ const f=fixture(true,[{name:'protocol',value:'vless'},...inputs]),initial=snapshot();
+ Object.assign(initial.policy,{preferred_routes:['warp-wg','usque'],failure_confirm_seconds:60,max_switches_per_hour:6});
+ f.respond(0,200,initial);await flush();f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ if(edit){
+  for(const [id,checked] of [['usque',false],['wireguard',true],['nfqws2',true]]){
+   const target=f.inputs('preferred').find(input=>input.value===id);
+   target.checked=checked;f.e('wizardForm').events.get('change')({target});
+  }
+ }
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');f.e('confirmConsent').checked=true;
+ assert.equal(f.requests.length,2,'editing or navigating sent a request');
+ const saving=f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const write=f.requests[2];assert.equal(write?.options.method,'PUT',f.e('wizardError').textContent);
+ const body=JSON.parse(write.options.body);
+ assert.deepEqual(body.policy.preferred_routes,edit?['warp-wg','wireguard','nfqws2']:['warp-wg','usque']);
+ assert.equal(body.expected_revision,1);assert.equal(body.policy.all_lan,false);
+ assert.deepEqual(body.policy.default_sources,initial.policy.default_sources);
+ f.respond(2,200,{ok:true});await flush();f.respond(3,200,{...initial,policy:{...body.policy,revision:2}});await saving;
+});
+
+await test('another form in the autonomy section cannot preselect or grant a wizard method',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless'},{name:'preferred',value:'usque'},{name:'preferred',value:'xray',checked:true,otherForm:true}]);
+ const initial=snapshot();
+ Object.assign(initial.policy,{preferred_routes:['usque'],failure_confirm_seconds:60,max_switches_per_hour:6});
+ f.respond(0,200,initial);await flush();f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ const [own,other]=f.inputs('preferred');
+ assert.equal(other.checked,true,'wizard fill edited another form');
+ own.checked=false;f.e('wizardForm').events.get('change')({target:own});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');f.e('confirmConsent').checked=true;
+ assert.equal(f.requests.length,2);
+ const saving=f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const write=f.requests[2];assert.equal(write?.options.method,'PUT',f.e('wizardError').textContent);
+ const body=JSON.parse(write.options.body);assert.deepEqual(body.policy.preferred_routes,[]);
+ assert.equal(other.checked,true,'wizard save edited another form');
+ f.respond(2,200,{ok:true});await flush();f.respond(3,200,{...initial,policy:{...body.policy,revision:2}});await saving;
+});
+
+await test('wizard save readback preserves edits made while PUT was pending',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();
+ initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ f.respond(0,200,initial);await flush();f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ f.e('checkInterval').value='180';f.e('wizardForm').events.get('input')({});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ f.e('confirmConsent').checked=true;
+ const saving=f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const i=f.requests.length-1;assert.equal(f.requests[i].options.method,'PUT',f.e('wizardError').textContent);
+ f.e('checkInterval').value='240';f.e('wizardForm').events.get('input')({});
+ f.respond(i,200,{ok:true});await flush();
+ const next=snapshot(2);next.policy.check_seconds=180;f.respond(i+1,200,next);await saving;
+ assert.equal(f.e('checkInterval').value,'240');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
+ assert.equal(f.contextView(),'onboard');assert.match(f.e('notice').textContent,/Новые изменения ещё не сохранены/);
+});
+
+for(const enabled of [false,true])await test('wizard save immediately shows configured services without worker state: '+(enabled?'enabled':'paused'),async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();
+ initial.policy.enabled=enabled;
+ initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ f.respond(0,200,initial);await flush();f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ f.e('checkInterval').value='180';f.e('wizardForm').events.get('input')({});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');f.e('confirmConsent').checked=true;
+ const saving=f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const i=f.requests.length-1;assert.equal(f.requests[i].options.method,'PUT');
+ f.respond(i,200,{ok:true});await flush();
+ const next=snapshot(2);next.policy.check_seconds=180;next.policy.enabled=enabled;
+ next.services=Object.fromEntries(Array.from({length:8},(_,n)=>['configured-'+n,{enabled:true,all_lan:true,sources:[]}]));
+ f.respond(i+1,200,next);await saving;
+ assert.equal(f.contextView(),'autopilot');assert.equal(f.e('revisionLabel').textContent,'Редакция 2');
+ assert.match(f.e('notice').textContent,/Настройки сохранены на роутере/);
+ assert.doesNotMatch(f.e('notice').textContent,/Новые изменения/);
+ assert.equal(f.e('managedCount').textContent,8);
+ const list=f.e('overviewServices').innerHTML;
+ assert.equal((list.match(/class="service-card"/g)||[]).length,3,'saved snapshot left the old empty placeholder');
+ assert.match(list,/configured-0/);assert.match(list,enabled?/Ожидает проверки/:/Автоматика на паузе/);
+ assert.match(list,/Нет результата проверки/);assert.match(list,/Не применён/);
+ assert.doesNotMatch(list,/Сначала выберите|Доступен · проверено/);
+});
+
+await test('overview navigation renders the configured saved snapshot before the next read settles',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');
+ const saved=snapshot(2);saved.policy.enabled=false;saved.services={selected:{enabled:true,all_lan:true,sources:[]}};
+ f.respond(1,200,saved);await flush();
+ f.event('razvilka:view-change','autopilot');
+ assert.match(f.e('overviewServices').innerHTML,/selected/);
+ assert.match(f.e('overviewServices').innerHTML,/Автоматика на паузе/);
+ assert.doesNotMatch(f.e('overviewServices').innerHTML,/Сначала выберите/);
+ assert.equal(f.requests.length,3,'navigation must retain its ordinary fresh read');
+});
+
+for(const button of ['reloadButton','reloadSources']){
+ await test(button+' asynchronous cancel preserves dirty fields and sends no read',async()=>{
+  const f=fixture();f.respond(0,200,snapshot());await flush();
+  f.e('checkInterval').value='777';
+  (button==='reloadButton'?f.e('wizardForm'):f.e('sourcesList')).events.get('input')({});
+  const pending=deferred();f.confirmWith(()=>pending.promise);const before=f.requests.length;
+  f.click(button);assert.equal(f.requests.length,before);pending.resolve(false);await flush();
+  assert.equal(f.requests.length,before);assert.equal(f.e('checkInterval').value,'777');
+ });
+ for(const change of ['logout','view','new-edit'])await test(button+' rejects late consent after '+change,async()=>{
+  const f=fixture();f.respond(0,200,snapshot());await flush();
+  const edited=button==='reloadButton'?f.e('wizardForm'):f.e('sourcesList');edited.events.get('input')({});
+  const pending=deferred();f.confirmWith(()=>pending.promise);f.click(button);
+  if(change==='logout')f.event('razvilka:auth-required');
+  else if(change==='view')f.event('razvilka:view-change','managed');
+  else {f.e('checkInterval').value='777';edited.events.get('input')({});}
+  const before=f.requests.length;pending.resolve(true);await flush();
+  assert.equal(f.requests.length,before,'late consent started a read');
+  if(change==='new-edit')assert.equal(f.e('checkInterval').value,'777');
+ });
+}
+for(const outcome of ['cancel','logout','view','revision','accept'])await test('remove service async consent '+outcome,async()=>{
+ const f=fixture(),initial=snapshot();initial.catalog_services=[{id:'telegram',name:'Telegram',custom:true}];
+ f.respond(0,200,initial);await flush();const pending=deferred();f.confirmWith(()=>pending.promise);
+ f.clickTarget({closest:selector=>selector==='[data-autonomy]'?{}:selector==='[data-remove]'?{dataset:{remove:'telegram'}}:null});
+ const before=f.requests.length;
+ if(outcome==='logout')f.event('razvilka:auth-required');
+ if(outcome==='view')f.event('razvilka:view-change','managed');
+ if(outcome==='revision'){
+  f.event('razvilka:panel-refresh');const next=snapshot(2);next.catalog_services=initial.catalog_services;
+  f.respond(f.requests.length-1,200,next);await flush();
+ }
+ pending.resolve(outcome!=='cancel');await flush();
+ const writes=f.requests.filter(r=>r.options.method==='DELETE');
+ assert.equal(writes.length,outcome==='accept'?1:0);
+ if(outcome==='accept'){
+  const body=JSON.parse(writes[0].options.body);assert.equal(body.expected_revision,1);assert.equal(body.delete_definition,true);
+ }
+ if(outcome==='cancel')assert.equal(f.requests.length,before);
+});
+
+await test('quick policy save shares its live revision with pause/resume before a passive refresh',async()=>{
+ const f=fixture(true,[],true),initial=snapshot(3);initial.policy.enabled=false;
+ f.respond(0,200,initial);await flush();
+ f.coreElement('autoQuickCheck').value='180';f.coreElement('autoQuickForm').events.get('input')({target:{id:'autoQuickCheck'}});
+ const save=f.coreElement('autoQuickForm').events.get('submit')({preventDefault(){}});
+ assert.equal(f.requests[1].options.method,'PUT');assert.equal(JSON.parse(f.requests[1].options.body).expected_revision,3);
+ f.respond(1,200,{});await flush();assert.equal(f.requests[2].path,'/api/v1/autonomy');
+ // Equal millisecond timestamps must not admit the older cached revision.
+ const saved=snapshot(4);saved.policy.enabled=false;saved.policy.check_seconds=180;
+ f.respond(2,200,saved);await save;await flush();
+ assert.equal(f.requests[3].path,'/api/v1/panel/autonomy','ordinary publication refresh no longer triggered');
+ f.click('pauseButton');await flush();
+ const resume=f.requests[4],body=JSON.parse(resume.options.body);
+ assert.equal(resume.options.method,'PUT');assert.equal(body.expected_revision,4,'resume used the pre-save console revision');
+ assert.equal(body.policy.enabled,true);assert.equal(body.policy.check_seconds,180,'resume overwrote the quick edit');
+ f.respond(3,200,initial);await flush();
+ assert.equal(f.e('pauseButton').textContent,'Возобновить автоматику','stale publication replaced the shared readback');
+ const resumed=snapshot(5);resumed.policy.check_seconds=180;resumed.server_time='2026-09-13T10:00:02Z';
+ f.respond(4,200,resumed);await flush();assert.equal(f.requests[5].path,'/api/v1/autonomy');
+ f.respond(5,200,resumed);await flush();
+ assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,2,'pause/resume silently replayed a CAS write');
+});
+
+await test('older or retained policy readbacks cannot regress the console revision',async()=>{
+ for(const which of ['older-revision','older-time','retained','blocked','different-instance']){
+  const f=fixture(),initial=snapshot(4);f.respond(0,200,initial);await flush();
+  const next=snapshot(5);next.policy.enabled=false;
+  if(which==='older-revision')next.policy.revision=3;
+  if(which==='older-time')next.server_time='2026-09-13T09:59:59Z';
+  if(which==='retained')next.observation={state:'retained'};
+  if(which==='blocked')next.blocked=true;
+  if(which==='different-instance')next.observation={state:'available',instance_id:'b'.repeat(32)};
+  f.readback(next);f.click('pauseButton');await flush();
+  assert.equal(JSON.parse(f.requests[1].options.body).expected_revision,4,which);
+  f.respond(1,409,{error:'Настройки изменились. Обновите страницу.'});await flush();
+  assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,1,'conflict was retried');
+ }
+});
+
+await test('shared readback keeps unsaved wizard edits and ignores logged-out publications',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(3));await flush();
+ f.e('scopeAddresses').value='192.0.2.80/32';f.e('wizardForm').events.get('input')();
+ f.readback(snapshot(4));assert.equal(f.e('scopeAddresses').value,'192.0.2.80/32');
+ f.event('razvilka:auth-required');const before=f.published.filter(event=>event.type==='razvilka:autonomy-state').length;
+ f.readback(snapshot(5));assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-state').length,before);
+ assert.equal(f.e('pauseButton').disabled,true);
+});
+
+for(const outcome of ['accept','revision','digest','logout'])await test('reviewed service definition '+outcome,async()=>{
+ const f=fixture(),initial=snapshot(3),id='telegram',digest='a'.repeat(64);
+ initial.catalog_services=[{id,name:'Telegram',review_definition:digest}];
+ initial.services[id]={enabled:true,sources:[],all_lan:true};initial.runtime[id]={state:'definition-changed'};
+ f.respond(0,200,initial);await flush();
+ assert.match(f.e('serviceRows').innerHTML,/Проверить новый состав/);
+ const click=(key,dataset)=>f.clickTarget({closest:selector=>selector==='[data-autonomy]'?{}:selector===key?{dataset}:null});
+ click('[data-show-definition]',{showDefinition:id});await flush();
+ assert.equal(f.requests[1].path,'/api/v1/autonomy/services?review=telegram');
+ f.respond(1,200,{service_id:id,expected_revision:3,expected_definition:digest,domains:['edited.example'],cidrs:['192.0.2.0/24'],strategy:['auto'],source_refs:['list-A'],probes:[{label:'<canary>',url:'https://edited.example',required:true,expect:{status_codes:[204]}}]});
+ await flush();
+ const html=f.e('serviceRows').innerHTML;
+ for(const item of ['edited.example','192.0.2.0/24','auto','list-A','&lt;canary&gt;','обязательная','204','Подтвердить этот состав'])assert.ok(html.includes(item),item);
+ assert.ok(!html.includes('<canary>'));
+ if(outcome==='logout')f.event('razvilka:auth-required');
+ if(outcome==='revision'||outcome==='digest'){
+  f.event('razvilka:panel-refresh');const next=structuredClone(initial);
+  if(outcome==='digest')next.catalog_services[0].review_definition='b'.repeat(64);
+  else next.policy.revision++;
+  f.respond(f.requests.length-1,200,next);await flush();
+ }
+ click('[data-approve-definition]',{approveDefinition:id,definition:digest,revision:'3'});await flush();
+ const writes=f.requests.filter(r=>r.options.method==='POST');
+ assert.equal(writes.length,outcome==='accept'?1:0);
+ if(writes.length)assert.deepEqual(JSON.parse(writes[0].options.body),{service_id:id,expected_revision:3,expected_definition:digest,confirm:'REVIEW_SERVICE_DEFINITION'});
+});
+
+console.log(JSON.stringify({status:'passed',tests:passed}));

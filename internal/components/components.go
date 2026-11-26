@@ -1,0 +1,785 @@
+package components
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"github.com/ArtixSx/razvilka/internal/installpath"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+type Spec struct {
+	SchemaVersion       int            `json:"schema_version"`
+	ID                  string         `json:"id"`
+	Name                string         `json:"name"`
+	Category            string         `json:"category"`
+	Package             string         `json:"package,omitempty"`
+	Provider            string         `json:"provider"`
+	Repository          string         `json:"repository,omitempty"`
+	Binary              string         `json:"-"`
+	Archive             string         `json:"-"`
+	Description         string         `json:"description"`
+	UseCase             string         `json:"use_case,omitempty"`
+	Requirement         string         `json:"requirement,omitempty"`
+	Recommended         bool           `json:"recommended"`
+	Removable           bool           `json:"removable"`
+	Capabilities        []string       `json:"capabilities,omitempty"`
+	Dependencies        []string       `json:"dependencies,omitempty"`
+	RuntimeDependencies []string       `json:"runtime_dependencies,omitempty"`
+	Claims              []Claim        `json:"claims,omitempty"`
+	Budget              ResourceBudget `json:"resource_budget"`
+}
+
+type View struct {
+	Spec
+	InstalledVersion       string `json:"installed_version,omitempty"`
+	AvailableVersion       string `json:"available_version,omitempty"`
+	Installed              bool   `json:"installed"`
+	Available              bool   `json:"available"`
+	UpdateAvailable        bool   `json:"update_available"`
+	State                  string `json:"state"`
+	CanInstall             bool   `json:"can_install"`
+	CanUpdate              bool   `json:"can_update"`
+	CanRemove              bool   `json:"can_remove"`
+	Configured             bool   `json:"configured"`
+	Running                bool   `json:"running"`
+	ExternalOwner          bool   `json:"external_owner"`
+	Verification           string `json:"verification"`
+	LastAction             string `json:"last_action,omitempty"`
+	LastActionAt           string `json:"last_action_at,omitempty"`
+	VerifiedVersion        string `json:"verified_version,omitempty"`
+	OperationStatus        string `json:"operation_status,omitempty"`
+	OperationAction        string `json:"operation_action,omitempty"`
+	OperationAt            string `json:"operation_at,omitempty"`
+	OperationMessage       string `json:"operation_message,omitempty"`
+	InstalledVersionSource string `json:"installed_version_source,omitempty"`
+	AvailableVersionSource string `json:"available_version_source,omitempty"`
+	RuntimeVersion         string `json:"runtime_version,omitempty"`
+	RuntimeObservation     string `json:"runtime_observation,omitempty"`
+	CatalogStale           bool   `json:"catalog_stale"`
+	UpdateCheckError       string `json:"update_check_error,omitempty"`
+	InventoryError         string `json:"inventory_error,omitempty"`
+	CheckedAt              string `json:"checked_at,omitempty"`
+	LifecycleBlockReason   string `json:"lifecycle_block_reason,omitempty"`
+	// ManagedUpdate: the component can be updated while its routes are in use,
+	// with a check and rollback; RollbackReady: a copy of the installed
+	// version is cached for that rollback.
+	ManagedUpdate bool `json:"managed_update"`
+	RollbackReady bool `json:"rollback_ready"`
+}
+
+type Result struct {
+	OK                        bool   `json:"ok"`
+	Component                 string `json:"component"`
+	Action                    string `json:"action"`
+	Output                    string `json:"output"`
+	TransactionID             string `json:"transaction_id,omitempty"`
+	PendingLiveAcceptance     bool   `json:"pending_live_acceptance,omitempty"`
+	PendingRollbackAcceptance bool   `json:"pending_rollback_acceptance,omitempty"`
+	InstalledIdleAccepted     bool   `json:"installed_idle_accepted,omitempty"`
+}
+
+type BatchResult struct {
+	OK      bool     `json:"ok"`
+	Results []Result `json:"results"`
+	Errors  []string `json:"errors,omitempty"`
+}
+
+var errUpdateNotAdvanced = errors.New("component-update-not-advanced")
+
+type Runner interface {
+	Run(context.Context, string, ...string) ([]byte, error)
+}
+
+// Private helper overrides are constructed only by isolated native tests.
+type execRunner struct {
+	supervisorPath string
+	supervisorArgs []string
+	supervisorEnv  []string
+}
+
+func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+}
+
+type Manager struct {
+	AdmitXrayCoreWrite func(context.Context) (context.Context, func(), error)
+	Opkg               string
+	RepoDir            string
+	InfoDir            string // opkg package metadata; default /opt/lib/opkg/info
+	BinDir             string
+	InitDir            string
+	StateDir           string
+	Arch               string
+	Client             *http.Client
+	Timeout            time.Duration
+	Runner             Runner
+	external           map[string]releaseInfo
+	catalog            catalogStatus
+	lastInstalled      map[string]string
+	lastAvailable      map[string]string
+	availableAt        time.Time // when lastAvailable was read; zero after opkg update
+	retryDelay         time.Duration
+	releaseChecks      map[string]catalogStatus
+	updateFault        func(string) error        // phase-boundary fault injection; nil in production
+	initialNFQSource   NFQWSInitialInstallSource // Bound once by the actual startup dataplane owner.
+
+	usqueNetworkCheck func() error // isolated network-preflight fixtures only
+
+	// Isolated bundle tests relocate files and supply an already reviewed
+	// synthetic archive. Production uses the fixed owned root/catalog below.
+	nfqwsReleases string
+	nfqwsFixture  *managedNFQWSFixtureBoundary // private pinned TempDir exception, never production wiring
+	nfqwsReview   func(ManagedNFQWSManifest) error
+	nfqwsPublish  func(context.Context, string, string, string, func(func() error) error, func(string) error) error
+	mu            sync.Mutex
+}
+
+func New() *Manager {
+	return newWithOpkg(installpath.EntwareOpkg())
+}
+
+func newWithOpkg(opkg string) *Manager {
+	return &Manager{Opkg: opkg, RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: installpath.State + "/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}, retryDelay: 2 * time.Second}
+}
+
+func Specs() []Spec {
+	specs := []Spec{
+		{SchemaVersion: 1, ID: "mihomo", Name: "Mihomo", Category: "proxy", Provider: "github-release", Repository: "https://github.com/MetaCubeX/mihomo", Binary: "mihomo", Archive: "gzip", Description: "Закреплённое ядро Mihomo для поддержанных профилей", UseCase: "Установка проверенного бинарника отдельно от подключения маршрута.", Requirement: "Linux amd64/arm64, версия1.19.33. Установка сама не запускает прокси и не меняет маршруты.", Capabilities: []string{"profile-export"}, Budget: ResourceBudget{RAMMiB: 96, FlashMiB: 100, CPUClass: "medium"}},
+		{SchemaVersion: 1, ID: "nfqws2", Name: "NFQWS2", Category: "local-dpi", Package: "nfqws2-keenetic", Provider: "opkg", Repository: "https://nfqws.github.io/nfqws2-keenetic/all", Description: "Локальный DPI-desync через NFQUEUE", UseCase: "Для DPI-фильтрации, замедления и доменных блокировок без внешнего сервера.", Requirement: "Не помогает, если сеть сервиса полностью заблокирована по IP — тогда нужен туннель.", Recommended: true, Removable: true, Capabilities: []string{"tcp", "udp", "quic", "strategy-lab"}, Claims: []Claim{{Kind: "nfqueue", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 24, FlashMiB: 18, CPUClass: "medium"}},
+		{SchemaVersion: 1, ID: "usque", Name: "WARP · MASQUE", Category: "tunnel", Package: "usque-keenetic", Provider: "opkg", Repository: "https://side-effect-tm.github.io/usque-keenetic/all", Description: "Cloudflare WARP через MASQUE (QUIC/HTTP2)", UseCase: "Туннель для полных IP-блокировок; основной транспорт использует UDP/443, TCP/443 проверяется как запасной.", Requirement: "Нужен доступ к Cloudflare endpoint. RAZVILKA запускает USQUE как SOCKS-прокси, а Sing-box с gVisor создаёт отдельный TUN для выбранных сервисов.", Recommended: true, Removable: true, Capabilities: []string{"masque", "quic", "http2", "socks", "tun", "split-routing"}, Dependencies: []string{"sing-box"}, RuntimeDependencies: []string{"sing-box"}, Claims: []Claim{{Kind: "tun", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 32, FlashMiB: 20, CPUClass: "medium"}},
+		{SchemaVersion: 1, ID: "sing-box", Name: "Sing-box · свой сервер", Category: "proxy", Package: "sing-box-go", Provider: "opkg", Description: "Клиент VLESS, Reality, Hysteria2, TUIC и Shadowsocks", UseCase: "Универсальный туннель для сервисов с полной блокировкой, включая TCP, UDP и IP-сети.", Requirement: "Нужен профиль и доступный удалённый сервер. Одна установка Sing-box доступ в интернет не создаёт.", Removable: true, Capabilities: []string{"vless", "reality", "hysteria2", "tuic", "shadowsocks", "tun"}, Claims: []Claim{{Kind: "tun", Value: "managed"}, {Kind: "listen-port", Value: "profile"}}, Budget: ResourceBudget{RAMMiB: 64, FlashMiB: 32, CPUClass: "medium"}},
+		{SchemaVersion: 1, ID: "xray", Name: "Xray · свой сервер", Category: "proxy", Package: "xray-core", Provider: "opkg", Description: "Клиент Xray и VLESS-транспортов", UseCase: "Альтернативный клиент для собственного VLESS/Reality-сервера.", Requirement: "Нужен профиль удалённого сервера. Xray работает как SOCKS-прокси; Sing-box с gVisor создаёт отдельный TUN для выбранных сервисов.", Removable: true, Capabilities: []string{"vless", "reality", "proxy"}, Dependencies: []string{"sing-box"}, RuntimeDependencies: []string{"sing-box"}, Claims: []Claim{{Kind: "listen-port", Value: "profile"}}, Budget: ResourceBudget{RAMMiB: 64, FlashMiB: 38, CPUClass: "medium"}},
+		// Fresh WARP profiles use the built-in generator; wgcf is optional for legacy account rebuilds.
+		{SchemaVersion: 1, ID: "warp-wg", Name: "WARP · WireGuard", Category: "tunnel", Package: "wireguard-tools", Provider: "opkg", Description: "Cloudflare WARP через WireGuard UDP", UseCase: "Бесплатный split-туннель для выбранных сервисов, когда UDP Cloudflare доступен.", Requirement: "Если handshake не проходит на 2408/500/1701/4500, используйте MASQUE или свой сервер.", Removable: true, Capabilities: []string{"wireguard", "tun", "split-routing"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 12, FlashMiB: 8, CPUClass: "light"}},
+		{SchemaVersion: 1, ID: "wireguard", Name: "WireGuard · свой сервер", Category: "tunnel", Package: "wireguard-tools", Provider: "opkg", Description: "Обычный WireGuard к вашему серверу", UseCase: "Свой VPS или домашний сервер с WireGuard: без регистрации Cloudflare.", Requirement: "Нужен ваш сервер WireGuard и поддержка WireGuard в ядре роутера. Пакет общий с WARP · WireGuard, поэтому здесь не удаляется.", Removable: false, Capabilities: []string{"wireguard", "tun", "split-routing"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 12, FlashMiB: 8, CPUClass: "light"}},
+		{SchemaVersion: 1, ID: "hev-socks5-tunnel", Name: "HEV SOCKS5 TUN", Category: "tool", Provider: "github-release", Repository: "https://github.com/heiher/hev-socks5-tunnel", Binary: "hev-socks5-tunnel", Archive: "binary", Description: "Проверенная версия отдельного SOCKS5 TUN процесса", UseCase: "Дополнительный TUN backend для управляемого SOCKS5 пути.", Requirement: "Установка не включает маршрут: необходимы SOCKS5 клиент, отдельный TUN и проверка среды. Версия закреплена на 2.17.1; доступны Linux amd64/arm64.", Capabilities: []string{"socks5-tun-sidecar"}, Budget: ResourceBudget{RAMMiB: 16, FlashMiB: 4, CPUClass: "light"}},
+		{SchemaVersion: 1, ID: "wgcf", Name: "Генератор WARP", Category: "tool", Provider: "github-release", Repository: "https://github.com/ViRb3/wgcf", Binary: "wgcf", Archive: "binary", Description: "Создаёт профиль Cloudflare WARP", UseCase: "Только регистрация аккаунта и генерация ключей для WARP WireGuard.", Requirement: "Это инструмент, а не самостоятельный обход; требуется компонент WARP · WireGuard.", Removable: true, Capabilities: []string{"warp-registration", "wireguard-profile"}, Budget: ResourceBudget{RAMMiB: 8, FlashMiB: 12, CPUClass: "light"}},
+		{SchemaVersion: 1, ID: "amneziawg", Name: "AmneziaWG · свой сервер", Category: "tunnel", Provider: "platform", Repository: "https://github.com/amnezia-vpn/amneziawg-openwrt", Description: "DPI-устойчивый WireGuard-совместимый туннель", UseCase: "Для полной блокировки и сетей, где обычный WireGuard распознаётся или режется.", Requirement: "Нужен совместимый AmneziaWG-сервер, загруженный модуль amneziawg для текущего ядра роутера и проверенный awg CLI с поддержкой версии профиля.", Capabilities: []string{"amneziawg", "tun", "split-routing"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 24, FlashMiB: 16, CPUClass: "medium"}},
+	}
+	return normalizeManifest(specs)
+}
+
+func (m *Manager) InstallRecommended(ctx context.Context) BatchResult {
+	report := BatchResult{OK: true, Results: []Result{}, Errors: []string{}}
+	for _, spec := range Specs() {
+		if !spec.Recommended {
+			continue
+		}
+		result, err := m.Apply(ctx, spec.ID)
+		if err != nil {
+			report.OK = false
+			report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", spec.ID, err))
+			result.Component = spec.ID
+			if result.Action == "" {
+				result.Action = "install"
+			}
+		}
+		report.Results = append(report.Results, result)
+	}
+	return report
+}
+
+func (m *Manager) List(ctx context.Context, refresh bool) ([]View, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listLocked(ctx, refresh, false)
+}
+
+// Observe performs local inventory only. An installer owns the same mutex;
+// passive observation must yield immediately rather than queue behind it.
+func (m *Manager) Observe(ctx context.Context) ([]View, error) {
+	if !m.mu.TryLock() {
+		return nil, errors.New("component operation is active")
+	}
+	defer m.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return m.listLocked(ctx, false, true)
+}
+
+func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View, error) {
+	installed, available, inventoryError := m.packageInventory(ctx, refresh, passive)
+	views := make([]View, 0, len(Specs()))
+	for _, spec := range Specs() {
+		if spec.Provider == "github-release" {
+			view, err := m.externalView(ctx, spec, refresh)
+			if err != nil {
+				view.UpdateCheckError = "Не удалось проверить выпуск в GitHub. Повторите проверку версий."
+			}
+			view.CanInstall = !view.Installed && view.Available && !view.CatalogStale
+			view.CanUpdate = view.UpdateAvailable && !view.CatalogStale && view.InstalledVersionSource == "receipt"
+			view.CanRemove = view.Installed && spec.Removable && view.InstalledVersionSource == "receipt"
+			if view.Installed && view.InstalledVersionSource != "receipt" {
+				view.LifecycleBlockReason = "Файл установлен вне RAZVILKA; управляемая установка и удаление не подтверждены."
+			}
+			if spec.ID == "hev-socks5-tunnel" {
+				if err := m.hevReleaseIdle(); err != nil {
+					view.CanInstall, view.CanUpdate, view.CanRemove = false, false, false
+					view.State = "recovery-required"
+					view.LifecycleBlockReason = "Установка HEV требует восстановления исходного журнала; автоматический запуск запрещён."
+				}
+			}
+			m.attachLifecycleVerification(&view)
+			if spec.ID == "mihomo" {
+				view.CanRemove = false
+				if err := m.mihomoReleaseIdle(); err != nil {
+					view.CanInstall, view.CanUpdate = false, false
+					view.State = "recovery-required"
+					view.LifecycleBlockReason = "Установка Mihomo требует восстановления исходного журнала."
+				}
+			}
+			views = append(views, view)
+			continue
+		}
+		if spec.Provider != "opkg" || spec.Package == "" {
+			state := "provider-required"
+			if spec.Provider == "external" {
+				state = "external"
+			}
+			view := View{Spec: spec, State: state}
+			m.attachLifecycleVerification(&view)
+			views = append(views, view)
+			continue
+		}
+		if spec.ID == "xray" && installed["xray"] != "" {
+			spec.Package = "xray"
+		}
+		iv, av := installed[spec.Package], available[spec.Package]
+		stale := m.catalog.feedStale(spec)
+		checkError := ""
+		if stale {
+			checkError = m.catalog.Error
+		}
+		v := View{Spec: spec, InstalledVersion: iv, AvailableVersion: av, Installed: iv != "", Available: av != "", CatalogStale: stale, UpdateCheckError: checkError, CheckedAt: m.catalog.CheckedAt, InventoryError: inventoryError}
+		if iv != "" {
+			v.InstalledVersionSource = "opkg"
+		}
+		if av != "" {
+			v.AvailableVersionSource = "opkg"
+		}
+		switch {
+		case v.Installed && v.Available && compareVersions(iv, av) < 0:
+			v.State, v.UpdateAvailable = "update", true
+		case v.Installed:
+			v.State = "installed"
+		case v.Available:
+			v.State = "available"
+		default:
+			v.State = "unavailable"
+		}
+		v.CanInstall = !v.Installed && v.Available && !v.CatalogStale && inventoryError == ""
+		v.CanUpdate = v.UpdateAvailable && !v.CatalogStale && inventoryError == ""
+		v.CanRemove = v.Installed && spec.Removable && inventoryError == ""
+		if managedUpdateComponents[spec.ID] {
+			v.ManagedUpdate = true
+			v.RollbackReady = m.rollbackPackage(spec, iv) != ""
+		}
+		if err := m.xrayPackageConflict(spec.ID, installed); err != nil {
+			v.CanInstall, v.CanUpdate, v.CanRemove = false, false, false
+			v.LifecycleBlockReason = err.Error()
+		}
+		m.attachLifecycleVerification(&v)
+		views = append(views, v)
+	}
+	return views, nil
+}
+
+func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
+	return m.apply(ctx, id, nil)
+}
+
+func (m *Manager) apply(ctx context.Context, id string, installGuard func(context.Context) error) (Result, error) {
+	if id == "xray" {
+		held, release, err := m.xrayWriteAdmission(ctx)
+		if err != nil {
+			return Result{Component: id, Action: "install"}, NoMutation(err)
+		}
+		defer release()
+		ctx = held
+	}
+	if id == "mihomo" {
+		return Result{Component: id, Action: "install"}, NoMutation(errors.New("Mihomo installation requires ApplyMihomoGuarded original-owner admission"))
+	}
+	if id == "hev-socks5-tunnel" {
+		return Result{Component: id, Action: "install"}, NoMutation(errors.New("HEV installation requires ApplyHEVGuarded original-owner admission"))
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.nfqwsPackageMutationGuard(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
+	if err := m.usquePackageNetworkPreflight(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
+	if spec, ok := lookup(id); ok && spec.Provider == "opkg" && m.Opkg == "" {
+		return Result{Component: id, Action: "install"}, NoMutation(errors.New("opkg is not available"))
+	}
+	release, err := m.fencePackageMutation()
+	if err != nil {
+		return Result{}, NoMutation(err)
+	}
+	defer release()
+	if installGuard != nil {
+		return m.applyJournalLocked(ctx, id, map[string]bool{}, nil, installGuard)
+	}
+	if m.StateDir != "" && ManagedUpdateSupported(id) {
+		spec, _ := lookup(id)
+		installed, err := m.installedPackageVersions(ctx)
+		if err != nil {
+			return Result{}, NoMutation(err)
+		}
+		if installed[spec.Package] != "" {
+			return Result{}, NoMutation(ErrManagedUpdateRequired)
+		}
+	}
+	if id == "nfqws2" {
+		spec, _ := lookup(id)
+		if m.catalog.feedStale(spec) {
+			return Result{}, NoMutation(errors.New("component catalog is stale; refresh package sources successfully before updating"))
+		}
+		return Result{Component: id, Action: "install"}, NoMutation(ErrNFQWSInitialInstall)
+	}
+	return m.applyLocked(ctx, id, map[string]bool{})
+}
+
+func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[string]bool) (Result, error) {
+	return m.applyJournalLocked(ctx, id, visiting, nil, nil)
+}
+
+func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting map[string]bool, tx *updateTransaction, guard func(context.Context) error) (Result, error) {
+	if err := m.nfqwsPackageMutationGuard(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
+	if id == "nfqws2" && tx == nil {
+		return Result{Component: id, Action: "install"}, NoMutation(ErrNFQWSInitialInstall)
+	}
+	spec, ok := lookup(id)
+	if !ok {
+		return Result{}, fmt.Errorf("unknown component %q", id)
+	}
+	if err := m.usquePackageNetworkPreflight(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
+	if visiting[id] {
+		return Result{}, fmt.Errorf("component dependency cycle at %s", id)
+	}
+	if spec.Provider == "opkg" && m.catalog.feedStale(spec) {
+		return Result{}, errors.New("component catalog is stale; refresh package sources successfully before installing or updating")
+	}
+	if id == "xray" {
+		installed, err := m.installedPackageVersions(ctx)
+		if err != nil {
+			return Result{}, NoMutation(err)
+		}
+		if err := m.xrayPackageConflict(id, installed); err != nil {
+			return Result{}, NoMutation(err)
+		}
+		if tx == nil && guard != nil {
+			if err := checkAbsentInstallation(ctx, installed[spec.Package], guard); err != nil {
+				return Result{Component: id, Action: "install"}, err
+			}
+		}
+		if err := m.xrayHistoryPreflight(); err != nil {
+			return Result{}, NoMutation(err)
+		}
+	}
+	visiting[id] = true
+	defer delete(visiting, id)
+	for _, dependency := range spec.Dependencies {
+		dep, known := lookup(dependency)
+		if known && dep.Provider == "opkg" {
+			installed, err := m.installedPackageVersions(ctx)
+			if err != nil {
+				return Result{Component: id, Action: "install"}, fmt.Errorf("inspect dependency %s: %w", dependency, err)
+			}
+			// Installing a parent must not upgrade or stop an existing shared core.
+			if installed[dep.Package] != "" {
+				continue
+			}
+		}
+		if known && dep.Provider == "github-release" && dep.Binary != "" {
+			// A dependency with our integrity-bound receipt does not need a
+			// second download/update just because its parent is being updated.
+			path := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), dep.Binary)
+			if externalReceiptVersion(path) != "" {
+				continue
+			}
+		}
+		var err error
+		if tx == nil && guard != nil {
+			_, err = m.applyJournalLocked(ctx, dependency, visiting, nil, guard)
+		} else {
+			_, err = m.applyLocked(ctx, dependency, visiting)
+		}
+		if err != nil {
+			return Result{Component: id, Action: "install"}, fmt.Errorf("install dependency %s: %w", dependency, err)
+		}
+	}
+	if spec.Provider == "github-release" {
+		return m.installExternal(ctx, spec)
+	}
+	if spec.Provider != "opkg" || spec.Package == "" {
+		return Result{}, fmt.Errorf("component %s requires the %s installer, which is not enabled yet", id, spec.Provider)
+	}
+	if m.Opkg == "" {
+		return Result{}, errors.New("opkg is not available")
+	}
+	if err := m.prepareReceiptDir(); err != nil {
+		return Result{}, err
+	}
+	before, err := m.installedPackageVersions(ctx)
+	if err != nil {
+		return Result{}, fmt.Errorf("read installed packages before component operation: %w", err)
+	}
+	if err := m.xrayPackageConflict(id, before); err != nil {
+		return Result{}, err
+	}
+	beforeVersion := before[spec.Package]
+	if tx == nil && guard != nil {
+		if err := checkAbsentInstallation(ctx, beforeVersion, guard); err != nil {
+			return Result{Component: id, Action: "install"}, err
+		}
+	}
+	action := "install"
+	if beforeVersion != "" {
+		action = "update"
+	}
+	var singInit *singBoxInitGuard
+	if id == "sing-box" {
+		singInit, err = m.prepareSingBoxInit(beforeVersion != "")
+		if err != nil {
+			return Result{Component: id, Action: action}, fmt.Errorf("sing-box package autostart preflight: %w", err)
+		}
+		defer singInit.root.Close()
+		if err := singInit.checkWritable(); err != nil {
+			return Result{Component: id, Action: action}, fmt.Errorf("sing-box package autostart preflight: %w", err)
+		}
+	}
+	if err := m.ensureRepository(spec); err != nil {
+		return Result{}, err
+	}
+	if spec.Repository != "" {
+		if out, err := m.refreshPackageLists(ctx); err != nil {
+			// Proceed only when opkg attributed the failure to other sources.
+			status := catalogStatus{Error: packageRefreshError(out), FailedFeeds: failedFeeds(out)}
+			if status.feedStale(spec) {
+				return Result{}, fmt.Errorf("opkg update after repository setup: %w", err)
+			}
+		}
+	}
+	command := "install"
+	if beforeVersion != "" {
+		command = "upgrade"
+	}
+	// Dependencies and repository refresh can take time; reobserve the local
+	// subnet immediately before the vendor package may start its NDM setup.
+	if err := m.usquePackageNetworkPreflight(id); err != nil {
+		return Result{Component: id, Action: action}, NoMutation(err)
+	}
+	if tx == nil && guard != nil {
+		latest, err := m.installedPackageVersions(ctx)
+		if err != nil {
+			return Result{Component: id, Action: action}, NoMutation(err)
+		}
+		if err := m.xrayPackageConflict(id, latest); err != nil {
+			return Result{Component: id, Action: action}, NoMutation(err)
+		}
+		if err := checkAbsentInstallation(ctx, latest[spec.Package], guard); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+	}
+	// Never upgrade the global package set. Only the reviewed allowlisted package.
+	if tx != nil {
+		if err := tx.authority(ctx, guard); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+		if err := tx.phase(UpdateStarted); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+		if err := tx.fault("before:upgrade-command"); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+	}
+	if id == "xray" && tx == nil {
+		if err := m.markXrayCoreHistory(); err != nil {
+			return Result{}, err
+		}
+	}
+	var out []byte
+	if tx != nil {
+		out, err = tx.runPackage(ctx, "upgrade", command, spec.Package)
+	} else {
+		out, err = m.run(ctx, command, spec.Package)
+	}
+	if tx != nil {
+		if faultErr := tx.fault("after:upgrade-command"); faultErr != nil {
+			return Result{Component: id, Action: action}, faultErr
+		}
+		if err != nil {
+			err = errors.Join(ErrUpdateUnknown, err)
+		} else {
+			if err := tx.phase(UpdateInstalled); err != nil {
+				return Result{Component: id, Action: action}, err
+			}
+		}
+	}
+	text := strings.TrimSpace(string(out))
+	if len(text) > 8192 {
+		text = text[len(text)-8192:]
+	}
+	if singInit != nil {
+		// opkg may unpack files and still fail (or be canceled). Always disable
+		// a recognized package init before returning; never invoke its stop/start
+		// actions, which could kill unrelated or RAZVILKA-owned core processes.
+		if disableErr := singInit.disable(err == nil); disableErr != nil {
+			return Result{Component: id, Action: action, Output: text}, errors.Join(err, fmt.Errorf("sing-box package autostart could not be disabled: %w; installation is not verified", disableErr))
+		}
+	}
+	if err != nil {
+		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("opkg %s %s: %w", command, spec.Package, err)
+	}
+	after, verifyErr := m.installedPackageVersions(ctx)
+	if verifyErr != nil {
+		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("verify installed component: %w", verifyErr)
+	}
+	if err := m.xrayPackageConflict(id, after); err != nil {
+		return Result{Component: id, Action: action, Output: text}, err
+	}
+	afterVersion := after[spec.Package]
+	if afterVersion == "" {
+		// A guarded first install does not prove ownership of shared WireGuard
+		// files when opkg cannot confirm its package. Do not remove them.
+		if beforeVersion == "" && id != "xray" && (id != "warp-wg" || guard == nil || tx != nil) {
+			_, _ = m.run(ctx, "remove", spec.Package)
+		}
+		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("opkg reported success but %s is not installed", spec.Package)
+	}
+	if beforeVersion != "" && compareVersions(afterVersion, beforeVersion) <= 0 {
+		// Exit zero may mean "nothing to upgrade". Never issue a new verified
+		// receipt for unchanged/downgraded bytes; leave the prior receipt intact.
+		return Result{Component: id, Action: action, Output: text}, errUpdateNotAdvanced
+	}
+	if tx != nil {
+		tx.doc.AfterVersion = afterVersion
+	}
+	receipt := lifecycleReceipt{SchemaVersion: 1, Component: id, Package: spec.Package, Provider: spec.Provider, Action: action, BeforeVersion: beforeVersion, AfterVersion: afterVersion, CompletedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	if tx != nil {
+		receipt.TransactionID, receipt.Acceptance = tx.doc.TransactionID, "candidate-installed"
+		if err := tx.fault("before:candidate-receipt"); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+	}
+	if err := m.writeLifecycleReceipt(receipt); err != nil {
+		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("write component receipt: %w", err)
+	}
+	if tx != nil {
+		if err := tx.fault("after:candidate-receipt"); err != nil {
+			return Result{Component: id, Action: action}, err
+		}
+	}
+	return Result{OK: true, Component: id, Action: action, Output: text + fmt.Sprintf("\nverified installed version: %s", afterVersion)}, nil
+}
+
+func (m *Manager) ensureRepositories() error {
+	for _, spec := range Specs() {
+		if err := m.ensureRepository(spec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) ensureRepository(spec Spec) error {
+	if spec.Provider != "opkg" || spec.Repository == "" {
+		return nil
+	}
+	dir := m.RepoDir
+	if dir == "" {
+		dir = "/opt/etc/opkg"
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create opkg repository directory: %w", err)
+	}
+	declared, err := repositoryDeclared(dir, spec.Package, spec.Repository)
+	if err != nil {
+		return fmt.Errorf("inspect opkg repositories: %w", err)
+	}
+	if declared {
+		return nil
+	}
+	path := filepath.Join(dir, spec.ID+".conf")
+	content := []byte(fmt.Sprintf("src/gz %s %s\n", spec.Package, spec.Repository))
+	if existing, err := os.ReadFile(path); err == nil {
+		if string(existing) == string(content) {
+			return nil
+		}
+		return errors.New("component-repository-file-conflict")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".razvilka-repo-*")
+	if err != nil {
+		return fmt.Errorf("create opkg repository draft: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("commit opkg repository: %w", err)
+	}
+	return nil
+}
+
+func repositoryDeclared(dir, packageName, repository string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".conf") {
+			continue
+		}
+		file, err := os.Open(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return false, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, 64<<10))
+		closeErr := file.Close()
+		if readErr != nil {
+			return false, readErr
+		}
+		if closeErr != nil {
+			return false, closeErr
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Fields(strings.TrimSpace(line))
+			if len(fields) >= 3 && (fields[0] == "src" || fields[0] == "src/gz") && fields[1] == packageName && fields[2] == repository {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func (m *Manager) run(parent context.Context, args ...string) ([]byte, error) {
+	if err := m.nfqwsPackageArgumentsGuard(args); err != nil {
+		return nil, err
+	}
+	if m.Opkg == "" {
+		return nil, errors.New("opkg is not available")
+	}
+	timeout := m.Timeout
+	if timeout <= 0 {
+		timeout = 90 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	if len(args) > 0 && args[0] == "update" {
+		m.availableAt = time.Time{} // package lists change; re-read the catalog
+	}
+	out, err := m.withPackageParents(args, func() ([]byte, error) {
+		if err := m.nfqwsPackageArgumentsGuard(args); err != nil {
+			return nil, err
+		}
+		return m.Runner.Run(ctx, m.Opkg, args...)
+	})
+	if ctx.Err() == context.DeadlineExceeded {
+		return out, fmt.Errorf("timed out after %s", timeout)
+	}
+	return out, err
+}
+
+func lookup(id string) (Spec, bool) {
+	for _, spec := range Specs() {
+		if spec.ID == id {
+			return spec, true
+		}
+	}
+	return Spec{}, false
+}
+
+func unavailableViews() []View {
+	views := make([]View, 0, len(Specs()))
+	for _, spec := range Specs() {
+		views = append(views, View{Spec: spec, State: "unavailable"})
+	}
+	return views
+}
+
+func parsePackageVersions(output string) map[string]string {
+	result := map[string]string{}
+	for _, line := range strings.Split(output, "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), " - ", 3)
+		if len(parts) >= 2 && parts[0] != "" && parts[1] != "" {
+			if old := result[parts[0]]; old == "" || compareVersions(old, parts[1]) < 0 {
+				result[parts[0]] = parts[1]
+			}
+		}
+	}
+	return result
+}
+
+var versionPart = regexp.MustCompile(`[0-9]+|[A-Za-z]+`)
+
+func compareVersions(a, b string) int {
+	aa, bb := versionPart.FindAllString(a, -1), versionPart.FindAllString(b, -1)
+	n := len(aa)
+	if len(bb) > n {
+		n = len(bb)
+	}
+	for i := 0; i < n; i++ {
+		if i >= len(aa) {
+			return -1
+		}
+		if i >= len(bb) {
+			return 1
+		}
+		if aa[i] == bb[i] {
+			continue
+		}
+		var ai, bi int
+		_, ae := fmt.Sscanf(aa[i], "%d", &ai)
+		_, be := fmt.Sscanf(bb[i], "%d", &bi)
+		if ae == nil && be == nil {
+			if ai < bi {
+				return -1
+			}
+			return 1
+		}
+		if aa[i] < bb[i] {
+			return -1
+		}
+		return 1
+	}
+	return 0
+}
+
+func Sort(views []View) {
+	sort.Slice(views, func(i, j int) bool { return views[i].Name < views[j].Name })
+}

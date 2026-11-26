@@ -1,0 +1,65 @@
+name: Expected artifact complete stream experiment
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/expected-pair-stream-experiment-20261116']
+permissions:
+  contents: read
+jobs:
+  measurement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Fetch the exact representative Mihomo bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/razvilka-pair-mihomo.gz
+          echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/razvilka-pair-mihomo.gz' | sha256sum --check --strict
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/platform.txt
+      - name: Complete fresh files with original custody and byte comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ '${{ matrix.mode }}' = race ]; then flags=(-race); fi
+          RAZVILKA_EXPECTED_PAIR_STREAM_MEASURE=1 RAZVILKA_MIHOMO_ARCHIVE=/tmp/razvilka-pair-mihomo.gz \
+            go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/restorejournal \
+            -run '^TestExpectedPairStreamNative' 2>&1 | tee artifacts/stream.log
+          for test in SourceParity Refusals ActualFDsAndRevocation PairedMeasurement; do
+            grep -F -- "--- PASS: TestExpectedPairStreamNative$test " artifacts/stream.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/stream.log; then exit 1; fi
+          python3 - <<'PY'
+          import json,pathlib
+          text=pathlib.Path('artifacts/stream.log').read_text()
+          rows=[json.loads(l.split('EXPECTED_PAIR_STREAM ',1)[1]) for l in text.splitlines() if 'EXPECTED_PAIR_STREAM ' in l]
+          assert len(rows)==16
+          for pair in range(8):
+              group=[r for r in rows if r['pair']==pair]
+              variants=['original-parallel-two-sha','paired-fresh-stream-one-sha']
+              assert [r['variant'] for r in group]==(variants if pair%2==0 else variants[::-1])
+              for r in group:
+                  assert r['samples']==2 and r['file_bytes']==62017662
+                  assert r['fresh_streams_per_sample']==2 and r['io_workspace_bytes']==131072
+                  assert r['wall_ns']>0 and r['thread_cpu_ns']>0 and r['total_process_cpu_ns']>0
+          pathlib.Path('artifacts/samples.json').write_text(json.dumps(rows,indent=2)+'\n')
+          PY
+      - name: Preserve full stream comparison evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: expected-pair-stream-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/

@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+const model=createRequire(import.meta.url)('../cmd/razvilka/web/interface-model.js');
+const read=f=>readFileSync(new URL('../'+f,import.meta.url),'utf8');
+const html=read('cmd/razvilka/web/index.html'),version=read('VERSION').trim();
+assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1,'one compiled stylesheet');
+assert.equal(read('cmd/razvilka/web/interface.css'),read('cmd/razvilka/web/interface-compat.css')+'\n'+read('cmd/razvilka/web/interface-shell.css'));
+assert(html.includes('/panel-availability.js?v='+version));
+assert(html.includes('/wireguard-profiles-ui.js?v='+version),'named WireGuard profile asset must be embedded and versioned');
+assert(!html.includes('href="/panel-availability.css"'));
+assert(html.includes('data-rz-filter="changed"'),'contextual unsaved change filter');
+const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(ids.length,new Set(ids).size,'unique IDs');
+assert.deepEqual([...html.matchAll(/data-main-nav="([^"]+)"/g)].map(m=>m[1]).sort(),Object.keys(model.taskSections).sort());
+const calls=read('scripts/check.sh');for(const test of ['test-ux-stage1.mjs','test-bundle-integration.mjs'])assert(calls.includes(test));
+console.log('PASS unified build contract: assets, CSS, pending controls, navigation and CI wiring');

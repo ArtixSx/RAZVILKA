@@ -1,0 +1,102 @@
+import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
+const code=fs.readFileSync('cmd/razvilka/web/app-update-ui.js','utf8'),index=fs.readFileSync('cmd/razvilka/web/index.html','utf8');
+const el={};let state={status:{},appUpdate:null};const ctx={state,consoleSnapshot:{},$:s=>s==='#maintenanceAddressStatus'?el:null,esc:s=>String(s).replaceAll('<','&lt;'),Date,AbortController,console};vm.createContext(ctx);vm.runInContext(code,ctx);let n=0;
+function check(name,fn){fn();n++;console.log('PASS',name)}
+check('future proof not current',()=>assert.equal(ctx.appUpdateBadge({state:'current',checked_at:new Date(Date.now()+600000).toISOString()}).label,'Не проверено'));
+check('stale metadata never offers prepare',()=>assert.notEqual(ctx.appUpdateBadge({state:'current',metadata_stale:true,update_available:true,can_prepare:true,checked_at:new Date().toISOString()}).kind,'update'));
+state.appUpdate={channel:'preview',state:'ahead',installed_version:'0.18.2-rc.10',checked_at:new Date().toISOString()};
+check('explicit channel in summary',()=>assert.match(ctx.appUpdateSummaryHTML(),/Предварительные и стабильные/));
+check('stable is wizard default',()=>assert.match(index,/<select id="a1-updateChannel"><option value="stable">/));
+check('auto install is explicit and distinguishes verified rollback from unknown outcome',()=>{
+ assert.match(index,/<select id="a1-appUpdateMode">[^]*?<option value="install">Устанавливать с откатом; при сбое проверить журнал<\/option>/);
+ assert.match(index,/<select id="a1-engineUpdateMode">[^]*?<option value="install">Обновлять пакеты; подтверждать результат в журнале<\/option>/);
+ assert.match(index,/При проверенном сбое установщик возвращает прежнюю версию/);
+ assert.match(index,/неподтверждённый исход требует проверки журнала/);
+ assert.match(index,/Отдельная проверка пакета не подтверждает рабочий процесс/);
+ assert.doesNotMatch(index,/эту версию сам больше не ставит/);
+});
+check('no address result stays unknown',()=>{ctx.renderMaintenanceAddresses();assert.match(el.textContent,/ещё нет/)});
+ctx.consoleSnapshot.address_refresh={state:'failed',checked_at:new Date().toISOString()};
+check('failed address status not healthy',()=>{ctx.renderMaintenanceAddresses();assert.match(el.textContent,/не завершено/)});
+check('mode inputs present once',()=>{for(const id of ['auto3NFQRead','auto3NFQMode','auto3DiscoveryConsent','auto3NFQSave'])assert.equal(index.split('id="'+id+'"').length-1,1)});
+check('declaration alone not canary',()=>{const script=fs.readFileSync('cmd/razvilka/web/automation-setup.js','utf8');assert.match(script,/не результат|не доказательство|не подтверждение/)});
+function setupFixture(){
+ const elements=new Map(),listeners=new Map(),requests=[],workflowState={epoch:1};
+ const element=id=>{if(!elements.has(id))elements.set(id,{value:'',checked:false,disabled:false,hidden:false,textContent:'',events:new Map(),addEventListener(type,fn){this.events.set(type,fn);}});return elements.get(id);};
+ const context={AbortController,queueMicrotask,workflowState,state:{status:{revision:1}},document:{getElementById:element,querySelectorAll:()=>[],addEventListener:(type,fn)=>listeners.set(type,fn)},window:{addEventListener(){}},workflowSession:epoch=>epoch===workflowState.epoch,workflowError:e=>e.message,workflowRequest:(path,options)=>new Promise(resolve=>requests.push({path,options,resolve}))};
+ vm.runInNewContext(fs.readFileSync('cmd/razvilka/web/automation-setup.js','utf8'),context);
+ return {element,listeners,requests,workflowState};
+}
+check('NFQWS setup clears expired-session notices after successful login without reading or granting consent',()=>{
+ const f=setupFixture();f.listeners.get('razvilka:auth-required')();assert.equal(f.element('auto3NFQStatus').textContent,'Сеанс завершён.');
+ f.listeners.get('razvilka:auth-restored')();
+ assert.match(f.element('auto3NFQStatus').textContent,/Прочитать конфигурацию/);assert.doesNotMatch(f.element('auto3NativeAdaptive').textContent,/Требуется вход/);assert.doesNotMatch(f.element('auto3ProxySummary').textContent,/Требуется вход/);
+ assert.equal(f.element('auto3NFQRead').disabled,false);assert.equal(f.element('auto3NFQSave').disabled,true);assert.equal(f.element('auto3DiscoveryConsent').checked,false);assert.equal(f.requests.length,0);
+});
+{
+ const f=setupFixture();const read=f.element('auto3NFQRead').events.get('click')();
+ f.workflowState.epoch++;f.listeners.get('razvilka:auth-required')();f.listeners.get('razvilka:auth-restored')();
+ f.requests[0].resolve({available:true,native_adaptive:true,review:'a'.repeat(64),mode:'auto'});await read;
+ check('pre-login NFQWS read cannot restore old review or error after login',()=>{assert.equal(f.requests[0].options.controller.signal.aborted,true);assert.equal(f.element('auto3NFQSave').disabled,true);assert.match(f.element('auto3NFQStatus').textContent,/Прочитать конфигурацию/);assert.equal(f.element('auto3NativeAdaptive').textContent,'Конфигурация ещё не прочитана.');});
+}
+{
+ const model=vm.runInNewContext(fs.readFileSync('cmd/razvilka/web/automation-setup.js','utf8')+';RazvilkaAutomationSetup',{});
+ const review='b'.repeat(64);
+ check('Discord repair request requires a fresh reviewed configuration',()=>{
+  assert.throws(()=>model.discordRepairRequest({available:true,review:'x'},1));
+  assert.throws(()=>model.discordRepairRequest({available:true,review,discord_voice:true},1),/уже есть/);
+  assert.deepEqual(JSON.parse(JSON.stringify(model.discordRepairRequest({available:true,review,discord_voice:false},4))),{review,config_revision:4,confirm:'STAGE_DISCORD_REPAIR'});
+  assert.match(model.discordRepairText({available:true,discord_voice:false}),/профиля нет/);
+  assert.match(model.discordRepairText({available:true,discord_voice:true}),/профиль есть/);
+ });
+ const f=setupFixture();const read=f.element('auto3NFQRead').events.get('click')();
+ f.requests[0].resolve({available:true,review,mode:'auto',discord_voice:false});await read;
+ check('Discord repair button stages through its own endpoint',()=>{
+  assert.equal(f.element('auto3DiscordRepairAdd').disabled,false);
+  f.element('auto3DiscordRepairAdd').events.get('click')();
+  const last=f.requests.at(-1);assert.equal(last.path,'/api/v1/nfqws2/discord-repair');
+  assert.equal(JSON.parse(last.options.body).confirm,'STAGE_DISCORD_REPAIR');
+ });
+}
+// Execute the served schedule renderer rather than duplicating its mode selection.
+const consoleCode=fs.readFileSync('cmd/razvilka/web/console.js','utf8');
+const scheduleRenderer=consoleCode.match(/function renderConsoleUpdates\(\)\{[\s\S]*?\r?\n\}/)[0];
+function scheduleHTML(policy){
+ const elements={};const context={consoleSnapshot:{policy},consoleEngineMeta:{},consoleAutonomyError:'',esc:String,ci:()=>'', $:id=>elements[id]??={innerHTML:''}};
+ vm.runInNewContext(scheduleRenderer+';renderConsoleUpdates();',context);
+ return elements['#consoleUpdateSchedule'].innerHTML;
+}
+const schedulePolicy={enabled:true,timezone:'Europe/Moscow',update_channel:'stable',application:{mode:'install',start:'03:00',end:'04:00'},components:{mode:'install',start:'04:00',end:'05:00'}};
+check('schedule identifies preview and stable channels',()=>{
+ assert.match(scheduleHTML({...schedulePolicy,update_channel:'preview'}),/Предварительные и стабильные/);
+ assert.doesNotMatch(scheduleHTML(schedulePolicy),/Предварительные/);
+ assert.match(scheduleHTML(schedulePolicy),/Стабильные/);
+});
+check('paused schedule preserves windows and permissions without promising active installs',()=>{
+ const policy=structuredClone({...schedulePolicy,enabled:false}),before=JSON.stringify(policy),html=scheduleHTML(policy);
+ assert.equal((html.match(/Автоматика на паузе/g)||[]).length,2);
+ assert.match(html,/Сохранённый режим/);assert.match(html,/03:00–04:00/);assert.match(html,/04:00–05:00/);
+ assert.doesNotMatch(html,/ставится сама|Обновляются сами/);assert.equal(JSON.stringify(policy),before);
+});
+check('off schedule never describes checking or installation as active',()=>{
+ const html=scheduleHTML({...schedulePolicy,application:{mode:'off'},components:{mode:'off'}});
+ assert.equal((html.match(/Автоматические проверки и установка отключены/g)||[]).length,2);
+ assert.doesNotMatch(html,/Проверка доступности|Проверка версии|Автоматическая установка|подтверждение результата/);
+});
+check('install schedule qualifies rollback and component acceptance',()=>{
+ const html=scheduleHTML(schedulePolicy);
+ assert.match(html,/При подтверждённой ошибке возвращается прежняя версия/);assert.match(html,/Если результат неизвестен, откройте журнал/);
+ assert.match(html,/Обновление пакетов; подтверждение результата в журнале/);
+ assert.doesNotMatch(html,/с проверкой на маршрутах|при сбое возвращается прежняя/);
+});
+check('check and prepare modes cannot promise installation',()=>{
+ for(const mode of ['check','prepare']){
+  const html=scheduleHTML({...schedulePolicy,application:{...schedulePolicy.application,mode},components:{...schedulePolicy.components,mode:'check'}});
+  assert.doesNotMatch(html,/Автоматическая установка|Обновление пакетов/);
+  assert.match(html,/без (?:автоматической )?установки/i);
+ }
+});
+check('missing policy keeps setup action and unavailable explanation',()=>{
+ const html=scheduleHTML(null);assert.match(html,/Настройте окно обслуживания/);assert.match(html,/data-console-navigate="onboard"/);
+});
+console.log(JSON.stringify({suite:'maintenance-ui',passed:n}));

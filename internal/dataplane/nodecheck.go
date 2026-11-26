@@ -1,0 +1,1350 @@
+package dataplane
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"net/netip"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/netresolve"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
+	"github.com/ArtixSx/razvilka/internal/providerprofile"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
+)
+
+var (
+	ErrExactNodeBusy           = errors.New("exact node checker is busy")
+	ErrExactNodeUnavailable    = errors.New("exact node checker is unavailable")
+	ErrExactNodeRuntime        = errors.New("exact node runtime is unavailable")
+	ErrExactNodeUnsupported    = errors.New("exact node profile is unsupported by this runtime")
+	ErrExactNodeNetworkChanged = errors.New("exact node network epoch changed or is unavailable")
+)
+
+const exactNodeSchema = 1
+
+var exactNodeIDPattern = regexp.MustCompile(`^node-[0-9a-f]{64}$`)
+
+type NodeCheckRequest struct {
+	NodeID         string
+	Outbound       []byte
+	Service        catalog.Service
+	NetworkProfile string
+	connectivity   bool // Issued only by CheckConnectivity; never a catalogue service.
+}
+
+type NodeCheckStage struct {
+	ID       string `json:"id"`
+	Status   string `json:"status"`
+	Message  string `json:"message"`
+	Duration int64  `json:"duration_ms,omitempty"`
+}
+
+// Only the synchronous start call owns this sink. It contains bounded stage
+// names and durations, never runtime arguments, output or endpoint addresses.
+type nodeRuntimeStagesKey struct{}
+
+// NodeCleanupStatus describes the original temporary session's cleanup only;
+// it is diagnostic metadata and grants no route or runtime admission.
+type NodeCleanupStatus string
+
+// One synchronous Check owns this observation; it is never persisted or reused
+// by another check. Fresh DNS and resource admission still run before reuse.
+type literalServiceObservationKey struct{}
+type literalServiceObservation struct {
+	url, address, route string
+	pinned              netip.Addr
+	proof               evidence.ProbeEvidence
+}
+
+const (
+	NodeCleanupNotObserved NodeCleanupStatus = "not_observed"
+	NodeCleanupNotRequired NodeCleanupStatus = "not_required"
+	NodeCleanupVerified    NodeCleanupStatus = "verified"
+	NodeCleanupFailed      NodeCleanupStatus = "failed"
+)
+
+// NodeCheckResult is deliberately safe for persistence and the Web API. Raw
+// process output, the remote endpoint and direct egress address are omitted.
+type NodeCheckResult struct {
+	NetworkTimings       []probecheck.NetworkTiming `json:"network_timings,omitempty"` // Diagnostic only; not persisted in NodeStore.
+	SchemaVersion        int                        `json:"schema_version"`
+	ProbeID              string                     `json:"probe_id"`
+	NodeID               string                     `json:"node_id"`
+	ServiceID            string                     `json:"service_id"`
+	NetworkProfile       string                     `json:"network_profile"`
+	RoutePathID          string                     `json:"route_path_id"`
+	StartedAt            time.Time                  `json:"started_at"`
+	FinishedAt           time.Time                  `json:"finished_at"`
+	ExpiresAt            time.Time                  `json:"expires_at"`
+	TestLevel            string                     `json:"test_level"`
+	Stage                string                     `json:"stage"`
+	Verdict              evidence.Verdict           `json:"verdict"`
+	Available            bool                       `json:"available"`
+	EgressIP             string                     `json:"egress_ip,omitempty"`
+	HTTPStatus           int                        `json:"http_status,omitempty"`
+	LatencyMS            int64                      `json:"latency_ms,omitempty"`
+	ErrorCode            string                     `json:"error_code,omitempty"`
+	Message              string                     `json:"message"`
+	DirectControl        string                     `json:"direct_control"`
+	CleanupStatus        NodeCleanupStatus          `json:"cleanup_status,omitempty"`
+	DirectLeak           bool                       `json:"direct_leak"`
+	ServiceErrorCategory string                     `json:"service_error_category,omitempty"`
+	DirectEgressError    string                     `json:"direct_egress_error,omitempty"`
+	ProxyEgressError     string                     `json:"proxy_egress_error,omitempty"`
+	RuntimeContract      string                     `json:"runtime_contract,omitempty"`
+	Stages               []NodeCheckStage           `json:"stages"`
+	Evidence             evidence.ProbeEvidence     `json:"evidence"`
+}
+
+type NodeChecker interface {
+	Check(context.Context, NodeCheckRequest) (NodeCheckResult, error)
+	Recover(context.Context) error
+}
+
+// NodeCheckCapacity is implemented by checkers that run several checks at once.
+type NodeCheckCapacity interface {
+	Capacity() int
+}
+
+// TransportScreener is implemented by checkers that can decide a node from
+// its DNS and transport stages alone, without a temporary process.
+type TransportScreener interface {
+	ScreenTransport(context.Context, NodeCheckRequest) (NodeCheckResult, bool, error)
+}
+
+type exactNodeEndpoint struct {
+	Protocol  string
+	Transport string
+	Host      string
+	Port      int
+	Pinned    netip.Addr
+}
+
+type exactNodeSession struct {
+	Root    string
+	Address string
+	Port    int
+	Spec    ProcessSpec
+}
+
+// MaxExactNodeSlots bounds the temporary Sing-box processes that may run at
+// once, and with them the loopback ports Port .. Port+MaxExactNodeSlots-1.
+const MaxExactNodeSlots = 4
+
+// ExactNodeChecker owns up to MaxExactNodeSlots loopback-only temporary
+// Sing-box processes, one per slot: slot 0 in StateRoot on Port, slot N in
+// StateRoot/slot-N on Port+N. A non-blocking gate of free slots prevents
+// port/process collisions with itself.
+type ExactNodeChecker struct {
+	engine            string
+	StateRoot         string
+	Binary            string
+	Port              int
+	Timeout           time.Duration
+	EvidenceTTL       time.Duration
+	Processes         ProcessController
+	FreshProfile      func(context.Context) (string, error)
+	resolve           func(context.Context, string) ([]netip.Addr, error)
+	dialTransport     func(context.Context, exactNodeEndpoint, []netip.Addr) (bool, error)
+	prepare           func(context.Context, exactNodeSession, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error)
+	start             func(context.Context, exactNodeSession) error
+	identity          func(exactNodeSession) (routeidentity.Passport, error)
+	directEgress      func(context.Context) (string, error)
+	proxyEgress       func(context.Context, string) (string, error)
+	egressPair        func(context.Context, string) nodeEgressPair
+	serviceProbe      func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error)
+	serviceTLSRoots   *tls.Config // Test trust only; nil uses system roots in production.
+	serviceIPProbe    func(context.Context, string, string, string, catalog.Service, netip.Addr) (evidence.ProbeEvidence, error)
+	connectivityProbe func(context.Context, string) (int, error)
+	cleanup           func(context.Context, exactNodeSession) error
+	runtimeReady      func() bool
+	xhttpRuntime      func(context.Context, string) (bool, error)
+	now               func() time.Time
+	gate              chan int
+	poisoned          atomic.Bool
+}
+
+func NewExactNodeChecker(stateRoot string) *ExactNodeChecker {
+	return NewExactNodeCheckerSlots(stateRoot, 1)
+}
+
+// NewExactNodeCheckerSlots allows that many checks at once (1..MaxExactNodeSlots).
+func NewExactNodeCheckerSlots(stateRoot string, slots int) *ExactNodeChecker {
+	slots = min(max(slots, 1), MaxExactNodeSlots)
+	gate := make(chan int, slots)
+	for slot := range slots {
+		gate <- slot
+	}
+	checker := &ExactNodeChecker{
+		StateRoot: stateRoot, Port: 19181, Timeout: 45 * time.Second, EvidenceTTL: 30 * time.Minute,
+		Processes: OSProcessController{}, now: time.Now, gate: gate,
+	}
+	checker.resolve = checker.resolveHost
+	checker.dialTransport = checker.transportPrefilter
+	checker.prepare = checker.prepareSession
+	checker.start = checker.startSession
+	checker.identity = checker.verifyIdentity
+	checker.directEgress = checker.directTrace
+	checker.proxyEgress = checker.proxyTrace
+	checker.egressPair = func(ctx context.Context, address string) nodeEgressPair {
+		return probeNodeEgressPair(ctx, address, nil)
+	}
+	checker.serviceProbe = checker.probeService
+	checker.serviceIPProbe = checker.probeServiceIP
+	checker.connectivityProbe = checker.probeConnectivity
+	checker.cleanup = checker.cleanupSession
+	checker.runtimeReady = func() bool { return checker.binary() != "" }
+	checker.FreshProfile = func(ctx context.Context) (string, error) {
+		profile, err := systemprobe.FreshWANProfile(ctx)
+		return profile.ID, err
+	}
+	return checker
+}
+
+// Capacity is the number of checks that may run at once.
+func (c *ExactNodeChecker) Capacity() int {
+	if c == nil || c.gate == nil {
+		return 0
+	}
+	return cap(c.gate)
+}
+
+func (c *ExactNodeChecker) newResult(request NodeCheckRequest) NodeCheckResult {
+	return NodeCheckResult{
+		SchemaVersion: exactNodeSchema, ProbeID: newNodeProbeID(), NodeID: request.NodeID,
+		ServiceID: request.Service.ID, NetworkProfile: request.NetworkProfile,
+		RoutePathID: c.EngineID() + ":" + request.NodeID, StartedAt: c.currentTime(), TestLevel: "dns",
+		Stage: "dns", Verdict: evidence.VerdictError, Message: "Проверка не завершена.",
+		DirectControl: "not_run", CleanupStatus: NodeCleanupNotRequired, Stages: []NodeCheckStage{},
+	}
+}
+
+func (c *ExactNodeChecker) finishResult(result *NodeCheckResult) {
+	result.FinishedAt = c.currentTime()
+	// Completing cleanup changes elapsed time, not the freshness of the
+	// observation already made. Never renew that observation on a later finish.
+	if result.ExpiresAt.IsZero() {
+		result.ExpiresAt = result.FinishedAt.Add(c.evidenceTTL())
+	}
+	result.LatencyMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
+	if result.LatencyMS < 0 {
+		result.LatencyMS = 0
+	}
+}
+
+// A resource observation can stop because its caller was canceled, even when
+// no resource guard is installed. Preserve that cause; an actual guard refusal
+// remains a resource denial even if it wraps its own deadline error.
+func refuseNodeResourceObservationResult(result *NodeCheckResult, err error) {
+	if errors.Is(err, ErrNodeResourceDenied) || !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		RefuseNodeResourceResult(result)
+		return
+	}
+	result.Available, result.Verdict, result.EgressIP = false, evidence.VerdictInconclusive, ""
+	result.Evidence.Verdict, result.Evidence.Outcome, result.Evidence.EgressIP = evidence.VerdictInconclusive, evidence.OutcomeUnknown, ""
+	if errors.Is(err, context.DeadlineExceeded) {
+		result.Stage, result.ErrorCode, result.Message = "deadline", "node-check-deadline", "Истекло общее время проверки. Изменение WAN этим не доказано."
+	} else {
+		result.Stage, result.ErrorCode, result.Message = "canceled", "node-check-canceled", "Проверка отменена; положительный результат не используется."
+	}
+	result.Evidence.ErrorCode = result.ErrorCode
+}
+
+// transportStages runs the DNS and transport stages of a check. It reports
+// false when the result is final because the node failed one of them.
+func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeCheckRequest, result *NodeCheckResult) (exactNodeEndpoint, bool) {
+	endpoint, err := inspectExactNodeOutbound(request.Outbound)
+	if err != nil {
+		result.fail("dns", "node-config-invalid", "Конфигурация узла не прошла строгую проверку.")
+		c.finishResult(result)
+		return endpoint, false
+	}
+	stageStarted := c.currentTime()
+	if err := checkNodeResource(ctx, endpoint.Host, netip.Addr{}); err != nil {
+		return endpoint, false
+	}
+	addresses, err := c.resolve(ctx, endpoint.Host)
+	if err != nil || len(addresses) == 0 || !publicNodeAddresses(addresses) {
+		result.fail("dns", "node-dns-failed", "Адрес узла не удалось безопасно определить.")
+		result.addStage("dns", "failed", "DNS-проверка не пройдена.", stageStarted, c.currentTime())
+		c.finishResult(result)
+		return endpoint, false
+	}
+	result.addStage("dns", "passed", "Адрес узла определён без раскрытия в интерфейсе.", stageStarted, c.currentTime())
+	for _, address := range addresses {
+		if err := checkNodeResource(ctx, endpoint.Host, address); err != nil {
+			return endpoint, false
+		}
+	}
+	stageStarted = c.currentTime()
+	selected, err := c.selectEndpoint(ctx, endpoint, addresses)
+	endpoint.Pinned = selected.Address
+	checked := selected.Checked
+	if err != nil {
+		result.TestLevel = "transport"
+		result.fail("transport", "node-transport-failed", "Транспорт до узла недоступен.")
+		result.addStage("transport", "failed", "Предварительное соединение не установлено.", stageStarted, c.currentTime())
+		c.finishResult(result)
+		return endpoint, false
+	}
+	result.TestLevel = "transport"
+	if checked {
+		if selected.TCPConnectMS != nil {
+			result.Stages = append(result.Stages, NodeCheckStage{ID: "tcp_connect", Status: "passed", Message: "TCP до закреплённого адреса сервера; не проверка ключа.", Duration: *selected.TCPConnectMS})
+		}
+		result.addStage("transport", "passed", "Предварительное соединение установлено; это ещё не доказывает работу ключа.", stageStarted, c.currentTime())
+	} else {
+		result.addStage("transport", "skipped", "Для UDP-протокола отдельный TCP-тест неприменим; проверяется реальный обмен.", stageStarted, c.currentTime())
+	}
+	return endpoint, true
+}
+
+// ScreenTransport runs only the DNS and transport stages of Check. It takes
+// no slot, process or port, so a whole queue can be screened at once. A node
+// that fails them is decided: the result is the one Check would give it. Any
+// other node still needs Check; its result then only carries the duration of
+// the transport stage in LatencyMS, for ordering.
+func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeCheckRequest) (NodeCheckResult, bool, error) {
+	if err := c.validRequest(parent, request); err != nil {
+		return NodeCheckResult{}, false, err
+	}
+	ctx, cancel := context.WithTimeout(parent, c.timeout())
+	defer cancel()
+	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
+		return NodeCheckResult{}, false, err
+	}
+	result := c.newResult(request)
+	if err := checkNodeResource(ctx, "www.cloudflare.com", netip.Addr{}); err != nil {
+		refuseNodeResourceObservationResult(&result, err)
+		return result, false, err
+	}
+	_, passed := c.transportStages(ctx, request, &result)
+	if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
+		refuseNodeResourceObservationResult(&result, err)
+		return result, false, err
+	}
+	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
+		return NodeCheckResult{}, false, err
+	}
+	if passed {
+		result.LatencyMS = result.Stages[len(result.Stages)-1].Duration
+		return result, false, nil
+	}
+	return result, true, nil
+}
+
+func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckRequest) (result NodeCheckResult, resultErr error) {
+	if c == nil {
+		return NodeCheckResult{}, ErrExactNodeUnavailable
+	}
+	startedAt := c.currentTime()
+	if err := c.validRequest(parent, request); err != nil {
+		return NodeCheckResult{}, err
+	}
+	var slot int
+	select {
+	case slot = <-c.gate:
+		defer func() { c.gate <- slot }()
+	default:
+		return NodeCheckResult{}, ErrExactNodeBusy
+	}
+	// Validation may overlap the previous session's cleanup. Recheck the fence
+	// while holding the slot so that cleanup failure cannot admit another run.
+	if c.poisoned.Load() {
+		return NodeCheckResult{}, ErrExactNodeUnavailable
+	}
+	ctx, cancel := context.WithTimeout(parent, c.timeout())
+	defer cancel()
+	if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
+		return NodeCheckResult{}, err
+	}
+	result = c.newResult(request)
+	result.StartedAt = startedAt
+	finish := func() { c.finishResult(&result) }
+	// This runs after identity, cleanup and final network/resource observations.
+	// Queue wait before Check is separate from this complete checker lifecycle.
+	defer finish()
+	defer func() {
+		if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
+			if result.Stage != "cleanup" {
+				refuseNodeResourceObservationResult(&result, err)
+			}
+			finish()
+			resultErr = errors.Join(resultErr, err)
+		}
+	}()
+	if err := checkNodeResource(ctx, "www.cloudflare.com", netip.Addr{}); err != nil {
+		return result, err
+	}
+	// Registered before session cleanup so this check runs after every probe
+	// and after cleanup, while the checker still owns its single runtime slot.
+	defer func() {
+		if err := c.checkNetwork(ctx, request.NetworkProfile); err != nil {
+			result.Available = false
+			result.Verdict = evidence.VerdictInconclusive
+			result.EgressIP = ""
+			result.Evidence.Verdict = evidence.VerdictInconclusive
+			result.Evidence.Outcome = evidence.OutcomeUnknown
+			result.Evidence.EgressIP = ""
+			if result.Stage != "cleanup" {
+				result.Stage = "route_identity"
+				result.ErrorCode = "node-network-changed"
+				result.Message = "Сеть изменилась или не подтверждена. Повторите проверку на текущем подключении."
+				if errors.Is(err, context.DeadlineExceeded) {
+					result.Stage, result.ErrorCode, result.Message = "deadline", "node-check-deadline", "Истекло общее время проверки. Изменение WAN этим не доказано."
+				} else if errors.Is(err, context.Canceled) {
+					result.Stage, result.ErrorCode, result.Message = "canceled", "node-check-canceled", "Проверка отменена; положительный результат не используется."
+				}
+				result.Evidence.ErrorCode = result.ErrorCode
+			}
+			finish()
+			resultErr = err
+		}
+	}()
+
+	endpoint, passed := c.transportStages(ctx, request, &result)
+	if !passed {
+		return result, nil
+	}
+	if c.EngineID() == "sing-box" {
+		var outbound map[string]any
+		if json.Unmarshal(request.Outbound, &outbound) == nil {
+			_, result.RuntimeContract = providerprofile.SingBoxRuntimeOutbound(outbound)
+		}
+	}
+
+	stageStarted := c.currentTime()
+	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
+		return result, err
+	}
+	// From preparation onward, only the original cleanup outcome can report
+	// whether this temporary session was removed, including partial preparation.
+	result.CleanupStatus = NodeCleanupNotObserved
+	session, err := c.prepare(ctx, c.session(slot), request, endpoint)
+	defer func() {
+		cleanupStarted := c.currentTime()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(parent), 8*time.Second)
+		defer cleanupCancel()
+		// A nil return after the cleanup budget expired does not establish a
+		// completed cleanup. Keep the same fence as an explicit cleanup error.
+		if err := errors.Join(c.cleanup(cleanupCtx, session), cleanupCtx.Err()); err != nil {
+			result.CleanupStatus = NodeCleanupFailed
+			c.poisoned.Store(true)
+			result.Available = false
+			result.Verdict = evidence.VerdictError
+			result.Stage = "cleanup"
+			result.ErrorCode = "node-cleanup-failed"
+			result.Message = "Временный процесс не удалось гарантированно убрать; повторные проверки заблокированы до восстановления."
+			result.addStage("cleanup", "failed", "Очистка временного процесса требует внимания.", cleanupStarted, c.currentTime())
+			finish()
+		} else {
+			result.CleanupStatus = NodeCleanupVerified
+			result.addStage("cleanup", "passed", "Временный процесс и его ресурсы убраны.", cleanupStarted, c.currentTime())
+		}
+	}()
+	if err != nil {
+		result.TestLevel = "protocol"
+		result.fail("configuration", "node-runtime-config-rejected", "Движок отклонил изолированную конфигурацию узла.")
+		result.addStage("configuration", "failed", "Изолированная конфигурация не принята.", stageStarted, c.currentTime())
+		finish()
+		return result, nil
+	}
+	result.addStage("configuration", "passed", "Создан временный профиль только для этого узла.", stageStarted, c.currentTime())
+
+	stageStarted = c.currentTime()
+	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
+		return result, err
+	}
+	var runtimeStages []NodeCheckStage
+	startErr := c.start(context.WithValue(ctx, nodeRuntimeStagesKey{}, &runtimeStages), session)
+	result.Stages = append(result.Stages, runtimeStages...)
+	if startErr != nil {
+		result.TestLevel = "protocol"
+		result.fail("protocol", "node-protocol-start-failed", "Узел не смог запустить рабочий протокольный сеанс.")
+		result.addStage("protocol", "failed", "Временный клиент не открыл локальный проверочный канал.", stageStarted, c.currentTime())
+		finish()
+		return result, nil
+	}
+
+	stageStarted = c.currentTime()
+	passport, err := c.identity(session)
+	if err != nil || passport.Outbound != endpoint.Protocol {
+		result.TestLevel = "protocol"
+		result.fail("route_identity", nodeRouteIdentityErrorCode(err, passport.Outbound, endpoint.Protocol), "Не удалось доказать принадлежность временного канала выбранному узлу.")
+		result.addStage("route_identity", "failed", "Идентичность процесса или конфигурации не подтверждена.", stageStarted, c.currentTime())
+		finish()
+		return result, nil
+	}
+	result.addStage("route_identity", "passed", "Процесс, конфигурация и локальный канал принадлежат этой проверке.", stageStarted, c.currentTime())
+	// The receipt is checked again after the network probes, before cleanup.
+	// A process restart or config replacement must invalidate earlier replies.
+	defer func() {
+		after, err := c.identity(session)
+		if err != nil || after != passport {
+			result.Available = false
+			result.Verdict = evidence.VerdictInconclusive
+			result.EgressIP = ""
+			result.Evidence.Verdict = evidence.VerdictInconclusive
+			result.Evidence.Outcome = evidence.OutcomeUnknown
+			result.Evidence.EgressIP = ""
+			result.fail("route_identity", "node-route-runtime-changed", "Временный процесс или профиль изменился во время проверки; результат не используется.")
+			result.Evidence.ErrorCode = result.ErrorCode
+			finish()
+		}
+	}()
+
+	stageStarted = c.currentTime()
+	if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
+		return result, err
+	}
+	var directIP, proxyIP string
+	var directErr, proxyErr error
+	if c.egressPair != nil {
+		pair := c.egressPair(ctx, session.Address)
+		directIP, proxyIP, directErr, proxyErr = pair.directIP, pair.proxyIP, pair.directErr, pair.proxyErr
+	} else {
+		directIP, directErr = c.directEgress(ctx)
+		proxyIP, proxyErr = c.proxyEgress(ctx, session.Address)
+	}
+	result.DirectEgressError = nodeEgressErrorCategory(directErr)
+	result.ProxyEgressError = nodeEgressErrorCategory(proxyErr)
+	directAddress, directAddressErr := netip.ParseAddr(strings.TrimSpace(directIP))
+	if directErr == nil && directAddressErr == nil && publicNodeAddresses([]netip.Addr{directAddress}) {
+		result.DirectControl = "measured"
+	} else {
+		result.DirectControl = "unavailable"
+	}
+	proxyAddress, proxyAddressErr := netip.ParseAddr(strings.TrimSpace(proxyIP))
+	if proxyErr != nil || proxyAddressErr != nil || !publicNodeAddresses([]netip.Addr{proxyAddress}) {
+		if result.DirectControl == "unavailable" {
+			result.TestLevel, result.Verdict = "egress", evidence.VerdictInconclusive
+			result.fail("egress", "node-egress-control-unavailable", "Прямой и проксированный контроль недоступны. Работоспособность узла не определена.")
+			result.addStage("egress", "failed", "Не получена сопоставимая пара контрольных измерений.", stageStarted, c.currentTime())
+			finish()
+			return result, nil
+		}
+		result.TestLevel = "protocol"
+		result.fail("egress", "node-egress-failed", nodeEgressFailureMessage(result.ProxyEgressError, c.EngineID()))
+		result.addStage("protocol", "failed", "Канал открылся локально, но удалённый протокол или ключ не передал запрос.", stageStarted, c.currentTime())
+		result.addStage("egress", "failed", "Внешний IP через узел не получен.", stageStarted, c.currentTime())
+		finish()
+		return result, nil
+	}
+	result.TestLevel = "egress"
+	proxyIP = proxyAddress.Unmap().String()
+	result.addStage("protocol", "passed", "Реальный запрос прошёл через протокол выбранного узла.", stageStarted, c.currentTime())
+	if result.DirectControl == "measured" && directAddress.Unmap() == proxyAddress.Unmap() {
+		result.DirectLeak = true
+		result.fail("egress", "node-direct-leak", "Проксированный IP совпал с прямым: точный выход не доказан.")
+		result.Verdict = evidence.VerdictMisrouted
+		result.addStage("egress", "failed", "Сработал контроль утечки прямого маршрута.", stageStarted, c.currentTime())
+		finish()
+		return result, nil
+	}
+	if result.DirectControl == "unavailable" {
+		result.Verdict = evidence.VerdictInconclusive
+		result.fail("egress", "node-direct-control-unavailable", "IP через узел получен, но прямой контроль недоступен; точный выход не подтверждён.")
+		result.addStage("egress", "failed", "Без прямого контрольного IP нельзя исключить утечку маршрута.", stageStarted, c.currentTime())
+		if !request.connectivity {
+			c.probeRestrictedDiagnostic(ctx, &result, session.Address, proxyIP, request.Service)
+		}
+		finish()
+		return result, nil
+	}
+	// Publish the measured proxy address only after excluding the user's
+	// direct IP, including when the direct control could not be measured.
+	result.EgressIP = proxyIP
+	result.addStage("egress", "passed", "Получен внешний IP через точный outbound; прямой контроль не совпал.", stageStarted, c.currentTime())
+	if request.connectivity {
+		c.finishConnectivity(ctx, session.Address, &result)
+		finish()
+		return result, nil
+	}
+
+	stageStarted = c.currentTime()
+	if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, netip.Addr{}); err != nil {
+		return result, err
+	}
+	serviceCtx, serviceFailure := withNodeServiceFailure(ctx)
+	var firstLiteral literalServiceObservation
+	if guard, _ := ctx.Value(nodeResourceGuardKey{}).(*nodeResourceGuard); guard != nil {
+		serviceCtx = context.WithValue(serviceCtx, literalServiceObservationKey{}, &firstLiteral)
+	}
+	proof, err := c.serviceProbe(serviceCtx, session.Address, result.RoutePathID, proxyIP, request.Service)
+	proof.NetworkProfile = request.NetworkProfile
+	result.Evidence = proof
+	result.HTTPStatus = proof.HTTPStatus
+	if err != nil || !proof.Valid() {
+		result.fail("service", "node-service-probe-failed", "Контрольный запрос сервиса не завершён.")
+		result.addStage("service", "failed", "Сервис не дал проверяемый ответ через узел.", stageStarted, c.currentTime())
+		finish()
+		return result, nil
+	}
+	result.TestLevel = "service"
+	result.Stage = "service"
+	result.Verdict = proof.Verdict
+	exactRoute := exactNodeProofEngine(proof.Engine, c.EngineID()) && proof.RoutePathID == result.RoutePathID && proof.ExpectedRoutePathID == result.RoutePathID && proof.ObservedRoutePathID == result.RoutePathID
+	result.Available = proof.AssuranceLevel().AtLeast(evidence.Service) && exactRoute
+	if result.Available {
+		result.addStage("service", "passed", "Контрольный адрес сервиса вернул ожидаемый ответ.", stageStarted, c.currentTime())
+		// The managed TUN sends literal destinations to SOCKS. A domain-only
+		// request can succeed when that actual transport path does not work.
+		result.Available = false
+		ipStarted := c.currentTime()
+		addresses, resolveErr := resolveNodeServiceIPv4(ctx, selectedNodeProbe(request.Service).URL, c.resolve)
+		if resolveErr != nil {
+			result.fail("service_ip", "node-service-ip-unavailable", "Публичный IPv4-адрес сервиса не подтверждён. Узел пока нельзя применить к устройствам.")
+			result.Evidence.Verdict = evidence.VerdictError
+			result.addStage("service_ip", "failed", "Не удалось безопасно определить IP-адрес контрольного сервиса.", ipStarted, c.currentTime())
+			finish()
+			return result, resultErr
+		}
+		for _, address := range addresses {
+			if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, address); err != nil {
+				return result, err
+			}
+			ipCtx, ipFailure := withNodeServiceFailure(ctx)
+			var ipProof evidence.ProbeEvidence
+			var ipErr error
+			if firstLiteral.pinned == address && firstLiteral.url == selectedNodeProbe(request.Service).URL && firstLiteral.address == session.Address && firstLiteral.route == result.RoutePathID && firstLiteral.proof.ProbeID == proof.ProbeID && firstLiteral.proof.EgressIP == proxyIP {
+				// This exact literal transport already passed the service criteria.
+				ipProof = firstLiteral.proof
+			} else {
+				ipProof, ipErr = c.serviceIPProbe(ipCtx, session.Address, result.RoutePathID, proxyIP, request.Service, address)
+			}
+			ipProof.NetworkProfile = request.NetworkProfile
+			ipRoute := exactNodeProofEngine(ipProof.Engine, c.EngineID()) && ipProof.RoutePathID == result.RoutePathID && ipProof.ExpectedRoutePathID == result.RoutePathID && ipProof.ObservedRoutePathID == result.RoutePathID
+			if ipErr != nil || !ipProof.Valid() || !ipProof.AssuranceLevel().AtLeast(evidence.Service) || !ipRoute {
+				category := ""
+				if ipErr == nil && ipProof.Valid() && ipRoute {
+					category = nodeServiceFailureCategory(ipProof, ipFailure)
+				}
+				result.Evidence = ipProof
+				result.ServiceErrorCategory = category
+				result.fail("service_ip", "node-service-ip-path-failed", nodeServiceFailureMessage("Узел не подтвердил доступ к сервису по IP-адресу, необходимый для маршрута устройств.", category))
+				result.Evidence.Verdict = evidence.VerdictError
+				result.addStage("service_ip", "failed", "Имя сервиса проверено, но путь к его IP-адресу не подтверждён.", ipStarted, c.currentTime())
+				finish()
+				return result, resultErr
+			}
+			result.Evidence = ipProof
+		}
+		result.Available = true
+		result.ErrorCode = ""
+		result.Message = "Узел подтвердил точный выход и доступ к сервису по имени и IP-адресу."
+		result.addStage("service_ip", "passed", "IP-путь сервиса подтверждён с исходным именем TLS.", ipStarted, c.currentTime())
+	} else {
+		result.ErrorCode = proof.ErrorCode
+		category := ""
+		if exactRoute {
+			category = nodeServiceFailureCategory(proof, serviceFailure)
+		} else {
+			result.Verdict = evidence.VerdictMisrouted
+			result.ErrorCode = "node-route-mismatch"
+		}
+		if result.ErrorCode == "" {
+			result.ErrorCode = "node-service-not-confirmed"
+		}
+		result.ServiceErrorCategory = category
+		result.Message = nodeServiceFailureMessage("Узел передаёт трафик, но выбранный сервис через него не подтверждён.", category)
+		result.addStage("service", "failed", "Ответ сервиса не соответствует безопасному критерию.", stageStarted, c.currentTime())
+	}
+	finish()
+	return result, resultErr
+}
+
+// nodeRouteIdentityErrorCode preserves only the bounded diagnostic category.
+// It makes hardware-specific procfs incompatibilities actionable without ever
+// exposing process arguments, paths, endpoints or configuration values.
+func nodeRouteIdentityErrorCode(err error, observed, expected string) string {
+	if err == nil {
+		if observed != expected {
+			return "node-route-protocol-mismatch"
+		}
+		return "node-route-identity-failed"
+	}
+	code := err.Error()
+	for _, allowed := range []string{
+		"route-receipt-missing",
+		"route-pid-invalid",
+		"route-process-unavailable",
+		"route-process-stat-invalid",
+		"route-runtime-changed",
+		"route-engine-mismatch",
+		"route-network-namespace-mismatch",
+		"route-command-unverified",
+		"route-config-invalid",
+		"route-outbound-missing",
+		"route-outbound-ambiguous",
+		"route-direct-outbound",
+		"route-rules-unverified",
+		"route-dynamic-config-unverified",
+		"route-chain-unverified",
+		"route-outbound-unsupported",
+		"route-remote-endpoint-unverified",
+		"route-listener-unsupported",
+		"route-listener-unavailable",
+		"route-listener-ambiguous",
+		"route-listener-owner-unavailable",
+		"route-listener-owner-mismatch",
+	} {
+		if code == allowed {
+			return "node-" + allowed
+		}
+	}
+	return "node-route-identity-failed"
+}
+
+func (c *ExactNodeChecker) Recover(ctx context.Context) error {
+	if c == nil || c.StateRoot == "" || c.gate == nil {
+		return ErrExactNodeUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Recovery owns every slot: no check may start while it cleans up.
+	held := []int{}
+	defer func() {
+		for _, slot := range held {
+			c.gate <- slot
+		}
+	}()
+	for len(held) < cap(c.gate) {
+		select {
+		case slot := <-c.gate:
+			held = append(held, slot)
+		default:
+			return ErrExactNodeBusy
+		}
+	}
+	// Also clean slots a previous run with more slots left behind.
+	for slot := range MaxExactNodeSlots {
+		if err := ctx.Err(); err != nil {
+			c.poisoned.Store(true)
+			return err
+		}
+		session := c.session(slot)
+		if slot >= cap(c.gate) {
+			if _, err := os.Lstat(session.Root); errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+		}
+		if err := errors.Join(c.cleanup(ctx, session), ctx.Err()); err != nil {
+			c.poisoned.Store(true)
+			return err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		c.poisoned.Store(true)
+		return err
+	}
+	c.poisoned.Store(false)
+	return nil
+}
+
+func (c *ExactNodeChecker) RuntimeInstalled() bool {
+	return c != nil && c.runtimeReady != nil && c.runtimeReady()
+}
+
+func (c *ExactNodeChecker) validRequest(ctx context.Context, request NodeCheckRequest) error {
+	if c == nil || c.Processes == nil || c.resolve == nil || c.dialTransport == nil || c.prepare == nil || c.start == nil || c.identity == nil || c.directEgress == nil || c.proxyEgress == nil || c.serviceProbe == nil || c.serviceIPProbe == nil || c.cleanup == nil || c.runtimeReady == nil || c.FreshProfile == nil || c.gate == nil || c.poisoned.Load() {
+		return ErrExactNodeUnavailable
+	}
+	if !c.RuntimeInstalled() {
+		return ErrExactNodeRuntime
+	}
+	if c.EngineID() == "xray" {
+		p, err := exactXrayProfile(request.Outbound)
+		if err != nil {
+			return ErrExactNodeUnsupported
+		}
+		if p.Transport == "xhttp" {
+			if err := c.requireXHTTPRuntime(ctx, c.binary()); err != nil {
+				return err
+			}
+		}
+	} else if !exactSingBoxTransportSupported(request.Outbound) {
+		return ErrExactNodeUnsupported
+	}
+	serviceValid := request.Service.ID != "" && selectedNodeProbe(request.Service).URL != ""
+	if request.connectivity {
+		serviceValid = request.Service.ID == "" && request.Service.ProbeURL == "" && c.connectivityProbe != nil
+	}
+	if !exactNodeIDPattern.MatchString(request.NodeID) || len(request.Outbound) == 0 || !serviceValid || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
+		return ErrExactNodeUnavailable
+	}
+	if !filepath.IsAbs(c.StateRoot) || filepath.Clean(c.StateRoot) == filepath.VolumeName(c.StateRoot)+string(filepath.Separator) || c.Port < 1024 || c.Port+MaxExactNodeSlots-1 > 65535 {
+		return ErrExactNodeUnavailable
+	}
+	return nil
+}
+
+func (c *ExactNodeChecker) checkNetwork(ctx context.Context, expected string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	observed, err := c.FreshProfile(ctx)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return contextErr
+	}
+	if err != nil || !systemprobe.ValidWANProfileID(observed) || observed != expected {
+		return ErrExactNodeNetworkChanged
+	}
+	return nil
+}
+
+func (r *NodeCheckResult) fail(stage, code, message string) {
+	r.Available = false
+	r.Stage = stage
+	r.ErrorCode = code
+	r.Message = message
+	if r.Verdict == "" || r.Verdict == evidence.VerdictPass {
+		r.Verdict = evidence.VerdictError
+	}
+}
+
+// nodeEgressFailureMessage explains a closed category in plain words for the
+// engine that carried the request. Timeout texts never claim that the node
+// accepted a TCP connection: the checker does not see the engine's own
+// connect, and the engines answer SOCKS CONNECT at different points.
+func nodeEgressFailureMessage(category, engine string) string {
+	const prefix = "Точный выход через узел не подтвердился."
+	var detail string
+	switch category {
+	case "socks_connect":
+		detail = "Проверочный запрос через SOCKS не установил соединение."
+	case "tcp_connect":
+		detail = "Соединение с контрольным адресом не установлено."
+	case "tls_handshake":
+		detail = "TLS-обмен с контрольным адресом не завершён."
+	case "certificate":
+		detail = "TLS-сертификат контрольного адреса не прошёл проверку."
+	case "http_status":
+		detail = "Контрольный адрес вернул неподходящий HTTP-статус."
+	case "timeout":
+		detail = "Контрольный запрос через узел не уложился в срок."
+	case "body_parse":
+		detail = "Ответ контрольного адреса не прошёл проверку."
+	case "http_transport":
+		detail = "HTTP-обмен с контрольным адресом не завершён."
+	case "dial_timeout":
+		switch engine {
+		case "xray":
+			// Xray answers CONNECT before it dials the node: this wait was local.
+			detail = "Xray на роутере не ответил вовремя."
+		case "sing-box":
+			// Sing-box answers CONNECT only after its own handshake with the node.
+			detail = "Соединение через узел не открылось вовремя. Возможно, узел не ответил."
+		default:
+			detail = "Соединение через узел не открылось вовремя."
+		}
+	case "tls_timeout":
+		detail = "Защищённое соединение через узел не установилось вовремя."
+		if engine == "xray" {
+			// This wait also covers Xray's own connection to the node.
+			detail += " Возможно, узел не ответил."
+		}
+	case "response_timeout":
+		detail = "Соединение через узел установлено, но ответ не пришёл вовремя."
+	}
+	if detail == "" {
+		return prefix
+	}
+	return prefix + " " + detail
+}
+
+// nodeServiceFailureKey carries a *nodeServiceFailure through the fixed
+// service-probe signature, from probeServicePath back to Check.
+type nodeServiceFailureKey struct{}
+
+// nodeServiceFailure receives the closed category of a service request that
+// got no usable response. Check publishes its closed diagnostic category and
+// Message text; ErrorCode, evidence and NodeStore records stay unchanged.
+type nodeServiceFailure struct{ category string }
+
+func withNodeServiceFailure(ctx context.Context) (context.Context, *nodeServiceFailure) {
+	failure := &nodeServiceFailure{}
+	return context.WithValue(ctx, nodeServiceFailureKey{}, failure), failure
+}
+
+// reportNodeServiceFailure records whether a service request without a usable
+// response timed out (service_timeout) or failed otherwise, for example by a
+// reset, a TLS failure or a refused redirect (service_transport). Neither a
+// refusal nor a cancellation is an observation of the path; neither is kept.
+func reportNodeServiceFailure(ctx context.Context, err error) {
+	failure, _ := ctx.Value(nodeServiceFailureKey{}).(*nodeServiceFailure)
+	if failure == nil || err == nil || errors.Is(err, context.Canceled) || errors.Is(err, ErrNodeResourceDenied) {
+		return
+	}
+	failure.category = "service_transport"
+	if errors.Is(err, context.DeadlineExceeded) || nodeEgressTimedOut(err) {
+		failure.category = "service_timeout"
+	}
+}
+
+// nodeServiceFailureCategory names why a valid service proof on the exact
+// route did not confirm the service: the service answered with a status or
+// content that does not match (service_status_mismatch), or the request got
+// no usable response because it timed out or broke.
+func nodeServiceFailureCategory(proof evidence.ProbeEvidence, failure *nodeServiceFailure) string {
+	if proof.HTTPStatus > 0 {
+		if proof.Verdict != evidence.VerdictPass && proof.Verdict != evidence.VerdictMisrouted {
+			return "service_status_mismatch"
+		}
+		return ""
+	}
+	if failure != nil && (proof.ErrorCode == "request-failed" || proof.ErrorCode == "response-body-invalid") {
+		return failure.category
+	}
+	return ""
+}
+
+// nodeServiceFailureMessage adds one short plain reason to a service-stage
+// failure message. Anything outside the closed categories adds nothing.
+func nodeServiceFailureMessage(message, category string) string {
+	switch category {
+	case "service_timeout":
+		return message + " Сервис не ответил вовремя."
+	case "service_status_mismatch":
+		return message + " Сервис ответил отказом или неожиданным ответом."
+	case "service_transport":
+		return message + " Соединение с сервисом не установилось или оборвалось."
+	}
+	return message
+}
+
+func (r *NodeCheckResult) addStage(id, status, message string, started, finished time.Time) {
+	duration := finished.Sub(started).Milliseconds()
+	if duration < 0 {
+		duration = 0
+	}
+	r.Stages = append(r.Stages, NodeCheckStage{ID: id, Status: status, Message: message, Duration: duration})
+}
+
+func (c *ExactNodeChecker) currentTime() time.Time {
+	if c.now != nil {
+		return c.now().UTC()
+	}
+	return time.Now().UTC()
+}
+
+func (c *ExactNodeChecker) timeout() time.Duration {
+	if c.Timeout <= 0 || c.Timeout > 2*time.Minute {
+		return 45 * time.Second
+	}
+	return c.Timeout
+}
+
+func (c *ExactNodeChecker) evidenceTTL() time.Duration {
+	if c.EvidenceTTL <= 0 || c.EvidenceTTL > 24*time.Hour {
+		return 30 * time.Minute
+	}
+	return c.EvidenceTTL
+}
+
+func newNodeProbeID() string {
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		digest := routeidentity.Hash([]byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
+		return "node-check-" + digest[:24]
+	}
+	return "node-check-" + hex.EncodeToString(random)
+}
+
+func selectedNodeProbe(service catalog.Service) catalog.Probe {
+	if service.ProbeURL != "" {
+		return probecheck.ServiceProbe(service)
+	}
+	for _, probe := range service.Probes {
+		if probe.Required && probe.URL != "" {
+			service.ProbeURL = probe.URL
+			return probecheck.ServiceProbe(service)
+		}
+	}
+	return catalog.Probe{}
+}
+
+func inspectExactNodeOutbound(raw []byte) (exactNodeEndpoint, error) {
+	var outbound map[string]json.RawMessage
+	if json.Unmarshal(raw, &outbound) != nil || outbound == nil {
+		return exactNodeEndpoint{}, errors.New("invalid outbound")
+	}
+	for _, forbidden := range []string{"tag", "detour"} {
+		if _, exists := outbound[forbidden]; exists {
+			return exactNodeEndpoint{}, errors.New("chained outbound is not exact")
+		}
+	}
+	var endpoint exactNodeEndpoint
+	_ = json.Unmarshal(outbound["type"], &endpoint.Protocol)
+	_ = json.Unmarshal(outbound["server"], &endpoint.Host)
+	_ = json.Unmarshal(outbound["server_port"], &endpoint.Port)
+	var transport struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal(outbound["transport"], &transport)
+	endpoint.Transport = transport.Type
+	switch endpoint.Protocol {
+	case "vless", "hysteria2", "tuic", "shadowsocks":
+	default:
+		return exactNodeEndpoint{}, errors.New("unsupported outbound")
+	}
+	if endpoint.Host == "" || endpoint.Port < 1 || endpoint.Port > 65535 || strings.ContainsAny(endpoint.Host, "/\\:@ \t\r\n") {
+		if net.ParseIP(endpoint.Host) == nil || endpoint.Port < 1 || endpoint.Port > 65535 {
+			return exactNodeEndpoint{}, errors.New("invalid endpoint")
+		}
+	}
+	if address, err := netip.ParseAddr(endpoint.Host); err == nil && !publicNodeAddresses([]netip.Addr{address}) {
+		return exactNodeEndpoint{}, errors.New("private endpoint")
+	}
+	host := strings.ToLower(strings.TrimSuffix(endpoint.Host, "."))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") {
+		return exactNodeEndpoint{}, errors.New("local endpoint")
+	}
+	return endpoint, nil
+}
+
+func publicNodeAddresses(addresses []netip.Addr) bool {
+	if len(addresses) == 0 || len(addresses) > 16 {
+		return false
+	}
+	for _, address := range addresses {
+		address = address.Unmap()
+		if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *ExactNodeChecker) resolveHost(ctx context.Context, host string) ([]netip.Addr, error) {
+	if address, err := netip.ParseAddr(host); err == nil {
+		return []netip.Addr{address}, nil
+	}
+	return netresolve.LookupNetIP(ctx, "ip", host)
+}
+
+func (c *ExactNodeChecker) transportPrefilter(ctx context.Context, endpoint exactNodeEndpoint, addresses []netip.Addr) (bool, error) {
+	if endpoint.Protocol == "hysteria2" || endpoint.Protocol == "tuic" {
+		return false, nil
+	}
+	var lastErr error
+	for _, address := range addresses {
+		dialer := net.Dialer{Timeout: 3 * time.Second}
+		connection, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(address.String(), strconv.Itoa(endpoint.Port)))
+		if err == nil {
+			_ = connection.Close()
+			return true, nil
+		}
+		lastErr = err
+	}
+	return true, lastErr
+}
+
+func (c *ExactNodeChecker) binary() string {
+	if c.Binary != "" {
+		return c.Binary
+	}
+	engine := c.EngineID()
+	for _, candidate := range []string{"/opt/bin/" + engine, "/opt/usr/bin/" + engine, engine} {
+		if strings.Contains(candidate, "/") {
+			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0 {
+				return candidate
+			}
+			continue
+		}
+		if found, err := exec.LookPath(candidate); err == nil {
+			return found
+		}
+	}
+	return ""
+}
+
+func (c *ExactNodeChecker) session(slot int) exactNodeSession {
+	root, id := c.StateRoot, "node-check-"+c.EngineID()
+	if slot > 0 {
+		root, id = filepath.Join(c.StateRoot, "slot-"+strconv.Itoa(slot)), id+"-"+strconv.Itoa(slot)
+	}
+	config := filepath.Join(root, "engine.json")
+	configFlag := "-c"
+	if c.EngineID() == "xray" {
+		configFlag = "-config"
+	}
+	return exactNodeSession{
+		Root: root, Address: net.JoinHostPort("127.0.0.1", strconv.Itoa(c.Port+slot)), Port: c.Port + slot,
+		Spec: ProcessSpec{ID: id, Binary: c.binary(), Args: []string{"run", configFlag, config}, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config, RouteProof: true},
+	}
+}
+
+func (c *ExactNodeChecker) prepareSession(ctx context.Context, session exactNodeSession, request NodeCheckRequest, endpoint exactNodeEndpoint) (exactNodeSession, error) {
+	if c.EngineID() == "xray" {
+		return c.prepareXraySession(ctx, session, request, endpoint)
+	}
+	if session.Spec.Binary == "" {
+		return session, errors.New("sing-box missing")
+	}
+	if err := os.MkdirAll(session.Root, 0o700); err != nil {
+		return session, err
+	}
+	data, err := compilePinnedSingBoxNodeConfig(request.Outbound, endpoint, session.Port)
+	if err != nil {
+		return session, err
+	}
+	defer clear(data)
+	if writeAtomic(session.Spec.MatchArg, data, 0o600) != nil {
+		return session, errors.New("write candidate")
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if output, err := exec.CommandContext(checkCtx, session.Spec.Binary, "check", "-c", session.Spec.MatchArg).CombinedOutput(); err != nil {
+		clear(output)
+		return session, errors.New("sing-box check failed")
+	}
+	return session, nil
+}
+
+func compilePinnedSingBoxNodeConfig(raw []byte, endpoint exactNodeEndpoint, port int) ([]byte, error) {
+	var outbound map[string]any
+	if json.Unmarshal(raw, &outbound) != nil {
+		return nil, errors.New("invalid outbound")
+	}
+	if !endpoint.Pinned.IsValid() {
+		return nil, errors.New("endpoint not pinned")
+	}
+	preserveNodeHostname(outbound, endpoint.Host)
+	outbound, _ = providerprofile.SingBoxRuntimeOutbound(outbound)
+	outbound["server"] = endpoint.Pinned.String()
+	outbound["tag"] = "rz-exact-node"
+	document := map[string]any{
+		"log":       map[string]any{"level": "warn", "timestamp": true},
+		"inbounds":  []any{map[string]any{"type": "socks", "tag": "rz-node-check-in", "listen": "127.0.0.1", "listen_port": port}},
+		"outbounds": []any{outbound, map[string]any{"type": "direct", "tag": "direct"}},
+		"route":     map[string]any{"final": "rz-exact-node", "auto_detect_interface": true},
+	}
+	return json.MarshalIndent(document, "", "  ")
+}
+
+func preserveNodeHostname(outbound map[string]any, hostname string) {
+	if outbound == nil || hostname == "" || net.ParseIP(hostname) != nil {
+		return
+	}
+	if tls, ok := outbound["tls"].(map[string]any); ok {
+		enabled, _ := tls["enabled"].(bool)
+		serverName, _ := tls["server_name"].(string)
+		if enabled && strings.TrimSpace(serverName) == "" {
+			tls["server_name"] = hostname
+		}
+	}
+	transport, ok := outbound["transport"].(map[string]any)
+	if !ok {
+		return
+	}
+	typeName, _ := transport["type"].(string)
+	if typeName != "ws" && typeName != "http" && typeName != "httpupgrade" {
+		return
+	}
+	headers, _ := transport["headers"].(map[string]any)
+	if headers == nil {
+		headers = map[string]any{}
+		transport["headers"] = headers
+	}
+	if hosts, ok := headers["Host"].([]any); typeName == "ws" && ok && len(hosts) > 0 {
+		// Native sing-box headers are listable. Preserve an explicit Host
+		// list; replacing it with the server name changes the WS request.
+		return
+	}
+	if host, _ := headers["Host"].(string); strings.TrimSpace(host) == "" {
+		headers["Host"] = hostname
+	}
+}
+
+func (c *ExactNodeChecker) startSession(ctx context.Context, session exactNodeSession) (resultErr error) {
+	record := func(id string, started time.Time, err error) {
+		if stages, _ := ctx.Value(nodeRuntimeStagesKey{}).(*[]NodeCheckStage); stages != nil {
+			status := "passed"
+			if err != nil {
+				status = "failed"
+			}
+			*stages = append(*stages, NodeCheckStage{ID: id, Status: status, Duration: max(0, c.currentTime().Sub(started).Milliseconds())})
+		}
+	}
+	started := c.currentTime()
+	if err := ctx.Err(); err != nil {
+		record("runtime_start", started, err)
+		return err
+	}
+	err := errors.Join(c.Processes.Start(ctx, session.Spec), ctx.Err())
+	record("runtime_start", started, err)
+	if err != nil {
+		return err
+	}
+	readyStarted := c.currentTime()
+	defer func() { record("runtime_ready", readyStarted, resultErr) }()
+	// The deadline must also bound an in-flight SOCKS greeting. Checking it
+	// only between attempts can both overrun the budget and accept late success.
+	readyCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	// Add three early observations for fast native startup, then retain the
+	// original 100ms cadence: nominal probes at 0/10/30/70/100/200/...ms.
+	// Actual process/socket checks also take time; the context bounds all of it.
+	readinessPauses := [...]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond, 30 * time.Millisecond, 100 * time.Millisecond}
+	retry := 0
+	for {
+		if err := readyCtx.Err(); err != nil {
+			return err
+		}
+		if !c.Processes.Running(session.Spec) {
+			return errors.New("candidate exited")
+		}
+		if probeSOCKS5(readyCtx, session.Address) == nil {
+			return readyCtx.Err()
+		}
+		select {
+		case <-readyCtx.Done():
+			return readyCtx.Err()
+		case <-time.After(readinessPauses[min(retry, len(readinessPauses)-1)]):
+		}
+		retry++
+	}
+}
+
+func (c *ExactNodeChecker) verifyIdentity(session exactNodeSession) (routeidentity.Passport, error) {
+	return routeidentity.Verify(session.Root, c.EngineID(), session.Address)
+}
+
+func (c *ExactNodeChecker) directTrace(ctx context.Context) (string, error) {
+	return probeNodeEgress(ctx, "", nil)
+}
+
+func (c *ExactNodeChecker) proxyTrace(ctx context.Context, address string) (string, error) {
+	return probeNodeEgress(ctx, address, nil)
+}
+
+func (c *ExactNodeChecker) probeService(ctx context.Context, address, routePathID, egressIP string, service catalog.Service) (evidence.ProbeEvidence, error) {
+	return c.probeServicePath(ctx, address, routePathID, egressIP, service, netip.Addr{})
+}
+
+func (c *ExactNodeChecker) probeServiceIP(ctx context.Context, address, routePathID, egressIP string, service catalog.Service, pinned netip.Addr) (evidence.ProbeEvidence, error) {
+	return c.probeServicePath(ctx, address, routePathID, egressIP, service, pinned)
+}
+
+func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routePathID, egressIP string, service catalog.Service, pinned netip.Addr) (evidence.ProbeEvidence, error) {
+	probe := selectedNodeProbe(service)
+	service.ProbeURL = probe.URL
+	started := c.currentTime()
+	var response *http.Response
+	var cleanup func()
+	var err error
+	if err = checkNodeResourceURL(ctx, probe.URL, pinned); err != nil {
+		return evidence.ProbeEvidence{}, err
+	}
+	if guard, _ := ctx.Value(nodeResourceGuardKey{}).(*nodeResourceGuard); guard != nil && !pinned.IsValid() {
+		// An App candidate cannot delegate opaque service DNS to SOCKS: its
+		// actual destination must pass the same negative boundary first.
+		addresses, resolveErr := resolveNodeServiceIPv4(ctx, probe.URL, c.resolve)
+		if resolveErr != nil {
+			return evidence.ProbeEvidence{}, resolveErr
+		}
+		pinned = addresses[0]
+	}
+	if pinned.IsValid() {
+		response, cleanup, err = socksHTTPGetPinnedTLS(ctx, probe.URL, address, pinned, c.serviceTLSRoots)
+	} else {
+		response, cleanup, err = socksHTTPGet(ctx, probe.URL, address)
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	finished := c.currentTime()
+	result := evidence.ProbeEvidence{
+		SchemaVersion: evidence.ProbeSchemaVersion, ProbeID: newNodeProbeID(), StartedAt: started, FinishedAt: finished,
+		NetworkProfile: "", Service: service.ID, RoutePathID: routePathID, Engine: c.EngineID(), Outbound: routePathID,
+		EgressIP: egressIP, Stage: "service", Outcome: evidence.OutcomeUnknown, Verdict: evidence.VerdictError,
+		RequestedURL: probecheck.RedactedURL(probe.URL), ExpectedRoutePathID: routePathID, ObservedRoutePathID: routePathID,
+		Source: "exact-node-check",
+	}
+	if err != nil {
+		result.ErrorCode = "request-failed"
+		reportNodeServiceFailure(ctx, err)
+		return result, nil
+	}
+	defer response.Body.Close()
+	body, truncated, readErr := readServiceBodySample(ctx, response)
+	if readErr != nil {
+		result.ErrorCode = "response-body-invalid"
+		reportNodeServiceFailure(ctx, readErr)
+		return result, nil
+	}
+	redirects := responseRedirects(response)
+	assessment := probecheck.Evaluate(service, probe, probecheck.Observation{
+		RequestedURL: probe.URL, FinalURL: probecheck.FinalURL(response, probe.URL), RedirectChain: redirects,
+		HTTPStatus: response.StatusCode, ContentType: response.Header.Get("Content-Type"), Body: body,
+		BodyTruncated: truncated, ExpectedRoutePathID: routePathID, ObservedRoutePathID: routePathID,
+	})
+	result.HTTPStatus = response.StatusCode
+	result.Outcome, result.Verdict = assessment.Outcome, assessment.Verdict
+	result.ErrorCode, result.ContentFingerprint = assessment.ErrorCode, assessment.ContentFingerprint
+	result.ContentType = response.Header.Get("Content-Type")
+	result.FinalURL = probecheck.RedactedURL(probecheck.FinalURL(response, probe.URL))
+	for _, target := range redirects {
+		result.RedirectChain = append(result.RedirectChain, probecheck.RedactedURL(target))
+	}
+	clear(body)
+	if pinned.IsValid() && result.Verdict == evidence.VerdictPass && result.AssuranceLevel().AtLeast(evidence.Service) {
+		if observation, _ := ctx.Value(literalServiceObservationKey{}).(*literalServiceObservation); observation != nil {
+			*observation = literalServiceObservation{url: probe.URL, address: address, route: routePathID, pinned: pinned, proof: result}
+		}
+	}
+	return result, nil
+}
+
+func responseRedirects(response *http.Response) []string {
+	chain := []string{}
+	if response == nil || response.Request == nil {
+		return chain
+	}
+	for request := response.Request; request != nil && request.Response != nil; request = request.Response.Request {
+		chain = append([]string{request.URL.String()}, chain...)
+	}
+	return chain
+}
+
+func (c *ExactNodeChecker) cleanupSession(ctx context.Context, session exactNodeSession) error {
+	if session.Spec.Binary == "" {
+		if _, err := os.Lstat(session.Spec.PIDPath); err == nil {
+			return errors.New("temporary process ownership unavailable")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		for _, path := range []string{session.Spec.MatchArg, session.Spec.PIDPath + routeidentity.ReceiptSuffix, session.Spec.LogPath} {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := c.Processes.Stop(ctx, session.Spec); err != nil {
+		return err
+	}
+	for _, path := range []string{session.Spec.MatchArg, session.Spec.PIDPath, session.Spec.PIDPath + routeidentity.ReceiptSuffix, session.Spec.LogPath} {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}

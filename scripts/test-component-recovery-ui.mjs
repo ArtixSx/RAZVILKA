@@ -1,0 +1,365 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const source=readFileSync(new URL('../cmd/razvilka/web/component-recovery-ui.js',import.meta.url),'utf8');
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
+function snapshot(phase='awaiting-live-acceptance',pending=true){return {revision:7,recovery_required:pending,transaction:{schema_version:1,transaction_id:'a'.repeat(32),component:'xray',phase,before_version:'1.0',after_version:'2.0',updated_at:new Date().toISOString()},capabilities:{supported_actions:['accept-live','accept-installed-idle','rollback','verify-rollback','abandon-prepared'],available_actions:pending?['accept-live','rollback','verify-rollback','abandon-prepared']:[],quiescence_confirmed:false,inactivity_confirmed:false,installed_idle_accepted:phase==='accepted-installed-idle',live_proof_required:true}};}
+function managedSnapshot(phase='prepared'){
+  const pending=!['accepted-installed-idle','rolled-back','abandoned'].includes(phase),value=snapshot(phase,pending);
+  Object.assign(value.transaction,{schema_version:3,component:'nfqws2',before_version:'absent',after_version:'reviewed-flavor'});
+  Object.assign(value.capabilities,{supported_actions:['resume','rollback'],available_actions:pending?(phase==='rollback-started'?['rollback']:['resume','rollback']):[],live_proof_required:false});return value;
+}
+function managedAcknowledgement(installed=true){return {ok:true,installed_idle:installed,compatibility_ready:installed,working_routes_changed:false,...(installed?{receipt:{schema:1,provider_id:'reviewed-provider',transaction_id:'a'.repeat(32),manifest_sha256:'b'.repeat(64),generation_path:'/owned/'+ 'b'.repeat(64),flavor:'reviewed-flavor',state:'ready-idle'}}:{recovery_required:false})};}
+const pure={};vm.createContext(pure);vm.runInContext(source,pure);const model=pure.RazvilkaComponentRecovery;
+function fixture(view='engines'){
+  const requests=[],listeners=new Map(),notices=[],panel={innerHTML:'',contains:()=>false};
+  const state={authenticated:true,currentView:view,status:{safe_mode:false,revision:7},serviceControl:{stopped:false}};
+  let confirm=async()=>true,authCalls=0;
+  let now=Date.now(),timerID=0;const timers=new Map();class Clock extends Date{static now(){return now;}}
+  const ctx={state,Date:Clock,AbortController,Promise,panelLoad:{request:null},
+    setTimeout(fn,delay){const id=++timerID;timers.set(id,{fn,at:now+delay});return id;},clearTimeout:id=>timers.delete(id),
+    esc:value=>String(value??'').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),
+    document:{hidden:false,activeElement:null,querySelectorAll:()=>[panel],addEventListener(name,fn){listeners.set(name,fn);}},
+    api(path,options={}){const pending=deferred();requests.push({path,options,...pending});return pending.promise;},
+    askConfirmation:(...args)=>confirm(...args),showNotice:(...args)=>notices.push(args),routeLabel:id=>id,
+    renderInterfaceEngines(){},renderComponents(){},refreshManagedNFQBundle:async()=>true,
+    showAuth(){authCalls++;state.authenticated=false;listeners.get('razvilka:auth-required')();}
+  };
+  vm.createContext(ctx);vm.runInContext(source,ctx);
+  const click=(selector,action='accept-live')=>listeners.get('click')({target:{closest:value=>value===selector?{disabled:false,dataset:{componentRepair:selector==='[data-component-repair]'?action:undefined}}:null}});
+  return {ctx,state,requests,notices,panel,authCalls:()=>authCalls,
+    advance:milliseconds=>{now+=milliseconds;},
+    async tick(milliseconds){
+      const until=now+milliseconds;
+      for(let count=0;count<100;count++){
+        const next=[...timers].sort((a,b)=>a[1].at-b[1].at)[0];if(!next||next[1].at>until)break;
+        now=next[1].at;timers.delete(next[0]);next[1].fn();await flush();
+        assert(count<99,'timer loop was not bounded');
+      }
+      now=until;await flush();
+    },
+    timerCount:()=>timers.size,panelRefresh:()=>listeners.get('razvilka:panel-refresh')(),
+    confirm:fn=>{confirm=fn;},clickRead:()=>click('[data-component-recovery-read]'),clickRepair:action=>click('[data-component-repair]',action),
+    revoke(){listeners.get('razvilka:auth-required')();state.authenticated=false;},
+    view(name){listeners.get('razvilka:view-change')({detail:name});state.currentView=name;},
+    async ready(value=snapshot()){await flush();assert.equal(requests[0].path,'/api/v1/components/recovery');requests[0].resolve(value);await flush();},
+  };
+}
+let total=0;async function test(name,fn){await fn();total++;console.log('PASS '+name);}
+await test('no positive acceptance from phase, candidate or historical receipt',()=>{
+  for(const phase of ['awaiting-live-acceptance','upgrade-finished','upgrade-started','rollback-started'])assert.equal(model.summary(snapshot(phase)).tone,'unknown');
+  const accepted=snapshot('accepted',false);assert.equal(model.summary(accepted).tone,'unknown');
+  assert.equal(model.summary(accepted,{transaction_id:'b'.repeat(32),component:'xray',live_accepted:true}).tone,'unknown');
+  assert.equal(model.summary(accepted,{transaction_id:'a'.repeat(32),component:'xray',live_accepted:true}).tone,'good');
+  assert.equal(model.summary(accepted,{transaction_id:'a'.repeat(32),component:'xray',installed_idle_accepted:true}).tone,'unknown');
+});
+await test('historical unknown offers no force, replay or operator boolean',()=>{
+  for(const phase of ['upgrade-started','rollback-started'])assert.equal(model.summary(snapshot(phase)).actions.length,0);
+  assert.deepEqual(Array.from(model.summary(snapshot('awaiting-rollback-acceptance')).actions),['verify-rollback']);
+});
+await test('invalid, future, corrupt and inconsistent data fail closed',()=>{
+  for(const value of [{},{...snapshot(),revision:-1},{...snapshot(),recovery_required:false},snapshot('future-phase'),{...snapshot(),transaction:{...snapshot().transaction,component:'unknown'}}]) {
+    assert.equal(model.valid(value),false);assert.equal(model.summary(value).actions.length,0);
+  }
+});
+await test('legacy schema 1/2 remain known and schema 2 idle acceptance stays neutral',()=>{
+  for(const schema of [1,2]){const value=snapshot();value.transaction.schema_version=schema;assert.equal(model.valid(value),true);}
+  for(const schema of [0,3,999,'2']){const value=snapshot();value.transaction.schema_version=schema;assert.equal(model.valid(value),false);}
+  const idle=snapshot('accepted-installed-idle',false);assert.equal(model.valid(idle),false);
+  idle.transaction.schema_version=2;assert.equal(model.valid(idle),true);
+  const receipt={transaction_id:idle.transaction.transaction_id,component:'xray',installed_idle_accepted:true,live_accepted:true};
+  const observed=model.summary(idle,receipt);assert.equal(observed.tone,'unknown');assert.equal(observed.actions.length,0);
+  assert.match(observed.detail,/доступ сервисов ещё не подтверждены/);
+  const pending=snapshot();pending.transaction.schema_version=2;
+  assert(!Array.from(model.summary(pending).actions).includes('accept-installed-idle'),'idle action guessed before HTTP capabilities');
+});
+await test('server capabilities restrict actions; idle needs schema 2 and both trusted observations',()=>{
+  const value=snapshot();delete value.capabilities;assert.equal(model.summary(value).actions.length,0);
+  const idle=snapshot();idle.transaction.schema_version=2;idle.capabilities.available_actions=['accept-installed-idle'];
+  assert.equal(model.summary(idle).actions.length,0);idle.capabilities.quiescence_confirmed=true;assert.equal(model.summary(idle).actions.length,0);
+  idle.capabilities.inactivity_confirmed=true;assert.deepEqual(Array.from(model.summary(idle).actions),['accept-installed-idle']);
+  idle.capabilities.available_actions=[];assert.equal(model.summary(idle).actions.length,0);
+  idle.capabilities.available_actions=['future-action'];assert.equal(model.valid(idle),false);
+});
+await test('matching idle POST and separate idle GET settle with a neutral label',async()=>{
+  const before=snapshot();before.transaction.schema_version=2;before.capabilities.quiescence_confirmed=before.capabilities.inactivity_confirmed=true;
+  before.capabilities.available_actions=['accept-installed-idle'];const f=fixture();await f.ready(before);f.clickRepair('accept-installed-idle');await flush();
+  assert.equal(JSON.parse(f.requests[1].options.body).action,'accept-installed-idle');
+  assert.equal(Object.keys(JSON.parse(f.requests[1].options.body)).length,5,'operator flags were added');
+  f.requests[1].resolve({recovery_required:false,installed_idle_accepted:true,live_accepted:false});await flush();
+  const settled=snapshot('accepted-installed-idle',false);settled.transaction.schema_version=2;f.requests[2].resolve(settled);await flush();
+  assert.equal(f.ctx.componentRecoveryFence(),false);assert.equal(f.ctx.componentRecoverySummary('xray').tone,'unknown');
+  assert.match(f.notices.at(-1)[1],/Неактивная версия/);
+});
+await test('idle result missing its exact acceptance fields cannot settle or replay',async()=>{
+  const before=snapshot();before.transaction.schema_version=2;before.capabilities.quiescence_confirmed=before.capabilities.inactivity_confirmed=true;
+  before.capabilities.available_actions=['accept-installed-idle'];const f=fixture();await f.ready(before);f.clickRepair('accept-installed-idle');await flush();
+  f.requests[1].resolve({recovery_required:false,live_accepted:true});await flush();f.clickRepair('accept-installed-idle');await flush();
+  assert.equal(f.requests.length,2);assert.equal(f.ctx.componentRecoveryFence(),true);assert.equal(f.notices.length,0);
+});
+await test('Home/login do not read recovery; navigation issues only single GET',async()=>{
+  const f=fixture('overview');await flush();assert.equal(f.requests.length,0);
+  f.state.authenticated=false;f.view('engines');await flush();assert.equal(f.requests.length,0);
+  f.state.authenticated=true;f.view('engines');await flush();f.clickRead();f.clickRead();await flush();
+  assert.equal(f.requests.length,1);assert.equal(f.requests[0].options.method,undefined);
+  f.requests[0].resolve(snapshot());await flush();assert.equal(f.requests.filter(r=>r.options.method==='POST').length,0);
+});
+await test('POST has matching transaction and CAS, then independent journal read',async()=>{
+  const f=fixture();await f.ready();f.clickRepair();f.clickRepair();await flush();
+  assert.equal(f.requests.length,2);const request=f.requests[1];assert.equal(request.options.method,'POST');
+  assert.deepEqual(JSON.parse(request.options.body),{transaction_id:'a'.repeat(32),component:'xray',action:'accept-live',expected_revision:7,confirm:'REPAIR_COMPONENT_TRANSACTION'});
+  request.resolve({recovery_required:false,live_accepted:true});await flush();
+  assert.equal(f.requests[2].options.method,undefined);assert.equal(f.ctx.componentRecoveryFence(),true);
+  f.requests[2].resolve(snapshot('accepted',false));await flush();assert.equal(f.ctx.componentRecoveryFence(),false);
+  assert.equal(f.ctx.componentRecoverySummary('xray').tone,'good');assert.equal(f.notices[0][0],'review');
+});
+await test('500/409 unknown writes require explicit read and never replay',async()=>{
+  for(const status of [409,500]){
+    const f=fixture();await f.ready();f.clickRepair();await flush();
+    f.requests[1].reject(Object.assign(new Error('unconfirmed repair'),{status}));await flush();
+    f.clickRepair();await flush();assert.equal(f.requests.length,2);assert.equal(f.ctx.componentRecoveryFence(),true);
+    assert.match(f.panel.innerHTML,/unconfirmed repair/);
+    f.clickRead();await flush();f.requests[2].resolve(snapshot('rollback-started'));await flush();
+    assert.equal(f.requests.filter(r=>r.options.method==='POST').length,1);assert.doesNotMatch(f.panel.innerHTML,/data-component-repair=/);
+  }
+});
+await test('202-shaped pending response never shows settled or live acceptance',async()=>{
+  const f=fixture();await f.ready();f.clickRepair();await flush();
+  f.requests[1].resolve({ok:true,recovery_required:true,pending_live_acceptance:true,live_accepted:true});await flush();
+  assert.equal(f.ctx.componentRecoveryFence(),true);assert.equal(f.notices.length,0);
+  assert.equal(f.requests.length,2,'pending response silently issued another action or read');
+});
+await test('confirmation or cancellation cannot retain obsolete CAS authority',async()=>{
+  const f=fixture();await f.ready();const confirmation=deferred();f.confirm(()=>confirmation.promise);f.clickRepair();await flush();
+  f.state.status.revision=8;confirmation.resolve(true);await flush();assert.equal(f.requests.length,1);assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+await test('Safe Mode and Stop block repair without disabling GET',async()=>{
+  for(const flag of ['safe_mode','stopped']){
+    const f=fixture();await f.ready();if(flag==='safe_mode')f.state.status.safe_mode=true;else f.state.serviceControl.stopped=true;
+    f.clickRepair();await flush();assert.equal(f.requests.length,1);
+    f.clickRead();await flush();assert.equal(f.requests.length,2);f.requests[1].resolve(snapshot());await flush();
+  }
+});
+await test('late POST/read/error cannot revive data after logout',async()=>{
+  for(const pendingKind of ['read','post']){
+    const f=fixture();await f.ready();if(pendingKind==='read')f.clickRead();else f.clickRepair();await flush();
+    const old=f.requests[1];f.revoke();old.resolve(pendingKind==='read'?snapshot('accepted',false):{recovery_required:false,live_accepted:true});await flush();
+    assert.equal(f.ctx.componentRecoverySummary('xray'),null);assert.equal(f.notices.length,0);assert.equal(f.authCalls(),0);
+  }
+  const f=fixture();await flush();f.revoke();f.requests[0].reject(Object.assign(new Error('old session'),{status:401}));await flush();assert.equal(f.authCalls(),0);
+});
+await test('current 401 closes the session; 503 keeps journal visible and fenced',async()=>{
+  const f=fixture();await flush();f.requests[0].reject(Object.assign(new Error('journal not readable'),{status:503}));await flush();
+  assert.match(f.panel.innerHTML,/journal not readable/);assert.equal(f.ctx.componentRecoveryFence(),true);
+  f.clickRead();await flush();f.requests[1].reject(Object.assign(new Error('expired session'),{status:401}));await flush();assert.equal(f.authCalls(),1);
+});
+await test('stale enabled action gives a visible readback and never posts',async()=>{
+  const f=fixture();await f.ready();assert.match(f.panel.innerHTML,/data-component-repair="accept-live"/);
+  f.advance(60001);f.clickRepair();await flush();
+  assert.equal(f.requests.length,2);assert.equal(f.requests[1].options.method,undefined);
+  assert.match(f.panel.innerHTML,/Сведения устарели/);
+  f.requests[1].resolve(snapshot());await flush();
+  assert.equal(f.requests.filter(request=>request.options.method==='POST').length,0);
+  assert.match(f.notices.at(-1)[1],/Журнал обновлён/);
+});
+await test('leaving a pending action releases the ticket and allows explicit readback',async()=>{
+  const f=fixture();await f.ready();f.clickRepair();await flush();const old=f.requests[1];
+  f.view('overview');f.view('engines');await flush();f.clickRead();await flush();
+  assert.equal(f.requests.length,3,'obsolete action blocked independent readback');
+  assert.equal(f.requests[2].options.method,undefined);
+  f.requests[2].resolve(snapshot('rollback-started'));await flush();
+  old.resolve({recovery_required:false,live_accepted:true});await flush();
+  assert.equal(f.ctx.componentRecoverySummary('xray').tone,'unknown');
+  assert.doesNotMatch(f.panel.innerHTML,/data-component-repair=/);assert.equal(f.notices.length,0);
+});
+await test('leaving while review is pending cancels POST and releases buttons',async()=>{
+  const f=fixture();await f.ready();const confirmation=deferred();f.confirm(()=>confirmation.promise);f.clickRepair();await flush();
+  f.view('overview');f.view('engines');await flush();confirmation.resolve(true);await flush();
+  assert.equal(f.requests.filter(request=>request.options.method==='POST').length,0);
+  f.clickRead();await flush();assert.equal(f.requests.length,2);
+});
+await test('schema 3 is only the managed NFQ file protocol with exact known phases',()=>{
+  for(const phase of ['prepared','upgrade-started','upgrade-finished','awaiting-live-acceptance','accepted-installed-idle','rollback-started','rolled-back','abandoned'])assert(model.valid(managedSnapshot(phase)),phase);
+  for(const phase of ['started','installed','awaiting-live','accepted-idle','accepted','future-phase'])assert.equal(model.valid(managedSnapshot(phase)),false);
+  const wrongComponent=managedSnapshot();wrongComponent.transaction.component='xray';assert.equal(model.valid(wrongComponent),false);
+  const partial=managedSnapshot();delete partial.transaction.after_version;assert.equal(model.valid(partial),false);
+});
+await test('schema 3 actions come from explicit capabilities, without legacy acceptance or observed booleans as grants',()=>{
+  const value=managedSnapshot();assert.deepEqual(Array.from(model.summary(value).actions),['resume','rollback']);
+  value.capabilities.available_actions=['rollback'];assert.deepEqual(Array.from(model.summary(value).actions),['rollback']);
+  value.capabilities.quiescence_confirmed=value.capabilities.inactivity_confirmed=true;assert.deepEqual(Array.from(model.summary(value).actions),['rollback']);
+  value.capabilities.supported_actions.push('accept-live');assert.equal(model.valid(value),false);
+  const absent=managedSnapshot();delete absent.capabilities;assert.equal(model.summary(absent).actions.length,0);
+  assert.deepEqual(Array.from(model.summary(managedSnapshot('rollback-started')).actions),['rollback']);
+});
+await test('all schema 3 terminal phases stay neutral even with a matching forged live receipt',()=>{
+  for(const phase of ['accepted-installed-idle','rolled-back','abandoned']){
+    const value=managedSnapshot(phase),summary=model.summary(value,{transaction_id:'a'.repeat(32),component:'nfqws2',live_accepted:true});
+    assert.equal(summary.actions.length,0);assert.equal(summary.tone,'unknown');assert.doesNotMatch(summary.label,/Рабочий процесс принял/);
+  }
+});
+await test('schema 3 resume allows Safe Mode and Stop but uses only current CAS and existing transaction confirmation',async()=>{
+  const f=fixture();f.state.status.safe_mode=true;f.state.serviceControl.stopped=true;await f.ready(managedSnapshot());let installedReads=0;f.ctx.refreshManagedNFQBundle=async(journal,receipt)=>{installedReads++;assert.equal(journal.transaction.transaction_id,'a'.repeat(32));assert.equal(receipt.transaction_id,'a'.repeat(32));return true;};
+  f.clickRepair('resume');await flush();assert.equal(f.requests.length,2);
+  assert.deepEqual(JSON.parse(f.requests[1].options.body),{transaction_id:'a'.repeat(32),component:'nfqws2',action:'resume',expected_revision:7,confirm:'REPAIR_COMPONENT_TRANSACTION'});
+  f.requests[1].resolve(managedAcknowledgement());await flush();assert.equal(f.notices.length,0);f.requests[2].resolve(managedSnapshot('accepted-installed-idle'));await flush();
+  assert.equal(installedReads,1);assert.equal(f.ctx.componentRecoveryFence(),false);assert.equal(f.ctx.componentRecoverySummary('nfqws2').tone,'unknown');assert.equal(f.notices[0][0],'review');
+});
+await test('schema 3 rollback-started only offers the actually advertised rollback action',async()=>{
+  const f=fixture();await f.ready(managedSnapshot('rollback-started'));f.clickRepair('resume');await flush();assert.equal(f.requests.length,1);
+  f.clickRepair('rollback');await flush();assert.equal(JSON.parse(f.requests[1].options.body).action,'rollback');f.requests[1].resolve(managedAcknowledgement(false));await flush();f.requests[2].resolve(managedSnapshot('rolled-back'));await flush();assert.equal(f.notices.length,1);
+});
+await test('schema 3 current revision still fences actions while Safe Mode and Stop stay allowed',async()=>{
+  const f=fixture();f.state.status.safe_mode=true;f.state.serviceControl.stopped=true;await f.ready(managedSnapshot());const confirmation=deferred();f.confirm(()=>confirmation.promise);f.clickRepair('resume');await flush();f.state.status.revision=8;confirmation.resolve(true);await flush();assert.equal(f.requests.length,1);assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+await test('schema 3 pending or a different readback transaction cannot settle the operation',async()=>{
+  const pending=fixture();await pending.ready(managedSnapshot());pending.clickRepair('resume');await flush();pending.requests[1].resolve({recovery_required:true});await flush();assert.equal(pending.requests.length,2);assert.equal(pending.notices.length,0);assert.equal(pending.ctx.componentRecoveryFence(),true);
+  const other=fixture();await other.ready(managedSnapshot());other.clickRepair('resume');await flush();other.requests[1].resolve(managedAcknowledgement());await flush();const wrong=managedSnapshot('accepted-installed-idle');wrong.transaction.transaction_id='b'.repeat(32);other.requests[2].resolve(wrong);await flush();assert.equal(other.notices.length,0);assert.equal(other.ctx.componentRecoveryFence(),true);
+});
+await test('schema 3 incomplete or route-changing acknowledgement cannot borrow a terminal result',async()=>{
+  for(const result of [{ok:true,working_routes_changed:false},{...managedAcknowledgement(),working_routes_changed:true}]){
+    const f=fixture();await f.ready(managedSnapshot());f.clickRepair('resume');await flush();f.requests[1].resolve(result);await flush();assert.equal(f.requests.length,2);assert.equal(f.notices.length,0);assert.equal(f.ctx.componentRecoveryFence(),true);
+  }
+});
+await test('schema 3 completed journal without matching installed receipt readback remains unconfirmed',async()=>{
+  const f=fixture();await f.ready(managedSnapshot());f.ctx.refreshManagedNFQBundle=async()=>false;f.clickRepair('resume');await flush();f.requests[1].resolve(managedAcknowledgement());await flush();f.requests[2].resolve(managedSnapshot('accepted-installed-idle'));await flush();assert.equal(f.notices.length,0);assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/независимое чтение/);
+});
+const busyRead=()=>Object.assign(new Error('operation temporarily busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY',not_started:true,recovery_required:false}});
+const idleSnapshot=()=>({revision:7,recovery_required:false,transaction:null});
+await test('recovery waits for the current panel batch with one read ticket',async()=>{
+  const f=fixture('overview'),panel=deferred();f.ctx.panelLoad.request=panel.promise;f.view('engines');await flush();
+  f.panelRefresh();f.clickRead();await flush();assert.equal(f.requests.length,0);assert.match(f.panel.innerHTML,/Читаем/);
+  f.ctx.panelLoad.request=null;panel.resolve();await flush();assert.equal(f.requests.length,1);
+  assert.equal(f.requests[0].options.cache,'no-store');f.requests[0].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);assert.equal(f.timerCount(),0);
+});
+await test('a replaced genuine panel batch is joined before recovery starts',async()=>{
+  const f=fixture('overview'),first=deferred(),second=deferred();f.ctx.panelLoad.request=first.promise;f.view('engines');await flush();
+  f.ctx.panelLoad.request=second.promise;first.resolve();await flush();assert.equal(f.requests.length,0);
+  f.ctx.panelLoad.request=null;second.resolve();await flush();assert.equal(f.requests.length,1);f.requests[0].resolve(idleSnapshot());await flush();
+});
+await test('exact transient busy retries only GET after backoff and settles from a fresh journal',async()=>{
+  const f=fixture();await flush();f.requests[0].reject(busyRead());await flush();
+  assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/временно занят/);f.panelRefresh();f.clickRead();await flush();assert.equal(f.requests.length,1);
+  await f.tick(1999);assert.equal(f.requests.length,1);await f.tick(1);assert.equal(f.requests.length,2);
+  assert.equal(f.requests[1].options.signal,f.requests[0].options.signal);assert.equal(f.requests[1].options.readTimeoutMs,5000);assert.equal(f.requests[1].options.cache,'no-store');
+  f.requests[1].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);assert.match(f.panel.innerHTML,/Незавершённых обновлений нет/);assert.equal(f.timerCount(),0);
+  assert(f.requests.every(request=>request.options.method===undefined));
+});
+await test('four persistent busy responses stop automatically and allow a separate explicit read',async()=>{
+  const f=fixture();await flush();
+  for(let attempt=0;attempt<4;attempt++){
+    assert.equal(f.requests.length,attempt+1);f.requests[attempt].reject(busyRead());await flush();
+    if(attempt<3)await f.tick([2000,3000,4000][attempt]);
+  }
+  assert.equal(f.timerCount(),0);assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/Журнал остаётся занят.*Автоматическое чтение остановлено/);
+  for(let repeat=0;repeat<8;repeat++)f.panelRefresh();await f.tick(30000);assert.equal(f.requests.length,4);
+  f.clickRead();await flush();assert.equal(f.requests.length,5);f.requests[4].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);
+  assert.equal(f.requests.filter(request=>request.options.method==='POST').length,0);
+});
+await test('other 409, unknown busy shape and permanent 503 never auto retry',async()=>{
+  for(const error of [
+    Object.assign(new Error('changed journal'),{status:409,payload:{code:'COMPONENT_TRANSACTION_CHANGED'}}),
+    Object.assign(new Error('generic conflict'),{status:409}),
+    Object.assign(busyRead(),{payload:{code:'RESTORE_OPERATION_BUSY',recovery_required:false}}),
+    Object.assign(busyRead(),{payload:{code:'RESTORE_OPERATION_BUSY',not_started:true,recovery_required:true}}),
+    ...['COMPONENT_RECOVERY_REQUIRED','SELF_UPDATE_RECOVERY_REQUIRED','PRIVATE_BACKUP_RECOVERY_REQUIRED','DATAPLANE_RECOVERY_REQUIRED','COMPONENT_JOURNAL_UNAVAILABLE'].map(code=>Object.assign(new Error('persistent journal failure'),{status:503,payload:{code,recovery_required:true}}))
+  ]){
+    const f=fixture();await flush();f.requests[0].reject(error);await flush();f.panelRefresh();await f.tick(30000);
+    assert.equal(f.requests.length,1);assert.equal(f.timerCount(),0);assert.equal(f.ctx.componentRecoveryFence(),true);assert(f.panel.innerHTML.includes(error.message));
+  }
+});
+await test('busy after a previous clear journal expires its proof immediately',async()=>{
+  const f=fixture();await f.ready(idleSnapshot());assert.equal(f.ctx.componentRecoveryFence(),false);f.clickRead();await flush();f.requests[1].reject(busyRead());await flush();
+  assert.match(f.panel.innerHTML,/<h3>Состояние журнала уточняется<\/h3>/);
+  assert.doesNotMatch(f.panel.innerHTML,/<h3>Незавершённых обновлений нет<\/h3>/);
+  assert.match(f.panel.innerHTML,/временно занят/);assert.match(f.panel.innerHTML,/data-component-recovery-read/);
+  assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/изменения компонентов заблокированы/);f.view('overview');await flush();assert.equal(f.timerCount(),0);
+});
+await test('expired idle and completed journal snapshots cannot retain a current success heading',async()=>{
+  for(const value of [idleSnapshot(),snapshot('accepted',false)]){
+    const f=fixture();await f.ready(value);
+    const freshLabel=model.summary(value).label;
+    assert.ok(f.panel.innerHTML.includes('<h3>'+freshLabel+'</h3>'));
+    f.advance(60001);f.ctx.renderComponentRecovery();
+    assert.match(f.panel.innerHTML,/<h3>Состояние журнала уточняется<\/h3>/);
+    assert.ok(!f.panel.innerHTML.includes('<h3>'+freshLabel+'</h3>'));
+    assert.match(f.panel.innerHTML,/Нужно свежее чтение журнала/);
+    assert.match(f.panel.innerHTML,/data-component-recovery-read[^>]*>Прочитать состояние/);
+    assert.doesNotMatch(f.panel.innerHTML,/data-component-repair=/);
+    assert.equal(f.ctx.componentRecoveryFence(),true);assert.equal(f.requests.length,1);
+    f.clickRead();await flush();f.requests[1].resolve(value);await flush();
+    assert.ok(f.panel.innerHTML.includes('<h3>'+freshLabel+'</h3>'));
+    assert.equal(f.ctx.componentRecoveryFence(),false);
+  }
+});
+await test('leave or logout aborts a queued busy retry and late completion cannot restart it',async()=>{
+  for(const cancel of ['leave','logout']){
+    const f=fixture();await flush();f.requests[0].reject(busyRead());await flush();const signal=f.requests[0].options.signal;
+    if(cancel==='leave')f.view('overview');else f.revoke();await f.tick(30000);
+    assert.equal(signal.aborted,true);assert.equal(f.requests.length,1);assert.equal(f.timerCount(),0);assert.equal(f.notices.length,0);
+  }
+  const f=fixture();await flush();const old=f.requests[0];f.view('overview');old.reject(busyRead());await f.tick(30000);assert.equal(f.requests.length,1);assert.equal(f.timerCount(),0);
+});
+await test('leaving a panel wait aborts it before any recovery request',async()=>{
+  const f=fixture('overview'),pending=deferred();f.ctx.panelLoad.request=pending.promise;f.view('engines');await flush();f.view('overview');await flush();
+  f.ctx.panelLoad.request=null;pending.resolve();await f.tick(30000);assert.equal(f.requests.length,0);assert.equal(f.timerCount(),0);
+});
+await test('a stalled panel wait hits the same finite deadline and remains visibly fenced',async()=>{
+  const f=fixture('overview'),pending=deferred();f.ctx.panelLoad.request=pending.promise;f.view('engines');await flush();await f.tick(20000);
+  assert.equal(f.requests.length,0);assert.equal(f.timerCount(),0);assert.match(f.panel.innerHTML,/не прочитан за отведённое время/);assert.equal(f.ctx.componentRecoveryFence(),true);
+  f.ctx.panelLoad.request=null;pending.resolve();f.panelRefresh();await flush();assert.equal(f.requests.length,0);
+  f.clickRead();await flush();assert.equal(f.requests.length,1);f.requests[0].resolve(idleSnapshot());await flush();assert.equal(f.ctx.componentRecoveryFence(),false);
+});
+await test('deadline fences an ignored-abort GET and discards its late clear journal',async()=>{
+  const f=fixture();await flush();const old=f.requests[0];await f.tick(20000);
+  assert.equal(old.options.signal.aborted,true);assert.equal(f.timerCount(),0);assert.match(f.panel.innerHTML,/Автоматическое чтение остановлено/);assert.equal(f.ctx.componentRecoveryFence(),true);
+  old.resolve(idleSnapshot());await flush();f.panelRefresh();await flush();assert.equal(f.requests.length,1);assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+await test('repair POST busy still never retries or automatically reads a journal',async()=>{
+  const f=fixture();await f.ready();f.clickRepair();await flush();f.requests[1].reject(busyRead());await f.tick(30000);
+  assert.equal(f.requests.length,2);assert.equal(f.requests.filter(request=>request.options.method==='POST').length,1);assert.equal(f.timerCount(),0);assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+await test('repair deadline releases busy into unknown read-only state without replay',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];assert.equal(post.options.signal.aborted,false);
+ await f.tick(369999);assert.equal(post.options.signal.aborted,false);
+ await f.tick(1);assert.equal(post.options.signal.aborted,true);assert.equal(f.timerCount(),0);
+ assert.match(f.panel.innerHTML,/<h3>Результат восстановления неизвестен<\/h3>/);
+ assert.match(f.panel.innerHTML,/Исход неизвестен/);
+ assert.doesNotMatch(f.panel.innerHTML,/data-component-recovery-read[^>]*disabled/);
+ f.clickRepair();f.panelRefresh();await flush();assert.equal(f.requests.length,2);
+ post.resolve({recovery_required:false,live_accepted:true});await flush();
+ assert.equal(f.requests.length,2);assert.equal(f.ctx.componentRecoveryFence(),true);
+ f.clickRead();await flush();assert.equal(f.requests[2].options.method,undefined);
+ f.requests[2].resolve(snapshot('accepted',false));await flush();
+ assert.equal(f.ctx.componentRecoveryFence(),false);
+ assert.equal(f.requests.filter(r=>r.options.method==='POST').length,1);
+});
+
+await test('repair completion before deadline clears timer and still reads journal',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];post.resolve({recovery_required:false,live_accepted:true});await flush();
+ f.requests[2].resolve(snapshot('accepted',false));await flush();
+ assert.equal(f.timerCount(),0);assert.equal(post.options.signal.aborted,false);
+ await f.tick(370000);assert.equal(post.options.signal.aborted,false);
+});
+
+await test('repair auth cancellation aborts transport and ignores late success',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];f.revoke();await flush();
+ assert.equal(post.options.signal.aborted,true);assert.equal(f.timerCount(),0);
+ post.resolve({recovery_required:false,live_accepted:true});await flush();
+ assert.equal(f.requests.length,2);assert.equal(f.notices.length,0);
+});
+
+await test('leaving recovery cancels repair wait but preserves unknown outcome',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];f.view('overview');await flush();
+ assert.equal(post.options.signal.aborted,true);assert.equal(f.timerCount(),0);
+ post.resolve({recovery_required:false,live_accepted:true});await flush();
+ assert.equal(f.notices.length,0);assert.equal(f.requests.length,2);
+ assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+
+console.log(JSON.stringify({suite:'component-recovery',tests:total}));

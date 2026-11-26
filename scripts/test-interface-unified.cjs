@@ -1,0 +1,240 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const checkout=path.resolve(__dirname,'..');
+const model=require(path.join(checkout,'cmd/razvilka/web/interface-model.js'));
+const full=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/interface.js'),'utf8');
+const names=["interfaceRecoveryRequired", "interfaceAutoLabel", "interfaceServicePresentation", "interfaceServiceCard", "interfaceGroupHTML", "renderInterfaceNavigation", "interfaceHomeAuto", "interfaceHomeOrder", "interfaceHomeServicesHTML", "renderInterfaceHome", "renderHomeEngineSummary", "refreshHomeEngineSummary", "renderInterfaceServices", "renderInterfaceSettings", "renderInterface", "interfaceOpenService", "interfaceQuickAdd", "interfaceTaskAction", "interfaceCheckService", "interfaceUpdateInspector", "interfaceSafeRender", "interfaceScopeLabel", "interfaceInspectorControls"];
+names.push('interfaceStatusCache','interfaceStatusServices','interfaceServiceActionsReady','interfaceFinishRequestedDeletion','interfaceHomeProof');
+const source=names.map(name=>{const f=full.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n}\\n'));assert(f,'Missing production function: '+name);return f[0];}).join('\n');
+const results=[];async function test(name,fn){await fn();results.push({name,status:'passed'});console.log('PASS',name);}
+const service={id:'youtube',name:'YouTube',category:'Видео',enabled:true,applied_state:{enabled:true,route:'nfqws2',sources:['192.168.1.20']}};
+const good={kind:'good',route:'nfqws2'};
+const snap=()=>({policy:{enabled:true,setup_complete:true,check_seconds:300},services:{},runtime:{}});
+function fixture(){
+ const elements=new Map(),calls=[],notices=[];
+ const state={authenticated:true,services:[structuredClone(service)],status:{version:'fixture'},dataLoad:{services:{loaded:true,phase:'ready'}},devices:[]};
+ const $=id=>{if(!elements.has(id))elements.set(id,{id,hidden:true,disabled:false,value:'',innerHTML:'',textContent:'',dataset:{},open:false,isConnected:true,classList:{toggle(){},remove(){},add(){}},showModal(){this.open=true;},close(){this.open=false;},focus(){calls.push(['focus',id]);}});return elements.get(id);};
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const c={state,consoleSnapshot:snap(),consoleAutonomyError:'',interfaceSections:model.taskSections,interfaceState:{authRevoked:false,authEpoch:0,busy:false,layout:'cards',filter:'selected',query:'',category:'',expanded:new Set()},rim:model,
+ interfaceExclusionMap:()=>model.resourceServiceExclusions(null),
+ consoleEngineMeta:{nfqws2:{name:'NFQWS2',tone:'mint',icon:'route'}},consoleEngineState:()=>({label:'Не проверен'}),serviceDashboard:{authenticated:true,control:{config_revision:1},operation:null,message:''},$, $$:()=>[],Date,Number,Map,Set,console,document:{activeElement:null},esc,ci:()=>'',consoleServiceIcon:()=>'',consoleText:(id,t)=>{$('#'+id).textContent=String(t??'');},interfaceHTML:(id,t)=>{$('#'+id).innerHTML=t;},consoleDate:s=>s||'—',interfaceToast:t=>notices.push(t),interfaceRouteName:r=>r,
+ interfaceBadge:h=>`<b class="${esc(h.kind)}">${esc(h.label)}</b>`,interfaceDataReady:k=>state.dataLoad[k]?.loaded===true,interfaceLoadMessage:()=> 'Загрузка',serviceDashboardApplied:s=>model.appliedView(s),setView:n=>{state.currentView=n;calls.push(['navigate',n]);},renderInterfaceEngines(){},interfaceSummaries:()=>({youtube:good}),interfaceServices:()=>model.selectedView(state.services,c.consoleSnapshot.services),interfaceEmpty:(a,b,button)=>`<h3>${esc(a)}</h3><p>${esc(b)}</p>${button}`,serviceDashboardJobActive:()=>false,refreshServiceControl:async()=>{calls.push(['refresh']);c.serviceDashboard.control={config_revision:2};},serviceDashboardStart:async(kind,ids)=>{calls.push(['start',kind,ids]);c.serviceDashboard.control.job={id:'new-job'};},interfaceManage:async(...a)=>calls.push(['manage',...a])};
+ c.interfaceCards=(list,sums)=>list.map(s=>c.interfaceServiceCard(s,sums)).join('');vm.createContext(c);vm.runInContext(source,c);
+ return {c,state,$,calls,notices,elements};
+}
+(async()=>{
+await test('custom delete is visible without expanding details and blocked while removal is pending',()=>{
+ const {c,state,$}=fixture();state.services[0].custom=true;c.consoleSnapshot.services.youtube={enabled:true};
+ c.interfaceOpenService('youtube');
+ const content=$('#ui3InspectorContent').innerHTML,buttons=$('#r6InspectorRemove').innerHTML;
+ assert.ok(content.indexOf('id="r6InspectorRemove"')<content.indexOf('<details'));
+ assert.match(buttons,/data-rz-action="delete">Удалить сервис/);assert.match(buttons,/Убрать из моих сервисов/);
+ c.consoleSnapshot.services.youtube.removing=true;c.interfaceUpdateInspector();
+ assert.match($('#r6InspectorRemove').innerHTML,/data-rz-action="delete" disabled/);
+ assert.doesNotMatch($('#r6InspectorRemove').innerHTML,/data-rz-action="remove"/);
+ c.consoleSnapshot.runtime.youtube={state:'definition-changed'};c.interfaceUpdateInspector();
+ assert.match($('#r6InspectorRemove').innerHTML,/data-rz-action="delete">Подтвердить удаление снова/);
+ state.services[0].custom=false;c.interfaceUpdateInspector();assert.doesNotMatch($('#r6InspectorRemove').innerHTML,/data-rz-action="delete"/);
+});
+await test('cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority',async()=>{
+ const {c,state,$,calls}=fixture(),listeners=new Map();let clock=1000;
+ const consoleSource=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/console.js'),'utf8');
+ c.performance={now:()=>clock};c.consoleAutonomyReceipt=null;c.window={addEventListener:(name,fn)=>listeners.set(name,fn)};c.document.addEventListener=(name,fn)=>listeners.set(name,fn);
+ c.consoleAutonomyAvailability=()=>{};c.renderConsole=()=>c.renderInterfaceHome({telegram:{kind:'good',route:'sing-box:node-1'}});
+ const helpers=['consoleObservationClock','consoleClearAutonomySnapshot','consoleAcceptAutonomySnapshot','consoleAutonomyCache'].map(name=>consoleSource.match(new RegExp('function '+name+'\\([^]*?\\n}\\n'))[0]).join('\n');
+ vm.runInContext(helpers+'\n'+consoleSource.match(/^document.addEventListener\('razvilka:auth-required'.*$/m)[0]+'\n'+consoleSource.match(/^window.addEventListener\('razvilka:autonomy-state'.*$/m)[0],c);
+ const event=value=>listeners.get('razvilka:autonomy-state')({detail:value});
+ state.services=['youtube','discord','instagram','roblox','tiktok','twitch','telegram','openai'].map(id=>({id,name:id,presentation_only:true,enabled:false,applied_state:{enabled:false,route:'auto'}}));
+ state.dataLoad.services={loaded:true,phase:'busy'};state.resourceExclusions={};state.dataLoad.resourceExclusions={phase:'busy'};
+ c.consoleEngineMeta={'sing-box':{name:'Sing-box',tone:'blue',icon:'route'}};
+ const make=(revision,kind,age)=>({policy:{setup_complete:true,enabled:true},observation:{instance_id:'a'.repeat(32),revision,state:kind,data_age_ms:age,observed_at:'2026-10-22T18:46:34Z'},
+  services:Object.fromEntries(state.services.map(s=>[s.id,{enabled:true}])),
+  applied_services:{telegram:{enabled:true,route:'sing-box:node-1'}},
+  runtime:{...Object.fromEntries(['instagram','roblox','tiktok','twitch'].map(id=>[id,{state:'component-stopped',message:'Нужен явный запуск.'}])),youtube:{state:'component-stopped',message:'Запустите NFQWS2 через подтверждённое применение.'},discord:{state:'component-stopped',message:'Нужен явный запуск.'},telegram:{state:'applied',checked_at:'2026-10-22T18:44:31Z'},openai:{state:'domain-route-unavailable',message:'Для доменного списка нужен поддержанный обход.'}}});
+ const original=JSON.stringify(state.services);
+ event(make(1,'retained',45000));
+ assert.match($('#r42RouteDistribution').innerHTML,/Последние сведения: Нужный компонент не запущен/);
+ assert.match($('#ui3Attention').innerHTML,/45 сек назад/);
+ clock+=1000;event(make(2,'available',7000));
+ const home=$('#r42RouteDistribution').innerHTML,attention=$('#ui3Attention').innerHTML;
+ assert.match(home,/Нужный компонент не запущен/);assert.match(home,/Нет подтверждённого обхода для доменного сервиса/);
+ assert.doesNotMatch(home,/Нет свежих данных|Работает/);assert.match(home,/Нужна проверка/);
+ assert.match(attention,/Запустите NFQWS2/);assert.match(attention,/7 сек назад/);
+ assert.doesNotMatch(attention,/Вашего участия не требуется/);
+ assert.match($('#ui7HomeEngines').innerHTML,/<b>1<\/b>/);assert.doesNotMatch($('#ui7HomeEngines').innerHTML,/1 проверено/);
+ assert.equal(JSON.stringify(state.services),original,'presentation must not hydrate the action source');assert.deepEqual(calls,[]);
+ assert.equal(state.dataLoad.services.phase,'busy');assert.equal(state.dataLoad.resourceExclusions.phase,'busy');
+ c.interfaceOpenService('youtube');assert.equal($('#r6InspectorCheck').disabled,true);
+ assert.doesNotMatch($('#r6InspectorControls').innerHTML,/data-rz-action/);assert.equal($('#r6InspectorRemove').innerHTML,'');
+ await c.interfaceCheckService('youtube');assert.deepEqual(calls.filter(call=>call[0]==='start'||call[0]==='manage'),[]);
+ // Polling the SAME publication cannot refresh a retained lease. Neither a
+ // response clock nor runtime.checked_at supplies current PASS/Start authority.
+ clock+=114000;event(make(2,'available',0));
+ assert.equal(c.consoleAutonomyCache().usable,false);assert.match($('#r42RouteDistribution').innerHTML,/Нет свежих данных/);
+ assert.doesNotMatch($('#ui3Attention').innerHTML,/Вашего участия не требуется/);
+ event(make(1,'available',0));assert.equal(c.consoleSnapshot.observation.revision,2,'late publication cannot rewind');
+ // A new process/publication may provide new metadata. Auth revocation cannot.
+ const next=make(1,'available',0);next.observation.instance_id='b'.repeat(32);event(next);assert.equal(c.consoleAutonomyCache().fresh,true);
+ state.authenticated=false;event(make(9,'available',0));assert.equal(c.consoleAutonomyCache(),null);assert.equal(c.consoleSnapshot.observation.instance_id,'b'.repeat(32));
+ listeners.get('razvilka:auth-required')();state.authGeneration=1;state.authenticated=true;
+ assert.equal(c.consoleSnapshot,null);assert.equal(c.consoleAutonomyReceipt,null);assert.equal(c.consoleAutonomyCache(),null);
+ c.renderInterfaceHome({});assert.doesNotMatch($('#r42RouteDistribution').innerHTML,/Нужный компонент не запущен|Нет подтверждённого обхода для доменного сервиса/,'login without a new response cannot restore old labels');
+ event(next);assert.equal(c.consoleAutonomyCache().usable,true);state.authGeneration++;
+ assert.equal(c.consoleAutonomyCache(),null,'auth epoch independently fences an uncleared receipt');
+ // Legacy browsers without performance.now fail closed on a backwards wall
+ // clock, and replaying that same server publication cannot renew the age.
+ c.performance=undefined;c.Date=class extends Date{static now(){return clock;}};event({...next,observation:{...next.observation,revision:2}});
+ clock+=10000;assert.equal(c.consoleAutonomyCache().usable,true);clock-=5000;
+ assert.equal(c.consoleAutonomyCache().usable,false);clock+=1000;event({...next,observation:{...next.observation,revision:2}});
+ assert.equal(c.consoleAutonomyCache().usable,false);
+});
+await test('cached metadata does not borrow PASS and unknown waiting does not promise self-repair',()=>{
+ const {c,state,$}=fixture();
+ c.consoleSnapshot.services.youtube={enabled:true};c.consoleSnapshot.runtime.youtube={state:'origin-expired',message:'Источник больше не доступен.'};
+ c.renderInterfaceHome({});assert.doesNotMatch($('#ui3Attention').innerHTML,/Вашего участия не требуется/);
+ const saved={...structuredClone(service),presentation_only:true};
+ const cache={usable:true,fresh:true,ageMS:7000,applied:{youtube:{enabled:true,route:'nfqws2'}}};
+ const h=model.humanService(saved,good,{enabled:true},{state:'healthy',checked_at:new Date().toISOString()},false,[],cache);
+ assert.notEqual(h.kind,'good');assert.equal(h.statusOnly,true);assert.match(h.detail,/не подтверждается/);
+ const removed=model.humanService(saved,good,{enabled:true},{state:'pending'},false,[],{...cache,applied:{}});
+ assert.equal(removed.applied,false);assert.equal(removed.route,'','old row cannot restore a removed cached assignment');
+ assert.equal(model.humanService(saved,good,{enabled:true},{state:'healthy'},false,[{originLabel:'Добавлено вручную'}],cache).excluded,true,'cached status cannot erase a saved exclusion');
+ const retained={...cache,fresh:false,ageMS:45000};
+ const oldTask=model.humanService(service,{}, {enabled:true},{state:'checking',message:'Идёт проверка.'},true,[],retained);
+ assert.equal(oldTask.progress,false);assert.match(oldTask.label,/Последние сведения/);assert.match(oldTask.detail,/45 сек назад/);
+ assert.equal(model.humanService(service,good,{enabled:true},{state:'checking'},true,[],retained).kind,'good','independent current route proof remains authoritative');
+});
+await test('runtime expiry boundary keeps a ready service inspector unknown without disabling independent controls',()=>{
+ const {c,state,$,calls}=fixture();let clock=0;
+ const consoleSource=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/console.js'),'utf8');
+ const helpers=['consoleObservationClock','consoleAcceptAutonomySnapshot','consoleAutonomyCache'].map(name=>consoleSource.match(new RegExp('function '+name+'\\([^]*?\\n}\\n'))[0]).join('\n');
+ c.performance={now:()=>clock};c.consoleAutonomyReceipt=null;vm.runInContext(helpers,c);
+ state.services[0]={...service,dirty:false,applied_state:{enabled:false}};c.interfaceSummaries=()=>({});
+ c.consoleAcceptAutonomySnapshot({...snap(),services:{youtube:{enabled:true}},applied_services:{},runtime:{youtube:{state:'domain-route-unavailable',message:'Для доменного сервиса нужен NFQWS2.'}},observation:{instance_id:'a'.repeat(32),revision:1,state:'available',data_age_ms:0,observed_at:'2026-10-23T19:00:00Z'}});
+ clock=119999;c.interfaceOpenService('youtube');
+ assert.equal(c.consoleAutonomyCache().usable,true);assert.match($('#r5InspectorStatus').innerHTML,/Последние сведения: Нет подтверждённого обхода/);
+ const controls=$('#r6InspectorControls').innerHTML,removal=$('#r6InspectorRemove').innerHTML;
+ clock=120000;c.interfaceUpdateInspector();
+ assert.equal(c.consoleAutonomyCache().usable,false);assert.match($('#r5InspectorStatus').innerHTML,/Нет свежих данных/);
+ assert.doesNotMatch($('#r5InspectorStatus').innerHTML,/Ожидает настройки|Подбирается|Проверяется/);
+ assert.doesNotMatch($('#r5InspectorDetail').textContent,/добавлен в автопилот/);
+ clock=120001;$('#ui3ServiceDialog').close();c.interfaceOpenService('youtube');
+ assert.match($('#r5InspectorStatus').innerHTML,/Нет свежих данных/,'reopening an expired observation invented a pending task');
+ assert.equal($('#r6InspectorCheck').disabled,false);assert.equal($('#r6InspectorControls').innerHTML,controls);assert.equal($('#r6InspectorRemove').innerHTML,removal);
+ assert.deepEqual(calls.filter(call=>call[0]==='start'||call[0]==='manage'),[]);
+ state.services[0].applied_state={enabled:true,route:'nfqws2',sources:[]};c.interfaceSummaries=()=>({youtube:good});c.interfaceUpdateInspector();
+ assert.match($('#r5InspectorStatus').innerHTML,/Работает/,'expired runtime erased independent current route proof');
+});
+await test('quick add announces success only after explicitly accepted management',async()=>{
+ for(const accepted of [false,undefined,true]){
+  const {c,state,notices}=fixture();state.services=[{id:'new',name:'New',enabled:false}];c.interfaceManage=async()=>accepted;
+  await c.interfaceQuickAdd('new');assert.equal(notices.length,accepted===true?1:0);assert.equal(c.interfaceState.busy,false);
+ }
+});
+await test('domain-route refusal is readable on the service card without advanced details',()=>{
+ const message='Выберите NFQWS2 или выключите сервис: VPN и прокси не различают сайты на общем IP.';
+ const s={id:'youtube',name:'YouTube',enabled:true,applied_state:{enabled:false}};
+ const h=model.humanService(s,{}, {enabled:true},{state:'domain-route-unavailable',message});
+ assert.equal(h.label,'Нет подтверждённого обхода для доменного сервиса');assert.equal(h.detail,message);assert.equal(h.kind,'warn');
+ const {c,state}=fixture();state.services=[s];c.consoleSnapshot.services.youtube={enabled:true};c.consoleSnapshot.runtime.youtube={state:'domain-route-unavailable',message};
+ const html=c.interfaceServiceCard(s,{});assert.match(html,/Нет подтверждённого обхода для доменного сервиса/);assert.match(html,/Выберите NFQWS2/);assert.doesNotMatch(html,/domain-route-unavailable/);
+});
+await test('custom catalog definition can be inspected before enrollment',()=>{
+ const {c,state}=fixture();
+ const item={id:'custom-catalog-check',name:'Проверка каталога',custom:true,enabled:false};
+ state.services=[item];
+ for(const setup of [false,true]){
+  c.consoleSnapshot.policy.setup_complete=setup;
+  const card=c.interfaceServiceCard(item,{});
+  assert.match(card,/data-rz-inspect="custom-catalog-check"[^>]*>Подробнее<\/button>/);
+  assert.match(card,/data-r5-add="custom-catalog-check"/);
+  assert.doesNotMatch(card,/data-rz-action="delete"/);
+ }
+ assert.doesNotMatch(c.interfaceServiceCard({...item,custom:false},{}),/data-rz-inspect=/);
+ c.consoleSnapshot.services[item.id]={enabled:true};
+ const enrolled=c.interfaceServiceCard(item,{});
+ assert.equal((enrolled.match(/data-rz-inspect=/g)||[]).length,1);
+ assert.match(enrolled,/>Открыть<\/button>/);
+});
+await test('sidebar count updates outside home and first setup opens the wizard directly',()=>{
+ const {c,state,$}=fixture();state.currentView='onboard';
+ state.services=[{...service},{...service,id:'discord'},{...service,id:'telegram'}];
+ c.renderInterfaceNavigation();assert.equal($('#ui3NavCount').textContent,'3');
+ state.services=[];c.renderInterfaceNavigation();assert.equal($('#ui3NavCount').textContent,'0');
+ const first=model.humanAuto({policy:{setup_complete:false}},{});assert.equal(first.target,'onboard');
+});
+await test('metadata summary refresh replaces unknown inventory without redrawing the home form',()=>{
+ const {c,state,$}=fixture();
+ c.refreshHomeEngineSummary();assert.match($('#ui7HomeEngines').innerHTML,/Состояние неизвестно/);
+ state.dataLoad.inventory={loaded:true,phase:'ready'};c.consoleEngineState=()=>({label:'Установлен'});
+ c.renderInterfaceHome=()=>{throw Error('must not redraw full home');};c.refreshHomeEngineSummary();
+ assert.doesNotMatch($('#ui7HomeEngines').innerHTML,/Состояние неизвестно/);assert.match($('#ui7HomeEngines').innerHTML,/Установлен/);
+});
+await test('known recovery refusal replaces loading without inventing inventory or statistics',()=>{
+ const {c,state,$,calls}=fixture();
+ c.consoleSnapshot=null;c.consoleAutonomyError='DATAPLANE_RECOVERY_REQUIRED';
+ state.services=[];state.dataLoad={services:{loaded:false,phase:'error'},inventory:{loaded:false,phase:'error'}};
+ state.panelAvailability={kind:'responding',admission:{state:'recovery-required'}};
+ assert.equal(c.interfaceRecoveryRequired(),true);
+ c.renderInterfaceHome({});
+ assert.match($('#r42AutoPanel').innerHTML,/Нужно восстановление/);
+ assert.match($('#r42AutoPanel').innerHTML,/data-rz-nav="diagnostics"/);
+ assert.match($('#ui7HomeEngines').innerHTML,/Состояние неизвестно/);
+ assert.match($('#ui7HomeEngines').innerHTML,/<b>—<\/b>/);
+ assert.doesNotMatch($('#ui7HomeEngines').innerHTML,/Процесс запущен|Не установлен|\d проверено/);
+ assert.equal($('#ui3HomeCount').textContent,'—');
+ assert.match($('#ui3Resources').innerHTML,/Нет свежих данных/);
+ assert.doesNotMatch($('#ui3Resources').innerHTML,/0%/);
+ assert.doesNotMatch($('#r42AutoPanel').innerHTML,/выключен|Нет связи/);
+ assert.deepEqual(calls,[],'render must not start recovery or service mutations');
+ state.panelAvailability={kind:'unreachable',admission:{state:'recovery-required'}};
+ assert.equal(c.interfaceRecoveryRequired(),false,'unreachable must not manufacture a current recovery refusal');
+ state.panelAvailability={kind:'responding',admission:{state:'idle'}};
+ c.renderInterfaceHome({});assert.doesNotMatch($('#r42AutoPanel').innerHTML,/Нужно восстановление/);
+ state.panelAvailability={kind:'responding',admission:{state:'recovery-required'}};
+ state.authenticated=false;assert.equal(c.interfaceRecoveryRequired(),false);
+ state.authenticated=true;c.interfaceState.authRevoked=true;assert.equal(c.interfaceRecoveryRequired(),false);
+});
+await test('primary destinations retain unique owners and directly expose tools',()=>{for(const view of ['dns','diagnostics','strategylab','testlab','updates'])assert.equal(model.navigation(view).owner,view);const all=Object.values(model.taskSections).flatMap(s=>s.children.map(x=>x[0]));assert.equal(all.length,new Set(all).size);assert.equal(model.navigation('engines').owner,'engines');});
+await test('healthy and changed remains healthy with a separate actionable change',()=>{const h=model.humanService({...service,dirty:true},good);assert.equal(h.kind,'good');assert(h.actionable);assert.match(h.pendingLabel,/изменения/);assert.equal(model.filterServices([service],{scope:'attention'},{youtube:h}).length,1);});
+await test('routine missing proof does not become manual intervention',()=>{const h=model.humanService(service,{kind:'unknown',route:'nfqws2'});assert.notEqual(h.kind,'good');assert.equal(h.actionable,false);});
+await test('unbound good summary without route is not service proof',()=>assert.notEqual(model.humanService(service,{kind:'good'}).kind,'good'));
+await test('another route cannot supply green status',()=>assert.notEqual(model.humanService(service,{kind:'good',route:'xray'}).kind,'good'));
+await test('desired deselection retains applied route and pending marker',()=>{const h=model.humanService({...service,enabled:false},good);assert(h.member&&h.applied&&h.changed);assert.equal(h.route,'nfqws2');});
+await test('removing is not green even with prior proof',()=>assert.equal(model.humanService(service,good,{enabled:true,removing:true}).kind,'warn'));
+await test('stale display does not claim stopped or confirmed access',()=>{const h=model.humanService(service,good,null,{},false);assert.equal(h.kind,'unknown');assert.equal(h.route,'nfqws2');assert(h.member);});
+await test('queued work does not produce manual alert',()=>{const h=model.humanService(service,{}, {enabled:true},{state:'checking'});assert.equal(h.label,'Проверяется');assert.equal(h.actionable,false);});
+await test('engine usage requires matching current proof instead of runtime history',()=>{const u=model.engineUsage([service],{},{youtube:{enabled:true}},{youtube:{state:'healthy'}});assert.equal(u.nfqws2.assigned,1);assert.equal(u.nfqws2.verified,0);assert.equal(model.engineUsage([service],{youtube:good}).nfqws2.verified,1);assert.equal(model.engineUsage([service],{youtube:{kind:'good',route:'sing-box:node-old'}}).nfqws2.verified,0);});
+await test('historical healthy cannot confirm a new route or override a current failure',()=>{const historical={state:'healthy',message:'Старая проверка прошла.',checked_at:'2020-01-01T00:00:00Z',network:'old-network',failure_node:'sing-box:node-old'};const changed={...service,dirty:false,applied_state:{enabled:true,route:'sing-box:node-new',sources:[]}};const managed={enabled:true,expected_route:'sing-box:node-old'};assert.notEqual(model.humanService(changed,{},managed,historical).kind,'good');assert.equal(model.humanService(changed,{kind:'bad',route:'sing-box:node-new'},managed,historical).kind,'bad');assert.equal(model.humanService(service,good,{enabled:true},historical).kind,'good','the existing fresh matching summary still confirms access');});
+await test('pending applied service waits for verification, not first setup',()=>{const h=model.humanService(service,{}, {enabled:true},{state:'pending'});assert.equal(h.label,'Включён · перепроверяется');assert.equal(h.applied,true);assert.equal(h.actionable,false);const unconfigured=model.humanService({...service,applied_state:{enabled:false}}, {}, {enabled:true},{state:'pending'});assert.equal(unconfigured.label,'Ожидает настройки');});
+await test('saved-only rows cannot borrow good proof even if loader says ready',()=>{const h=model.humanService({...service,presentation_only:true},good,{enabled:true},{state:'healthy'});assert.equal(h.kind,'unknown');assert.equal(h.label,'Нет свежих данных');assert.equal(model.humanCounts([{...service,presentation_only:true}],{youtube:good}).good,0);});
+await test('global pause suppresses old running task and explains global pause',()=>{const {c}=fixture();c.consoleSnapshot.services.youtube={enabled:true};c.consoleSnapshot.runtime.youtube={state:'checking'};c.consoleSnapshot.policy.enabled=false;const h=c.interfaceServicePresentation(service,{});assert.notEqual(h.label,'Проверяется');assert.match(h.control,/общей паузе/);});
+await test('scope uses applied sources not desired all LAN',()=>{const {c}=fixture();assert.equal(c.interfaceScopeLabel({...service,all_lan:true,sources:[],applied_sources:[]}), 'Адреса и сети: 1');});
+await test('empty applied sources does not infer all LAN from draft',()=>{const {c}=fixture();assert.match(c.interfaceScopeLabel({...service,all_lan:true,applied_state:{enabled:true,route:'nfqws2'}}),/применённом плане/);});
+await test('inspector reads current route scope and ownership after background update',()=>{const {c,state,$}=fixture();c.interfaceOpenService('youtube');assert.equal($('#r6InspectorRoute').textContent,'nfqws2');state.services[0].applied_state={enabled:true,route:'xray',sources:['192.168.1.21','192.168.1.22']};c.consoleSnapshot.services.youtube={enabled:true};c.interfaceSummaries=()=>({youtube:{kind:'good',route:'xray'}});c.interfaceUpdateInspector();assert.equal($('#r6InspectorRoute').textContent,'xray');assert.equal($('#r6InspectorScope').textContent,'Адреса и сети: 2');assert.match($('#r6InspectorControls').innerHTML,/data-rz-action="pause"/);assert.match($('#r6InspectorAddresses').textContent,/192.168.1.22/);});
+await test('inspector content is not replaced and focus not stolen on same service',()=>{const {c,$,calls}=fixture();c.interfaceOpenService('youtube');const html=$('#ui3InspectorContent').innerHTML;const n=calls.filter(x=>x[0]==='focus').length;c.interfaceOpenService('youtube');assert.equal($('#ui3InspectorContent').innerHTML,html);assert.equal(calls.filter(x=>x[0]==='focus').length,n);});
+await test('deleted service cannot retain old route and action controls',()=>{const {c,state,$}=fixture();c.interfaceOpenService('youtube');state.services=[];c.interfaceUpdateInspector();assert.equal($('#r6InspectorRoute').textContent,'Нет актуальных данных');assert.equal($('#r6InspectorControls').innerHTML,'');assert($('#r6InspectorCheck').disabled);});
+await test('auth revocation fences inspector updates',()=>{const {c,$}=fixture();c.interfaceOpenService('youtube');c.interfaceState.authRevoked=true;c.state.services[0].applied_state.route='must-not-render';c.interfaceUpdateInspector();assert.equal($('#r6InspectorRoute').textContent,'nfqws2');});
+await test('domain rendering is escaped and bounded',()=>{const {c,state,$}=fixture();state.services[0].domains=['<img src=x onerror=alert(1)>',...Array.from({length:150},(_,i)=>'x'+i+'.example.com')];c.interfaceOpenService('youtube');const html=$('#r6InspectorDomains').innerHTML;assert(!html.includes('<img'));assert.equal((html.match(/<code>/g)||[]).length,100);assert.match(html,/первые 100/);});
+await test('quick add releases lock when renderer throws',async()=>{const {c,state,calls}=fixture();state.services=[{id:'new',name:'New',enabled:false}];c.renderInterfaceServices=()=>{throw Error('renderer');};await c.interfaceQuickAdd('new');assert.equal(c.interfaceState.busy,false);assert.equal(calls.filter(x=>x[0]==='manage').length,1);assert(c.state.uiRenderIssues);});
+await test('quick add releases lock when action and error renderer fail',async()=>{const {c,state}=fixture();state.services=[{id:'new',enabled:false}];c.interfaceManage=async()=>{throw Error('write');};c.interfaceToast=()=>{throw Error('toast');};await c.interfaceQuickAdd('new');assert.equal(c.interfaceState.busy,false);});
+await test('two quick adds create one outstanding operation',async()=>{const {c,state,calls}=fixture();state.services=[{id:'new',enabled:false}];let done;c.interfaceManage=()=>new Promise(r=>{calls.push(['manage']);done=r;});const a=c.interfaceQuickAdd('new');await c.interfaceQuickAdd('new');done();await a;assert.equal(calls.filter(x=>x[0]==='manage').length,1);});
+await test('existing manual selection is not silently taken over',async()=>{const {c,calls}=fixture();await c.interfaceQuickAdd('youtube');assert.equal(calls.filter(x=>x[0]==='manage').length,0);});
+await test('check stays in place with one existing server check and no Apply',async()=>{const {c,$,calls}=fixture();c.interfaceOpenService('youtube');await c.interfaceCheckService('youtube');assert.equal(calls.filter(x=>x[0]==='navigate').length,0);assert.equal(calls.filter(x=>x[0]==='start').length,1);assert.equal(calls.filter(x=>x[0]==='manage').length,0);assert.match($('#ui3InspectorMessage').textContent,/принята/);assert.equal(c.interfaceState.busy,false);});
+await test('new accepted job is not hidden by old error message',async()=>{const {c,$}=fixture();c.interfaceOpenService('youtube');c.serviceDashboard.message='old failure';await c.interfaceCheckService('youtube');assert.match($('#ui3InspectorMessage').textContent,/принята/);});
+await test('missing config revision refuses start without replay',async()=>{const {c,calls}=fixture();c.serviceDashboard.control={};c.refreshServiceControl=async()=>{};await c.interfaceCheckService('youtube');assert.equal(calls.filter(x=>x[0]==='start').length,0);assert.equal(c.interfaceState.busy,false);});
+await test('unconfirmed start never becomes service PASS',async()=>{const {c,$}=fixture();c.interfaceOpenService('youtube');c.serviceDashboardStart=async()=>{};await c.interfaceCheckService('youtube');assert.match($('#ui3InspectorMessage').textContent,/не подтверждён/);});
+await test('check UI throw does not wedge busy state',async()=>{const {c}=fixture();c.interfaceUpdateInspector=()=>{throw Error('render');};await c.interfaceCheckService('youtube');assert.equal(c.interfaceState.busy,false);});
+await test('faulty navigation renderer cannot prevent other components',()=>{const {c,calls}=fixture();c.renderInterfaceNavigation=()=>{throw Error('nav');};c.renderInterfaceHome=()=>calls.push(['home']);c.renderInterfaceSettings=()=>calls.push(['settings']);c.renderInterface();assert(calls.some(x=>x[0]==='home'));assert(!calls.some(x=>x[0]==='settings'),'hidden settings must not redraw');});
+await test('contextual changes filter appears only for actual changes',()=>{const {c,state,$}=fixture();c.renderInterfaceServices({youtube:good});assert($('#r6ChangedServices').hidden);state.services[0].dirty=true;c.renderInterfaceServices({youtube:good});assert.equal($('#r6ChangedServices').hidden,false);assert.match($('#r6ChangedServices').textContent,/1/);});
+await test('saved whole-service exclusion has neutral card and explicit editor action',()=>{const {c,state}=fixture();state.resourceExclusions={};state.dataLoad.resourceExclusions={phase:'ready'};c.interfaceExclusionMap=()=>({youtube:[{originLabel:'Добавлено вручную'}]});const html=c.interfaceServiceCard(service,{youtube:{kind:'bad',route:'nfqws2'}});assert.match(html,/Исключение сохранено/);assert.match(html,/Прежнее назначение/);assert.doesNotMatch(html,/Проверка не пройдена/);assert.doesNotMatch(html,/data-r5-add/);assert.match(c.interfaceInspectorControls(service),/data-rz-nav="exclusions"/);});
+await test('two service lists wait for real supported contract and exclude saved negative from bypass view',()=>{const {c,state,$}=fixture();c.renderInterfaceServices({youtube:good});assert.equal($('#resourceBypassTab').textContent,'Мои сервисы');assert($('#resourceExcludedTab').hidden);state.resourceExclusions={};state.dataLoad.resourceExclusions={phase:'ready'};c.resourceExclusionsSupported=()=>true;c.interfaceExclusionMap=()=>({youtube:[{originLabel:'Добавлено вручную'}]});c.renderInterfaceServices({youtube:good});assert.equal($('#resourceBypassTab').textContent,'Обходить');assert.equal($('#resourceExcludedTab').hidden,false);assert.doesNotMatch($('#ui3ServiceCatalog').innerHTML,/data-rz-card="youtube"/);assert.match($('#ui3CatalogSummary').textContent,/Без обхода: 1/);c.interfaceState.filter='excluded';c.resourceExclusionsServicesHTML=()=>'<p>Принятые исключения</p>';c.renderInterfaceServices({youtube:good});assert.match($('#ui3ServiceCatalog').innerHTML,/Принятые исключения/);});
+await test('home excludes intentional saved negative from failures while retaining applied assignment count',()=>{const {c,state,$}=fixture();state.resourceExclusions={};state.dataLoad.resourceExclusions={phase:'ready'};c.resourceExclusionsSupported=()=>true;c.interfaceExclusionMap=()=>({youtube:[{originLabel:'Добавлено вручную'}]});c.renderInterfaceHome({youtube:good});assert.match($('#ui3HealthBanner').innerHTML,/Без обхода: 1/);assert.doesNotMatch($('#r42RouteDistribution').innerHTML,/YouTube/);assert.match($('#ui7HomeEngines').innerHTML,/<b>1<\/b>/);assert.match($('#ui7HomeEngines').innerHTML,/0 проверено/);});
+await test('home shows services the autopilot is working on before working ones',()=>{const {c,state,$}=fixture();state.services.push({id:'telegram',name:'Telegram',category:'Мессенджеры',enabled:true,dirty:false,applied_state:{enabled:true,route:'auto'}});c.consoleSnapshot.services.telegram={enabled:true};c.consoleSnapshot.runtime.telegram={state:'searching',message:'Подходящий узел пока не найден.'};c.renderInterfaceHome({youtube:good});const html=$('#r42RouteDistribution').innerHTML;assert(html.indexOf('Telegram')>=0&&html.indexOf('Telegram')<html.indexOf('YouTube'),'problem first');assert.match(html,/data-kind="progress"/);assert.match(html,/Подходящий узел пока не найден/);assert.match(html,/<b>1<\/b> работает/);assert.match(html,/<b>1<\/b> в работе автопилота/);const attention=$('#ui3Attention').innerHTML;assert.match(attention,/Telegram/);assert.match(attention,/Вашего участия не требуется/);assert.doesNotMatch(attention,/ещё нет свежего результата/);});
+await test('home lists every service up to eight and links the rest',()=>{const {c,state,$}=fixture();const sums={};state.services=Array.from({length:10},(_,i)=>{const id='s'+i;sums[id]=good;return {...structuredClone(service),id,name:'Сервис '+i};});c.renderInterfaceHome(sums);const html=$('#r42RouteDistribution').innerHTML;assert.equal((html.match(/class="r5-home-service"/g)||[]).length,8);assert.match(html,/Ещё 2 работают/);});
+await test('home still supports known zero resources and unknown data',()=>{const {c,state,$}=fixture();state.metrics={latest:{timestamp:new Date().toISOString(),cpu_ready:true,cpu_percent:0,memory_used_percent:0,memory_total_bytes:1024}};c.renderInterfaceHome({youtube:good});assert.match($('#ui3Resources').innerHTML,/0%/);state.dataLoad.services.phase='error';c.renderInterfaceHome({youtube:good});assert.match($('#ui3HealthBanner').innerHTML,/неизвестна/);});
+await test('paused home does not claim an old service check is still running',()=>{const {c,$}=fixture();c.consoleSnapshot.services.youtube={enabled:true};c.consoleSnapshot.runtime.youtube={state:'checking'};c.consoleSnapshot.policy.enabled=false;c.interfaceSummaries=()=>({});c.renderInterfaceHome({});assert.doesNotMatch($('#r42RouteDistribution').innerHTML,/Проверяется/);});
+await test('idle availability is quiet, busy/failure remains visible',()=>{const hctx={};vm.createContext(hctx);vm.runInContext(fs.readFileSync(path.join(checkout,'cmd/razvilka/web/panel-availability.js'),'utf8'),hctx);const h=hctx.RazvilkaPanelAvailability;assert.equal(h.needsAttention({kind:'responding',admission:{state:'idle'}}),false);assert.equal(h.needsAttention({kind:'responding',admission:{state:'busy'}}),true);assert.equal(h.needsAttention({kind:'unreachable'}),true);assert.equal(h.needsAttention(null),false);});
+if(!checkout){const before=require('./fixtures/stage2-before.model.js');const h=before.humanService({...service,dirty:true},good);assert.equal(before.filterServices([service],{scope:'attention'},{youtube:h}).length,0);results.push({name:'baseline reproduces missing healthy+pending attention item',status:'reproduced'});}
+console.log(JSON.stringify({suite:'unified-ui',mode:checkout?'checkout-functions':'component-excerpts',results},null,2));
+})().catch(e=>{console.error(e.stack);process.exitCode=1;});

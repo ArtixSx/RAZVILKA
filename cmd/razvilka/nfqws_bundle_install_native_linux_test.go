@@ -1,0 +1,352 @@
+//go:build linux
+
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/app"
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/security"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
+)
+
+// This opt-in actually installs the fixed reviewed payload through the panel.
+// Root supplies its owned ARM64 deployment, actual /opt/bin/razvilka identity,
+// readable retained fleet and a new private empty source root. No fixture
+// archive, receipt, trusted-assets flag or substituted admission is accepted.
+func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
+	if os.Getenv("RAZVILKA_NATIVE_MANAGED_INSTALL_APP") != "1" {
+		t.Skip("coordinator-owned genuine ARM64 first installation required")
+	}
+	if os.Geteuid() != 0 || runtime.GOARCH != "arm64" {
+		t.Fatal("actual root ARM64 installation required")
+	}
+	root := os.Getenv("RAZVILKA_NATIVE_MANAGED_INSTALL_APP_ROOT")
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
+		t.Fatal("canonical owned source root required")
+	}
+	info, err := os.Lstat(root)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&077 != 0 {
+		t.Fatal("new private real directory required", err)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("new empty source directory required", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
+	defer cancel()
+	owner := components.New()
+	if err := owner.PreflightManagedNFQWS(ctx); err != nil {
+		t.Fatal("actual managed payload filesystem preflight", err)
+	}
+	if floor, err := components.RequiredRetainedManagedUpdateReadVersion(ctx, owner.StateDir); err != nil || floor != components.ComponentUpdateSchema {
+		t.Fatal("first managed installation requires readable pre-schema3 component state", floor, err)
+	}
+	if installed, err := owner.AcquireCurrentManagedNFQWSRuntime(ctx); err == nil {
+		_ = installed.Close()
+		t.Fatal("genuine managed bundle already installed; do not erase its history to repeat this test")
+	}
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := strategylab.New(filepath.Join(root, "strategy-lab.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Validator, manager.Executor = strategylab.CompatibleValidator{}, nil
+	files, err := productionSelfUpdateFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := operationgate.InitializeSelfUpdateControl(ctx, files.ControlRoot); err != nil {
+		t.Fatal(err)
+	}
+	const token = "native-managed-install-owned-token-0123456789"
+	sec, err := security.NewGate(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This is the actual catalog of this new test App, not an HTTP response
+	// replacement. Saving a choice must not enable this service or probe it.
+	catalogue := catalog.Catalog{Services: []catalog.Service{{ID: "native-manual", Name: "Native manual selection", Category: "test", Domains: []string{"example.com"}, Strategy: []string{"nfqws2"}}}}
+	activate := os.Getenv("RAZVILKA_NATIVE_MANAGED_INSTALL_ACTIVATE") == "one-owned-ip"
+	var source, destination netip.Addr
+	if activate {
+		source, err = netip.ParseAddr(os.Getenv("RAZVILKA_NATIVE_MANAGED_CLIENT"))
+		if err != nil || !source.Is4() || !source.IsPrivate() {
+			t.Fatal("explicit single private IPv4 test client required")
+		}
+		destination, err = netip.ParseAddr(os.Getenv("RAZVILKA_NATIVE_MANAGED_DESTINATION"))
+		if err != nil || !destination.Is4() || !destination.IsGlobalUnicast() || destination.IsPrivate() {
+			t.Fatal("explicit single public IPv4 test destination required")
+		}
+		catalogue.Services[0].Domains = nil
+		catalogue.Services[0].CIDRs = []string{netip.PrefixFrom(destination, 32).String()}
+		catalogue.Services[0].ProbeURL = "https://" + destination.String() + "/"
+	}
+	if err := catalog.Validate(catalogue); err != nil {
+		t.Fatal(err)
+	}
+	a := &app.App{Store: store, Catalog: catalogue, StrategyLab: manager, Components: owner, Security: sec, SelfUpdate: files.Helper, SelfUpdateFiles: files, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
+	actualTools := os.Getenv("RAZVILKA_NATIVE_MANAGED_INSTALL_TOOLS") == "1"
+	if activate && !actualTools {
+		t.Fatal("activation requires the original stock tools")
+	}
+	if actualTools {
+		configs := engineconfig.New(filepath.Join(root, "staged"), filepath.Join(root, "backups"))
+		a.Dataplane, err = newDataplaneManager(filepath.Join(root, "dataplane"), configs)
+		if err != nil {
+			t.Fatal("ordinary adapter construction", err)
+		}
+		if err := a.ConfigureDefaultConsent(filepath.Join(root, "config.json"), ""); err != nil {
+			t.Fatal("original private Store/control binding", err)
+		}
+		defer a.CloseDefaultConsent()
+	}
+	defer a.CloseManagedNFQControl()
+	if err := a.InitializeComponentRecoveryGate(); err != nil {
+		t.Fatal(err)
+	}
+	if control, err := configureManagedNFQCompatibility(ctx, a); err == nil || control != nil {
+		t.Fatal("missing receipt configured startup compatibility", err)
+	}
+	before := store.Get()
+	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer server.Close()
+	request := func(method, path, body string, out any) int {
+		t.Helper()
+		req, err := http.NewRequestWithContext(ctx, method, server.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Origin", server.URL)
+		req.Header.Set("Content-Type", "application/json")
+		response, err := server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if err := json.NewDecoder(response.Body).Decode(out); err != nil {
+			t.Fatal("actual API response", response.StatusCode, err)
+		}
+		return response.StatusCode
+	}
+	var plan struct {
+		Ready    bool   `json:"ready"`
+		Revision uint64 `json:"revision"`
+		Code     string `json:"code"`
+		Reason   string `json:"reason"`
+	}
+	if status := request("GET", "/api/v1/components/nfqws2/managed-bundle/plan", "", &plan); status != 200 || !plan.Ready || plan.Revision != before.Revision {
+		t.Fatal("actual retained fleet/control/config did not admit the installation plan", status, plan)
+	}
+	if _, err := os.Stat(manager.Path); !os.IsNotExist(err) {
+		t.Fatal("plan initialized source", err)
+	}
+	body, _ := json.Marshal(map[string]uint64{"expected_revision": plan.Revision})
+	var result struct {
+		Code       string                               `json:"code"`
+		ReasonCode string                               `json:"reason_code"`
+		Error      string                               `json:"error"`
+		OK         bool                                 `json:"ok"`
+		Receipt    components.ManagedNFQWSBundleReceipt `json:"receipt"`
+		Installed  bool                                 `json:"installed_idle"`
+		Compatible bool                                 `json:"compatibility_ready"`
+	}
+	if status := request("POST", "/api/v1/components/nfqws2/managed-bundle/install", string(body), &result); status != 200 || !result.OK || !result.Installed || !result.Compatible {
+		t.Fatal("actual first install or original source handover refused", status, result)
+	}
+	manifest, err := components.ReviewedManagedNFQWSManifest(runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := manifest.Digest()
+	if err != nil || result.Receipt.ManifestSHA256 != digest || result.Receipt.ProviderID != manifest.ProviderID || result.Receipt.Flavor != manifest.Flavor || result.Receipt.State != "ready-idle" {
+		t.Fatal("installed receipt does not match reviewed payload", err)
+	}
+	var readback struct {
+		Installed bool   `json:"installed_idle"`
+		ID        string `json:"receipt_id"`
+		Hash      string `json:"manifest_sha256"`
+	}
+	if status := request("GET", "/api/v1/components/nfqws2/managed-bundle/installed", "", &readback); status != 200 || !readback.Installed || readback.ID != result.Receipt.TransactionID || readback.Hash != digest {
+		t.Fatal("independent current lease readback does not match install", status, readback)
+	}
+	snapshot := manager.Snapshot()
+	saved, err := os.ReadFile(manager.Path)
+	if err != nil || len(snapshot.Candidates) != 0 || len(snapshot.Evidence) != 0 || len(snapshot.Selections) != 0 || snapshot.QuiescenceUnknown || bytes.Contains(saved, []byte(`"wait_echild": true`)) || bytes.Contains(saved, []byte(`"acknowledged": true`)) {
+		t.Fatal("first installation invented history or candidates", err)
+	}
+	if !reflect.DeepEqual(before, store.Get()) || !before.SafeMode || before.NetworkPolicy != nil || before.DefaultRouteConsent != nil || manager.Executor != nil || snapshot.Safety["temporary_scoped_firewall_probe"] != false || a.Operations.Snapshot().Active != 0 {
+		t.Fatal("idle installation changed routes, scope or native probing")
+	}
+	t.Log("actual ARM64 first panel install: original closed source initialized, reviewed payload installed, fresh runtime readback and locked provider handover passed; no native compatibility, route or client-health claim")
+
+	// Exercise the installed validator on this SAME live App, without restart
+	// or rebuilding the provider through the independent startup test.
+	candidate, err := manager.AddCandidate("tcp-tls", "first installed compatibility", "--filter-tcp=443 --lua-desync=fake:blob=tls_clienthello", "expert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checked strategylab.Candidate
+	if status := request("POST", "/api/v1/strategy-lab/candidates/"+candidate.ID+"/validate", "{}", &checked); status != http.StatusOK || !checked.Validation.OK || !checked.Validation.Native || !checked.Validation.LuaChecked || checked.Validation.QuiescenceUnknown || checked.Validation.Code != "COMPATIBLE" {
+		t.Fatal("hot-installed provider did not complete actual compatibility", status, checked.Validation.Code)
+	}
+	saved, err = os.ReadFile(manager.Path)
+	if err != nil || !bytes.Contains(saved, []byte(`"wait_echild": true`)) || !bytes.Contains(saved, []byte(`"acknowledged": true`)) || manager.Snapshot().QuiescenceUnknown || a.Operations.Snapshot().Active != 0 {
+		t.Fatal("hot-installed compatibility did not retain actual completion and retirement", err)
+	}
+	if !reflect.DeepEqual(before, store.Get()) || manager.Executor != nil || manager.Snapshot().Safety["temporary_scoped_firewall_probe"] != false {
+		t.Fatal("compatibility changed configuration or enabled network probing")
+	}
+	current, err := owner.AcquireCurrentManagedNFQWSRuntime(ctx)
+	if err != nil {
+		t.Fatal("completed compatibility retained the runtime writer lease", err)
+	}
+	actual := current.Descriptor()
+	if closeErr := current.Close(); closeErr != nil || actual.ReceiptID != result.Receipt.TransactionID || actual.ManifestSHA256 != digest {
+		t.Fatal("compatibility changed the genuine installed generation", closeErr)
+	}
+	t.Log("same App first install -> actual authenticated dry-run/Lua -> saved ECHILD/ACK -> retired runtime lease passed; no firewall, routes or client-health claim")
+
+	manualBody, err := json.Marshal(map[string]string{"mode": "manual", "service_id": "native-manual", "protocol": "tcp", "ip_family": "ipv4", "candidate_id": candidate.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selected strategylab.Selection
+	if status := request("POST", "/api/v1/strategy-lab/selections", string(manualBody), &selected); status != http.StatusOK || selected.CandidateID != candidate.ID || selected.Mode != strategylab.ModeManual || !selected.Frozen || selected.Status != "manual-unchecked" || selected.Healthy || selected.Confidence != 0 || selected.LastHealthyAt != "" {
+		t.Fatal("actual manual selection after compatibility did not remain unverified", status, selected)
+	}
+	var observed strategylab.Snapshot
+	if status := request("GET", "/api/v1/strategy-lab", "", &observed); status != http.StatusOK || len(observed.Selections) != 1 || observed.Selections[0].CandidateID != candidate.ID || observed.Selections[0].Status != "manual-unchecked" || observed.Selections[0].Healthy || len(observed.Evidence) != 0 {
+		t.Fatal("actual API readback invented evidence or lost manual choice", status, observed.Selections)
+	}
+	if !reflect.DeepEqual(before, store.Get()) || manager.Executor != nil || observed.Safety["temporary_scoped_firewall_probe"] != false || observed.QuiescenceUnknown || a.Operations.Snapshot().Active != 0 {
+		t.Fatal("manual selection changed configuration, network admission or operation settlement")
+	}
+	current, err = owner.AcquireCurrentManagedNFQWSRuntime(ctx)
+	if err != nil {
+		t.Fatal("manual selection retained the runtime writer lease", err)
+	}
+	if actual = current.Descriptor(); current.Close() != nil || actual.ReceiptID != result.Receipt.TransactionID || actual.ManifestSHA256 != digest {
+		t.Fatal("manual selection changed the installed generation")
+	}
+	t.Log("same App genuine compatibility -> manual HTTP selection -> independent neutral readback passed; unchanged configuration and no network effects")
+	if actualTools {
+		// Only construction and closure are tested here. No Start/Apply is
+		// called; real held tools must pass their ordinary production review.
+		list, err := configureManagedNFQList(ctx, a)
+		if err != nil || list == nil {
+			t.Fatal("ordinary stock factory with actual tools", err)
+		}
+		if activate {
+			// Explicit coordinator-only native test. The ordinary HTTP writers
+			// retain the actual Store/control; no evidence or runner is injected.
+			defer func() {
+				cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if err := list.Close(cleanup); err != nil {
+					t.Error("native retirement remains unconfirmed; preserve the original owner", err)
+				}
+			}()
+			var reply map[string]any
+			if status := request("PUT", "/api/v1/settings/safe-mode", `{"enabled":false}`, &reply); status != http.StatusOK {
+				t.Fatal("explicit private working mode refused", status, reply)
+			}
+			body, _ := json.Marshal(config.ServiceState{Enabled: true, Route: "nfqws2", Sources: []string{netip.PrefixFrom(source, 32).String()}})
+			reply = nil
+			if status := request("PUT", "/api/v1/services/native-manual", string(body), &reply); status != http.StatusOK {
+				t.Fatal("ordinary service selection refused", status, reply)
+			}
+			home := os.Getenv("RAZVILKA_NATIVE_MANAGED_HOME")
+			if home == "" {
+				t.Fatal("explicit actual Home segment required")
+			}
+			policy := config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{home}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "retain"}}
+			body, _ = json.Marshal(map[string]any{"expected_revision": store.Get().Revision, "expected_policy_revision": 0, "policy": policy, "grants": []config.DefaultRouteGrant{}, "confirm": "APPROVE_NETWORK_POLICY"})
+			reply = nil
+			if status := request("POST", "/api/v1/networkpolicy/review", string(body), &reply); status != http.StatusOK || reply["live_applied"] != false {
+				t.Fatal("original list scope approval refused", status, reply)
+			}
+			for cycle := 1; cycle <= 2; cycle++ {
+				for _, action := range []string{"start", "check", "stop", "stop"} {
+					if cycle == 2 && action == "start" {
+						// Exercise the ordinary UI caller with its freshly returned
+						// review, not a reconstructed digest or private admission.
+						var planned struct {
+							Review json.RawMessage `json:"review"`
+							Health string          `json:"service_health"`
+						}
+						if status := request("GET", "/api/v1/plan", "", &planned); status != http.StatusOK || len(planned.Review) == 0 || planned.Health != "unverified" {
+							t.Fatal("ordinary native plan refused", status)
+						}
+						reply = nil
+						if status := request("POST", "/api/v1/apply", string(planned.Review), &reply); status != http.StatusOK || reply["ok"] != true || reply["live_applied"] != true || reply["service_health"] != "unverified" {
+							t.Fatal("ordinary reviewed native Apply refused", status, reply)
+						}
+						var active struct {
+							Health      string `json:"service_health"`
+							Transaction struct {
+								State string `json:"state"`
+								Noop  bool   `json:"noop"`
+							} `json:"transaction"`
+						}
+						if status := request("GET", "/api/v1/plan", "", &active); status != http.StatusOK || active.Health != "unverified" || active.Transaction.State != "committed" || !active.Transaction.Noop {
+							t.Fatal("ordinary active readback refused", status, active)
+						}
+						t.Log("actual same-App ordinary plan/reviewed Apply/active readback passed; service_health=unverified")
+						continue
+					}
+					body := map[string]string{"action": action}
+					if action == "start" {
+						body["service_id"], body["protocol"], body["ip_family"] = "native-manual", "tcp", "ipv4"
+					}
+					encoded, _ := json.Marshal(body)
+					reply = nil
+					if status := request("POST", "/api/v1/strategy-lab/runtime", string(encoded), &reply); status != http.StatusOK || reply["ok"] != true || reply["service_health"] != "unverified" {
+						t.Fatal("actual retained runtime refused", cycle, action, status, reply)
+					}
+					want := "native-active"
+					if action == "stop" {
+						want = "stopped"
+					}
+					if reply["runtime_state"] != want {
+						t.Fatal("actual runtime readback differs", cycle, action, reply)
+					}
+					t.Log("actual same-App native HTTP cycle", cycle, action, want, "service_health=unverified")
+				}
+			}
+			if err := list.Close(ctx); err != nil || a.Operations.Snapshot().Active != 0 {
+				t.Fatal("native cycles did not join original cleanup", err)
+			}
+			return
+		}
+		if err := list.Close(ctx); err != nil {
+			t.Fatal("idle stock factory closure", err)
+		}
+		if !reflect.DeepEqual(before, store.Get()) || a.Operations.Snapshot().Active != 0 {
+			t.Fatal("idle stock factory changed configuration or retained an operation")
+		}
+		t.Log("ordinary stock App factory and closure passed with actual held Entware tools; no Start, Apply or client-health claim")
+	}
+}

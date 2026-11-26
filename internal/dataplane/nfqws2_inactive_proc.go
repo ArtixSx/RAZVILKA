@@ -1,0 +1,305 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
+func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, a *NFQWS2Adapter) error {
+	return nfqws2InactiveProcessesExcept(ctx, proof, a, 0, nil)
+}
+
+// The sole exemption is an original, live process rechecked by the actual
+// first-start owner. Ordinary inactivity never exempts a PID or a name.
+func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlatform, a *NFQWS2Adapter, exceptPID int, current func() error) (result error) {
+	if ctx == nil {
+		return nfqws2InactiveProcessAt("coordinates", ErrNFQWSManagedProcessUnknown)
+	}
+	if ctx.Err() != nil {
+		return nfqws2InactiveProcessAt("context", ErrNFQWSManagedProcessUnknown)
+	}
+	if a == nil || proof.selfPID < 1 || !filepath.IsAbs(proof.procRoot) || proof.readlink == nil {
+		return nfqws2InactiveProcessAt("coordinates", ErrNFQWSManagedProcessUnknown)
+	}
+	if exceptPID != 0 && (exceptPID <= 1 || exceptPID == proof.selfPID || current == nil) {
+		return nfqws2InactiveProcessAt("exemption", ErrNFQWSManagedProcessUnknown)
+	}
+	if proof.procPass == nil {
+		return nfqws2InactiveProcessAt("coordinates", ErrNFQWSManagedProcessUnknown)
+	}
+	pass, err := proof.procPass(ctx, proof.procRoot, proof.selfPID)
+	if err != nil {
+		return nfqws2InactiveProcessAt("inventory.open", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+	}
+	var child inactiveProcPID
+	closeChild := func() error {
+		if child == nil {
+			return nil
+		}
+		previous := child
+		child = nil
+		return previous.Close()
+	}
+	defer func() {
+		closing := errors.Join(closeChild(), pass.Close())
+		if closing != nil {
+			if result != nil {
+				result = errors.Join(result, &inactiveProcCloseFailure{cause: closing})
+				return
+			}
+			if ctx.Err() != nil {
+				closing = nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), closing))
+			} else {
+				closing = nfqws2InactiveProcessAt("inventory.closure", errors.Join(ErrNFQWSManagedProcessUnknown, closing))
+			}
+			result = errors.Join(result, closing)
+		}
+	}()
+	entries, err := pass.Entries()
+	if err != nil {
+		return nfqws2InactiveProcessAt("inventory.read", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+	}
+	self, processes, bytes := false, 0, 0
+	exceptSeen := false
+	for _, entry := range entries {
+		if err := closeChild(); err != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
+			return nfqws2InactiveProcessAt("inventory.closure", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+		}
+		if err := ctx.Err(); err != nil {
+			return nfqws2InactiveProcessAt("context", err)
+		}
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+		if pid <= 0 || strconv.Itoa(pid) != entry.Name() || !entry.IsDir() || processes >= 4096 {
+			return nfqws2InactiveProcessAt("inventory.entry", ErrNFQWSManagedProcessUnknown)
+		}
+		processes++
+		child, err = pass.OpenPID(pid)
+		if err != nil {
+			if inactiveProcOpenMissing(err) && pid != proof.selfPID && pid != exceptPID && pass.GoneBeforeOpen(pid) {
+				continue
+			}
+			return nfqws2InactiveProcessAt("stat.read", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+		}
+		stat, err := child.Stat()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
+			continue
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
+			var statFailure *inactiveProcStatFailure
+			if errors.As(err, &statFailure) {
+				return nfqws2InactiveProcessAt("stat.parse", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+			}
+			return nfqws2InactiveProcessAt("stat.read", ErrNFQWSManagedProcessUnknown)
+		}
+		state, flags, ticks, err := proxyInactiveProcStat(stat, pid)
+		if err != nil {
+			return nfqws2InactiveProcessAt("stat.parse", ErrNFQWSManagedProcessUnknown)
+		}
+		if pid == exceptPID {
+			if exceptSeen || state == 'Z' || state == 'X' || state == 'x' || current() != nil {
+				return nfqws2InactiveProcessAt("exemption.current", ErrNFQWSManagedProcessUnknown)
+			}
+			exceptSeen = true
+			continue
+		}
+		text := strings.TrimSpace(string(stat))
+		name := strings.TrimPrefix(text[:strings.LastIndex(text, ")")], strconv.Itoa(pid)+" (")
+		if nfqws2InactiveProcessName(name) {
+			if state == 'Z' || state == 'X' || state == 'x' {
+				return nfqws2InactiveProcessAt("zombie", ErrNFQWSManagedProcessUnknown)
+			}
+			return nfqws2InactiveProcessAt("name", ErrNFQWSManagedProcessUnknown)
+		}
+		if state == 'Z' || state == 'X' || state == 'x' {
+			if state != 'Z' || pid == proof.selfPID || !child.Terminal() {
+				return nfqws2InactiveProcessAt("self.state", ErrNFQWSManagedProcessUnknown)
+			}
+			continue
+		}
+		cmd, err := child.Command()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
+			continue
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
+			return nfqws2InactiveProcessAt("cmdline.read", ErrNFQWSManagedProcessUnknown)
+		}
+		bytes += len(cmd)
+		if bytes > 16<<20 {
+			return nfqws2InactiveProcessAt("budget", ErrNFQWSManagedProcessUnknown)
+		}
+		if len(cmd) == 0 {
+			if flags&0x00200000 == 0 && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
+				continue
+			}
+			if flags&0x00200000 == 0 || pid == proof.selfPID {
+				return nfqws2InactiveProcessAt("cmdline.empty", ErrNFQWSManagedProcessUnknown)
+			}
+		} else {
+			args, valid := inactiveProcArguments(cmd)
+			if !valid {
+				return nfqws2InactiveProcessAt("cmdline.parse", ErrNFQWSManagedProcessUnknown)
+			}
+			// Stock is_running uses pgrep -f of this entire program path. A
+			// wrapper/observer mentioning it could change stock's PID choice.
+			if exceptPID != 0 && strings.Contains(string(cmd), filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(a.InitPath))), "usr", "bin", "nfqws2")) {
+				return nfqws2InactiveProcessAt("exemption.wrapper", ErrNFQWSManagedProcessUnknown)
+			}
+			executable, err := child.Executable()
+			if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
+				clear(cmd)
+				continue
+			}
+			if err != nil || executable == "" || len(executable) > 4096 || strings.ContainsRune(executable, '\x00') {
+				if ctx.Err() != nil {
+					return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+				}
+				return nfqws2InactiveProcessAt("exe", ErrNFQWSManagedProcessUnknown)
+			}
+			if nfqws2InactiveProcessName(strings.TrimSuffix(executable, " (deleted)")) || nfqws2InactiveProcessName(args[0]) {
+				return nfqws2InactiveProcessAt("exe.name", ErrNFQWSManagedProcessUnknown)
+			}
+			for _, arg := range args {
+				if nfqws2InactiveProcessArgument(arg, a) {
+					return nfqws2InactiveProcessAt("argument", ErrNFQWSManagedProcessUnknown)
+				}
+			}
+		}
+		clear(cmd)
+		again, err := child.Stat()
+		if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
+			continue
+		}
+		closingState, _, closingTicks, parseErr := proxyInactiveProcStat(again, pid)
+		if err != nil || parseErr != nil {
+			if ctx.Err() != nil {
+				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+			}
+			var statFailure *inactiveProcStatFailure
+			if errors.As(err, &statFailure) && statFailure.birth {
+				return nfqws2InactiveProcessAt("startticks", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+			}
+			return nfqws2InactiveProcessAt("stat.close", ErrNFQWSManagedProcessUnknown)
+		}
+		if closingTicks != ticks {
+			return nfqws2InactiveProcessAt("startticks", ErrNFQWSManagedProcessUnknown)
+		}
+		if closingState == 'Z' || closingState == 'X' || closingState == 'x' {
+			closingText := strings.TrimSpace(string(again))
+			closingName := strings.TrimPrefix(closingText[:strings.LastIndex(closingText, ")")], strconv.Itoa(pid)+" (")
+			if nfqws2InactiveProcessName(closingName) {
+				return nfqws2InactiveProcessAt("zombie", ErrNFQWSManagedProcessUnknown)
+			}
+			if closingState != 'Z' || pid == proof.selfPID || pid == exceptPID || !child.Terminal() {
+				return nfqws2InactiveProcessAt("self.state", ErrNFQWSManagedProcessUnknown)
+			}
+			continue
+		}
+		self = self || pid == proof.selfPID
+	}
+	if err := closeChild(); err != nil {
+		if ctx.Err() != nil {
+			return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
+		}
+		return nfqws2InactiveProcessAt("inventory.closure", errors.Join(ErrNFQWSManagedProcessUnknown, err))
+	}
+	if !self || processes == 0 || exceptPID != 0 && !exceptSeen {
+		return nfqws2InactiveProcessAt("inventory.closure", ErrNFQWSManagedProcessUnknown)
+	}
+	if err := ctx.Err(); err != nil {
+		return nfqws2InactiveProcessAt("context", err)
+	}
+	return nil
+}
+
+func nfqws2InactiveProcessName(value string) bool {
+	name := strings.ToLower(filepath.Base(value))
+	return name == "nfqws" || name == "nfqws2" || name == "dvtws"
+}
+
+func nfqws2InactiveProcessArgument(arg string, a *NFQWS2Adapter) bool {
+	if arg == "nfqws-managed-process-supervisor" || arg == "nfqws-managed-helper" {
+		return true
+	}
+	key, value, inline := strings.Cut(arg, "=")
+	if key == "--qnum" || key == "--intercept" || key == "--queue-num" {
+		return true
+	}
+	if !inline {
+		value = arg
+	}
+	lists := a.ownedListPaths()
+	return value == a.StateRoot || value == a.ConfigPath || value == a.InitPath || slices.Contains(lists[:], value)
+}
+
+// nfqws2InactiveNetlinkTable validates the complete proc table without
+// projecting captured rows into diagnostics. A transient kernel snapshot is
+// still a refusal; it must never be converted to evidence of inactivity.
+func nfqws2InactiveNetlinkTable(text string) error {
+	_, err := nfqws2InactiveNetlinkOwners(text)
+	return err
+}
+
+// Owners are returned only after the entire table passes the same strict
+// validation. A missing peer can then be distinguished from malformed or
+// ambiguous input without relaxing the shared scoped socket parser.
+func nfqws2InactiveNetlinkOwners(text string) (map[uint32]string, error) {
+	refuse := func(stage string) (map[uint32]string, error) {
+		return nil, nfqws2InactiveKernelAt("socket.table."+stage, ErrNFQWSManagedKernelOwner)
+	}
+	if len(text) == 0 || len(text) > 1<<20 || !utf8.ValidString(text) || strings.ContainsAny(text, "\x00\r") {
+		return refuse("encoding")
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > 8192 {
+		return refuse("limit")
+	}
+	if strings.Join(strings.Fields(lines[0]), " ") != "sk Eth Pid Groups Rmem Wmem Dump Locks Drops Inode" {
+		return refuse("header")
+	}
+	seen := map[[2]uint64]bool{}
+	owners := map[uint32]string{}
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if len(fields) != 10 {
+			return refuse("columns")
+		}
+		protocol, e1 := strconv.ParseUint(fields[1], 10, 8)
+		port, e2 := strconv.ParseUint(fields[2], 10, 32)
+		inode, e3 := strconv.ParseUint(fields[9], 10, 64)
+		if e1 != nil || e2 != nil || e3 != nil || strconv.FormatUint(protocol, 10) != fields[1] || strconv.FormatUint(port, 10) != fields[2] || strconv.FormatUint(inode, 10) != fields[9] {
+			return refuse("number")
+		}
+		key := [2]uint64{protocol, port}
+		if seen[key] {
+			return refuse("duplicate")
+		}
+		if protocol == 12 && port != 0 && inode == 0 {
+			return refuse("owner-inode")
+		}
+		seen[key] = true
+		if protocol == 12 && port != 0 {
+			owners[uint32(port)] = fields[9]
+		}
+	}
+	return owners, nil
+}

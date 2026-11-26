@@ -1,0 +1,127 @@
+#!/bin/sh
+set -eu
+umask 077
+work=$1
+repo=$2
+stage=$3
+case "$stage" in outer|inner) ;; *) exit 2 ;; esac
+layout=${RAZVILKA_PAIRED_NATIVE_LAYOUT:-configured}
+case "$layout" in configured) ;; default-refusal) test -z "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" ;; *) exit 2 ;; esac
+# This script is entered only by the disposable unshare/tini harness. Check
+# original outer namespaces before the first mount, not just an environment bit.
+verify_scope() {
+python3 - "$stage" "$1" <<'SCOPE'
+import fcntl,json,os,sys
+identities=[]
+namespaces=[(3,'net',0x40000000),(4,'mnt',0x00020000)]
+if sys.argv[1]=='inner': namespaces.append((5,'pid',0x20000000))
+for fd,name,kind in namespaces:
+    if fcntl.ioctl(fd,0xb703)!=kind: raise SystemExit('held original descriptor is not the required namespace')
+    outer=os.fstat(fd);inner=os.stat('/proc/self/ns/'+name)
+    if (outer.st_dev,outer.st_ino)==(inner.st_dev,inner.st_ino): raise SystemExit('fixture did not isolate '+name)
+    identities.append([name,outer.st_dev,outer.st_ino,inner.st_dev,inner.st_ino])
+if sys.argv[2]=='fresh-proc':
+    roots=[]
+    for line in open('/proc/self/mountinfo'):
+        fields=line.split(); separator=fields.index('-')
+        if fields[4]=='/proc': roots.append((fields[3],fields[separator+1]))
+    if roots!=[('/', 'proc')]: raise SystemExit('fixture requires one original proc root, without hidden overmounts')
+print(json.dumps(identities,separators=(',',':')))
+SCOPE
+}
+original_scope=$(verify_scope inherited-proc)
+mount --make-rprivate /
+if grep -E ' (shared|master|propagate_from):[0-9]+' /proc/self/mountinfo; then exit 2; fi
+if test "$stage" = outer; then
+ # Initialize actual per-network queue state while /proc/1 still names the
+ # outer PID namespace. No hook references this queue during its real Start.
+ /usr/sbin/iptables-legacy -t mangle -N RZV_CI_NFQ_BOOTSTRAP
+ /usr/sbin/iptables-legacy -t mangle -A RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+ /usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+ /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
+ /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
+ RAZVILKA_MANAGED_PROBE_FIXTURE_WORK="$work" python3 "$repo/scripts/native-managed-probe-queue-init.py"
+ exec unshare --mount --pid --fork /usr/bin/tini -g -- /bin/sh "$repo/scripts/fixtures/paired-public-session.sh" "$work" "$repo" inner
+fi
+# A stacked --mount-proc leaves a hidden /proc root which the original source
+# identity parser correctly refuses. Replace it only in the proven private
+# mount/PID namespace, retaining and rechecking all original namespace FDs.
+umount -l /proc
+mount -t proc proc /proc
+test "$(verify_scope fresh-proc)" = "$original_scope"
+if grep -E ' (shared|master|propagate_from):[0-9]+' /proc/self/mountinfo; then exit 2; fi
+mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
+mkdir -p /opt/bin /opt/sbin /opt/etc/init.d /opt/etc/razvilka /opt/root
+chmod 755 /opt/bin /opt/sbin /opt/etc /opt/etc/init.d
+chmod 700 /opt/etc/razvilka /opt/root
+if test "$layout" = configured; then
+ mkdir -p /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache
+ chmod 755 /opt/razvilka
+ chmod 700 /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache
+fi
+cp "$(command -v busybox)" /opt/bin/busybox
+chmod 755 /opt/bin/busybox
+ln -s /opt/bin/busybox /opt/bin/sh
+# The genuine old init requires -O. Ubuntu's BusyBox applet lacks that ABI;
+# use the actual dpkg helper, without rewriting the old command or its args.
+# This is the configured Ubuntu fixture, not an Entware helper equivalence.
+daemon_version=$(dpkg-query -W -f='${Version}' dpkg)
+dpkg --compare-versions "$daemon_version" ge 1.20.6
+/usr/sbin/start-stop-daemon --help | grep -F -- '--output' >/dev/null
+daemon_sha=$(sha256sum /usr/sbin/start-stop-daemon | cut -d ' ' -f 1)
+cp /usr/sbin/start-stop-daemon /opt/sbin/start-stop-daemon
+chmod 755 /opt/sbin/start-stop-daemon
+test "$(sha256sum /opt/sbin/start-stop-daemon | cut -d ' ' -f 1)" = "$daemon_sha"
+printf 'Actual dpkg start-stop-daemon version=%s source_and_copy_sha256=%s configured_ubuntu_fixture=true\n' "$daemon_version" "$daemon_sha"
+cp "$work/old-controller" /opt/bin/razvilka
+chmod 755 /opt/bin/razvilka
+cp "$work/old-source/scripts/S99razvilka" /opt/etc/razvilka/source-init-0193
+chmod 600 /opt/etc/razvilka/source-init-0193
+cp "$work/old-source/configs/"*.json /opt/etc/razvilka/
+cp /opt/etc/razvilka/config.example.json /opt/etc/razvilka/config.json
+python3 - <<'PY'
+import json,pathlib
+p=pathlib.Path('/opt/etc/razvilka/config.json');cfg=json.loads(p.read_text())
+cfg['safe_mode']=True;cfg['revision']=1;cfg['service_control']={'stopped':True}
+p.write_text(json.dumps(cfg));p.chmod(0o600)
+PY
+# The actual old source and old script are unmodified. Its existing supported
+# layout variables configure this explicit source scenario; no old-reader ABI
+# or default legacy-layout migration is inferred from that configuration.
+if test "$layout" = default-refusal; then
+ # Run the exact historical default layout, without a wrapper or runtime
+ # path overrides. The current installer is expected to refuse this source.
+ unset RAZVILKA_BASE RAZVILKA_BINARY RAZVILKA_APPDIR RAZVILKA_CACHE RAZVILKA_STATE_DIR RAZVILKA_LOG_DIR RAZVILKA_RUN_DIR RAZVILKA_PORT RAZVILKA_PID_FILE RAZVILKA_LOG_FILE RAZVILKA_START_STOP_DAEMON
+ cp "$work/old-source/scripts/S99razvilka" /opt/etc/init.d/S99razvilka
+else
+cat >/opt/etc/init.d/S99razvilka <<'SOURCE_INIT'
+#!/opt/bin/sh
+set -eu
+export RAZVILKA_STATE_DIR=/opt/razvilka/state
+export RAZVILKA_RUN_DIR=/opt/razvilka/run
+export RAZVILKA_CACHE=/opt/razvilka/cache
+export RAZVILKA_LOG_DIR=/opt/razvilka/log
+if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
+ export SSL_CERT_FILE=/opt/etc/razvilka/history-ca.pem
+fi
+exec /opt/bin/sh /opt/etc/razvilka/source-init-0193 "$@"
+SOURCE_INIT
+fi
+chmod 755 /opt/etc/init.d/S99razvilka
+ip link set lo up
+if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
+ # Only this already-proven private mount namespace sees the synthetic catalog
+ # host. No outward link/default route exists; the peer is added by the test.
+ printf '127.0.0.1 localhost\n::1 localhost\n203.0.113.9 www.youtube.com\n' >/opt/etc/razvilka/history-hosts
+ chmod 600 /opt/etc/razvilka/history-hosts
+ mount --bind /opt/etc/razvilka/history-hosts /etc/hosts
+ "$work/cmd.test" -test.run '^TestNativePairedHistoryTLSMaterial$' -test.v -test.count=1 -test.timeout=30s
+fi
+/opt/bin/sh /opt/etc/init.d/S99razvilka start
+# tini is PID1 and joins the actual daemon after the public old-panel Stop.
+# Namespace teardown kills any remaining child on fixture failure.
+if test "$layout" = default-refusal; then
+ "$work/cmd.test" -test.run '^TestNativeDefaultOld193InstallRefusal$' -test.v -test.count=1 -test.timeout=3m
+else
+ "$work/cmd.test" -test.run '^TestNativeConfiguredOld193PairLifecycle$' -test.v -test.count=1 -test.timeout=30m
+fi

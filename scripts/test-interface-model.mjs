@@ -1,0 +1,96 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require=createRequire(import.meta.url);
+const m=require('../cmd/razvilka/web/interface-model.js');
+const a=require('../cmd/razvilka/web/console-autonomy.js');
+let count=0;
+function check(name,fn){fn();count++;console.log('PASS '+name);}
+const service=(id,category='AI',enabled=true)=>({id,name:id,category,enabled,domains:[id+'.example.org']});
+const rows=[service('one'),service('two'),service('three','AI',false),service('video','Видео')];
+const summaries={one:{kind:'good',route:'sing-box:A'},two:{kind:'warn',route:'sing-box:B'},three:{kind:'good',route:'sing-box:C'},video:{kind:'bad',route:'nfqws2'}};
+for(const value of ['AI','ai','ИИ','ИИ-сервисы','искусственный интеллект'])check('category '+value,()=>assert.equal(m.category({category:value}),'ИИ-сервисы'));
+check('other mapped to own services',()=>assert.equal(m.category({category:'other'}),'Мои сервисы'));
+check('default category',()=>assert.equal(m.category({}),'Мои сервисы'));
+check('not infer from name',()=>assert.equal(m.category({name:'ChatGPT',category:'Работа'}),'Работа'));
+check('custom AI name',()=>assert.equal(m.category(service('unknown')),'ИИ-сервисы'));
+check('queued intent stays visible',()=>assert.equal(m.selectedView([service('pending','AI',false)],{pending:{enabled:true}})[0].enabled,true));
+check('paused management is not removal',()=>assert.equal(m.selectedView([service('paused','AI',false)],{paused:{enabled:false}})[0].enabled,true));
+check('future member not enrolled',()=>assert.equal(m.selectedView([service('future','AI',false)],{})[0].enabled,false));
+check('selection copies do not mutate backend state',()=>{const original=[service('a','AI',false)];m.selectedView(original,{a:{enabled:true}});assert.equal(original[0].enabled,false);});
+check('mixed selection',()=>assert.equal(m.selection(rows).mixed,true));
+check('all selected',()=>assert.equal(m.selection(rows.filter(s=>s.enabled)).checked,true));
+check('empty not checked',()=>assert.equal(m.selection([]).checked,false));
+check('zero selected',()=>assert.equal(m.selection([service('x','AI',false)]).selected,0));
+check('only selected health',()=>assert.equal(m.aggregate(rows,summaries).good,1));
+check('one failure',()=>assert.equal(m.aggregate(rows,summaries).failed,1));
+check('one unknown',()=>assert.equal(m.aggregate(rows,summaries).pending,1));
+check('mixed routes not merged',()=>assert.equal(m.aggregate(rows,summaries).route,'Разные маршруты'));
+check('missing proof unknown',()=>assert.equal(m.aggregate([service('none')],summaries).pending,1));
+check('unselected bad ignored',()=>assert.equal(m.aggregate([service('video','Видео',false)],summaries).failed,0));
+check('empty unknown',()=>assert.equal(m.aggregate([],{}).kind,'unknown'));
+check('AI groups exactly once',()=>assert.equal(m.groupServices(rows,rows,summaries).filter(g=>g.grouped).length,1));
+check('other not grouped',()=>assert.equal(m.groupServices(rows,rows,summaries)[1].grouped,false));
+check('member IDs preserved',()=>assert.deepEqual(m.groupServices(rows,rows,summaries)[0].members.map(s=>s.id),['one','two','three']));
+check('selected-only keeps category total',()=>assert.equal(m.groupServices(rows.filter(s=>s.enabled),rows,summaries)[0].summary.total,3));
+check('source immutable',()=>{const copy=JSON.stringify(rows);m.groupServices(rows,rows,summaries);assert.equal(JSON.stringify(rows),copy);});
+check('search domain',()=>assert.equal(m.filterServices(rows,{query:'two.example',scope:'all'},summaries)[0].id,'two'));
+check('search category',()=>assert.equal(m.filterServices(rows,{query:'ИИ',scope:'all'},summaries).length,3));
+check('search case',()=>assert.equal(m.filterServices(rows,{query:'ONE',scope:'all'},summaries)[0].id,'one'));
+check('filter selected',()=>assert.equal(m.filterServices(rows,{},summaries).length,3));
+check('filter attention',()=>assert.equal(m.filterServices(rows,{scope:'attention'},summaries).length,2));
+check('filter category',()=>assert.equal(m.filterServices(rows,{scope:'all',category:'Видео'},summaries).length,1));
+check('query not URL network',()=>assert.equal(m.filterServices(rows,{query:'https://unknown.test'},summaries).length,0));
+check('new catalog addition not selected',()=>{const next=[...rows,service('future','AI',false)];assert.equal(m.selection(next).selected,3);});
+for(const v of [null,undefined,-1,101,NaN,Infinity,'50'])check('invalid percent '+v,()=>assert.equal(m.finitePercent(v),null));
+for(const v of [0,1,50,100])check('percent '+v,()=>assert.equal(m.finitePercent(v),v));
+check('valid proof timestamp',()=>assert.equal(m.freshEvidence({checked_at:'2026-01-01T00:00:00Z',fresh_until:'2026-01-01T00:10:00Z'},Date.parse('2026-01-01T00:05:00Z')),true));
+for(const change of [{checked_at:''},{checked_at:'bad'},{checked_at:'2026-01-01T00:09:00Z'},{fresh_until:'2026-01-01T00:01:00Z'},{status:'stale'}])check('invalid proof '+JSON.stringify(change),()=>assert.equal(m.freshEvidence({checked_at:'2026-01-01T00:00:00Z',fresh_until:'2026-01-01T00:10:00Z',...change},Date.parse('2026-01-01T00:05:00Z')),false));
+check('hy2 alias',()=>assert.equal(m.protocol('hy2'),'hysteria2'));
+check('ss alias',()=>assert.equal(m.protocol('ss'),'shadowsocks'));
+check('custom AI form',()=>assert.equal(a.websiteDefinition('My model','model.example.org','AI').category,'AI'));
+check('custom form default',()=>assert.equal(a.websiteDefinition('Work','work.example.org').category,'other'));
+check('custom bad category rejected',()=>assert.throws(()=>a.websiteDefinition('Work','work.example.org','arbitrary')));
+check('custom does not add shared route',()=>assert.deepEqual(a.websiteDefinition('My model','model.example.org','AI').strategy,['auto']));
+check('capability refusal and exclusion are named with the autopilot message',()=>{
+  for(const [state,label] of [['capability-refused','Недоступно в текущем режиме'],['excluded','Не разрешён списком или исключениями']]){
+    const view=m.humanService(service('one'),{},{enabled:true},{state,message:'Причина и что сделать.'});
+    assert.equal(view.label,label);assert.equal(view.kind,'warn');assert.equal(view.detail,'Причина и что сделать.');assert.equal(view.actionable,true);
+  }
+});
+check('component preparation shows its reason and schedule without claiming verified access',()=>{
+  const selected={...service('one'),dirty:false},managed={enabled:true};
+  for(const [state,label] of [['component-window','Ожидает окна установки'],['component-retry','Ожидает повторной установки']]){
+    const runtime={state,message:'Xray отсутствует.',next_check:'2026-11-25T01:00:00Z'};
+    const view=m.humanService(selected,{},managed,runtime);
+    assert.equal(view.label,label);assert.equal(view.detail,runtime.message);
+    assert.equal(view.nextAttempt,runtime.next_check);assert.equal(view.actionable,false);assert.equal(view.applied,false);
+    const retained={usable:true,fresh:false,ageMS:50000,applied:{}};
+    assert.equal(m.humanService(selected,{},managed,runtime,true,[],retained).nextAttempt,undefined);
+  }
+});
+check('expired managed runtime cannot turn a terminal failure into pending setup',()=>{
+ const s={...service('one'),dirty:false,applied_state:{enabled:false}},managed={enabled:true};
+ const cache={usable:false,fresh:false,ageMS:120000};
+ for(const state of ['domain-route-unavailable','pending','checking']){
+  const h=m.humanService(s,{},managed,{state,message:'Старое наблюдение.'},true,[],cache);
+  assert.equal(h.kind,'unknown');assert.equal(h.label,'Нет свежих данных');assert.equal(h.progress,false);
+  assert.doesNotMatch(h.detail,/добавлен в автопилот|Дождитесь результата|Старое наблюдение/);
+  assert.equal(h.member,true);assert.equal(h.applied,false);assert.equal(h.control,'Автоподбор включён');
+ }
+});
+check('expired runtime preserves independently current proof edits and saved exclusions',()=>{
+ const s={...service('one'),dirty:true,applied_state:{enabled:true,route:'nfqws2'}},managed={enabled:true};
+ const cache={usable:false,fresh:false,ageMS:120001},runtime={state:'domain-route-unavailable',message:'Старая причина.'};
+ for(const kind of ['good','bad']){
+  const h=m.humanService(s,{kind,route:'nfqws2'},managed,runtime,true,[],cache);
+  assert.equal(h.kind,kind);assert.equal(h.changed,true);assert.equal(h.actionable,true);assert.match(h.pendingLabel,/изменения/);
+ }
+ const changed=m.humanService(s,{},managed,runtime,true,[],cache);
+ assert.equal(changed.label,'Нет свежих данных');assert.equal(changed.changed,true);assert.equal(changed.actionable,true);
+ assert.match(changed.pendingLabel,/изменения/);assert.equal(changed.route,'nfqws2');
+ const excluded=m.humanService(s,{},managed,runtime,true,[{originLabel:'Добавлено вручную'}],cache);
+ assert.equal(excluded.excluded,true);assert.equal(excluded.label,'Исключение сохранено');assert.equal(excluded.control,'Добавлено вручную');
+ assert.notEqual(m.humanService(s,{kind:'good',route:'xray'},managed,runtime,true,[],cache).kind,'good');
+ assert.equal(m.humanService(s,{kind:'good',route:'nfqws2'},managed,runtime,false,[],cache).label,'Нет свежих данных');
+});
+console.log(JSON.stringify({suite:'interface-model',passed:count}));

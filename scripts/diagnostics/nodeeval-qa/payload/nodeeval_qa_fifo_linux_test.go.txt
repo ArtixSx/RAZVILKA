@@ -1,0 +1,45 @@
+//go:build linux
+
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"golang.org/x/sys/unix"
+)
+
+func TestQAStopFIFOWithoutWriterCannotBlockRealStop(t *testing.T) {
+	if os.Getenv("RAZVILKA_QA_FIFO_CHILD") == "1" {
+		w, _ := isolatedFixture(t)
+		path := filepath.Join(w.path, "engine.pid")
+		if err := unix.Mkfifo(path, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := qaReadLimited(path, 64); err == nil {
+			t.Fatal("FIFO was a regular observation")
+		}
+		p := &qaProcessesFixture{}
+		wrapped := &qaProcessController{base: p, capture: newQACapture(w, json.NewEncoder(&bytes.Buffer{}))}
+		if err := wrapped.Stop(context.Background(), dataplane.ProcessSpec{PIDPath: path}); err != nil || p.stops != 1 {
+			t.Fatal("diagnostic prevented real Stop")
+		}
+		return
+	}
+	// A regression must terminate its child, rather than leaving a stuck
+	// FIFO goroutine or a real QA Stop behind in the test process.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestQAStopFIFOWithoutWriterCannotBlockRealStop$")
+	cmd.Env = append(os.Environ(), "RAZVILKA_QA_FIFO_CHILD=1")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("FIFO diagnostic child failed: %v %s", err, output)
+	}
+}

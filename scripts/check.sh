@@ -1,0 +1,170 @@
+#!/bin/sh
+set -eu
+# Go's numbered test directories inherit the shell mask. Ownership tests need
+# their fixture parents to reject group/other writes, just like production.
+umask 022
+cd "$(dirname "$0")/.."
+unformatted="$(gofmt -l cmd internal)"
+if [ -n "$unformatted" ]; then
+  echo "gofmt is required for:"
+  echo "$unformatted"
+  exit 1
+fi
+# Draft release pages must describe the actual artifacts and pinned docs.
+python3 scripts/test-release-notes.py
+# Fail early on static errors before either full runtime suite.
+go vet ./...
+# Always execute the release gate. The owned-filesystem tests produce large
+# file-access logs; caching those results can cost more than running the tests.
+# This bounds each aggregate package run; individual operation/native deadlines
+# remain enforced by their original test contexts.
+go test -timeout=20m -count=1 ./...
+go test -timeout=20m -race -count=1 ./...
+for script in scripts/*.sh scripts/S99razvilka build.sh; do
+  case "$(head -n 1 "$script")" in
+    '#!/usr/bin/env bash'|'#!/bin/bash') bash -n "$script" ;;
+    *) sh -n "$script" ;;
+  esac
+done
+sh ./scripts/check-no-z2k-runtime.sh
+sh ./scripts/test-candidate-isolation.sh
+sh ./scripts/test-bootstrap.sh
+sh ./scripts/test-clean-control-installer.sh
+sh ./scripts/test-build-targets.sh
+sh ./scripts/test-uninstall-entware.sh
+sh ./scripts/test-dns-rollback.sh
+sh ./scripts/test-autonomy-rollback.sh
+sh ./scripts/test-node-history-rollback.sh
+if command -v node >/dev/null 2>&1; then
+  node scripts/build-interface.mjs --check
+  node scripts/test-interface-model.mjs
+  node scripts/test-ui-icons.mjs
+  node scripts/test-pending-changes-ui.mjs
+  node scripts/test-interface-contract.mjs
+  node scripts/test-console-route-hash.mjs
+  node scripts/test-interface-home.mjs
+  node scripts/test-simple-home.mjs
+  node scripts/test-autopilot-settings.mjs
+  node scripts/test-nfqws-first-start-ui.mjs
+  node scripts/test-active-panel.mjs
+  node scripts/test-inspector-focus.mjs
+  node scripts/test-inspector-controls-ui.mjs
+  node scripts/test-inspector-deletion-ui.mjs
+  node scripts/test-component-cards-ui.mjs
+  node scripts/test-operation-notifications.mjs
+  node scripts/test-strategy-compatibility-ui.mjs
+  node scripts/test-managed-nfq-bundle-ui.mjs
+  node scripts/test-component-recovery-ui.mjs
+  node scripts/test-engine-card-flow-ui.mjs
+  node scripts/test-diagnostics-observation-ui.mjs
+  node scripts/test-ui-http-perf.mjs
+  node --check cmd/razvilka/web/project-log.js
+  node scripts/test-project-log-ui.mjs
+  node scripts/test-onboarding-escape-ui.mjs
+  node --check cmd/razvilka/web/theme.js
+  node scripts/test-theme.mjs
+  node scripts/test-console-autonomy-auth.mjs
+  node scripts/test-console-sources.mjs
+  node scripts/test-console-providers.mjs
+  node scripts/test-auth-resume-ui.mjs
+  node scripts/test-auth-actions-ui.mjs
+  node scripts/test-connection-session-ui.mjs
+  node --check cmd/razvilka/web/dns-service-lab.js
+  node scripts/test-dns-service-lab.mjs
+  node --check cmd/razvilka/web/dns-scoped.js
+  node scripts/test-dns-scoped.mjs
+  node --check cmd/razvilka/web/awg-workspace.js
+  node scripts/test-awg-workspace.mjs
+  node --check cmd/razvilka/web/workflow-actions.js
+  node --check cmd/razvilka/web/interface.js
+  node --check cmd/razvilka/web/interface-model.js
+  node --check cmd/razvilka/web/console.js
+  node --check cmd/razvilka/web/console-autonomy.js
+  node --check cmd/razvilka/web/autonomy-ui.js
+  node scripts/test-runtime-capabilities-ui.mjs
+  node scripts/test-runtime-lifecycle-ui.mjs
+  node scripts/test-proxy-sidecar-ui.mjs
+node scripts/test-hev-recovery-ui.mjs
+node scripts/test-mihomo-recovery-ui.mjs
+  node scripts/test-mihomo-node-apply-ui.mjs
+  node scripts/test-node-job-timing-ui.mjs
+  node scripts/test-autonomy-ui.mjs
+  node --check cmd/razvilka/web/app.js
+  node --check cmd/razvilka/web/node-browser.js
+  node scripts/test-node-measurements-ui.mjs
+  node --check cmd/razvilka/web/node-intent-ui.js
+  node --check cmd/razvilka/web/node-service-ui.js
+  node --check cmd/razvilka/web/node-policy-ui.js
+  node --check cmd/razvilka/web/node-activity-ui.js
+  node --check cmd/razvilka/web/workspace-controls.js
+  node --check cmd/razvilka/web/service-dashboard-ui.js
+  node --check cmd/razvilka/web/app-update-ui.js
+  node --check cmd/razvilka/web/cloudflare-accounts.js
+  node --check cmd/razvilka/web/cloudflare-backups.js
+  node --check cmd/razvilka/web/cloudflare-migration.js
+  node scripts/test-probe-ui.mjs
+  node scripts/test-cloudflare-ui.mjs
+  node scripts/test-cloudflare-backup-ui.mjs
+  node scripts/test-cloudflare-migration-ui.mjs
+  node scripts/test-private-backup-ui.mjs
+  node scripts/test-devices-persistence-ui.mjs
+  node scripts/test-device-addresses-ui.mjs
+  node scripts/test-exclusions-ui.mjs
+  node scripts/test-resource-exclusions-model.mjs
+  node scripts/test-resource-exclusions-ui.mjs
+  node --check cmd/razvilka/web/list-scope-ui.js
+  node scripts/test-list-scope-ui.mjs
+  node scripts/test-usque-dns-ui.mjs
+  node scripts/test-provider-import-ui.mjs
+  node scripts/test-node-route-ui.mjs
+  node scripts/test-node-browser-ui.mjs
+  node scripts/test-node-group-save.mjs
+  node scripts/test-data-mutation-ui.mjs
+  node scripts/test-node-bulk-ui.mjs
+  node --check cmd/razvilka/web/setup-workflows.js
+  node scripts/test-setup-repair.mjs
+  node scripts/test-node-intent-ui.mjs
+  node scripts/test-node-service-ui.mjs
+  node scripts/test-node-policy-ui.mjs
+  node scripts/test-app-update-ui.mjs
+  node --check cmd/razvilka/web/automation-setup.js
+  node scripts/test-maintenance-ui.mjs
+  node --check cmd/razvilka/web/extension-lab.js
+  node scripts/test-extension-lab.mjs
+  node scripts/test-workspace-controls-ui.mjs
+  node scripts/test-interface-manage-ui.mjs
+  node scripts/test-interface-unified.cjs
+  node scripts/test-notice-lifecycle.mjs
+  node scripts/test-autonomy-controls-ui.mjs
+  node scripts/test-service-dashboard-ui.mjs
+  node scripts/test-engine-intent-ui.mjs
+  node scripts/test-node-activity-ui.mjs
+  node scripts/test-panel-loading-ui.mjs
+  node scripts/test-panel-snapshot-ui.mjs
+  node scripts/test-panel-device-browse-ui.mjs
+  node scripts/test-panel-community-browse-ui.mjs
+  node --check cmd/razvilka/web/panel-node-browse.js
+  node scripts/test-panel-node-browse-ui.mjs
+  node scripts/test-ux-stage1.mjs
+  node scripts/test-bundle-integration.mjs
+  node scripts/test-warp-generation-ui.mjs
+  node scripts/test-restore-busy-supervision.mjs
+  node scripts/test-native-enrollment-supervision.mjs
+  node scripts/test-component-update-supervision.mjs
+  node scripts/test-self-update-supervision.mjs
+  node scripts/test-self-update-legacy-fence.mjs
+  node scripts/test-self-update-rollback-reader.mjs sh rollback-entware.sh
+  node scripts/test-self-update-rollback-reader.mjs sh upgrade-entware.sh
+  node scripts/test-node-history-admission.mjs
+  node scripts/test-native-opkg-runner.mjs
+fi
+# Build the native executable required by the mandatory transaction fixture.
+if [ "${RAZVILKA_BUILD_TARGETS:-all}" = arm64 ] &&
+  [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
+  RAZVILKA_BUILD_TARGETS=arm64+amd64 ./build.sh
+else
+  ./build.sh
+fi
+sha256sum -c dist/SHA256SUMS
+sh ./scripts/test-entware-transaction.sh
+echo "RAZVILKA checks: OK"

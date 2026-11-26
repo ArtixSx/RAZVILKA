@@ -1,0 +1,180 @@
+//go:build linux && razvilka_native_fixture
+
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/security"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
+)
+
+func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, readEmpty func(context.Context) error, lan ...bool) {
+	t.Helper()
+	const token = "native-probe-original-api-token-1234567890"
+	var err error
+	a.Security, err = security.NewGate(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.ExecutionHistory = updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
+	before := a.Store.Get()
+	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer server.Close()
+	request := func(method, path, body, origin string, authenticated bool) (int, []byte) {
+		t.Helper()
+		r, err := http.NewRequest(method, server.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if authenticated {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		r.Header.Set("Origin", origin)
+		r.Header.Set("Content-Type", "application/json")
+		response, err := server.Client().Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		data, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response.StatusCode, data
+	}
+	path := "/api/v1/strategy-lab/candidates/" + candidate + "/probe"
+	const body = `{"service_id":"native","ip_family":"ipv4"}`
+	for _, negative := range []struct {
+		auth   bool
+		origin string
+	}{{false, server.URL}, {true, "https://foreign.invalid"}} {
+		code, data := request(http.MethodPost, path, body, negative.origin, negative.auth)
+		if code != http.StatusUnauthorized && code != http.StatusForbidden {
+			t.Fatal("actual authentication/origin negative admitted", code, string(data))
+		}
+	}
+	if len(lan) > 1 && lan[1] {
+		if !lan[0] {
+			t.Fatal("manual diagnostic requires actual LAN source")
+		}
+		runManagedStrategyManualLANHTTP(t, a, candidate, before, func(method, path, body string) (int, []byte) { return request(method, path, body, server.URL, true) }, readEmpty)
+		return
+	}
+	for pass := 0; pass < strategylab.RequiredPasses; pass++ {
+		code, data := request(http.MethodPost, path, body, server.URL, true)
+		if code != http.StatusOK {
+			t.Fatal("actual managed probe HTTP pass", pass, code, string(data))
+		}
+		if a.managedStrategyProbePending() || a.managedNFQList.probe.Pending() {
+			t.Fatal("successful handler retained original operation")
+		}
+		if err := readEmpty(context.Background()); err != nil {
+			t.Fatal("actual handler left packet resources", err)
+		}
+	}
+	selection := `{"service_id":"native","protocol":"tcp","ip_family":"ipv4","candidate_id":"` + candidate + `","mode":"preferred"}`
+	code, data := request(http.MethodPost, "/api/v1/strategy-lab/selections", selection, server.URL, true)
+	if code != http.StatusOK {
+		t.Fatal("actual managed selection HTTP", code, string(data))
+	}
+	code, data = request(http.MethodGet, "/api/v1/strategy-lab", "", server.URL, true)
+	var snapshot strategylab.Snapshot
+	if code != http.StatusOK || json.Unmarshal(data, &snapshot) != nil {
+		t.Fatal("actual managed snapshot HTTP", code, string(data))
+	}
+	eligible := false
+	for _, summary := range snapshot.Summaries {
+		eligible = eligible || summary.CandidateID == candidate && summary.Eligible
+	}
+	healthy := false
+	for _, selected := range snapshot.Selections {
+		healthy = healthy || selected.CandidateID == candidate && selected.Healthy && selected.Mode == strategylab.ModePreferred
+	}
+	if len(snapshot.Evidence) != strategylab.RequiredPasses || !eligible || !healthy || snapshot.QuiescenceUnknown {
+		t.Fatalf("actual App did not retain current three-pass authority: %s", data)
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) || a.StrategyLab.Executor != nil {
+		t.Fatal("probe/selection mutated live config or enabled legacy executor")
+	}
+	assertManagedProbeNativeSelectedSource(t, a, candidate, strategylab.ModePreferred)
+	manual := strings.Replace(selection, `"mode":"preferred"`, `"mode":"manual"`, 1)
+	code, data = request(http.MethodPost, "/api/v1/strategy-lab/selections", manual, server.URL, true)
+	var choice strategylab.Selection
+	if code != http.StatusOK || json.Unmarshal(data, &choice) != nil || choice.CandidateID != candidate || choice.Mode != strategylab.ModeManual || !choice.Frozen || choice.Healthy {
+		t.Fatal("actual manual choice must remain frozen intent", code, string(data))
+	}
+	assertManagedProbeNativeSelectedSource(t, a, candidate, strategylab.ModeManual)
+	if !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("manual metadata choice changed live config")
+	}
+	if len(lan) > 0 && lan[0] {
+		runManagedProbeNativeLANApply(t, a, func(method, path, body string) (int, []byte) { return request(method, path, body, server.URL, true) }, readEmpty)
+		return // The LAN helper reports its actual Apply/Stop evidence.
+	}
+	t.Log("actual authenticated App HTTP: three native TLS/counter passes, current preferred selection/snapshot, explicit frozen manual choice, original selected source bridge; live routing unchanged; CI classification only, no router/LAN acceptance")
+}
+
+// A separate real supported operator path, not manufactured canary eligibility.
+// Existing three-pass/automatic tests above remain unchanged and independent.
+func runManagedStrategyManualLANHTTP(t *testing.T, a *App, candidate string, before config.Config, request func(string, string, string) (int, []byte), readEmpty func(context.Context) error) {
+	t.Helper()
+	body := `{"service_id":"native","protocol":"tcp","ip_family":"ipv4","candidate_id":"` + candidate + `","mode":"manual"}`
+	code, data := request(http.MethodPost, "/api/v1/strategy-lab/selections", body)
+	var selection strategylab.Selection
+	if code != http.StatusOK || json.Unmarshal(data, &selection) != nil || selection.CandidateID != candidate || selection.Mode != strategylab.ModeManual || !selection.Frozen || selection.Healthy {
+		t.Fatal("actual manual API contract refused or promoted health", code, string(data))
+	}
+	code, data = request(http.MethodGet, "/api/v1/strategy-lab", "")
+	var snapshot strategylab.Snapshot
+	if code != http.StatusOK || json.Unmarshal(data, &snapshot) != nil || len(snapshot.Evidence) != 0 || snapshot.QuiescenceUnknown {
+		t.Fatal("manual diagnostic fabricated probe evidence", code, string(data))
+	}
+	for _, summary := range snapshot.Summaries {
+		if summary.CandidateID == candidate && summary.Eligible {
+			t.Fatal("native validation became automatic probe eligibility")
+		}
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) || a.StrategyLab.Executor != nil {
+		t.Fatal("manual intent changed live config or enabled legacy executor")
+	}
+	assertManagedProbeNativeSelectedSource(t, a, candidate, strategylab.ModeManual)
+	runManagedProbeNativeLANApply(t, a, request, readEmpty, true)
+}
+
+func assertManagedProbeNativeSelectedSource(t *testing.T, a *App, candidate string, mode strategylab.AdaptiveMode) {
+	t.Helper()
+	// The actual Apply source bridge must accept the resulting original epoch
+	// under a NEW real operation/runtime lease, without touching LAN routing.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ctx, release, err := a.Operations.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	lease, err := a.Components.AcquireCurrentManagedNFQWSRuntime(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Close()
+	source, err := a.StrategyLab.RetainSelectedCandidateReview(ctx, "native", "tcp", "ipv4", lease)
+	if err != nil {
+		t.Fatal("actual selected native Apply source bridge", err)
+	}
+	defer source.Close()
+	if source.Candidate().ID != candidate || source.Selection().Mode != mode || source.Current(ctx) != nil || source.ManagedOwnersCurrent(ctx, lease, a.managedNFQList.control) != nil {
+		t.Fatal("actual selected source lost original runtime/epoch owners")
+	}
+}

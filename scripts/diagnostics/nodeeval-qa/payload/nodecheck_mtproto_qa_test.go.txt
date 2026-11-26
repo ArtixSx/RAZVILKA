@@ -1,0 +1,547 @@
+package dataplane
+
+import (
+	"bytes"
+	"context"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"net/netip"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/routeidentity"
+)
+
+func qaMTPacket(nonce [16]byte, now time.Time) []byte {
+	frame := make([]byte, 76)
+	binary.LittleEndian.PutUint64(frame[8:16], uint64(now.Unix())<<32|1)
+	binary.LittleEndian.PutUint32(frame[16:20], 56)
+	binary.LittleEndian.PutUint32(frame[20:24], qaMTResPQ)
+	copy(frame[24:40], nonce[:])
+	copy(frame[40:56], bytes.Repeat([]byte{0x55}, 16))
+	frame[56], frame[57] = 1, 15
+	binary.LittleEndian.PutUint32(frame[60:64], qaMTVector)
+	binary.LittleEndian.PutUint32(frame[64:68], 1)
+	binary.LittleEndian.PutUint64(frame[68:76], 0x0102030405060708)
+	return frame
+}
+
+func TestQAMTOfficialAuthorizationExampleAndCanceledBeforeDial(t *testing.T) {
+	// Official https://core.telegram.org/mtproto/samples-auth_key resPQ bytes;
+	// independent of this implementation's constructor/fixture generator.
+	frame, err := hex.DecodeString("000000000000000001f4ccc26170466a500000006324160551a1143fc7a3666be4be54d6890a02dc63248f6748214eab8a2f4cc876e11974082e9cdb98c80cda4b00000015c4b51c0300000085fd64de851d9dd0a5b7f709355fc30b216be86c022bb4c3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nonce [16]byte
+	copy(nonce[:], frame[24:40])
+	now := time.Unix(int64(binary.LittleEndian.Uint64(frame[8:16])>>32), 0)
+	if code := qaMTValidate(frame, nonce, now); code != "" {
+		t.Fatal("official wire example refused", code)
+	}
+	request := qaMTRequest(nonce, now)
+	if !bytes.Equal(request[22:26], []byte{0xf1, 0x8e, 0x7e, 0xbe}) {
+		t.Fatal("req_pq_multi constructor differs from official schema")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	observation := qaMTExchange(ctx, "127.0.0.1:19301", func(context.Context, string) (net.Conn, error) {
+		t.Fatal("already canceled exchange opened a socket")
+		return nil, nil
+	}, time.Now)
+	if observation.Code != "mtproto-canceled" || observation.Reply {
+		t.Fatal("already canceled exchange accepted")
+	}
+	observation = qaMTExchange(context.Background(), "127.0.0.1:19301", func(context.Context, string) (net.Conn, error) {
+		return nil, &qaMTUnknownError{}
+	}, time.Now)
+	if observation.Code != "mtproto-io-failed" || observation.Reply {
+		t.Fatal("unknown raw I/O error escaped")
+	}
+}
+
+type qaMTUnknownError struct{}
+
+func (*qaMTUnknownError) Error() string { panic("raw MTProto error must not be formatted") }
+
+func TestQAMTStrictNonceEnvelopeTLAndTimeValidation(t *testing.T) {
+	now := time.Now()
+	var nonce [16]byte
+	copy(nonce[:], "client-nonce-qa1")
+	valid := qaMTPacket(nonce, now)
+	if code := qaMTValidate(valid, nonce, now); code != "" {
+		t.Fatal("valid resPQ refused", code)
+	}
+	for _, cut := range []string{"nonce", "constructor", "auth-key", "server-id", "old-id", "future-id", "body-length", "pq-zero", "pq-even", "pq-length", "pq-padding", "vector", "vector-zero", "vector-oversize", "trailing", "oversize"} {
+		t.Run(cut, func(t *testing.T) {
+			frame := bytes.Clone(valid)
+			switch cut {
+			case "nonce":
+				frame[24] ^= 1
+			case "constructor":
+				frame[20] ^= 1
+			case "auth-key":
+				frame[0] = 1
+			case "server-id":
+				frame[8] = 3
+			case "old-id":
+				binary.LittleEndian.PutUint64(frame[8:16], uint64(now.Unix()-301)<<32|1)
+			case "future-id":
+				binary.LittleEndian.PutUint64(frame[8:16], uint64(now.Unix()+31)<<32|1)
+			case "body-length":
+				binary.LittleEndian.PutUint32(frame[16:20], 4096)
+			case "pq-zero":
+				frame[57] = 0
+			case "pq-even":
+				frame[57] = 16
+			case "pq-length":
+				frame[56] = 254
+			case "pq-padding":
+				frame[58] = 1
+			case "vector":
+				frame[60] ^= 1
+			case "vector-zero":
+				binary.LittleEndian.PutUint32(frame[64:68], 0)
+			case "vector-oversize":
+				binary.LittleEndian.PutUint32(frame[64:68], 0xffffffff)
+			case "trailing":
+				frame = append(frame, make([]byte, 4)...)
+				binary.LittleEndian.PutUint32(frame[16:20], uint32(len(frame)-20))
+			case "oversize":
+				frame = append(frame, make([]byte, qaMTMaxFrame)...)
+			}
+			if qaMTValidate(frame, nonce, now) == "" {
+				t.Fatal("malformed response became protocol reply")
+			}
+		})
+	}
+	for n := 0; n < len(valid); n++ {
+		if qaMTValidate(valid[:n], nonce, now) == "" {
+			t.Fatal("truncated response accepted", n)
+		}
+	}
+	request := qaMTRequest(nonce, now)
+	if len(request) != 42 || request[0] != 0xef || request[1] != 10 || binary.LittleEndian.Uint64(request[2:10]) != 0 || binary.LittleEndian.Uint64(request[10:18])&3 != 0 || binary.LittleEndian.Uint32(request[18:22]) != 20 || binary.LittleEndian.Uint32(request[22:26]) != qaMTReqPQ || !bytes.Equal(request[26:], nonce[:]) {
+		t.Fatal("wire request differs from official req_pq_multi envelope")
+	}
+}
+
+type qaMTHeaderReader struct {
+	header []byte
+	reads  int
+}
+
+func (r *qaMTHeaderReader) Read(p []byte) (int, error) {
+	r.reads++
+	if len(r.header) == 0 {
+		panic("oversized frame must not allocate/read payload")
+	}
+	n := copy(p, r.header)
+	r.header = r.header[n:]
+	return n, nil
+}
+func TestQAMTFrameBoundBeforePayloadReadAndTransportErrors(t *testing.T) {
+	r := &qaMTHeaderReader{header: []byte{127, 255, 255, 255}}
+	frame, code := qaMTReadFrame(context.Background(), r)
+	if frame != nil || code != "mtproto-frame-oversize" || r.reads != 2 {
+		t.Fatal("unbounded frame allocation/read", code, r.reads)
+	}
+	for _, header := range [][]byte{{0}, {128}, {0xef}, {127, 1, 0, 0}} {
+		if _, code := qaMTReadFrame(context.Background(), bytes.NewReader(header)); code != "mtproto-frame-invalid" {
+			t.Fatal("invalid abridged header accepted", code)
+		}
+	}
+	transport := make([]byte, 5)
+	transport[0] = 1
+	negative := int32(-404)
+	binary.LittleEndian.PutUint32(transport[1:], uint32(negative))
+	if _, code := qaMTReadFrame(context.Background(), bytes.NewReader(transport)); code != "mtproto-transport-error" {
+		t.Fatal("transport error became response", code)
+	}
+}
+
+func TestQAMTExchangeSingleRequestTruncationOversizeStallAndCancel(t *testing.T) {
+	for _, cut := range []string{"valid", "wrong-nonce", "truncated", "oversize", "stall", "cancel"} {
+		t.Run(cut, func(t *testing.T) {
+			client, server := net.Pipe()
+			defer client.Close()
+			defer server.Close()
+			heard := make(chan struct{})
+			done := make(chan error, 1)
+			go func() {
+				defer server.Close()
+				request := make([]byte, 42)
+				if _, err := io.ReadFull(server, request); err != nil {
+					done <- err
+					return
+				}
+				close(heard)
+				if request[0] != 0xef || request[1] != 10 || binary.LittleEndian.Uint32(request[22:26]) != qaMTReqPQ {
+					done <- errors.New("wrong request")
+					return
+				}
+				var nonce [16]byte
+				copy(nonce[:], request[26:])
+				frame := qaMTPacket(nonce, time.Now())
+				payload := append([]byte{byte(len(frame) / 4)}, frame...)
+				switch cut {
+				case "wrong-nonce":
+					payload[25] ^= 1
+				case "truncated":
+					payload = payload[:12]
+				case "oversize":
+					payload = []byte{127, 255, 255, 255}
+				case "stall", "cancel":
+					_, _ = io.Copy(io.Discard, server)
+					done <- nil
+					return
+				}
+				_, err := server.Write(payload)
+				if err != nil && cut == "oversize" {
+					err = nil
+				}
+				done <- err
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			if cut == "stall" {
+				cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+			}
+			defer cancel()
+			if cut == "cancel" {
+				go func() {
+					select {
+					case <-heard:
+						cancel()
+					case <-ctx.Done():
+					}
+				}()
+			}
+			calls := 0
+			started := time.Now()
+			observation := qaMTExchange(ctx, "127.0.0.1:19301", func(c context.Context, address string) (net.Conn, error) {
+				calls++
+				if address != "127.0.0.1:19301" {
+					t.Error("listener changed")
+				}
+				if _, ok := c.Deadline(); !ok {
+					t.Error("unbounded dial")
+				}
+				return client, nil
+			}, time.Now)
+			if calls != 1 || time.Since(started) > 2*time.Second {
+				t.Fatal("retry or deadline widening")
+			}
+			want := map[string]string{"valid": "mtproto-respq", "wrong-nonce": "mtproto-nonce-mismatch", "truncated": "mtproto-truncated", "oversize": "mtproto-frame-oversize", "stall": "mtproto-deadline", "cancel": "mtproto-canceled"}[cut]
+			if observation.Code != want || observation.Reply != (cut == "valid") {
+				t.Fatal("bad protocol observation", observation.Code, observation.Reply)
+			}
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal("fixture server failed", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("fixture leaked a goroutine")
+			}
+		})
+	}
+}
+
+type qaMTForward struct {
+	conn             net.Conn
+	calls            int
+	network, address string
+}
+
+func (f *qaMTForward) Dial(network, address string) (net.Conn, error) {
+	return f.DialContext(context.Background(), network, address)
+}
+func (f *qaMTForward) DialContext(_ context.Context, network, address string) (net.Conn, error) {
+	f.calls++
+	f.network, f.address = network, address
+	return f.conn, nil
+}
+func TestQAMTSOCKSSendsNumericPinnedDCAndNeverDialsItDirect(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	done := make(chan error, 1)
+	go func() {
+		defer server.Close()
+		var greeting [3]byte
+		if _, err := io.ReadFull(server, greeting[:]); err != nil {
+			done <- err
+			return
+		}
+		if greeting != [3]byte{5, 1, 0} {
+			done <- errors.New("wrong SOCKS greeting")
+			return
+		}
+		if _, err := server.Write([]byte{5, 0}); err != nil {
+			done <- err
+			return
+		}
+		var request [10]byte
+		if _, err := io.ReadFull(server, request[:]); err != nil {
+			done <- err
+			return
+		}
+		if request != [10]byte{5, 1, 0, 1, 149, 154, 167, 51, 1, 187} {
+			done <- errors.New("destination was not pinned numeric DC")
+			return
+		}
+		_, err := server.Write([]byte{5, 0, 0, 1, 127, 0, 0, 1, 0, 0})
+		done <- err
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	forward := &qaMTForward{conn: client}
+	conn, err := qaMTSOCKSDial(ctx, "127.0.0.1:19301", forward)
+	if err != nil || conn == nil || forward.calls != 1 || forward.network != "tcp" || forward.address != "127.0.0.1:19301" {
+		t.Fatal("direct or additional dial occurred")
+	}
+	_ = conn.Close()
+	if err := <-done; err != nil {
+		t.Fatal("SOCKS fixture failed", err)
+	}
+	for _, address := range []string{qaMTEndpoint, "localhost:19301", "127.0.0.1:0"} {
+		if _, err := qaMTSOCKSDial(ctx, address, forward); err == nil || forward.calls != 1 {
+			t.Fatal("unowned listener accepted")
+		}
+	}
+}
+
+func TestQAMTOriginalCheckPreservedAndObservationEmittedAfterClosing(t *testing.T) {
+	for _, cut := range []string{"pass", "mtproto-fail", "cleanup-gap", "identity-change", "closing-network"} {
+		t.Run(cut, func(t *testing.T) {
+			c := fakeExactNodeChecker(t)
+			request := checkedNodeRequest()
+			request.Service.ID = "custom-telegram-https"
+			original := c.serviceProbe
+			httpsCalls, mtCalls := 0, 0
+			cleaned := false
+			var event *qaMTEvent
+			c.cleanup = func(context.Context, exactNodeSession) error {
+				cleaned = true
+				if cut == "cleanup-gap" {
+					return errors.New("private cleanup secret")
+				}
+				return nil
+			}
+			if cut == "closing-network" {
+				c.FreshProfile = func(context.Context) (string, error) {
+					if cleaned {
+						return "wan-ffffffffffff", nil
+					}
+					return request.NetworkProfile, nil
+				}
+			}
+			c.serviceProbe = qaMTWrapService(c, func(ctx context.Context, address, route, egress string, service catalog.Service) (evidence.ProbeEvidence, error) {
+				httpsCalls++
+				a, _ := ctx.Value(qaMTContextKey{}).(*qaMTAttemptRecord)
+				if a == nil || !a.bound {
+					t.Fatal("probe not inside original live bound session")
+				}
+				a.exchange = func(context.Context, string) qaMTObservation {
+					mtCalls++
+					if cleaned {
+						t.Fatal("MTProto ran after cleanup")
+					}
+					if cut == "identity-change" {
+						c.identity = func(exactNodeSession) (routeidentity.Passport, error) {
+							return routeidentity.Passport{ID: "changed-owner"}, nil
+						}
+					}
+					if cut == "mtproto-fail" {
+						return qaMTObservation{Code: "mtproto-deadline"}
+					}
+					return qaMTObservation{Code: "mtproto-respq", Reply: true}
+				}
+				a.emit = func(e qaMTEvent) {
+					if !cleaned {
+						t.Fatal("published before original closing")
+					}
+					event = &e
+				}
+				return original(ctx, address, route, egress, service)
+			})
+			result, err := c.Check(context.Background(), request)
+			if httpsCalls != 1 || mtCalls != 1 || event == nil {
+				t.Fatal("original probe/reply duplicated or absent")
+			}
+			if cut == "pass" || cut == "mtproto-fail" {
+				if err != nil || !result.Available || result.Verdict != evidence.VerdictPass || !event.HTTPSPass || event.Accepted != (cut == "pass") {
+					t.Fatal("MTProto modified HTTPS or closing acceptance", cut, result.ErrorCode)
+				}
+			} else if event.Accepted || event.ClosingConfirmed || result.Available {
+				t.Fatal("closing gap accepted", cut, result.ErrorCode)
+			}
+			if cut == "cleanup-gap" && (err != nil || result.Stage != "cleanup" || result.ErrorCode != "node-cleanup-failed" || !c.poisoned.Load()) {
+				t.Fatal("nil-error cleanup fence changed")
+			}
+			data, marshalErr := json.Marshal(event)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			for _, secret := range []string{"private", "egress_ip", "node.example", "nonce", "fingerprint", qaMTEndpoint} {
+				if strings.Contains(string(data), secret) {
+					t.Fatal("private protocol material escaped")
+				}
+			}
+		})
+	}
+}
+
+func TestQAMTServiceWrapperKeepsOriginalEvidenceErrorAndRunsOnce(t *testing.T) {
+	c := fakeExactNodeChecker(t)
+	r := checkedNodeRequest()
+	r.Service.ID = "custom-telegram-https"
+	a := qaMTNewAttempt(c, r)
+	s := exactNodeSession{Address: "127.0.0.1:19181"}
+	p, _ := c.identity(s)
+	qaMTBind(a, s, p)
+	ctx := context.WithValue(context.Background(), qaMTContextKey{}, a)
+	calls, originalCalls := 0, 0
+	a.exchange = func(context.Context, string) qaMTObservation {
+		calls++
+		return qaMTObservation{Code: "mtproto-respq", Reply: true}
+	}
+	want := evidence.ProbeEvidence{HTTPStatus: 451, ErrorCode: "private-evidence"}
+	wantErr := errors.New("private-probe-error")
+	probe := qaMTWrapService(c, func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error) {
+		originalCalls++
+		return want, wantErr
+	})
+	for range 2 {
+		got, err := probe(ctx, s.Address, c.EngineID()+":"+r.NodeID, "private-egress", r.Service)
+		if !reflect.DeepEqual(got, want) || err != wantErr {
+			t.Fatal("original HTTPS observation changed")
+		}
+	}
+	if calls != 1 || originalCalls != 2 {
+		t.Fatal("MTProto repeated or original suppressed", calls, originalCalls)
+	}
+}
+
+func TestQAMTPortPreservesCurrentResourceCancellationAndOriginalOwnerFences(t *testing.T) {
+	for _, cut := range []string{"pid-before", "argv-before", "config-before", "resource-before", "resource-after", "closing-resource", "closing-cancel", "service-ip-fail"} {
+		t.Run(cut, func(t *testing.T) {
+			c := fakeExactNodeChecker(t)
+			r := checkedNodeRequest()
+			r.Service.ID = "custom-telegram-https"
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cleaned, replied := false, false
+			mtCalls, httpsCalls := 0, 0
+			var event *qaMTEvent
+			ctx := WithNodeResourceGuard(parent, func(_ context.Context, _ string, address netip.Addr) error {
+				if (cut == "resource-before" || cut == "resource-after" && replied) && address == netip.MustParseAddr("149.154.167.51") || cut == "closing-resource" && cleaned {
+					return errors.New("private-denial")
+				}
+				return nil
+			})
+			c.cleanup = func(context.Context, exactNodeSession) error {
+				cleaned = true
+				if cut == "closing-cancel" {
+					cancel()
+				}
+				return nil
+			}
+			original := c.serviceProbe
+			c.serviceProbe = qaMTWrapService(c, func(ctx context.Context, address, route, egress string, service catalog.Service) (evidence.ProbeEvidence, error) {
+				httpsCalls++
+				a, _ := ctx.Value(qaMTContextKey{}).(*qaMTAttemptRecord)
+				if a == nil || !a.bound {
+					t.Fatal("not inside original bound Check")
+				}
+				a.emit = func(e qaMTEvent) {
+					if !cleaned {
+						t.Fatal("emitted before closing")
+					}
+					event = &e
+				}
+				a.exchange = func(context.Context, string) qaMTObservation {
+					mtCalls++
+					if cleaned {
+						t.Fatal("exchange after cleanup")
+					}
+					replied = true
+					return qaMTObservation{Code: "mtproto-respq", Reply: true}
+				}
+				if strings.HasSuffix(cut, "-before") && cut != "resource-before" {
+					passport := a.passport
+					switch cut {
+					case "pid-before":
+						passport.PID++
+					case "argv-before":
+						passport.ID = "other-argv"
+					case "config-before":
+						passport.ConfigHash = "other-config"
+					}
+					c.identity = func(exactNodeSession) (routeidentity.Passport, error) { return passport, nil }
+				}
+				return original(ctx, address, route, egress, service)
+			})
+			if cut == "service-ip-fail" {
+				c.serviceIPProbe = func(context.Context, string, string, string, catalog.Service, netip.Addr) (evidence.ProbeEvidence, error) {
+					return evidence.ProbeEvidence{}, errors.New("private-ip-probe")
+				}
+			}
+			result, _ := c.Check(ctx, r)
+			wantCalls := 1
+			if strings.HasSuffix(cut, "-before") {
+				wantCalls = 0
+			}
+			if httpsCalls != 1 || mtCalls != wantCalls || event == nil || event.Accepted || event.HTTPSPass || event.ClosingConfirmed || result.Available {
+				t.Fatalf("current original fence bypassed cut=%s https=%d mt=%d event=%v available=%t", cut, httpsCalls, mtCalls, event, result.Available)
+			}
+		})
+	}
+}
+
+func TestQAMTForeignServiceRouteAddressAndUnboundSessionNeverExchange(t *testing.T) {
+	for _, cut := range []string{"service", "route", "address", "unbound"} {
+		t.Run(cut, func(t *testing.T) {
+			c := fakeExactNodeChecker(t)
+			r := checkedNodeRequest()
+			r.Service.ID = "custom-telegram-https"
+			a := qaMTNewAttempt(c, r)
+			s := exactNodeSession{Address: "127.0.0.1:19181"}
+			p, _ := c.identity(s)
+			if cut != "unbound" {
+				qaMTBind(a, s, p)
+			}
+			a.exchange = func(context.Context, string) qaMTObservation {
+				t.Fatal("foreign session opened MTProto")
+				return qaMTObservation{}
+			}
+			address, route, service := s.Address, c.EngineID()+":"+r.NodeID, r.Service
+			switch cut {
+			case "service":
+				service.ID = "other"
+			case "route":
+				route = "other"
+			case "address":
+				address = "127.0.0.1:19182"
+			}
+			calls := 0
+			wantErr := errors.New("original")
+			wrapped := qaMTWrapService(c, func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error) {
+				calls++
+				return evidence.ProbeEvidence{}, wantErr
+			})
+			if _, err := wrapped(context.WithValue(context.Background(), qaMTContextKey{}, a), address, route, "", service); err != wantErr || calls != 1 || a.taken {
+				t.Fatal("original result changed or foreign attempt consumed")
+			}
+		})
+	}
+}

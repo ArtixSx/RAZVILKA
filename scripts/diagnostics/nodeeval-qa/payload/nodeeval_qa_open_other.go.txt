@@ -1,0 +1,8 @@
+//go:build !linux
+
+package main
+
+import "os"
+
+func qaObservedOpenFlags() int                     { return os.O_RDONLY }
+func qaOpenObserved(path string) (*os.File, error) { return os.Open(path) }
