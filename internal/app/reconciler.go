@@ -257,6 +257,9 @@ func (a *App) interruptAutomation(r *http.Request) {
 // readiness. Legacy standalone Start methods remain available to existing tests;
 // production has one scheduling loop for these adapters and feed due events.
 func (a *App) StartServiceReconciler(ctx context.Context) {
+	a.startServiceReconciler(ctx, a.reconcileRound)
+}
+func (a *App) startServiceReconciler(ctx context.Context, round func(context.Context, time.Time)) {
 	a.reconciler.once.Do(func() {
 		_ = a.loadAutonomy(ctx)
 		ctx, stop := context.WithCancel(ctx)
@@ -303,7 +306,7 @@ func (a *App) StartServiceReconciler(ctx context.Context) {
 				case <-timer.C:
 				case <-r.wake:
 				}
-				a.reconcileRound(ctx, time.Now())
+				round(ctx, time.Now())
 				timer.Reset(reconcilerPollInterval)
 			}
 		}()
@@ -481,6 +484,9 @@ func (a *App) retryReconcilerAdmissionLocked(ctx context.Context) {
 }
 
 func (a *App) reconcileRound(ctx context.Context, now time.Time) {
+	a.reconcileRoundWithAutonomy(ctx, now, a.autonomyRound)
+}
+func (a *App) reconcileRoundWithAutonomy(ctx context.Context, now time.Time, auto func(context.Context, time.Time)) {
 	// Stop needs neither DNS nor a node inventory. Join any previous cleanup,
 	// then dispatch it before background recovery can reactivate an owned path.
 	if a.hasDueRuntimeStop(now) && a.runDurableServiceJob(ctx, now) {
@@ -633,7 +639,7 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			}
 			// Share the existing due-event and cancellation journal; no sixth
 			// operation kind is written into the rc.2 journal format.
-			a.autonomyRound(attempt, time.Now())
+			auto(attempt, time.Now())
 			// At most one spaced connectivity check for the readiness pool,
 			// after the round has released its admission. Ordering only.
 			a.nodeReadinessRound(attempt, time.Now())

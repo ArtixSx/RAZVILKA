@@ -99,10 +99,12 @@ func (m *Manager) installHEVReleaseWithReplacement(ctx context.Context, spec Spe
 	if err != nil {
 		return result, err
 	}
+	reportInstall(ctx, installDownload)
 	binary, err := m.download(ctx, info.Asset.URL, restorejournal.MaxImageBytes)
 	if err != nil {
 		return result, err
 	}
+	reportInstall(ctx, installArchive)
 	digest := sha256.Sum256(binary)
 	if len(binary) == 0 || hex.EncodeToString(digest[:]) != info.PinnedSHA256 {
 		return result, errors.New("HEV reviewed pinned SHA-256 mismatch")

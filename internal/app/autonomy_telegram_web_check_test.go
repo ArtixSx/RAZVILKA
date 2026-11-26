@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,12 +47,22 @@ func TestAutonomyReserveUsesLastCurrentlyAllowedOrigin(t *testing.T) {
 // reads and the Xray engine are modeled. The worker, store, exclusion reader,
 // feed queue, search, and service history follow their production paths.
 func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
-	for _, scenario := range []string{"verified", "wrong-content", "excluded-domain", "revoked-during-check"} {
+	testAutonomyHomeWebFeedCheckOnly(t, "telegram-web", "telegram.org", []string{"Telegram Web"}, "<html><title>Telegram Web</title></html>")
+}
+
+func TestAutonomyHomeDiscordWebFeedCheckOnly(t *testing.T) {
+	testAutonomyHomeWebFeedCheckOnly(t, "discord-web", "discord.com", []string{"Discord", "You need to enable JavaScript to run this app."},
+		"<html><title>Discord</title><noscript>You need to enable JavaScript to run this app.</noscript></html>")
+}
+
+func testAutonomyHomeWebFeedCheckOnly(t *testing.T, serviceID, excludedSuffix string, markers []string, page string) {
+	t.Helper()
+	for _, scenario := range []string{"verified", "wrong-content", "external-redirect", "excluded-domain", "revoked-during-check"} {
 		t.Run(scenario, func(t *testing.T) {
 			a, model := autonomyHomeCandidateFixture(t)
 			a.Dataplane = dataplane.New(filepath.Join(t.TempDir(), "dataplane"))
 			a.Catalog = catalog.WithWebDefaults(catalog.Catalog{})
-			svc, ok := a.autonomyService("telegram-web")
+			svc, ok := a.autonomyService(serviceID)
 			if !ok {
 				t.Fatal("missing stock service")
 			}
@@ -66,7 +77,7 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 				}
 				defer epoch.Close()
 				if scenario == "excluded-domain" {
-					items := []config.ResourceMatch{{Kind: "suffix", Value: "telegram.org"}}
+					items := []config.ResourceMatch{{Kind: "suffix", Value: excludedSuffix}}
 					if _, err := a.Store.UpdateResourceExclusions(c, a.Store.Get(), &items, nil); err != nil {
 						t.Fatal(err)
 					}
@@ -127,7 +138,7 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 			checks := 0
 			a.NodeCheckers = map[string]dataplane.NodeChecker{"xray": jobNodeChecker(func(_ context.Context, req dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 				checks++
-				if len(req.Service.Probes) != 1 || !req.Service.Probes[0].Required || !reflect.DeepEqual(req.Service, svc) || !slices.Equal(req.Service.Probes[0].Expect.BodyContains, []string{"Telegram Web"}) {
+				if len(req.Service.Probes) != 1 || !req.Service.Probes[0].Required || !reflect.DeepEqual(req.Service, svc) || !slices.Equal(req.Service.Probes[0].Expect.BodyContains, markers) {
 					t.Fatal("weakened web probe")
 				}
 				if scenario == "revoked-during-check" {
@@ -140,14 +151,17 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				body := "<html><title>Telegram Web</title></html>"
+				body := page
 				if scenario == "wrong-content" {
-					body = "<html>Welcome</html>"
+					body = "<html><title>Discord</title>Welcome</html>"
 				}
 				observation := probecheck.Observation{RequestedURL: svc.ProbeURL, FinalURL: svc.ProbeURL, HTTPStatus: 200, ContentType: "text/html", Body: []byte(body)}
+				if scenario == "external-redirect" {
+					observation.FinalURL = "https://cdn.example.invalid/app"
+				}
 				assessment := probecheck.Evaluate(req.Service, probecheck.ServiceProbe(req.Service), observation)
 				pass := assessment.Verdict == evidence.VerdictPass
-				if pass != (scenario != "wrong-content") {
+				if pass != (scenario != "wrong-content" && scenario != "external-redirect") {
 					t.Fatal("unexpected content assessment", assessment)
 				}
 				result := d10Result(req, "xray", pass)
@@ -156,31 +170,7 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 				}
 				return result, nil
 			})}
-			withScope := func(c context.Context, cfg config.Config, s autonomy.Service, do func(context.Context)) error {
-				base, err := newNFQWSPacketScopeBinding(c, a, func(ctx context.Context, b *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error) {
-					intent, err := b.intent(ctx)
-					if err != nil {
-						return nil, err
-					}
-					model.b, model.facts.Intent, model.facts.Control = b, intent, b.control.Reference()
-					return model, nil
-				})
-				if err != nil {
-					return err
-				}
-				b := &xrayHomeScopeBinding{base: base}
-				b.self, base.homeOwner = b, b
-				h := &autonomyXrayHomeRound{app: a, store: a.Store, original: c, spec: s, policy: config.CloneNetworkPolicy(cfg.NetworkPolicy), consent: config.CloneDefaultRouteConsent(cfg.DefaultRouteConsent), binding: b, webCheckOnly: true}
-				h.self = h
-				defer h.close()
-				owned := context.WithValue(c, autonomyHomeScopeKey{}, h)
-				if _, err := a.borrowAutonomyXrayHomeScope(owned); err == nil {
-					t.Fatal("domain diagnostic could lend routing authority")
-				}
-				return base.use(owned, func(held context.Context) error {
-					return withAutonomyHomeScopeRead(held, b, func(marked context.Context) error { do(marked); return nil })
-				})
-			}
+			withScope := telegramWebModelScope(a, model)
 			run := func() autonomy.Runtime {
 				a.autonomyRoundWithWebCheck(ctx, time.Now(), withScope)
 				a.autonomy.mu.Lock()
@@ -234,14 +224,18 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 				}
 				return
 			}
-			if scenario == "wrong-content" {
+			if scenario == "wrong-content" || scenario == "external-redirect" {
+				code := "body-predicate-mismatch"
+				if scenario == "external-redirect" {
+					code = "redirect-host-rejected"
+				}
 				if len(r.Reserves) != 0 || r.State == homeServiceCheckedState || len(snap.Nodes[0].Health.History) != 1 ||
-					snap.Nodes[0].Health.History[0].ErrorCode != "body-predicate-mismatch" {
+					snap.Nodes[0].Health.History[0].ErrorCode != code {
 					t.Fatal("HTTP 200 with wrong content accepted", r.State, snap.Nodes[0].Health.History)
 				}
 				return
 			}
-			if r.State != homeServiceCheckedState || !slices.Equal(r.Reserves, []string{id}) || r.ReserveCheckedAt.IsZero() || !r.CheckedAt.IsZero() || len(snap.Nodes[0].Health.History) != 1 {
+			if r.State != homeServiceCheckedState || !strings.HasPrefix(r.Message, svc.Probes[0].Label) || !slices.Equal(r.Reserves, []string{id}) || r.ReserveCheckedAt.IsZero() || !r.CheckedAt.IsZero() || len(snap.Nodes[0].Health.History) != 1 {
 				t.Fatal("missing isolated service proof", r.State, r.Message, checks)
 			}
 			nextRound := func(due time.Time) autonomy.Runtime {
@@ -272,7 +266,7 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 				t.Fatal("fresh panel omitted a verified reserve", got.State)
 			}
 			listScopeOperation(t, a, func(c context.Context) {
-				exclusions := []config.ResourceMatch{{Kind: "suffix", Value: "telegram.org"}}
+				exclusions := []config.ResourceMatch{{Kind: "suffix", Value: excludedSuffix}}
 				if _, err := a.Store.UpdateResourceExclusions(c, a.Store.Get(), &exclusions, nil); err != nil {
 					t.Fatal(err)
 				}
@@ -287,6 +281,34 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 			if excluded.State != "excluded" || len(excluded.Reserves) != 0 || !excluded.ReserveCheckedAt.IsZero() || len(excluded.Switches) != 0 || checks != 1 {
 				t.Fatal("exclusion retained a reserve, probed or applied", excluded.State, excluded.Reserves, checks)
 			}
+		})
+	}
+}
+
+func telegramWebModelScope(a *App, model *nfqwsPacketModel) func(context.Context, config.Config, autonomy.Service, func(context.Context)) error {
+	return func(c context.Context, cfg config.Config, s autonomy.Service, do func(context.Context)) error {
+		base, err := newNFQWSPacketScopeBinding(c, a, func(ctx context.Context, b *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error) {
+			intent, err := b.intent(ctx)
+			if err != nil {
+				return nil, err
+			}
+			model.b, model.facts.Intent, model.facts.Control = b, intent, b.control.Reference()
+			return model, nil
+		})
+		if err != nil {
+			return err
+		}
+		b := &xrayHomeScopeBinding{base: base}
+		b.self, base.homeOwner = b, b
+		h := &autonomyXrayHomeRound{app: a, store: a.Store, original: c, spec: s, policy: config.CloneNetworkPolicy(cfg.NetworkPolicy), consent: config.CloneDefaultRouteConsent(cfg.DefaultRouteConsent), binding: b, webCheckOnly: true}
+		h.self = h
+		defer h.close()
+		owned := context.WithValue(c, autonomyHomeScopeKey{}, h)
+		if _, err := a.borrowAutonomyXrayHomeScope(owned); err == nil {
+			return errors.New("domain diagnostic could lend routing authority")
+		}
+		return base.use(owned, func(held context.Context) error {
+			return withAutonomyHomeScopeRead(held, b, func(marked context.Context) error { do(marked); return nil })
 		})
 	}
 }

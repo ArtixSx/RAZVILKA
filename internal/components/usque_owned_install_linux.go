@@ -44,10 +44,12 @@ func (m *Manager) InstallInitialUSQUE(ctx context.Context, guard func(context.Co
 	}
 	name := "usque_" + reviewedUSQUERelease + "_linux_" + m.Arch + ".zip"
 	url := "https://github.com/Diniboy1123/usque/releases/download/v" + reviewedUSQUERelease + "/" + name
+	reportInstall(ctx, installDownload)
 	archive, err := m.download(ctx, url, 6<<20)
 	if err != nil {
 		return result, NoMutation(err)
 	}
+	reportInstall(ctx, installArchive)
 	binary, err := reviewedUSQUEBinary(m.Arch, archive)
 	if err != nil {
 		return result, NoMutation(err)
@@ -70,6 +72,7 @@ func (m *Manager) InstallInitialUSQUE(ctx context.Context, guard func(context.Co
 		return result, NoMutation(err)
 	}
 	defer release()
+	reportInstall(ctx, installPublish)
 	if err := publishInitialUSQUE(ctx, installpath.ManagedUSQUE, binary, current); err != nil {
 		return result, err
 	}

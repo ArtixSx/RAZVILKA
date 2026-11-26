@@ -116,7 +116,7 @@ func (a *App) networkPolicyReview(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		cfg := a.Store.Get()
-		writeJSON(w, 200, map[string]any{"revision": cfg.Revision, "policy": cfg.NetworkPolicy, "consent": cfg.DefaultRouteConsent, "live_applied": false})
+		writeJSON(w, 200, map[string]any{"revision": cfg.Revision, "policy": cfg.NetworkPolicy, "consent": cfg.DefaultRouteConsent, "scope_consent_current": config.CurrentDefaultRouteScopeConsent(cfg), "live_applied": false})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -198,5 +198,5 @@ func (a *App) networkPolicyReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	after := a.Store.Get()
-	writeJSON(w, 200, map[string]any{"ok": true, "approved": true, "revision": after.Revision, "policy": after.NetworkPolicy, "consent": after.DefaultRouteConsent, "live_applied": false})
+	writeJSON(w, 200, map[string]any{"ok": true, "approved": true, "revision": after.Revision, "policy": after.NetworkPolicy, "consent": after.DefaultRouteConsent, "scope_consent_current": config.CurrentDefaultRouteScopeConsent(after), "live_applied": false})
 }

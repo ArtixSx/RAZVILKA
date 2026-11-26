@@ -81,7 +81,7 @@ func TestAutonomyFreshProofPriorityPreservesPrefixAndRefusesForeignProof(t *test
 				p.SourceIDs = []string{"different-source"}
 			}
 			before := slices.Clone(r.Search.Ordered)
-			a.prioritizeAutonomyFreshProofs(context.Background(), p, s, &r, "sing-box", "wan-0123456789ab", eligible, now)
+			a.prioritizeAutonomyFreshProofs(context.Background(), p, s, &r, "sing-box", "wan-0123456789ab", eligible, now, nil)
 			if r.Search.Cursor != 1 || r.Search.Ordered[0] != before[0] {
 				t.Fatal("consumed prefix changed", r.Search)
 			}
@@ -134,7 +134,7 @@ func TestAutonomyFreshProofPriorityRuntimeContractAndOrigin(t *testing.T) {
 			p := a.autonomyPolicy()
 			service := a.autonomy.doc.Services["my-independent-site"]
 			r := autonomy.Runtime{Search: &autonomy.Traversal{Ordered: []string{ids[0], id}}}
-			a.prioritizeAutonomyFreshProofs(ctx, p, service, &r, "sing-box", "wan-0123456789ab", []string{ids[0], id}, now)
+			a.prioritizeAutonomyFreshProofs(ctx, p, service, &r, "sing-box", "wan-0123456789ab", []string{ids[0], id}, now, nil)
 			if (r.Search.Ordered[0] == id) != (mode == "current") {
 				t.Fatal("runtime or origin contract not respected", mode, r.Search)
 			}

@@ -1496,11 +1496,13 @@ function renderAll() {
 }
 
 function renderComponents() {
+  const managedOnly = c => c.id === 'nfqws2' && !c.installed && globalThis.managedNFQInstallState?.() === 'installed';
+  const present = c => c.installed || managedOnly(c);
   const counts = {
     all: state.components.length,
-    installed: state.components.filter((c) => c.installed).length,
-    available: state.components.filter((c) => !c.installed && c.available).length,
-    updates: state.components.filter((c) => c.update_available).length,
+    installed: state.components.filter(present).length,
+    available: state.components.filter((c) => !present(c) && c.available).length,
+    updates: state.components.filter((c) => !managedOnly(c) && c.update_available).length,
   };
   $('#componentSummary').innerHTML = `<div><span>Установлено</span><b>${counts.installed}</b></div><div><span>Можно установить</span><b>${counts.available}</b></div><div class="${counts.updates ? 'attention' : ''}"><span>Обновления</span><b>${counts.updates}</b></div><div><span>Всего компонентов</span><b>${counts.all}</b></div>`;
   $$('#componentFilters [data-component-filter]').forEach((button) => {
@@ -1510,9 +1512,9 @@ function renderComponents() {
     button.textContent = `${{ all: 'Все', installed: 'Установлены', available: 'Можно установить', updates: 'Есть обновления' }[filter]} · ${count}`;
   });
   const visible = state.components.filter((component) => {
-    if (state.componentFilter === 'installed') return component.installed;
-    if (state.componentFilter === 'available') return !component.installed && component.available;
-    if (state.componentFilter === 'updates') return component.update_available;
+    if (state.componentFilter === 'installed') return present(component);
+    if (state.componentFilter === 'available') return !present(component) && component.available;
+    if (state.componentFilter === 'updates') return !managedOnly(component) && component.update_available;
     return true;
   });
   $('#componentEmpty').hidden = visible.length > 0;
@@ -1529,7 +1531,9 @@ function renderComponents() {
     // A managed component (NFQWS2) is updated in place while its routes run:
     // the server checks the result and restores the previous version on failure.
     const updateBlocked = busy || (c.running && !c.managed_update) || c.external_owner || inventoryObservationStale();
-    if (c.update_available) {
+    if (managedOnly(c)) {
+      version = 'Управляемый пакет установлен';
+    } else if (c.update_available) {
       version = info ? consoleEngineVersionLabel(info) : `${c.installed_version || 'Версия неизвестна'}${c.available_version ? ` → ${c.available_version}` : ''}`;
       const managedTitle = c.managed_update ? (c.rollback_ready ? ' title="Обновление при работающих маршрутах: проверка и автоматический откат"' : ' title="Сначала нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката"') : '';
       actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="update"${managedTitle} ${c.can_update && !stale && !updateBlocked && (!c.managed_update || c.rollback_ready) ? '' : 'disabled'}>Обновить</button>`;
@@ -1545,7 +1549,7 @@ function renderComponents() {
     if (c.external_owner) actions = '<span class="external-owner-tag">ВНЕШНЕЕ УПРАВЛЕНИЕ</span>';
     const budget = c.resource_budget || {};
     const budgetText = [budget.ram_mib ? `${budget.ram_mib} МиБ RAM` : '', budget.flash_mib ? `${budget.flash_mib} МиБ flash` : '', budget.cpu_class || ''].filter(Boolean).join(' · ');
-    const statusClass = c.update_available ? 'has-update' : c.installed ? 'is-installed' : c.available ? 'is-available' : 'is-unavailable';
+    const statusClass = managedOnly(c) ? 'is-installed' : c.update_available ? 'has-update' : c.installed ? 'is-installed' : c.available ? 'is-available' : 'is-unavailable';
     const verification = c.verification === 'verified'
       ? ['verified', `УСТАНОВКА ПРОВЕРЕНА${c.verified_version ? ` · ${c.verified_version}` : ''}`]
       : c.verification === 'verified-removed'
@@ -1629,7 +1633,7 @@ async function refreshComponents(refresh = true) {
   return request;
 }
 
-async function manageComponent(id, requestedAction) {
+async function manageComponent(id, requestedAction, stillRequested = () => true) {
   if (state.componentOperation || state.componentRefreshRequest || !workflowSession(workflowState.epoch)) return false;
   if (typeof componentRecoveryFence === 'function' && componentRecoveryFence()) {
     showNotice('review', 'Прочитайте журнал обновления', 'Новые изменения компонентов доступны после свежего чтения и завершения восстановления.');
@@ -1643,7 +1647,7 @@ async function manageComponent(id, requestedAction) {
   state.componentOperation = operation;
   $$('.component-action').forEach(button => { button.disabled = true; });
   if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
-  try { return await manageComponentReviewed(id, action); }
+  try { return await manageComponentReviewed(id, action, stillRequested); }
   finally {
     if (state.componentOperation === operation) state.componentOperation = null;
     if (workflowSession(operation.epoch)) {
@@ -1653,12 +1657,13 @@ async function manageComponent(id, requestedAction) {
   }
 }
 
-async function manageComponentReviewed(id, requestedAction) {
+async function manageComponentReviewed(id, requestedAction, stillRequested = () => true) {
   const epoch=workflowState.epoch;
   const component = state.components.find((c) => c.id === id);
   if (!component) return false;
   const action = requestedAction || (component.update_available ? 'update' : 'install');
   const verbs = { install: 'Установить', update: 'Обновить', remove: 'Удалить' };
+  const log = action === 'install' ? globalThis.RazvilkaInstallLog?.begin(component.name) : null;
   const verb = verbs[action] || 'Выполнить';
   const source = ['mihomo','hev-socks5-tunnel'].includes(component.id)
     ? 'официальный закреплённый GitHub release с проверкой SHA-256 архива'
@@ -1670,12 +1675,14 @@ async function manageComponentReviewed(id, requestedAction) {
     plan = await api(`/api/v1/components/${encodeURIComponent(id)}/plan?action=${encodeURIComponent(action)}`, { readTimeoutMs: 110000 });
   } catch (error) {
     if(!workflowSession(epoch))return false;
-    showDetails({ error: error.message, response: error.payload }, `${component.name}: план недоступен`);
+    if (log) log.finish('Не удалось прочитать план. Установка не началась.');
+    else showDetails({ error: error.message, response: error.payload }, `${component.name}: план недоступен`);
     return false;
   }
   if(!workflowSession(epoch))return false;
   if (!plan.ready) {
-    showDetails(plan, `${component.name}: действие заблокировано`);
+    if (log) log.finish('Установка заблокирована. ' + (plan.blockers?.[0]?.message || plan.reason || 'Откройте план компонента в разделе «Обходы».'));
+    else showDetails(plan, `${component.name}: действие заблокировано`);
     return false;
   }
   const operation = action === 'remove'
@@ -1686,17 +1693,31 @@ async function manageComponentReviewed(id, requestedAction) {
   if (action !== 'install' && !await askConfirmation(`${verb} ${component.name}`, `${operation} План содержит ${plan.steps?.length || 0} проверяемых этапов, фиксирует версии до/после и не включает маршруты автоматически.`, verb)) return false;
   if(!workflowSession(epoch))return false;
   const buttons = $$(`.component-action[data-component="${CSS.escape(id)}"]`);
+  if (!stillRequested()) {
+    log?.finish('Вы вышли из мастера. Установка не началась.');
+    return false;
+  }
   buttons.forEach((button) => { button.disabled = true; button.textContent = 'Выполняется…'; });
   try {
-    const result = await api(`/api/v1/components/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST' });
+    log?.sent();
+    const result = await api(`/api/v1/components/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, { method: 'POST', ...(log ? { headers: log.headers } : {}) });
     if(!workflowSession(epoch))return false;
     if (result?.ok !== true) throw new Error('Сервер не подтвердил завершение операции с компонентом.');
     if (result.pending_live_acceptance === true) {
+      log?.finish('Пакет установлен. Принятие новой версии рабочим процессом ещё ожидается.');
       if (typeof componentUpdatePending === 'function') componentUpdatePending();
       showNotice('review', `${component.name}: принятие версии ожидается`, 'Пакет установлен и проверен отдельно. Рабочий процесс ещё не подтвердил новую версию; прежняя версия сохранена. Откройте журнал на карточке компонента.', { plan, result });
       return true;
     }
-    if (!await refreshComponents(false)) throw new Error('Операция отправлена, но повторная проверка состояния не завершена.');
+    log?.note('Установщик завершил работу. Проверяем состояние компонента на роутере…');
+    if (action === 'install') {
+      const rows = await api('/api/v1/components', { cache: 'no-store', readTimeoutMs: 110000 });
+      if (!workflowSession(epoch)) return false;
+      if (!Array.isArray(rows) || !rows.some(c => c.id === id && c.installed === true && !c.inventory_error))
+        throw new Error('Установщик завершил работу, но роутер пока не подтвердил наличие компонента.');
+      state.components = rows;
+      state.inventoryInvalidatedAt = Date.now();
+    } else if (!await refreshComponents(false)) throw new Error('Операция отправлена, но повторная проверка состояния не завершена.');
     if(!workflowSession(epoch))return false;
     const [engines, engineConfigs] = await Promise.all([api('/api/v1/engines'), api('/api/v1/engine-configs')]);
     if(!workflowSession(epoch))return false;
@@ -1705,16 +1726,18 @@ async function manageComponentReviewed(id, requestedAction) {
     const title = `${component.name}: ${action === 'remove' ? 'удаление завершено' : action === 'update' ? 'обновление проверено' : 'установка проверена'}`;
     const message = action === 'remove' ? 'Компонент удалён и повторная проверка подтвердила результат.' : 'Версия повторно прочитана с роутера, контрольный результат сохранён. Маршруты сервисов пока не менялись.';
     const details = { message, plan, result };
+    log?.finish('Установка подтверждена. Компонент готов к настройке.');
     if (typeof notifyOperationSuccess === 'function') notifyOperationSuccess(title, message, details);
     else showNotice('success', title, message, details);
     return true;
   } catch (error) {
     if(!workflowSession(epoch))return false;
+    log?.finish('Не удалось подтвердить установку. Откройте журнал обновления перед повтором.');
     await refreshComponents(false);
     if(!workflowSession(epoch))return false;
     if (typeof componentUpdatePending === 'function') componentUpdatePending();
     showNotice('error', `${component.name}: ${action === 'remove' ? 'удаление' : action === 'update' ? 'обновление' : 'установка'} не завершено`, 'RAZVILKA не подтвердила итоговое состояние. Прочитайте журнал обновления перед новым действием. Маршруты автоматически не включались.', { error: error.message, response: error.payload, plan });
-    showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`);
+    if (!log) showDetails({ error: error.message, response: error.payload, plan }, `${component.name}: ошибка`);
     return false;
   }
 }

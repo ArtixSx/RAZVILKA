@@ -22,6 +22,31 @@ type autonomyHomeScopeKey struct{}
 type autonomyHomeReadKey struct{}
 type homeReserveHintKey struct{}
 
+type homeQueueHintsKey struct{}
+
+type homeQueueHint struct {
+	service               autonomy.Service
+	node, version         string
+	checkedAt, validUntil time.Time
+}
+
+// Snapshot while the coordinator already owns the document; no worker or
+// catalogue lock is borrowed across the later candidate search.
+func homeQueueHints(doc autonomyDocument, chosen string, configRevision uint64, now time.Time) []homeQueueHint {
+	var hints []homeQueueHint
+	for id, state := range doc.Runtime {
+		service := doc.Services[id]
+		if id == chosen || !service.Enabled || service.Removing || !service.AllLAN || service.ExpectedRoute != "auto" ||
+			len(service.Sources) != 0 || state.State != homeServiceCheckedState || state.Search == nil || len(state.Reserves) != 1 ||
+			state.ReserveConfigRevision != configRevision || state.ReserveCheckedAt.IsZero() || now.Before(state.ReserveCheckedAt) || !now.Before(state.ReserveValidUntil) {
+			continue
+		}
+		service.Sources = slices.Clone(service.Sources)
+		hints = append(hints, homeQueueHint{service: service, node: state.Reserves[0], version: state.Search.Version, checkedAt: state.ReserveCheckedAt, validUntil: state.ReserveValidUntil})
+	}
+	return hints
+}
+
 type homeReserveHint struct {
 	version, node string
 	checkedAt     time.Time
@@ -123,7 +148,7 @@ func (a *App) autonomyHomeXrayShape(cfg config.Config, serviceID string) bool {
 // A locally supplied definition can override a stock ID. Only the stock
 // web target and its complete TLS/content contract qualify for this check.
 func (a *App) autonomyHomeWebCheck(cfg config.Config, p autonomy.Policy, s autonomy.Service) bool {
-	if s.ID != "telegram-web" || !s.Enabled || s.Removing || !s.AllLAN || len(s.Sources) != 0 || s.ExpectedRoute != "auto" ||
+	if (s.ID != "telegram-web" && s.ID != "discord-web") || !s.Enabled || s.Removing || !s.AllLAN || len(s.Sources) != 0 || s.ExpectedRoute != "auto" ||
 		!cfg.Services[s.ID].Enabled || cfg.AppliedServices[s.ID].Enabled || !slices.Contains(p.PreferredRoutes, "xray") || len(p.SourceIDs) == 0 {
 		return false
 	}

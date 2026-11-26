@@ -65,7 +65,7 @@
   }
   root.RazvilkaComponentRecovery=Object.freeze({valid,summary});
   if (typeof document==='undefined') return;
-  const views=new Set(['engines','engineconfig','updates']);
+  const views=new Set(['engines','engineconfig','updates','onboard']);
   const recovery={epoch:0,read:null,action:null,data:null,received:0,error:'',unknownWrite:false,receipt:null,autoBlocked:false};
   const active=()=>state.authenticated && views.has(state.currentView) && !document.hidden;
   const fresh=()=>recovery.data && !recovery.error && recovery.received>0 && Date.now()-recovery.received<60000;
@@ -160,7 +160,7 @@
     paint();return ticket.promise;
   }
   async function repair(action) {
-    if (!active() || recovery.action || recovery.read) return;
+    if (!active() || state.currentView === 'onboard' || recovery.action || recovery.read) return;
     if(recovery.unknownWrite){render();return;}
     if(!fresh()){
       recovery.error='Сведения устарели. Читаем журнал перед новым действием; запись не отправляется.';render();

@@ -18,6 +18,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 )
 
@@ -315,7 +316,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		if !homeCheckOnly || h == nil || !h.webCheckOnly || !h.current(ctx, a, cfg, s) {
 			return finish(autonomyStateDomainRouteUnavailable, "Для доменного сервиса недоступна отдельная проверка узла.")
 		}
-		checkedMessage = "Страница Telegram Web ответила через узел Xray. Узел сохранён в резерве. Маршрут для домашних устройств не применён."
+		checkedMessage = service.Probes[0].Label + " ответила через узел Xray. Узел сохранён в резерве. Маршрут для домашних устройств не применён."
 	}
 	if homeCheckOnly {
 		if r.Search == nil || r.Search.Version != version {
@@ -355,7 +356,12 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		a.setAutonomyServiceRefusals(s.ID, refusals)
 	}
 	previousPending := slices.Clone(r.Search.Ordered[r.Search.Cursor:])
-	a.prioritizeAutonomyFreshProofs(ctx, p, s, &r, engine, profile, ids, time.Now())
+	now := time.Now()
+	var peerNodes map[string]bool
+	if homeCheckOnly && webCheckOnly {
+		peerNodes = a.homeQueuePeerNodes(ctx, p, s, r, cfg, engine, profile, ids, catalogNodes, now)
+	}
+	a.prioritizeAutonomyFreshProofs(ctx, p, s, &r, engine, profile, ids, now, peerNodes)
 	priorityCount, priorityErr := a.prioritizeAutonomySources(ctx, p, &r, time.Now(), personalPriorities)
 	if priorityErr != nil {
 		return finish("catalog-unavailable", "Каталог приоритетных источников недоступен; подбор отложен.")
@@ -718,10 +724,51 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	return r
 }
 
+// A reserve of another service can move an untried public peer forward. The
+// target service's own check and all original publication gates still run.
+func (a *App) homeQueuePeerNodes(ctx context.Context, p autonomy.Policy, target autonomy.Service, r autonomy.Runtime, cfg config.Config, engine, profile string, eligible []string, nodes []nodestore.Node, now time.Time) map[string]bool {
+	hints, _ := ctx.Value(homeQueueHintsKey{}).([]homeQueueHint)
+	var preferred map[string]bool
+	for _, hint := range hints {
+		if !hint.validUntil.After(now) || !slices.Contains(eligible, hint.node) || r.CandidateCoolingDown(hint.node) || !slices.Contains(r.Search.Ordered[r.Search.Cursor:], hint.node) {
+			continue
+		}
+		version, home := a.autonomySearchVersion(p, hint.service, engine, profile, cfg)
+		if !home || hint.version != version {
+			continue
+		}
+		index := slices.IndexFunc(nodes, func(n nodestore.Node) bool { return n.ID == hint.node })
+		if index < 0 {
+			continue
+		}
+		node := nodes[index]
+		if !strings.EqualFold(node.Protocol, "vless") || !slices.ContainsFunc(node.Origins, func(o nodestore.Origin) bool {
+			return providerfeed.SourceOrder(o.SourceID) > 0 && allowedAutonomyOrigin(p, o, now)
+		}) || slices.ContainsFunc(node.Health.History, func(rec nodestore.CheckRecord) bool {
+			return rec.ServiceID == target.ID && rec.NetworkProfile == profile && rec.RoutePathID == engine+":"+node.ID && rec.ExpiresAt.After(now)
+		}) {
+			continue
+		}
+		candidateEngine, err := a.autonomyCandidateEngine(ctx, p, target, engine, node.ID)
+		if err != nil || candidateEngine != "xray" {
+			continue
+		}
+		peer := autonomy.Runtime{Reserves: []string{node.ID}, ReserveCheckedAt: hint.checkedAt}
+		if !a.autonomyHomeReserveUntil(ctx, p, hint.service, peer, eligible, nodes, profile, now).After(now) {
+			continue
+		}
+		if preferred == nil {
+			preferred = make(map[string]bool)
+		}
+		preferred[node.ID] = true
+	}
+	return preferred
+}
+
 // Proof is only a scheduling hint. SearchFirstUsable still checks the exact
 // candidate afresh and persists its receipt before the ordinary Apply gate.
 // Never replay a consumed candidate or clear an untrusted application latch.
-func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Policy, s autonomy.Service, r *autonomy.Runtime, engine, profile string, eligible []string, now time.Time) {
+func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Policy, s autonomy.Service, r *autonomy.Runtime, engine, profile string, eligible []string, now time.Time, peerNodes map[string]bool) {
 	if r.Search == nil || r.Search.Halted || a.Nodes == nil {
 		return
 	}
@@ -734,7 +781,7 @@ func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Poli
 		nodes[n.ID] = n
 	}
 	t := r.Search
-	preferred, rest := []string{}, []string{}
+	preferred, peers, rest := []string{}, []string{}, []string{}
 	for _, id := range t.Ordered[t.Cursor:] {
 		fresh := false
 		// Avoid reopening the private catalogue for every unchecked/failed
@@ -775,6 +822,8 @@ func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Poli
 		}
 		if fresh {
 			preferred = append(preferred, id)
+		} else if peerNodes[id] {
+			peers = append(peers, id)
 		} else {
 			rest = append(rest, id)
 		}
@@ -783,5 +832,7 @@ func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Poli
 	// pool goes first and repeated failures go last. Nothing is removed.
 	rest = a.nodeReadinessOrder(rest, engine, profile, s.ExpectedRoute == "auto", now)
 	ordered := slices.Clone(t.Ordered[:t.Cursor])
-	t.Ordered = append(append(ordered, preferred...), rest...)
+	ordered = append(ordered, preferred...)
+	ordered = append(ordered, peers...)
+	t.Ordered = append(ordered, rest...)
 }

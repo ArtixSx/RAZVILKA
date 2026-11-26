@@ -369,6 +369,9 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 	if !ok {
 		return Result{}, fmt.Errorf("unknown component %q", id)
 	}
+	if id == "usque" {
+		reportInstall(ctx, installUSQUENetwork)
+	}
 	if err := m.usquePackageNetworkPreflight(id); err != nil {
 		return Result{Component: id, Action: "install"}, NoMutation(err)
 	}
@@ -395,6 +398,7 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 			return Result{}, NoMutation(err)
 		}
 	}
+	reportInstall(ctx, installDependencies)
 	visiting[id] = true
 	defer delete(visiting, id)
 	for _, dependency := range spec.Dependencies {
@@ -471,6 +475,7 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 		return Result{}, err
 	}
 	if spec.Repository != "" {
+		reportInstall(ctx, installCatalog)
 		if out, err := m.refreshPackageLists(ctx); err != nil {
 			// Proceed only when opkg attributed the failure to other sources.
 			status := catalogStatus{Error: packageRefreshError(out), FailedFeeds: failedFeeds(out)}
@@ -521,6 +526,7 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 	if tx != nil {
 		out, err = tx.runPackage(ctx, "upgrade", command, spec.Package)
 	} else {
+		reportInstall(ctx, installOpkg)
 		out, err = m.run(ctx, command, spec.Package)
 	}
 	if tx != nil {
@@ -550,6 +556,7 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 	if err != nil {
 		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("opkg %s %s: %w", command, spec.Package, err)
 	}
+	reportInstall(ctx, installVerify)
 	after, verifyErr := m.installedPackageVersions(ctx)
 	if verifyErr != nil {
 		return Result{Component: id, Action: action, Output: text}, fmt.Errorf("verify installed component: %w", verifyErr)

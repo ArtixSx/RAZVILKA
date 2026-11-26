@@ -19,6 +19,23 @@ const model = vm.createContext({state, esc, consoleDate:value=>value, ci:()=>'',
 vm.runInContext(slice(consoleCode, 'function consoleEngineState(', 'function consoleNavigate('), model);
 vm.runInContext(slice(interfaceCode, 'const engineProgressEvidence =', 'function renderInterfaceEngines('), model);
 const card = () => model.interfaceEngineCard('usque', meta);
+{
+  const nfq={...base,id:'nfqws2',installed:false,can_install:true,running:false,external_owner:true};
+  state.components.push(nfq);
+  model.managedNFQInstallState=()=>'installed';
+  const html=model.interfaceEngineCard('nfqws2',{...meta,name:'NFQWS2'});
+  assert.match(html,/Управляемый пакет установлен/);
+  assert.match(html,/Получена квитанция управляемого пакета/);
+  assert.match(html,/Запуск управляемого процесса не подтверждён/);
+  assert.match(html,/0 сервисов/);
+  assert.doesNotMatch(html,/Не установлен|Уточнить установку|data-component-action|1\.0\.[13]|Процесс запущен/);
+  model.managedNFQInstallState=()=>'unknown';
+  assert.match(model.interfaceEngineCard('nfqws2',meta),/Установка не подтверждена/);
+  nfq.installed=true;
+  assert.doesNotMatch(model.interfaceEngineCard('nfqws2',meta),/Управляемый пакет установлен|Получена квитанция/);
+  state.components.pop();
+  delete model.managedNFQInstallState;
+}
 assert.match(card(), /1\.0\.1 → 1\.0\.3/);
 assert.doesNotMatch(card(), /different runtime output/);
 assert.match(card(), /Процесс не запущен/);
@@ -119,6 +136,13 @@ assert.match(card(), /Не установлен/);
 assert.match(card(), /Доступна 1\.0\.3/);
 assert.match(card(), /data-component-action="install"[^>]*>Установить/);
 assert.doesNotMatch(card(), /data-component-action="remove"/);
+const firstActionArea = html => html.split('<details')[0];
+assert.match(firstActionArea(card()), /data-component-action="install"(?![^>]*disabled)/);
+state.components[0].can_install=false;
+state.components[0].available_version='';
+state.components[0].update_available=false;
+assert.match(firstActionArea(card()), /data-component-refresh="usque"[^>]*>Проверить доступность/);
+assert.doesNotMatch(firstActionArea(card()), /data-component-action="install"|data-engine-progress/);
 
 state.components = []; state.engineConfigs = [{id:'usque', installed:true}];
 assert.equal(model.consoleEngineState('usque').installed, true, 'config installed evidence must use installed, not nonexistent available');

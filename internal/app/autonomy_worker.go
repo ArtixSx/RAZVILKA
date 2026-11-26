@@ -167,6 +167,11 @@ func (a *App) autonomyRoundWithWebCheck(ctx context.Context, now time.Time, with
 	if chosen != "" && len(activate) == 0 {
 		spec = a.autonomy.doc.Services[chosen]
 		state = a.autonomy.doc.Runtime[chosen].Clone()
+		if spec.ExpectedRoute == "auto" && spec.AllLAN {
+			if hints := homeQueueHints(a.autonomy.doc, chosen, cfg.Revision, now); len(hints) != 0 {
+				ctx = context.WithValue(ctx, homeQueueHintsKey{}, hints)
+			}
+		}
 		a.autonomy.ordinaryAfterFirstSearch = firstSearchSlot
 	}
 	a.autonomy.mu.Unlock()
@@ -290,7 +295,9 @@ func (a *App) activateHandedOverServices(ctx context.Context, p autonomy.Policy,
 		r := a.autonomy.doc.Runtime[s.ID].Clone()
 		a.autonomy.mu.Unlock()
 		r.State, r.Message = "pending", "Сервис добавлен в активный список. Автопилот проверит и назначит путь."
-		a.autonomyRuntime(p.Revision, s.ID, r)
+		if a.autonomyRuntime(p.Revision, s.ID, r) {
+			a.wakeAutonomy()
+		}
 	}
 }
 

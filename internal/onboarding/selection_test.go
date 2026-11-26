@@ -72,7 +72,7 @@ func TestBuiltinWebChoicesRequireExplicitEnrollment(t *testing.T) {
 	_, cfg, old, next := fixture()
 	c := catalog.WithWebDefaults(catalog.NFQWS2Starter())
 	review := Starter(c, cfg, old, nil)
-	if !slices.Equal(review.OptionalIDs, []string{"instagram-web", "telegram-web", "whatsapp-web"}) {
+	if !slices.Equal(review.OptionalIDs, []string{"discord-web", "instagram-web", "telegram-web", "whatsapp-web"}) {
 		t.Fatalf("quick setup choices %v", review.OptionalIDs)
 	}
 	noStock := []string{}

@@ -44,6 +44,39 @@ function fixture(view='engines'){
   };return f;
 }
 let total=0;async function test(name,fn){await fn();total++;console.log('PASS '+name);}
+await test('Home reads only the installed receipt without granting installation rights',async()=>{
+  const f=fixture('overview'), status=f.context.managedNFQInstallState, observe=f.context.observeManagedNFQInstall;
+  const current=observation({provider_id:'managed-nfqws-payload'});
+  assert.equal(status(),'unknown');
+  const reading=observe();await observe();
+  assert.equal(f.requests.length,1);
+  assert.equal(f.requests[0].path,base+'/installed');
+  assert.equal(f.requests[0].options.cache,'no-store');
+  f.requests[0].resolve(current);await reading;
+  assert.equal(status(),'installed');
+  f.clickInstall();
+  await observe();assert.equal(f.requests.length,1);
+  f.advance(60001);assert.equal(status(),'unknown');
+  const next=observe();f.requests[1].reject(unavailable());await next;
+  assert.equal(status(),'unknown');
+  assert(f.requests.every(r=>r.path===base+'/installed' && !r.options.method));
+});
+await test('stock and malformed receipts, a revoked session and late reads cannot certify an installed bundle',async()=>{
+  const good=observation({provider_id:'managed-nfqws-payload'});
+  for(const invalid of [observation(),{...good,receipt_id:''},{...good,installed_idle:false},{...good,working_routes_changed:true}]){
+    const f=fixture('engines');
+    const read=f.context.observeManagedNFQInstall();f.requests[0].resolve(invalid);await read;
+    assert.equal(f.context.managedNFQInstallState(),'unknown');
+  }
+  for(const cancel of [f=>f.revoke(),f=>f.view('services')]){
+    const f=fixture('overview');
+    const read=f.context.observeManagedNFQInstall();cancel(f);
+    assert(f.requests[0].options.signal.aborted);
+    f.requests[0].resolve(good);await read;
+    assert.equal(f.context.managedNFQInstallState(),'unknown');
+    await f.context.observeManagedNFQInstall();assert.equal(f.requests.length,1);
+  }
+});
 await test('update needs matching original installed readback and cannot fall back to install',()=>{
   const old=observation({flavor:'previous',manifest_sha256:'c'.repeat(64),receipt_id:'d'.repeat(32)});
   const p=plan({action:'update',update_available:true,installed_idle:true,installed:old});
@@ -83,7 +116,7 @@ await test('receipt matching uses schema, exact transaction, provider, flavor an
   for(const value of [receipt({schema:2}),receipt({state:'live'}),receipt({transaction_id:'c'.repeat(32)}),receipt({provider_id:'other'}),receipt({flavor:'other'}),receipt({manifest_sha256:'c'.repeat(64)})])assert.equal(model.receiptMatches(value,observation()),false);
 });
 await test('stock component detection and rendering do not create managed proof or HTTP writes',()=>{
-  const f=fixture();assert.equal(f.requests.length,0);assert.match(f.card(),/Прочитайте план/);assert.match(f.card(),/data-managed-nfq-install[^>]*disabled/);assert.equal(f.context.managedNFQBundleCard('xray'),'');
+  const f=fixture();assert.equal(f.requests.length,0);assert.match(f.card(),/Проверить доступность пакета/);assert.match(f.card(),/data-managed-nfq-install[^>]*disabled/);assert.equal(f.context.managedNFQBundleCard('xray'),'');
   f.view('overview');f.view('engines');assert.equal(f.requests.length,0);f.clickInstall();assert.equal(f.requests.length,0);
 });
 await test('plan/readback uses three bounded sequential GETs without competing with its own plan gate',async()=>{
@@ -173,7 +206,7 @@ await test('stock component activity and recovery block POST while managed reads
   }
 });
 await test('late GET and POST cannot revive proof or show a notice after logout',async()=>{
-  const readOnly=fixture();readOnly.clickRead();await flush();readOnly.revoke();readOnly.requests[0].resolve(plan());await flush();assert.equal(readOnly.requests.length,1);assert.match(readOnly.card(),/Прочитайте план/);assert.equal(readOnly.notices.length,0);
+  const readOnly=fixture();readOnly.clickRead();await flush();readOnly.revoke();readOnly.requests[0].resolve(plan());await flush();assert.equal(readOnly.requests.length,1);assert.match(readOnly.card(),/Проверить доступность пакета/);assert.equal(readOnly.notices.length,0);
   const writing=fixture();await writing.ready();writing.clickInstall();await flush();writing.revoke();writing.requests[3].resolve(success());await flush();assert.equal(writing.requests.length,4);assert.equal(writing.notices.length,0);assert.equal(writing.state.componentOperation,null);
 });
 await test('leaving a sent install releases UI busy state and requires independent read on return',async()=>{

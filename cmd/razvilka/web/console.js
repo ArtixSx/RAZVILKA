@@ -73,16 +73,20 @@ function consoleEngineState(id){
  // Retain conservative running gates, but never present them as an observed
  // process state when the original component explicitly reports uncertainty.
  const running=component?.running===true||engine?.running===true||config?.running===true;
- const installed=running||component?.installed===true||engine?.installed===true||config?.installed===true;
+ const managedPackage=id==='nfqws2'&&typeof globalThis.managedNFQInstallState==='function';
+ const managedInstalled=managedPackage&&globalThis.managedNFQInstallState()==='installed';
+ const installed=managedInstalled||running||component?.installed===true||engine?.installed===true||config?.installed===true;
  const installedKnown=installed||(!component?.inventory_error&&[component,engine,config].some(e=>typeof e?.installed==='boolean'));
  const installedVersion=installed?(component?.installed_version||component?.runtime_version||engine?.version||''):'';
  const availableVersion=component?.available_version||'';
  const recovery=typeof componentRecoverySummary==='function'?componentRecoverySummary(id):null;
- return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,runtimeUnknown,recovery,label:runtimeUnknown?'Состояние процесса неизвестно':recovery?.label||(observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке'),tone:!runtimeUnknown&&!observationStale&&recovery?.tone==='good'?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
+ const label=managedInstalled?'Управляемый пакет установлен':runtimeUnknown?'Состояние процесса неизвестно':recovery?.label||(observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':managedPackage?'Установка не подтверждена':installedKnown?'Не установлен':'Нет данных об установке');
+ return {config,component,engine,running,installed,installedKnown,managedInstalled,installedVersion,availableVersion,observationStale,runtimeUnknown,recovery,label,tone:!runtimeUnknown&&!observationStale&&recovery?.tone==='good'?'good':'unknown',version:managedInstalled?'':installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown&&!managedPackage?'Не установлен':'Нет данных о версии')};
 }
 function consoleEngineUpdateState(info){
  const c=info.component,load=state.dataLoad?.components;
  if(info.recovery)return {kind:'pending',text:info.recovery.detail};
+ if(info.managedInstalled)return {kind:'managed',text:'Установка подтверждена по квитанции управляемого пакета.'};
  if(state.componentRefreshRequest)return {kind:'checking',text:'Проверяем каталог обновлений…'};
  if(state.componentInventoryPending&&info.observationStale)return {kind:'inventory-pending',text:'Версии получены. Панель автоматически проверяет, какие компоненты установлены и запущены.'};
  if(info.observationStale)return {kind:'failed',text:'Состояние обновляется. Последнее наблюдение: '+consoleDate(state.inventoryObservation?.observedAt)};
@@ -99,6 +103,7 @@ function consoleEngineUpdateState(info){
  return Number.isFinite(Date.parse(c.checked_at||''))?{kind:'current',text:'Обновление не требуется. Проверено: '+consoleDate(c.checked_at)}:{kind:'unknown',text:'Версия из локального каталога. Проверка обновлений ещё не подтверждена.'};
 }
 function consoleEngineVersionLabel(info){
+ if(info.managedInstalled)return '';
  const update=consoleEngineUpdateState(info);
  return info.installedVersion?`${info.installedVersion}${update.kind==='update'?` → ${info.availableVersion}`:''}`:!info.installed&&info.version===info.label?'':info.version;
 }

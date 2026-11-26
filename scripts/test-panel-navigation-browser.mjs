@@ -203,7 +203,7 @@ try{
   await page.evaluate(value=>localStorage.setItem('razvilka.simpleMode',value),saved);
   await page.reload({waitUntil:'networkidle'});
   await page.waitForSelector('#rzSimpleHome',{state:'attached'});
-  assert.equal(await page.locator('#rzSimpleHome').isVisible(),saved==='1');
+  assert.equal(await page.locator('#rzSimpleHome').isVisible(),true,'The retired view preference must not change Home');
   assert.equal(await page.locator('#rzSimpleToggle').count(),0);
  }
  // The quick and advanced wizards share the same saved service selection.
@@ -218,6 +218,7 @@ try{
  await quickPicker.waitFor({state:'visible'});
  assert.equal(await page.locator('[name="quick-scope"], [name="quick-device"]').count(),0);
  assert.match(await page.locator('#a1-quickScopeHint').textContent(),/общей политикой/);
+ assert(await page.locator('#a1-quickHome #a1-homeRead').isVisible(),'quick setup shows an inline network review');
  assert(!await quickPicker.locator('[name="initial-starter"]').isChecked(),'initial services require explicit selection');
  const optionalSettings=page.locator('#a1-quickStart details');
  assert.equal(await optionalSettings.getAttribute('open'),null);
@@ -232,6 +233,7 @@ try{
  await quickPicker.locator('[name="initial-extra"]').check();
  await page.locator('#a1-quickAdvanced').click();
  const advancedPicker=page.locator('#a1-wizardLayout #a1-starterReview');
+ assert(await page.locator('#a1-fullHome #a1-homeRead').isVisible(),'full setup retains the same inline review');
  assert(await advancedPicker.isVisible(),'the first advanced step must show the same services');
  assert(!await page.locator('#a1-scopeMode').isVisible(),'scope picker must stay hidden during initial advanced setup');
  assert(!await advancedPicker.locator('[name="initial-starter"]').isChecked(),'switching setup reset an intentional empty starter selection');

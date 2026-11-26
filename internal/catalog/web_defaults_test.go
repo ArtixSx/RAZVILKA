@@ -18,7 +18,7 @@ func TestWebDefaultsPreserveExistingServiceDefinition(t *testing.T) {
 	if err := Validate(merged); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(merged.Services[:len(input.Services)], input.Services) || len(merged.Services) != len(stock.Services)+3 {
+	if !reflect.DeepEqual(merged.Services[:len(input.Services)], input.Services) || len(merged.Services) != len(stock.Services)+4 {
 		t.Fatal("adding built-in web entries replaced a local or stock definition")
 	}
 	for _, service := range merged.Services[:len(stock.Services)] {

@@ -102,11 +102,13 @@ func (m *Manager) InstallInitialNFQWS(ctx context.Context, authority NFQWSInitia
 		if err := check(held); err != nil {
 			return NoMutation(err)
 		}
+		reportInstall(held, installDownload)
 		source, err := m.downloadNFQWSInitialArchive(held)
 		if err != nil {
 			return NoMutation(err)
 		}
 		owner := nfqwsInitialOwner(m.StateDir)
+		reportInstall(held, installArchive)
 		archive, err := rebuildNFQWSInitialArchive(held, source, owner)
 		if err != nil {
 			return NoMutation(err)
@@ -182,6 +184,7 @@ func (m *Manager) InstallInitialNFQWS(ctx context.Context, authority NFQWSInitia
 		if err := check(held); err != nil {
 			return err
 		}
+		reportInstall(held, installOpkg)
 		out, err := tx.runInitialNFQWSPackage(held, path)
 		result.Output = boundedOutput(out)
 		if fault := tx.fault("after:initial-install-command"); fault != nil {
@@ -193,6 +196,7 @@ func (m *Manager) InstallInitialNFQWS(ctx context.Context, authority NFQWSInitia
 		if err := check(held); err != nil {
 			return err
 		}
+		reportInstall(held, installVerify)
 		seal, err := m.verifyNFQWSInitialInstall(held, archive, before)
 		if err != nil {
 			return err

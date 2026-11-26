@@ -42,3 +42,30 @@ func (s *Store) WithRevisionObservation(ctx context.Context, revision uint64, ob
 	}
 	return check()
 }
+
+// WithAutonomyEnrollmentRevision holds the same file lease as a config writer
+// until the first-run wizard has published its separate permission journal.
+// publish must write only that journal and must not call this Store.
+func (s *Store) WithAutonomyEnrollmentRevision(ctx context.Context, revision uint64, publish func() error) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.writeUncertain || s.cfg.Revision != revision || publish == nil {
+		return ErrRevisionChanged
+	}
+	target, err := restorejournal.OpenFileTarget(s.path)
+	if err != nil {
+		return err
+	}
+	defer target.Close()
+	current, err := target.Read(ctx)
+	if err != nil {
+		return err
+	}
+	if current.Exists != s.diskImage.Exists || !bytes.Equal(current.Data, s.diskImage.Data) {
+		return ErrRevisionChanged
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return publish()
+}

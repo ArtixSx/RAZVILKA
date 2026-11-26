@@ -166,6 +166,7 @@ func (m *Manager) latestRelease(ctx context.Context, spec Spec) (releaseInfo, er
 		return releaseInfo{}, errors.New("invalid GitHub repository path")
 	}
 	apiURL := "https://api.github.com/repos/" + url.PathEscape(parts[0]) + "/" + url.PathEscape(parts[1]) + "/releases/latest"
+	reportInstall(ctx, installMetadata)
 	body, err := m.download(ctx, apiURL, 2<<20)
 	if err != nil {
 		return releaseInfo{}, err
@@ -233,6 +234,7 @@ func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error
 	if err != nil {
 		return Result{Component: spec.ID, Action: "install"}, err
 	}
+	reportInstall(ctx, installChecksum)
 	checksumBody, err := m.download(ctx, info.Checksum.URL, 1<<20)
 	if err != nil {
 		return Result{Component: spec.ID, Action: "install"}, fmt.Errorf("download checksums: %w", err)
@@ -241,10 +243,12 @@ func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error
 	if err != nil {
 		return Result{Component: spec.ID, Action: "install"}, err
 	}
+	reportInstall(ctx, installDownload)
 	assetBody, err := m.download(ctx, info.Asset.URL, maxReleaseAssetBytes)
 	if err != nil {
 		return Result{Component: spec.ID, Action: "install"}, fmt.Errorf("download release asset: %w", err)
 	}
+	reportInstall(ctx, installArchive)
 	actual := sha256.Sum256(assetBody)
 	if !strings.EqualFold(hex.EncodeToString(actual[:]), want) {
 		return Result{Component: spec.ID, Action: "install"}, errors.New("release asset SHA-256 does not match checksums.txt")
@@ -283,6 +287,7 @@ func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error
 			_ = os.Remove(receipt)
 		}
 	}
+	reportInstall(ctx, installPublish)
 	if err := installReleaseBinary(target, binary); err != nil {
 		return Result{Component: spec.ID, Action: "install"}, err
 	}

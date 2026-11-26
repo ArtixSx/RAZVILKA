@@ -113,6 +113,13 @@ function renderWorkspaceControls() {
     $('#projectPowerLabel').textContent = 'Авто подбирает подключение';
     $('#projectPowerHint').textContent = 'Нажмите, чтобы остановить подбор';
   }
+  if (ready && control.runtime_state === 'unconfigured' && !control.safe_mode && !workspaceControl.runtimeJob && !workspaceControl.busy && !stopPending) {
+    const cache = typeof consoleAutonomyCache === 'function' ? consoleAutonomyCache() : null;
+    if (cache?.fresh && Object.values(cache.services || {}).some(s => s.enabled && !s.removing)) {
+      $('#projectPowerLabel').textContent = 'Пока нет маршрутов';
+      $('#projectPowerHint').textContent = 'Сервисы выбраны · статус на главной';
+    }
+  }
   // A busy read preserves the previous Stop authority, but is not a fresh
   // observation of running/stopped/setup state. Do not turn an old initial
   // 'unconfigured' snapshot into a new instruction to configure the project.
