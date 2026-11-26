@@ -17,6 +17,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/onboarding"
 )
 
@@ -51,6 +52,34 @@ func putInitialScopeWizard(a *App, body map[string]any) *httptest.ResponseRecord
 	w := httptest.NewRecorder()
 	a.autonomyAPI(w, autonomyRequest(http.MethodPut, "/api/v1/autonomy", body))
 	return w
+}
+
+func TestInitialWizardPersonalSourceBeforeFirstImport(t *testing.T) {
+	a := autonomyAPIFixture(t)
+	nodes, err := nodestore.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = nodes.Close() })
+	a.Nodes = nodes
+	body := initialScopeWizardBody(t, a, nil, nil)
+	policy := body["policy"].(map[string]any)
+	sources := []string{"manual", "feed-kort0881-ru-sni"}
+	policy["source_ids"] = append(slices.Clone(sources), "unknown-local-source")
+	if w := putInitialScopeWizard(a, body); w.Code != http.StatusBadRequest || a.autonomyPolicy().SetupComplete {
+		t.Fatalf("wizard accepted an unknown source: %d", w.Code)
+	}
+	policy["source_ids"] = sources
+	if w := putInitialScopeWizard(a, body); w.Code != http.StatusOK {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if got := a.autonomyPolicy(); !got.SetupComplete || !slices.Equal(got.SourceIDs, sources) {
+		t.Fatalf("source selection was not saved: %+v", got.SourceIDs)
+	}
+	snapshot, err := nodes.Snapshot(t.Context(), time.Now())
+	if err != nil || len(snapshot.Sources) != 0 || len(snapshot.Nodes) != 0 {
+		t.Fatalf("expected an empty library after setup: %v", err)
+	}
 }
 
 func TestInitialAutoScopeDefaultsToManagedLANAndWaitsForAuthority(t *testing.T) {
