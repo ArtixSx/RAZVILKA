@@ -368,8 +368,9 @@ def git_fixture(destination, files, row):
     # Git is initialized only in this newly created fixture. No origin, old
     # parents, source worktree registration or current-repository ref is used.
     gitdir = Path(cwd) / ".git"
-    (gitdir / "shallow").write_text(commit + "\n", encoding="ascii")
-    (gitdir / "HEAD").write_text(commit + "\n", encoding="ascii")
+    head_line = (commit + "\n").encode("ascii")
+    (gitdir / "shallow").write_bytes(head_line)
+    (gitdir / "HEAD").write_bytes(head_line)
     require(git(cwd, "rev-parse", "HEAD").decode().strip() == commit, "isolated HEAD mismatch")
     require(git(cwd, "rev-list", "--count", "HEAD").strip() == b"1", "fixture has historical ancestry")
     require(not git(cwd, "remote").strip(), "fixture has a remote")

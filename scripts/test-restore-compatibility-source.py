@@ -89,6 +89,9 @@ class RestoreTests(unittest.TestCase):
             self.assertEqual(MODULE.git(folder / "restored", "rev-list", "--count", "HEAD").strip(), b"1")
             self.assertEqual(MODULE.git(folder / "restored", "rev-parse", "HEAD").decode().strip(), row["commit"])
             self.assertEqual(MODULE.git(folder / "restored", "cat-file", "commit", "HEAD"), base64.b64decode(row["commit_object_base64"]))
+            for name in ("HEAD", "shallow"):
+                self.assertEqual((folder / "restored" / ".git" / name).read_bytes(),
+                                 (row["commit"] + "\n").encode("ascii"))
 
     def test_unsafe_paths_and_git_metadata_refused(self):
         for path in ("../escape", "/absolute", "a/../b", "a//b", "a/./b", "a\\b", "C:stream",
