@@ -89,7 +89,7 @@ jobs:
           printf '%s\n' 'default_selector=true local_fixture_transport=true public_download_proven=false' > artifacts/hev-default/delivery.txt
       - name: Preserve default HEV source and local transport evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: mihomo-default-hev-${{ matrix.scenario }}-${{ github.sha }}
           path: |
@@ -134,7 +134,7 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/mihomo-manual-http/native.log; then exit 1; fi
       - name: Retain actual manual HTTP result
         if: always() && !cancelled() && matrix.scenario == 'manual-http'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: mihomo-manual-http-${{ github.sha }}
           path: |
@@ -143,7 +143,7 @@ jobs:
           if-no-files-found: warn
       - name: Retain bounded native CPU evidence
         if: always() && !cancelled() && matrix.scenario == 'lifecycle'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: mihomo-live-cpu-${{ github.sha }}
           path: artifacts/mihomo-live-profile
@@ -244,7 +244,7 @@ jobs:
           if grep -F -- '--- SKIP:' "$output/native.log"; then exit 1; fi
       - name: Retain same-runner preserved matching baseline
         if: always() && !cancelled() && inputs.compare_historical == true && (matrix.scenario == 'lifecycle' || matrix.scenario == 'manual-http')
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: mihomo-baseline4cc-${{ matrix.scenario }}-${{ github.sha }}
           path: baseline4cc/artifacts/mihomo-live-profile

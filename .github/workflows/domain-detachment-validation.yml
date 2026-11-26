@@ -50,7 +50,7 @@ jobs:
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-only-standby/native.log
       - name: Preserve actual diagnostic clocks and CPU samples
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: dns-only-standby-${{ github.sha }}
           path: artifacts/dns-only-standby
@@ -109,7 +109,7 @@ jobs:
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-detachment/native.log
       - name: Preserve original custody observations
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: dns-detachment-${{ matrix.cut }}-${{ github.sha }}
           path: artifacts/dns-detachment
@@ -182,7 +182,7 @@ jobs:
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-coexistence/native.log
       - name: Preserve actual two-operation diagnostics, including failures
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: dns-coexistence-${{ matrix.initial }}-${{ github.sha }}
           path: artifacts/dns-coexistence

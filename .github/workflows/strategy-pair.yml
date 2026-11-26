@@ -66,7 +66,7 @@ jobs:
             sh scripts/check-node-native-performance.sh
       - name: Preserve measured samples and environment
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: node-native-performance-${{ github.sha }}
           path: artifacts/node-native-performance
@@ -247,7 +247,7 @@ jobs:
           printf '%s\n' 'default_selector=true local_fixture_transport=true public_download_proven=false' > artifacts/hev-default/delivery.txt
       - name: Preserve default HEV source and local transport evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: strategy-default-hev-${{ github.sha }}
           path: |
@@ -275,7 +275,7 @@ jobs:
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain-native/native.log
       - name: Original domain native CPU evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: domain-native-${{ github.sha }}
           path: artifacts/domain-native
@@ -293,7 +293,7 @@ jobs:
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain-native-unpublished/native.log
       - name: Never-issued retirement evidence separate from publication performance
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: domain-native-unpublished-${{ github.sha }}
           path: artifacts/domain-native-unpublished

@@ -104,7 +104,7 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/startup-loader/release-scope.log; then exit 1; fi
       - name: Preserve loader closure outcomes
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: startup-loader-closure-${{ matrix.mode }}-${{ github.sha }}
           path: artifacts/startup-loader/
@@ -175,7 +175,7 @@ jobs:
             go test -count=1 ./cmd/razvilka -run '^TestPrivateStrategyRestoredPanelBoot$' -v
       - name: Preserve stopped completion evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: strategy-cuts-${{ github.sha }}
           path: artifacts/strategy-cuts/*.log
@@ -212,7 +212,7 @@ jobs:
             sh scripts/test-paired-public-native.sh 2>&1 | tee artifacts/paired-public/native.log
       - name: Preserve bounded public workflow evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: paired-public-cli-${{ matrix.history }}-${{ github.sha }}
           path: artifacts/paired-public/native.log
@@ -244,7 +244,7 @@ jobs:
             sh scripts/test-modern-paired-native.sh 2>&1 | tee artifacts/modern-pair/native.log
       - name: Preserve bounded modern workflow evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: modern-paired-public-${{ github.sha }}
           path: artifacts/modern-pair/native.log
@@ -302,7 +302,7 @@ jobs:
           grep -E 'classic_save_actual sample=5 .*serial_children=20 save_children=4 equal_rows=[1-9][0-9]*' artifacts/classic-save-pinned/native.log
       - name: Preserve actual pinned artifact evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: classic-save-pinned-${{ matrix.build-mode }}-${{ github.sha }}
           path: artifacts/classic-save-pinned/native.log
@@ -555,7 +555,7 @@ jobs:
             | tee artifacts/domain/hash-chunks-measurement.log
       - name: Preserve original clocks and failures
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: research-domain-${{ matrix.scenario }}-${{ github.sha }}
           path: artifacts/domain
@@ -813,7 +813,7 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/managed/prepared-active.log; then exit 1; fi
       - name: Preserve native managed outcomes
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: research-managed-${{ matrix.build-mode }}-${{ github.sha }}
           path: artifacts/managed
@@ -892,7 +892,7 @@ jobs:
           exit "$result"
       - name: Retain both successful and failed original scopes
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: research-preparation-${{ github.sha }}
           path: artifacts/preparation

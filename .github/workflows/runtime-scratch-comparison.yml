@@ -40,7 +40,7 @@ jobs:
           test "$(grep -c 'nfq_runtime_scratch_pair {' artifacts/comparison.txt)" -eq 16
       - name: Preserve model timings; not a LAN acceptance result
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: runtime-scratch-${{ matrix.mode }}-${{ github.sha }}
           path: artifacts

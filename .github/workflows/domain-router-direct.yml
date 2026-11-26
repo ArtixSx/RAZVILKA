@@ -42,7 +42,7 @@ jobs:
             grep -F -- '--- PASS: TestNativeDomainIPv4PolicyWindowRejectsRestoredRule ' "artifacts/policy-read/$mode.log"
             if grep -F -- '--- SKIP:' "artifacts/policy-read/$mode.log"; then exit 1; fi
           done
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ !cancelled() }}
         with:
           name: domain-ipv4-policy-read-${{ github.sha }}
@@ -132,7 +132,7 @@ jobs:
           python3 scripts/domain-native-phase-report.py artifacts/domain "$GITHUB_SHA" "$SCENARIO"
       - name: Preserve original result including failures
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: domain-router-direct-${{ matrix.scenario }}-${{ github.sha }}
           path: artifacts/domain
@@ -176,7 +176,7 @@ jobs:
           cp dist/SHA256SUMS "$output/SHA256SUMS-binaries"
           jq -n --arg revision "$GITHUB_SHA" --arg version "$version" --arg go "$(go env GOVERSION)" \
             '{revision: $revision, version: $version, toolchain: $go, physical_acceptance: false}' > "$output/build.json"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: entware-domain-acceptance-${{ github.sha }}
           path: ${{ runner.temp }}/domain-entware
@@ -244,7 +244,7 @@ jobs:
               report['archive'] = {'artifact': artifact, 'file': archive, 'sha256': actual, 'build': build}
           Path('evidence/acceptance.json').write_text(json.dumps(report, indent=2) + '\n')
           PY
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: domain-acceptance-report-${{ github.sha }}
           path: evidence/acceptance.json

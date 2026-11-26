@@ -51,7 +51,7 @@ jobs:
           done
       - name: Preserve original results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: offline-retry-${{ github.sha }}
           path: artifacts/offline-retry
@@ -144,7 +144,7 @@ jobs:
           go test ./internal/netidentity -run '^$' -bench '^(BenchmarkTaskStartParse|BenchmarkMountFields|BenchmarkMountLayoutFields)$' -benchmem -benchtime=300ms -count=5 | tee artifacts/parser-calculation.txt
       - name: Preserve evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: identity-contract-${{ github.sha }}
           path: artifacts/
@@ -192,7 +192,7 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/tls-repeat/native.log; then exit 1; fi
       - name: Preserve all completed samples and original failures
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: live-tls-repetition-${{ github.sha }}
           path: artifacts/tls-repeat

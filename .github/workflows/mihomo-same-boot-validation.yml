@@ -178,7 +178,7 @@ jobs:
           done
       - name: Preserve exact reviewed source provenance and selected mode
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: |
@@ -211,7 +211,7 @@ jobs:
             sh scripts/test-mihomo-same-boot-native.sh
       - name: Preserve original parent consumer diagnostic
         if: ${{ !cancelled() && inputs.consumer_profile }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: sameboot-profile-parent-${{ matrix.mode }}-${{ github.sha }}
           path: artifacts/sameboot-profile
@@ -236,7 +236,7 @@ jobs:
           exit "$status"
       - name: Preserve separate same-host diagnostic
         if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: hev-after-failure-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: artifacts/hev-after-failure
@@ -332,7 +332,7 @@ jobs:
           done
       - name: Preserve exact reviewed source provenance and selected mode
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: |
@@ -383,14 +383,14 @@ jobs:
           exit "$status"
       - name: Preserve separate same-host diagnostic
         if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: hev-after-failure-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: artifacts/hev-after-failure
           if-no-files-found: warn
       - name: Preserve original consumer diagnostic
         if: ${{ !cancelled() && inputs.consumer_profile }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: sameboot-profile-${{ matrix.mode }}-${{ matrix.ack_cut }}-${{ github.sha }}
           path: artifacts/sameboot-profile
