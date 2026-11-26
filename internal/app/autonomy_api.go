@@ -136,6 +136,8 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, 503, map[string]any{"error": "Каталог подключений недоступен."})
 				return
 			}
+			// Manual imports have a fixed source ID even before the first profile is added.
+			known["manual"] = true
 			for _, s := range snap.Sources {
 				known[s.ID] = true
 			}
