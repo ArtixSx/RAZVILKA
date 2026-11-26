@@ -50,13 +50,14 @@
   function card(id) {
     if (id !== 'nfqws2') return '';
     const ready = fresh(), present = installed(), updating = managed.plan?.action === 'update';
+    const canWrite = allowed();
     const note = managed.unknownWrite ? [managed.error, 'Исход установки ещё не подтверждён. Прочитайте состояние и журнал восстановления; повторная установка заблокирована.'].filter(Boolean).join(' ')
-      : managed.error || (present ? 'Управляемый пакет установлен и сейчас не используется для рабочих маршрутов.'
-        : !ready ? 'Прочитайте план и текущее состояние управляемого пакета.'
-          : !currentRevision() ? 'Настройки изменились. Прочитайте новый план перед установкой.'
+      : managed.error || (typeof componentRecoveryFence === 'function' && componentRecoveryFence() ? 'Сначала завершите восстановление на странице обновлений.' : present ? 'Управляемый пакет установлен и сейчас не используется для рабочих маршрутов.'
+        : !ready ? 'Проверьте, есть ли пакет NFQWS2 для вашего роутера.'
+          : !currentRevision() ? 'Настройки изменились. Проверьте доступность пакета ещё раз.'
             : managed.plan.reason || (managed.plan.ready ? 'План готов. Установку нужно запустить отдельно.' : 'Установка сейчас недоступна.'));
     const bundle = ready && managed.plan.bundle ? `<small>Пакет: ${esc(managed.plan.bundle.flavor)} · ${esc(managed.plan.bundle.architecture)}</small>` : '';
-    return `<section data-managed-nfq-panel aria-label="Управляемый пакет NFQWS2"><b>Управляемый пакет NFQWS2</b><p role="status">${esc(note)}</p>${bundle}<small>Установка файлов не включает обход. Совместимость и соединение проверяются отдельно.</small><div class="ui3-engine-actions"><button type="button" class="secondary" data-managed-nfq-read data-rz-focus="managed-nfq-read" ${busy() ? 'disabled' : ''}>${managed.read ? 'Читаем…' : 'Прочитать план и состояние'}</button><button type="button" class="primary" data-managed-nfq-install data-rz-focus="managed-nfq-install" ${allowed() ? '' : 'disabled'}>${managed.action ? 'Выполняем…' : updating ? 'Обновить управляемый пакет' : 'Установить управляемый пакет'}</button></div></section>`;
+    return `<section data-managed-nfq-panel aria-label="Управляемый пакет NFQWS2"><b>Установка NFQWS2</b><p role="status">${esc(note)}</p>${bundle}<small>Установка файлов не включает обход. Совместимость и соединение проверяются отдельно.</small><div class="ui3-engine-actions"><button type="button" class="${canWrite ? 'secondary' : 'primary'}" data-managed-nfq-read data-rz-focus="managed-nfq-read" ${busy() ? 'disabled' : ''}>${managed.read ? 'Читаем…' : ready ? 'Проверить ещё раз' : 'Проверить доступность пакета'}</button><button type="button" class="primary" data-managed-nfq-install data-rz-focus="managed-nfq-install" ${canWrite ? '' : managed.action ? 'disabled' : 'disabled hidden'}>${managed.action ? 'Выполняем…' : updating ? 'Обновить управляемый пакет' : 'Установить NFQWS2'}</button></div></section>`;
   }
   function render() {
     if (typeof renderComponents === 'function') renderComponents();

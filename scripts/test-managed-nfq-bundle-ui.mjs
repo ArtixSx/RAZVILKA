@@ -83,7 +83,7 @@ await test('receipt matching uses schema, exact transaction, provider, flavor an
   for(const value of [receipt({schema:2}),receipt({state:'live'}),receipt({transaction_id:'c'.repeat(32)}),receipt({provider_id:'other'}),receipt({flavor:'other'}),receipt({manifest_sha256:'c'.repeat(64)})])assert.equal(model.receiptMatches(value,observation()),false);
 });
 await test('stock component detection and rendering do not create managed proof or HTTP writes',()=>{
-  const f=fixture();assert.equal(f.requests.length,0);assert.match(f.card(),/Прочитайте план/);assert.match(f.card(),/data-managed-nfq-install[^>]*disabled/);assert.equal(f.context.managedNFQBundleCard('xray'),'');
+  const f=fixture();assert.equal(f.requests.length,0);assert.match(f.card(),/Проверить доступность пакета/);assert.match(f.card(),/data-managed-nfq-install[^>]*disabled/);assert.equal(f.context.managedNFQBundleCard('xray'),'');
   f.view('overview');f.view('engines');assert.equal(f.requests.length,0);f.clickInstall();assert.equal(f.requests.length,0);
 });
 await test('plan/readback uses three bounded sequential GETs without competing with its own plan gate',async()=>{
@@ -173,7 +173,7 @@ await test('stock component activity and recovery block POST while managed reads
   }
 });
 await test('late GET and POST cannot revive proof or show a notice after logout',async()=>{
-  const readOnly=fixture();readOnly.clickRead();await flush();readOnly.revoke();readOnly.requests[0].resolve(plan());await flush();assert.equal(readOnly.requests.length,1);assert.match(readOnly.card(),/Прочитайте план/);assert.equal(readOnly.notices.length,0);
+  const readOnly=fixture();readOnly.clickRead();await flush();readOnly.revoke();readOnly.requests[0].resolve(plan());await flush();assert.equal(readOnly.requests.length,1);assert.match(readOnly.card(),/Проверить доступность пакета/);assert.equal(readOnly.notices.length,0);
   const writing=fixture();await writing.ready();writing.clickInstall();await flush();writing.revoke();writing.requests[3].resolve(success());await flush();assert.equal(writing.requests.length,4);assert.equal(writing.notices.length,0);assert.equal(writing.state.componentOperation,null);
 });
 await test('leaving a sent install releases UI busy state and requires independent read on return',async()=>{

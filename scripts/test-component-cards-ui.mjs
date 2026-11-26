@@ -119,6 +119,13 @@ assert.match(card(), /Не установлен/);
 assert.match(card(), /Доступна 1\.0\.3/);
 assert.match(card(), /data-component-action="install"[^>]*>Установить/);
 assert.doesNotMatch(card(), /data-component-action="remove"/);
+const firstActionArea = html => html.split('<details')[0];
+assert.match(firstActionArea(card()), /data-component-action="install"(?![^>]*disabled)/);
+state.components[0].can_install=false;
+state.components[0].available_version='';
+state.components[0].update_available=false;
+assert.match(firstActionArea(card()), /data-component-refresh="usque"[^>]*>Проверить доступность/);
+assert.doesNotMatch(firstActionArea(card()), /data-component-action="install"|data-engine-progress/);
 
 state.components = []; state.engineConfigs = [{id:'usque', installed:true}];
 assert.equal(model.consoleEngineState('usque').installed, true, 'config installed evidence must use installed, not nonexistent available');
