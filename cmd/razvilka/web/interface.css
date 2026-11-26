@@ -1989,3 +1989,7 @@ html[data-theme=dark] .interface-ui button.primary:hover,html[data-theme=dark] .
     text-overflow: clip;
   }
 }
+
+#installLogDialog{width:min(42rem,calc(100vw - 2rem));}
+#installLogLines{background:#101519;color:#d4eddc;padding:1rem;border-radius:.5rem;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;max-height:45vh;overflow:auto;}
+#installLogTime{color:var(--muted);}

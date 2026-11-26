@@ -359,6 +359,9 @@ func (a *App) managedNFQBundleWrite(w http.ResponseWriter, r *http.Request, upda
 		http.Error(w, "expected_revision is required", http.StatusBadRequest)
 		return
 	}
+	if !update {
+		r = r.WithContext(a.installProgress.begin(r.Context(), r.Header.Get(installProgressHeader)))
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Minute)
 	defer cancel()
 	ctx, release, err := a.privateExclusiveOperation(ctx)

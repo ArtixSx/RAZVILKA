@@ -65,7 +65,9 @@ assert.equal(bad.services[0].name,'Discord');
 
 // A capability refusal is terminal for the current settings: it is labelled,
 // never presented as a retry, and the headline promises no further attempts.
-const limited=model(snap({youtube:'capability-refused',discord:'excluded'}),catalog);
+const limitedFixture=snap({youtube:'capability-refused',discord:'excluded'});
+delete limitedFixture.runtime.youtube.message;
+const limited=model(limitedFixture,catalog);
 const isolated=model(snap({youtube:'service-checked-lan-unavailable'}),catalog);
 assert.equal(isolated.services[0].short,'Узел проверен · маршрут для дома недоступен');
 assert.equal(isolated.services[0].bucket,'problem');
@@ -360,6 +362,23 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   assert.doesNotMatch(enginePart.innerHTML,/Процесс запущен/,'expired inventory cannot appear fresh');
   assert.equal(writes,0,'inventory rendering never saves or applies configuration');
 
+  // A reason only in title cannot be read on a touchscreen. These are distinct
+  // refusal messages currently produced by autonomyScopeRefusal / capabilityRefused.
+  const scopeReason='Область домашней сети ещё не подтверждена. Автопилот ждёт проверки её границ и исключений.';
+  const domainReason='Сервис задан доменами. Выключите его или используйте сервис с IP-диапазонами без доменов. Автопилот ждёт изменения настроек.';
+  const blockedHome=snap({youtube:'capability-refused',discord:'capability-refused',roblox:'capability-refused'});
+  blockedHome.runtime.youtube.message=scopeReason;blockedHome.runtime.discord.message=domainReason;
+  blockedHome.runtime.roblox.message='vless://test-private-value';
+  routerContext.consoleSnapshot=blockedHome;routerContext.testSimpleActions.render(true);
+  const blockedRows=home.children.find(e=>e.dataset.rzPart==='main');
+  const rowText=()=>blockedRows.innerHTML.replace(/<[^>]+>/g,'');
+  for(const reason of [scopeReason,domainReason])assert(rowText().includes(reason),'refusal reason must be visible without hover');
+  assert(rowText().includes('Недоступно в текущем режиме'));
+  assert.doesNotMatch(blockedRows.innerHTML,/test-private-value|rz-sh-ok/);
+  routerContext.consoleSnapshot={...blockedHome,observation:{state:'retained'}};
+  routerContext.testSimpleActions.render(true);
+  assert(!rowText().includes(scopeReason),'old refusal must not look current');
+  assert.equal(writes,0);
   // Exercise the real renderer, not just model(): off used to suppress the
   // entire service column along with Add, despite retaining all enrollments.
   state.services=[...catalog,...['a','b','c','d'].map(id=>({id,name:`Service ${id}`})),{id:'new-site',name:'New service'}];

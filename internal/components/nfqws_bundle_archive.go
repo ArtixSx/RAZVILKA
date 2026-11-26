@@ -218,6 +218,7 @@ const (
 )
 
 func (m *Manager) verifyManagedNFQWS(ctx context.Context, path string, expected string) (ManagedNFQWSManifest, error) {
+	reportInstall(ctx, installVerify)
 	return m.verifyManagedNFQWSImage(ctx, path, expected, managedNFQWSPublishedImage)
 }
 

@@ -28,6 +28,13 @@
     'removal-blocked': 'Снятие приостановлено'
   };
 
+  function capabilityReason(message) {
+    // The worker supplies owner-facing prose, never a URI or an engine log.
+    if (typeof message !== 'string' || message.length > 512 ||
+        /:\/\/|[<>\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]|(?:password|token|secret|private[_ -]?key)\s*[:=]/iu.test(message)) return '';
+    return message.trim();
+  }
+
   function bucket(state) {
     if (!state || PROGRESS.has(state) || HISTORICAL.has(state)) return 'progress';
     return 'problem';
@@ -69,7 +76,7 @@
     const services = Object.entries(snapshot.services || {}).filter(([, s]) => s && !s.removing).map(([id, spec]) => {
       const runtime = snapshot.runtime?.[id] || {};
       const state = runtime.state || 'pending';
-      const detail = String(runtime.message || '').slice(0, 220);
+      const detail = state === 'capability-refused' ? capabilityReason(runtime.message) : String(runtime.message || '').slice(0, 220);
       if (spec.enabled !== true) return { id, name: label[id] || id, state, bucket: 'problem', tone: 'paused', short: 'Автоподбор на паузе', detail, owner: true };
       // A waiting service says when it continues ("…через 12 мин.").
       const next = state === 'rate-limited' && /Следующая попытка[^.]*через \d+ мин/.exec(detail);
@@ -84,6 +91,9 @@
       }
       // Retain the applied assignment during recheck without claiming access.
       if (RECHECK.has(state) && applied?.enabled) return { id, name: label[id] || id, state, bucket: 'progress', short: 'Включён · перепроверяется', detail };
+      if (state === 'capability-refused') {
+        return { id, name: label[id] || id, state, bucket: 'problem', short: detail || SHORT[state], detail, owner: true };
+      }
       if (state === 'service-checked-lan-unavailable') {
         return { id, name: label[id] || id, state, bucket: 'problem', short: SHORT[state], detail, owner: true };
       }

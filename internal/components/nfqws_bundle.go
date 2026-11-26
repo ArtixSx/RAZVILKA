@@ -343,10 +343,12 @@ func (m *Manager) installManagedNFQWS(ctx context.Context, manifest ManagedNFQWS
 			return *v.Before, authority.check(ctx, v)
 		}
 	}
+	reportInstall(ctx, installDownload)
 	data, err := m.downloadManagedNFQWS(ctx, manifest)
 	if err != nil {
 		return zero, err
 	}
+	reportInstall(ctx, installArchive)
 	payload, err := extractManagedNFQWS(ctx, manifest, data)
 	if err != nil {
 		return zero, err
@@ -358,6 +360,7 @@ func (m *Manager) installManagedNFQWS(ctx context.Context, manifest ManagedNFQWS
 	id := strings.TrimPrefix(stage, ".stage-")
 	v.Stage = stage
 	v.After = ManagedNFQWSBundleReceipt{1, ManagedNFQWSProvider, id, hash, filepath.Join(path, hash), manifest.Flavor, "ready-idle"}
+	reportInstall(ctx, installPublish)
 	if err := stageManagedNFQWS(ctx, filepath.Join(path, v.Stage), manifest, payload); err != nil {
 		return zero, err
 	}

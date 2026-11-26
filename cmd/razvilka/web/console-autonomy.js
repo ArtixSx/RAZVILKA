@@ -545,12 +545,94 @@
   }
   // Both setup views use the same reviewed service list and save path.
   let quickAdvanced=false,displayedInitialScope=null;
+  const componentSelection = new Set();
+  let componentTask = null, componentView = -1, componentMessage = '';
+
+  function updateComponentButtons() {
+    $('componentInstall').disabled = !!componentTask || !componentSelection.size;
+    $('componentRead').disabled = !!componentTask || !root.RazvilkaWizardComponents;
+    $('componentStatus').textContent = componentMessage;
+  }
+  function renderComponentChoices() {
+    const api = root.RazvilkaWizardComponents;
+    const rows = api?.list() || [];
+    const choices = $('componentChoices');
+    for (const id of componentSelection) {
+      if (!rows.some(row => row.id === id && !row.installed)) componentSelection.delete(id);
+    }
+    const markup = rows.map(row => {
+      const checked = componentSelection.has(row.id);
+      const status = row.installed ? 'Уже установлен' : row.reason || (row.canInstall ? 'Можно установить' : 'Сейчас недоступен');
+      const disabled = componentTask || row.installed || (!checked && !row.canInstall);
+      return `<label><input type="checkbox" data-wizard-component="${escapeHTML(row.id)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span><b>${escapeHTML(row.name)}</b><small>${escapeHTML(status)}</small></span></label>`;
+    }).join('');
+    if (choices.innerHTML !== markup) choices.innerHTML = markup;
+    $('componentInstall').hidden = !rows.length;
+    if (!rows.length && !componentTask && !componentMessage) componentMessage = 'Нажмите «Проверить доступность», чтобы увидеть обходы для вашего роутера.';
+    updateComponentButtons();
+  }
+  function componentTaskCurrent(task) {
+    return componentTask === task && authGeneration === task.auth && viewEpoch === task.view && state.currentView === 'onboard';
+  }
+  async function prepareComponents(install) {
+    const api = root.RazvilkaWizardComponents;
+    if (!api || componentTask || saving || state.currentView !== 'onboard' || state.authenticated !== true || !snapshot || snapshot.policy.setup_complete) return;
+    const ids = install ? [...componentSelection] : [];
+    if (install && !ids.length) return;
+    const task = {install, auth:authGeneration, view:viewEpoch};
+    componentTask = task;
+    componentMessage = install ? 'Проверяем выбранные компоненты…' : 'Читаем состояние компонентов…';
+    renderComponentChoices();
+    try {
+      const refreshed = await api.refresh();
+      if (!componentTaskCurrent(task)) return;
+      if (refreshed === false) throw new Error('Не удалось прочитать каталог компонентов. Можно повторить проверку или продолжить настройку.');
+      componentMessage = '';
+      for (const id of ids) {
+        const row = api.list().find(item => item.id === id);
+        if (row?.installed) { componentSelection.delete(id); continue; }
+        if (!row?.canInstall) throw new Error((row?.name || id) + ' — ' + (row?.reason || 'установка сейчас недоступна.'));
+        componentMessage = 'Устанавливаем ' + row.name + '…';
+        updateComponentButtons();
+        $('componentLog').hidden = !root.RazvilkaInstallLog;
+        const complete = await api.install(id);
+        if (!componentTaskCurrent(task)) return;
+        if (complete !== true || !api.list().some(item => item.id === id && item.installed)) {
+          throw new Error('Установка ' + row.name + ' не подтверждена. Обновите список перед повторной попыткой.');
+        }
+        componentSelection.delete(id);
+      }
+      if (install) componentMessage = 'Все выбранные компоненты установлены.';
+    } catch (error) {
+      if (componentTaskCurrent(task)) componentMessage = error.message || 'Не удалось проверить компоненты.';
+    } finally {
+      if (componentTask === task) {
+        componentTask = null;
+        if (authGeneration === task.auth && state.currentView === 'onboard') {
+          if (viewEpoch !== task.view) componentMessage = 'Обновите список для проверки состояния.';
+          renderComponentChoices();
+        }
+      }
+    }
+  }
+  function requireComponentChoiceComplete() {
+    if (componentTask?.install) throw new Error('Дождитесь окончания установки компонентов.');
+    if (componentSelection.size) throw new Error('Установите выбранные компоненты или снимите отметки, чтобы пропустить установку.');
+  }
   function renderQuickStart(){
     const card=$('quickStart'),layout=$('wizardLayout');if(!card||!layout)return;
     const show=!!snapshot&&!snapshot.policy?.setup_complete&&!quickAdvanced;
     const picker=$('starterReview'),serviceTarget=$(show?'quickServices':'advancedServices');
     if(picker&&serviceTarget&&picker.parentNode!==serviceTarget)serviceTarget.append(picker);
     card.hidden=!show;layout.hidden=show;
+    const componentPicker=$('componentPicker'),componentHost=$(show?'quickComponents':'fullComponents');
+    if(componentPicker&&componentHost){
+      componentPicker.hidden=!snapshot||snapshot.policy.setup_complete;
+      if(componentPicker.parentNode!==componentHost)componentHost.append(componentPicker);
+      if(!componentPicker.hidden&&state.currentView==='onboard'&&componentView!==viewEpoch){
+        componentView=viewEpoch;componentMessage='';renderComponentChoices();
+      }
+    }
     if(!snapshot||snapshot.policy.setup_complete)return;
     const mode=initialScopeMode();
     if(displayedInitialScope!==null&&displayedInitialScope!==mode){
@@ -596,6 +678,7 @@
     event.preventDefault();if(saving) return;
     const generation=authGeneration,discardEdit=wizardEdit;
     try {
+      if(!snapshot?.policy?.setup_complete)requireComponentChoiceComplete();
       if(!presentationFresh)throw new Error('Сначала обновите состояние автопилота. Несохранённые поля оставлены.');
       const allowSavedEmptyScope=editingPolicy.setup_complete&&!editingPolicy.all_lan&&!editingPolicy.default_sources?.length;
       const p=validatePolicy(policyFromForm(),{allowSavedEmptyScope});
@@ -622,6 +705,12 @@
   }
   document.addEventListener('click',event=>{
     if(!event.target.closest('[data-autonomy]')) return;
+    if(event.target.closest('[data-wizard-home-scope]')){
+      setView('exclusions');
+      const section=document.getElementById('listScopeContent');
+      section?.focus({preventScroll:true});section?.scrollIntoView?.({block:'start'});
+      return;
+    }
     const nav=event.target.closest('[data-tab]');if(nav){event.preventDefault();tab(nav.dataset.tab);}
     if(event.target.closest('[data-open-setup]')){tab('setup');setStep(0);}
     const stepButton=event.target.closest('[data-step]');if(stepButton)setStep(Number(stepButton.dataset.step));
@@ -662,8 +751,21 @@
     }
     const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{const generation=authGeneration;await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});requireGeneration(generation);notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>reportError(e));
   });
-  $('wizardForm').addEventListener('input',()=>{dirty=true;wizardEdit++;});
+  $('componentPicker')?.addEventListener('change',event=>{
+    const id=event.target?.dataset?.wizardComponent;
+    if(!id||componentTask)return;
+    if(event.target.checked) {
+      if(!root.RazvilkaWizardComponents?.list().some(row=>row.id===id&&row.canInstall&&!row.installed)){renderComponentChoices();return;}
+      componentSelection.add(id);
+    } else componentSelection.delete(id);
+    componentMessage='';updateComponentButtons();
+  });
+  $('componentLog')?.addEventListener('click',()=>root.RazvilkaInstallLog?.show());
+  $('componentRead')?.addEventListener('click',()=>void prepareComponents(false));
+  $('componentInstall')?.addEventListener('click',()=>void prepareComponents(true));
+  $('wizardForm').addEventListener('input',event=>{if(event?.target?.dataset?.wizardComponent)return;dirty=true;wizardEdit++;});
   $('wizardForm').addEventListener('change',event=>{
+    if(event?.target?.dataset?.wizardComponent)return;
     if(event?.target?.name==='preferred'){
       preferredRouteOrder=checkedPreferredRoutes();
       updateMASQUERegistrationConsent(preferredRouteOrder);
@@ -774,7 +876,7 @@
     window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
   });
   window.addEventListener('beforeunload',event=>{if(dirty||sourceDirty){event.preventDefault();event.returnValue='';}});
-  document.addEventListener('razvilka:auth-required',()=>{nextAuthGeneration();definitionReview=null;snapshot=null;presentationFresh=false;feeds=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;$('authRequired').hidden=false;$('workspace').hidden=true;$('connectionLabel').textContent='Требуется вход';notify('Войдите для чтения настроек и управления.',true);if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
+  document.addEventListener('razvilka:auth-required',()=>{nextAuthGeneration();componentSelection.clear();componentTask=null;componentView=-1;componentMessage='';if($('componentLog'))$('componentLog').hidden=true;definitionReview=null;snapshot=null;presentationFresh=false;feeds=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;$('authRequired').hidden=false;$('workspace').hidden=true;$('connectionLabel').textContent='Требуется вход';notify('Войдите для чтения настроек и управления.',true);if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
   document.addEventListener('razvilka:auth-restored',()=>{nextAuthGeneration();notify('');$('wizardError').textContent='';$('addServiceError').textContent='';$('saveWizard').disabled=false;$('authRequired').hidden=true;$('connectionLabel').textContent='Загружаем настройки…';void refresh();if(activeTab==='sources')void readSources();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh();});
   document.addEventListener('razvilka:source-consent-changed',()=>{void refresh(false,true);});

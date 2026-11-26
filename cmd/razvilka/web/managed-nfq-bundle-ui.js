@@ -37,7 +37,7 @@
   root.RazvilkaManagedNFQBundle = Object.freeze({ validPlan, validInstalled, matches, validReceipt, receiptMatches, writeAction });
   if (typeof document === 'undefined') return;
 
-  const views = new Set(['engines', 'engineconfig', 'updates']);
+  const views = new Set(['engines', 'engineconfig', 'updates', 'onboard']);
   const managed = { epoch: 0, read: null, action: null, plan: null, installed: null, revision: null, received: 0, error: '', unknownWrite: false };
   const active = () => state.authenticated && views.has(state.currentView) && !document.hidden;
   const fresh = () => validPlan(managed.plan) && managed.received > 0 && Date.now() - managed.received < 60000 && !managed.error;
@@ -111,19 +111,23 @@
     const ticket = { id: 'nfqws2', action: 'managed-bundle-' + operation, epoch: managed.epoch, plan: managed.plan, sent: false, controller: new AbortController() };
     managed.action = ticket; state.componentOperation = ticket;
     const current = () => ticket.epoch === managed.epoch && managed.action === ticket && state.authenticated;
+    const log = operation === 'install' ? root.RazvilkaInstallLog?.begin('NFQWS2', 'План проверен. Готовим установку NFQWS2…') : null;
     const timer = setTimeout(() => ticket.controller.abort(), 370000);
     render();
     try {
       managed.unknownWrite = true; ticket.sent = true;
-      const result = await api(base + '/' + operation, { method: 'POST', signal: ticket.controller.signal, body: JSON.stringify({ expected_revision: ticket.plan.revision }) });
+      log?.sent();
+      const result = await api(base + '/' + operation, { method: 'POST', ...(log ? { headers: log.headers } : {}), signal: ticket.controller.signal, body: JSON.stringify({ expected_revision: ticket.plan.revision }) });
       if (!current()) return false;
       if (result?.ok !== true || result.installed_idle !== true || typeof result.compatibility_ready !== 'boolean'
         || result.working_routes_changed !== false || !validReceipt(result.receipt)) throw new Error('Сервер не подтвердил установку управляемого пакета. Повторная установка не отправляется.');
+      log?.note('Проверяем установленный пакет на роутере…');
       if (!await read(true) || !current() || !matches(ticket.plan, managed.installed) || !receiptMatches(result.receipt, managed.installed)) throw new Error('Установка отправлена, но независимое чтение ещё не подтвердило этот пакет и квитанцию.');
       managed.unknownWrite = false;
       state.inventoryInvalidatedAt = Date.now();
       if (typeof refreshComponents === 'function') await refreshComponents(false);
       if (!current()) return false;
+      log?.finish('NFQWS2 установлен. Маршруты сервисов пока выключены.');
       showNotice('review', 'Управляемый пакет установлен без запуска маршрутов', 'Текущее состояние прочитано отдельно. Проверку совместимости и доступности сервиса выполните отдельно.');
       return true;
     } catch (error) {
@@ -137,14 +141,28 @@
         if (typeof componentUpdatePending === 'function') componentUpdatePending();
       }
       if (error.status === 401) showAuth({ ...state.status, authenticated: false }, error.message);
+      log?.finish(managed.unknownWrite ? 'Исход установки неизвестен. Откройте журнал в разделе «Обновления».' : managed.error);
       return false;
     } finally {
+      log?.finish('Установка отправлена. Проверьте состояние пакета в разделе «Обходы».');
       clearTimeout(timer);
       if (state.componentOperation === ticket) state.componentOperation = null;
       if (managed.action === ticket) { managed.action = null; render(); }
     }
   }
   root.managedNFQBundleCard = card;
+  root.wizardManagedNFQ = {
+    refresh: read,
+    status() {
+      return { installed: fresh() && validInstalled(managed.installed),
+        canInstall: allowed() && writeAction(managed.plan, managed.installed) === 'install',
+        reason: managed.error || managed.plan?.reason || 'Сначала проверьте доступность пакета.' };
+    },
+    async install(stillRequested) {
+      if (state.currentView !== 'onboard' || !await read() || !stillRequested() || writeAction(managed.plan, managed.installed) !== 'install') return false;
+      return install();
+    }
+  };
   root.refreshManagedNFQBundle = async (journal, receipt = null) => {
     const epoch = managed.epoch, transaction = journal?.transaction;
     const settled = typeof RazvilkaComponentRecovery !== 'undefined' && RazvilkaComponentRecovery.valid(journal)

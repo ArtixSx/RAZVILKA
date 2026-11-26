@@ -142,6 +142,7 @@ type applyChangeSummary struct {
 }
 
 type App struct {
+	installProgress              installProgress
 	communityPreparationCount    atomic.Int32
 	panelSnapshots               panelSnapshotState
 	autonomy                     autonomyState
@@ -1517,6 +1518,9 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	if action != "install" && action != "update" && action != "remove" {
 		http.NotFound(w, r)
 		return
+	}
+	if action == "install" {
+		r = r.WithContext(a.installProgress.begin(r.Context(), r.Header.Get(installProgressHeader)))
 	}
 	if err := a.nfqwsPackageMutationGuard(id); err != nil {
 		writeNFQWSPackageMutationFailure(w, err)

@@ -259,12 +259,14 @@ func (m *Manager) applyMihomoGuarded(ctx context.Context, guard, rename, start f
 	if err != nil {
 		return result, err
 	}
+	reportInstall(ctx, installDownload)
 	compressed, err := m.download(ctx, info.Asset.URL, 32<<20)
 	if err != nil {
 		return result, err
 	}
 	var image restorejournal.Image
 	err = guard(ctx, func() error {
+		reportInstall(ctx, installArchive)
 		image, err = m.stageMihomoArtifact(ctx, compressed, info.PinnedSHA256, rename)
 		return err
 	})
