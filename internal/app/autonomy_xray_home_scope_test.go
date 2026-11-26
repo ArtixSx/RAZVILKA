@@ -297,3 +297,113 @@ func TestAutonomyInitialHomePublicNodeCandidatePreservesConsent(t *testing.T) {
 		}
 	})
 }
+
+func TestHomePeerReserveOrdersOnlyUntriedPublicCandidate(t *testing.T) {
+	a, _ := autonomyHomeCandidateFixture(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	const network = "wan-0123456789ab"
+	const source = "feed-vlessforu"
+	a.Catalog = catalog.WithWebDefaults(catalog.Catalog{})
+	cfg := a.Store.Get()
+	spec := func(id string) autonomy.Service {
+		svc, ok := a.autonomyService(id)
+		if !ok {
+			t.Fatal("missing service", id)
+		}
+		cfg.Services[id] = config.ServiceState{Enabled: true, Route: "auto"}
+		return autonomy.Service{ID: id, Enabled: true, AllLAN: true, ManagedLANOnly: true, ExpectedRoute: "auto", Definition: autonomyDefinition(svc)}
+	}
+	telegram, discord := spec("telegram-web"), spec("discord-web")
+	p := autonomy.Default()
+	p.SetupComplete, p.Enabled, p.AllLAN, p.ManagedLANOnly, p.Revision = true, true, true, true, 1
+	p.SourceIDs = []string{source}
+	p.PreferredRoutes = []string{"xray"}
+	snap, err := a.Nodes.Import(ctx, nodestore.Source{ID: source, Kind: "community"},
+		"vless://123e4567-e89b-12d3-a456-426614174000@a.example.test:443?security=tls\nvless://123e4567-e89b-12d3-a456-426614174001@b.example.test:443?security=tls", now.Add(-time.Minute), time.Hour, false)
+	if err != nil || len(snap.Nodes) != 2 {
+		t.Fatal("public nodes", err, len(snap.Nodes))
+	}
+	first, known := snap.Nodes[0].ID, snap.Nodes[1].ID
+	at := now.Add(-time.Second)
+	proof := nodestore.CheckRecord{ProbeID: "peer-check", ServiceID: telegram.ID, NetworkProfile: network, RoutePathID: "xray:" + known, TestLevel: "service", Verdict: "PASS", State: "available", Stage: "service", CheckedAt: at, ExpiresAt: now.Add(time.Minute)}
+	if _, err = a.Nodes.RecordCheck(ctx, known, proof, now); err != nil {
+		t.Fatal(err)
+	}
+	snap, err = a.Nodes.Snapshot(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, ok := a.autonomySearchVersion(p, telegram, "xray", network, cfg)
+	if !ok {
+		t.Fatal("Home web check not admitted")
+	}
+	receipt := autonomy.Runtime{State: homeServiceCheckedState, Search: &autonomy.Traversal{Version: version}, Reserves: []string{known}, ReserveConfigRevision: cfg.Revision, ReserveCheckedAt: at, ReserveValidUntil: proof.ExpiresAt}
+	doc := autonomyDocument{Policy: p, Services: map[string]autonomy.Service{telegram.ID: telegram, discord.ID: discord}, Runtime: map[string]autonomy.Runtime{telegram.ID: receipt}}
+	eligible := []string{first, known}
+	for _, tc := range []string{"fresh", "owner-first", "consumed", "cooldown", "changed-network", "expired", "disabled", "revised", "tried", "other-origin", "exact-first"} {
+		t.Run(tc, func(t *testing.T) {
+			target := autonomy.Runtime{Search: &autonomy.Traversal{Ordered: slices.Clone(eligible)}}
+			seenAt := now
+			wan := network
+			revision := cfg.Revision
+			rows := slices.Clone(snap.Nodes)
+			switch tc {
+			case "consumed":
+				target.Search.Ordered = []string{known, first}
+				target.Search.Cursor = 1
+			case "cooldown":
+				target.CandidateFailures = []autonomy.CandidateFailure{{NodeID: known}}
+			case "changed-network":
+				wan = "wan-999999999999"
+			case "expired":
+				seenAt = proof.ExpiresAt
+			case "revised":
+				revision++
+			case "disabled":
+				rows[1].Disabled = true
+			case "tried":
+				previous := proof
+				previous.ServiceID = discord.ID
+				previous.Verdict = "ERROR"
+				rows[1].Health.History = append(slices.Clone(rows[1].Health.History), previous)
+			case "other-origin":
+				rows[1].Origins = []nodestore.Origin{{SourceID: "manual", ReceivedAt: at, ExpiresAt: proof.ExpiresAt}}
+			case "exact-first":
+				current := proof
+				current.ServiceID = discord.ID
+				current.ProbeID = "exact-check"
+				current.RoutePathID = "xray:" + first
+				if _, err := a.Nodes.RecordCheck(ctx, first, current, now); err != nil {
+					t.Fatal(err)
+				}
+			}
+			hints := homeQueueHints(doc, discord.ID, revision, seenAt)
+			round := context.WithValue(ctx, homeQueueHintsKey{}, hints)
+			peers := a.homeQueuePeerNodes(round, p, discord, target, cfg, "xray", wan, eligible, rows, seenAt)
+			promote := tc == "fresh" || tc == "owner-first" || tc == "exact-first"
+			if peers[known] != promote {
+				t.Fatalf("peer hint=%v", peers)
+			}
+			before := slices.Clone(target.Search.Ordered)
+			a.prioritizeAutonomyFreshProofs(round, p, discord, &target, "xray", wan, eligible, seenAt, peers)
+			if tc == "owner-first" {
+				if _, err := a.prioritizeAutonomySources(round, p, &target, now, map[string]bool{first: true}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc == "fresh" {
+				before = []string{known, first}
+			}
+			if !slices.Equal(before, target.Search.Ordered) {
+				t.Fatal("order", target.Search.Ordered)
+			}
+			if len(target.Reserves) != 0 || target.State != "" || cfg.AppliedServices[discord.ID].Enabled {
+				t.Fatal("peer check supplied target confirmation")
+			}
+			if _, err := a.Nodes.ResolveRouteForEngine(round, "xray", known, discord.ID, wan, "", time.Time{}, seenAt); err == nil {
+				t.Fatal("peer used as Discord proof")
+			}
+		})
+	}
+}

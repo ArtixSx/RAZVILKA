@@ -22,6 +22,31 @@ type autonomyHomeScopeKey struct{}
 type autonomyHomeReadKey struct{}
 type homeReserveHintKey struct{}
 
+type homeQueueHintsKey struct{}
+
+type homeQueueHint struct {
+	service               autonomy.Service
+	node, version         string
+	checkedAt, validUntil time.Time
+}
+
+// Snapshot while the coordinator already owns the document; no worker or
+// catalogue lock is borrowed across the later candidate search.
+func homeQueueHints(doc autonomyDocument, chosen string, configRevision uint64, now time.Time) []homeQueueHint {
+	var hints []homeQueueHint
+	for id, state := range doc.Runtime {
+		service := doc.Services[id]
+		if id == chosen || !service.Enabled || service.Removing || !service.AllLAN || service.ExpectedRoute != "auto" ||
+			len(service.Sources) != 0 || state.State != homeServiceCheckedState || state.Search == nil || len(state.Reserves) != 1 ||
+			state.ReserveConfigRevision != configRevision || state.ReserveCheckedAt.IsZero() || now.Before(state.ReserveCheckedAt) || !now.Before(state.ReserveValidUntil) {
+			continue
+		}
+		service.Sources = slices.Clone(service.Sources)
+		hints = append(hints, homeQueueHint{service: service, node: state.Reserves[0], version: state.Search.Version, checkedAt: state.ReserveCheckedAt, validUntil: state.ReserveValidUntil})
+	}
+	return hints
+}
+
 type homeReserveHint struct {
 	version, node string
 	checkedAt     time.Time
