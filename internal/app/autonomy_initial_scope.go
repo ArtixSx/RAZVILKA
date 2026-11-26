@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net/http"
 	"slices"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
@@ -43,4 +44,17 @@ func autonomyScopeRefusal(cfg config.Config, s autonomy.Service) string {
 		return "Область домашней сети ещё не подтверждена. Автопилот ждёт проверки её границ и исключений."
 	}
 	return ""
+}
+
+func initialScopeRevisionCurrent(cfg config.Config, p autonomy.Policy, revision uint64) bool {
+	if cfg.NetworkPolicy == nil {
+		// Only the explicitly limited legacy scope can be handed back without
+		// a network policy. A missing policy must never manufacture Home consent.
+		return revision == 0 && !p.AllLAN && !p.ManagedLANOnly
+	}
+	return revision != 0 && cfg.NetworkPolicy.Revision == revision && config.CurrentDefaultRouteScopeConsent(cfg)
+}
+
+func writeWizardScopeChanged(w http.ResponseWriter) {
+	writeJSON(w, http.StatusConflict, map[string]any{"code": "NETWORK_POLICY_REVIEW_CHANGED", "error": "Область сети изменилась. Проверьте устройства и исключения перед сохранением мастера."})
 }

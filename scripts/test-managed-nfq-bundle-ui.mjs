@@ -44,6 +44,39 @@ function fixture(view='engines'){
   };return f;
 }
 let total=0;async function test(name,fn){await fn();total++;console.log('PASS '+name);}
+await test('Home reads only the installed receipt without granting installation rights',async()=>{
+  const f=fixture('overview'), status=f.context.managedNFQInstallState, observe=f.context.observeManagedNFQInstall;
+  const current=observation({provider_id:'managed-nfqws-payload'});
+  assert.equal(status(),'unknown');
+  const reading=observe();await observe();
+  assert.equal(f.requests.length,1);
+  assert.equal(f.requests[0].path,base+'/installed');
+  assert.equal(f.requests[0].options.cache,'no-store');
+  f.requests[0].resolve(current);await reading;
+  assert.equal(status(),'installed');
+  f.clickInstall();
+  await observe();assert.equal(f.requests.length,1);
+  f.advance(60001);assert.equal(status(),'unknown');
+  const next=observe();f.requests[1].reject(unavailable());await next;
+  assert.equal(status(),'unknown');
+  assert(f.requests.every(r=>r.path===base+'/installed' && !r.options.method));
+});
+await test('stock and malformed receipts, a revoked session and late reads cannot certify an installed bundle',async()=>{
+  const good=observation({provider_id:'managed-nfqws-payload'});
+  for(const invalid of [observation(),{...good,receipt_id:''},{...good,installed_idle:false},{...good,working_routes_changed:true}]){
+    const f=fixture('engines');
+    const read=f.context.observeManagedNFQInstall();f.requests[0].resolve(invalid);await read;
+    assert.equal(f.context.managedNFQInstallState(),'unknown');
+  }
+  for(const cancel of [f=>f.revoke(),f=>f.view('services')]){
+    const f=fixture('overview');
+    const read=f.context.observeManagedNFQInstall();cancel(f);
+    assert(f.requests[0].options.signal.aborted);
+    f.requests[0].resolve(good);await read;
+    assert.equal(f.context.managedNFQInstallState(),'unknown');
+    await f.context.observeManagedNFQInstall();assert.equal(f.requests.length,1);
+  }
+});
 await test('update needs matching original installed readback and cannot fall back to install',()=>{
   const old=observation({flavor:'previous',manifest_sha256:'c'.repeat(64),receipt_id:'d'.repeat(32)});
   const p=plan({action:'update',update_available:true,installed_idle:true,installed:old});

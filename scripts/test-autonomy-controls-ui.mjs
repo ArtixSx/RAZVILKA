@@ -5,7 +5,7 @@ const source=fs.readFileSync(new URL('../cmd/razvilka/web/console-autonomy.js',i
 const extract=name=>{const match=source.match(new RegExp(`  (?:async )?function ${name}\\([^]*?\\n  }`));assert(match,name);return match[0];};
 function fixture(){
  const elements=new Map(),timers=new Map(),posts=[],notices=[];let next=0;
- const c={root:{},snapshot:{policy:{enabled:true,setup_complete:true,revision:1}},editingPolicy:{revision:1},presentationFresh:true,authGeneration:0,wizardEdit:0,saving:false,pauseRequest:null,activeTab:'setup',step:0,
+ const c={root:{},snapshot:{policy:{enabled:true,setup_complete:true,revision:1}},editingPolicy:{revision:1,setup_complete:true},presentationFresh:true,authGeneration:0,wizardEdit:0,saving:false,pauseRequest:null,activeTab:'setup',step:0,
  document:{activeElement:null,createElement:()=>({setAttribute(){},addEventListener(){}})},
  $:id=>{if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,checked:true,textContent:'',classList:{toggle(){}},appendChild(){},focus(){c.document.activeElement=this;}});return elements.get(id);},$$:()=>[],
  setTimeout:(fn,ms)=>{timers.set(++next,{fn,ms});return next;},clearTimeout:id=>timers.delete(id),clone:structuredClone,

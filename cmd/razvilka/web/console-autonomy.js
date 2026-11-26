@@ -204,8 +204,9 @@
     if(noticeTransient)noticeTimer=setTimeout(dismissNotice,6500);
   }
   function formatDate(value,zone) { const n=new Date(value); if(!Number.isFinite(n.getTime())||n.getFullYear()<2000) return 'Ещё нет'; try {return n.toLocaleString('ru-RU',{timeZone:zone||snapshot?.policy.timezone||'UTC',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});} catch {return n.toISOString();} }
-  async function api(path,method='GET',body,attempt=0,requestGeneration=authGeneration) {
+  async function api(path,method='GET',body,attempt=0,requestGeneration=authGeneration,reviewIntent) {
     requireGeneration(requestGeneration);
+    if(reviewIntent)reviewIntent();
     const mutation=method!=='GET';
     if(mutation&&typeof root.invalidatePanelReads==='function')root.invalidatePanelReads();
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
@@ -220,7 +221,7 @@
       let data;try {data=await response.json();} catch {data={};}
       requireGeneration(requestGeneration);
       if(!response.ok && response.status===409 && data.not_started===true && data.code==='RESTORE_OPERATION_BUSY' && method!=='GET' && attempt<4) {
-        clearTimeout(timer);await new Promise(resolve=>setTimeout(resolve,1500));return api(path,method,body,attempt+1,requestGeneration);
+        clearTimeout(timer);await new Promise(resolve=>setTimeout(resolve,1500));return api(path,method,body,attempt+1,requestGeneration,reviewIntent);
       }
       if(response.status===401 && typeof showAuth==='function') showAuth(null,'Сессия завершилась. Войдите снова.');
       if(!response.ok) {const e=new Error(response.status===401?'Войдите в основную панель.':data.error||`Запрос не выполнен (${response.status}).`);e.status=response.status;throw e;}
@@ -635,6 +636,9 @@
     }
     if(!snapshot||snapshot.policy.setup_complete)return;
     const mode=initialScopeMode();
+    const homePicker=$('homePicker'),homeHost=$(show?'quickHome':'fullHome');
+    if(homePicker&&homeHost&&homePicker.parentNode!==homeHost)homeHost.append(homePicker);
+    root.RazvilkaWizardScope?.open(mode,()=>refresh(false,true));
     if(displayedInitialScope!==null&&displayedInitialScope!==mode){
       $('quickConsent').checked=false;
       $('confirmConsent').checked=false;
@@ -699,18 +703,24 @@
         }
       }
       saving=true;$('saveWizard').disabled=true;
-      await api('/api/v1/autonomy','PUT',request);
+      let reviewIntent;
+      if(firstSetup && p.enabled){
+        if(!root.RazvilkaWizardScope)throw new Error('Проверка домашней сети ещё недоступна.');
+        const view=viewEpoch;
+        const quick=errorTarget===$('quickError');
+        reviewIntent=()=>{
+          if(view!==viewEpoch || discardEdit!==wizardEdit || !$('confirmConsent').checked || quick&&!$('quickConsent').checked)
+            throw new Error('Настройки изменились. Проверьте область и подтвердите запуск ещё раз.');
+        };
+        request.expected_network_policy_revision=await root.RazvilkaWizardScope.verify();
+        requireGeneration(generation);
+      }
+      await api('/api/v1/autonomy','PUT',request,0,generation,reviewIntent);
       requireGeneration(generation);const refreshed=await refresh(true,true,discardEdit);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');if(discardEdit!==wizardEdit){tab('setup');notify('Отправленные настройки сохранены. Новые изменения ещё не сохранены.');return;}tab('overview');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');
     } catch(e) { reportError(e,errorTarget||$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
   document.addEventListener('click',event=>{
     if(!event.target.closest('[data-autonomy]')) return;
-    if(event.target.closest('[data-wizard-home-scope]')){
-      setView('exclusions');
-      const section=document.getElementById('listScopeContent');
-      section?.focus({preventScroll:true});section?.scrollIntoView?.({block:'start'});
-      return;
-    }
     const nav=event.target.closest('[data-tab]');if(nav){event.preventDefault();tab(nav.dataset.tab);}
     if(event.target.closest('[data-open-setup]')){tab('setup');setStep(0);}
     const stepButton=event.target.closest('[data-step]');if(stepButton)setStep(Number(stepButton.dataset.step));

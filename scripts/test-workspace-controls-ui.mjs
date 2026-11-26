@@ -271,6 +271,12 @@ context.renderWorkspaceControls();
 assert.equal($('#projectPowerLabel').textContent, 'Обход выключен');
 console.log('Workspace controls: exact revision, no implicit routes, double-click/refusal/logout guards, shared reads and factual versions passed');
 
+state.serviceControl = { ...snapshot, runtime_state: 'unconfigured', running: false, can_stop: false, safe_mode: false };
+context.consoleAutonomyCache = () => ({fresh:true, services:{test:{enabled:true}}});
+context.renderWorkspaceControls();
+assert.equal($('#projectPowerLabel').textContent, 'Пока нет маршрутов');
+delete context.consoleAutonomyCache;
+
 // Async Stop confirmation owns one operation and cannot authorize a later session.
 for(const outcome of ['cancel','changed','logout','accept']){
  events.get('razvilka:auth-required')();events.get('razvilka:auth-restored')();

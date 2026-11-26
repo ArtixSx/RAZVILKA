@@ -71,14 +71,19 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 				WARPRegistration       json.RawMessage `json:"allow_initial_warp_registration"`
 				MASQUERegistration     *bool           `json:"allow_initial_masque_registration"`
 			} `json:"policy"`
-			Confirm         string    `json:"confirm"`
-			ReleaseSafeMode bool      `json:"release_safe_mode"`
-			UseNetworkScope bool      `json:"use_network_scope"`
-			StarterSHA      string    `json:"starter_sha256,omitempty"`
-			StarterIDs      *[]string `json:"starter_service_ids,omitempty"`
-			InitialServices []string  `json:"initial_service_ids,omitempty"`
+			Confirm                       string    `json:"confirm"`
+			ReleaseSafeMode               bool      `json:"release_safe_mode"`
+			UseNetworkScope               bool      `json:"use_network_scope"`
+			ExpectedNetworkPolicyRevision *uint64   `json:"expected_network_policy_revision,omitempty"`
+			StarterSHA                    string    `json:"starter_sha256,omitempty"`
+			StarterIDs                    *[]string `json:"starter_service_ids,omitempty"`
+			InitialServices               []string  `json:"initial_service_ids,omitempty"`
 		}
 		if !decodeAutonomyRequest(w, r, &req) {
+			return
+		}
+		if !req.UseNetworkScope && req.ExpectedNetworkPolicyRevision != nil {
+			writeJSON(w, 400, map[string]any{"error": "Ревизия области сети используется только при первоначальной настройке."})
 			return
 		}
 		policy := req.Policy.Policy
@@ -169,6 +174,11 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			policy.AllLAN, policy.DefaultSources, policy.ManagedLANOnly = initialAutonomyScope(cfg, before, a.autonomy.image.Exists)
+			if req.ExpectedNetworkPolicyRevision != nil && !initialScopeRevisionCurrent(cfg, policy, *req.ExpectedNetworkPolicyRevision) {
+				a.autonomy.mu.Unlock()
+				writeWizardScopeChanged(w)
+				return
+			}
 		} else if !before.SetupComplete && policy.SetupComplete && policy.AllLAN && req.StarterSHA != "" {
 			// An already open first wizard may still send the old scope fields.
 			policy.ManagedLANOnly = true
@@ -260,12 +270,25 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		a.autonomy.doc.Runtime = runtime
 		a.autonomy.doc.Policy = autonomy.Clone(policy)
-		err := a.persistAutonomyLocked(r.Context())
+		var err error
+		if req.ExpectedNetworkPolicyRevision == nil {
+			err = a.persistAutonomyLocked(r.Context())
+		} else {
+			// The assignment journal is a separate file. Keep the reviewed configuration
+			// and its writer lease stable through publication of that journal.
+			err = a.Store.WithAutonomyEnrollmentRevision(r.Context(), cfg.Revision, func() error {
+				return a.persistAutonomyLocked(r.Context())
+			})
+		}
 		if err != nil {
 			a.autonomy.doc.Policy = before
 			a.autonomy.doc.Services, a.autonomy.doc.Runtime = oldServices, oldRuntime
 		}
 		a.autonomy.mu.Unlock()
+		if errors.Is(err, config.ErrRevisionChanged) {
+			writeWizardScopeChanged(w)
+			return
+		}
 		if err != nil {
 			writeJSON(w, 503, map[string]any{"error": "Разрешения не сохранены. Автоматика не запущена."})
 			return
@@ -285,7 +308,7 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		a.wakeReconciler()
-		if (requeued || installGranted || masqueGranted || warpGranted) && policy.Enabled {
+		if (requeued || installGranted || masqueGranted || warpGranted || !before.SetupComplete && policy.SetupComplete) && policy.Enabled {
 			a.wakeAutonomy()
 		}
 	}

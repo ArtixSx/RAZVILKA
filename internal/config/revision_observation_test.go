@@ -65,3 +65,51 @@ func TestRevisionObservationRefusesExternalChangeBeforeAndAfterReceipt(t *testin
 		})
 	}
 }
+
+func TestAutonomyEnrollmentHoldsReviewedConfigAcrossJournalPublication(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	store, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := store.Get().Revision
+	called := false
+	publish := func() error {
+		called = true
+		competing, err := restorejournal.OpenFileTarget(path)
+		if competing != nil {
+			competing.Close()
+			t.Error("config writer admitted during consent publication")
+		}
+		if !errors.Is(err, restorejournal.ErrBusy) {
+			t.Errorf("unexpected competing writer status: %v", err)
+		}
+		return nil
+	}
+	held, err := restorejournal.OpenFileTarget(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithAutonomyEnrollmentRevision(t.Context(), revision, publish); !errors.Is(err, restorejournal.ErrBusy) || called {
+		t.Fatal("sidecar published during competing writer", err)
+	}
+	if err := held.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithAutonomyEnrollmentRevision(t.Context(), revision, publish); err != nil || !called {
+		t.Fatal("same revision could not retry", err)
+	}
+	called = false
+	if err := store.SetSafeMode(!store.Get().SafeMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithAutonomyEnrollmentRevision(t.Context(), revision, publish); !errors.Is(err, ErrRevisionChanged) || called {
+		t.Fatal("old revision authorized sidecar", err)
+	}
+	if err := os.WriteFile(path, []byte("external replacement"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithAutonomyEnrollmentRevision(t.Context(), store.Get().Revision, publish); !errors.Is(err, ErrRevisionChanged) || called {
+		t.Fatal("changed file authorized sidecar", err)
+	}
+}

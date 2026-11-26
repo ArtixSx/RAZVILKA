@@ -170,6 +170,19 @@ await test('metadata summary refresh replaces unknown inventory without redrawin
  c.renderInterfaceHome=()=>{throw Error('must not redraw full home');};c.refreshHomeEngineSummary();
  assert.doesNotMatch($('#ui7HomeEngines').innerHTML,/Состояние неизвестно/);assert.match($('#ui7HomeEngines').innerHTML,/Установлен/);
 });
+await test('Home displays a fresh managed package independently from routes and stock inventory',()=>{
+ const {c,state,$}=fixture();
+ c.consoleEngineState=id=>id==='nfqws2'?{managedInstalled:true,label:'Управляемый пакет установлен'}:{};
+ state.services=[];c.consoleSnapshot.services={};c.consoleSnapshot.runtime={};
+ c.consoleSnapshot.policy.setup_complete=true;
+ c.renderInterfaceHome({});
+ const row=$('#ui7HomeEngines').innerHTML.match(/data-console-engine="nfqws2"[^]*?<\/button>/)[0];
+ assert.match(row,/Управляемый пакет установлен/);
+ assert.match(row,/<b>0<\/b><small>назначено/);
+ assert.doesNotMatch(row,/rz-engine-running|Процесс запущен|проверено/);
+ assert.match($('#ui3HealthBanner').innerHTML,/Автопилот настроен/);
+ assert.doesNotMatch($('#ui3HealthBanner').innerHTML,/Начните с настройки/);
+});
 await test('known recovery refusal replaces loading without inventing inventory or statistics',()=>{
  const {c,state,$,calls}=fixture();
  c.consoleSnapshot=null;c.consoleAutonomyError='DATAPLANE_RECOVERY_REQUIRED';

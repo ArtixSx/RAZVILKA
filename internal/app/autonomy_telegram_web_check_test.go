@@ -156,31 +156,7 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 				}
 				return result, nil
 			})}
-			withScope := func(c context.Context, cfg config.Config, s autonomy.Service, do func(context.Context)) error {
-				base, err := newNFQWSPacketScopeBinding(c, a, func(ctx context.Context, b *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error) {
-					intent, err := b.intent(ctx)
-					if err != nil {
-						return nil, err
-					}
-					model.b, model.facts.Intent, model.facts.Control = b, intent, b.control.Reference()
-					return model, nil
-				})
-				if err != nil {
-					return err
-				}
-				b := &xrayHomeScopeBinding{base: base}
-				b.self, base.homeOwner = b, b
-				h := &autonomyXrayHomeRound{app: a, store: a.Store, original: c, spec: s, policy: config.CloneNetworkPolicy(cfg.NetworkPolicy), consent: config.CloneDefaultRouteConsent(cfg.DefaultRouteConsent), binding: b, webCheckOnly: true}
-				h.self = h
-				defer h.close()
-				owned := context.WithValue(c, autonomyHomeScopeKey{}, h)
-				if _, err := a.borrowAutonomyXrayHomeScope(owned); err == nil {
-					t.Fatal("domain diagnostic could lend routing authority")
-				}
-				return base.use(owned, func(held context.Context) error {
-					return withAutonomyHomeScopeRead(held, b, func(marked context.Context) error { do(marked); return nil })
-				})
-			}
+			withScope := telegramWebModelScope(a, model)
 			run := func() autonomy.Runtime {
 				a.autonomyRoundWithWebCheck(ctx, time.Now(), withScope)
 				a.autonomy.mu.Lock()
@@ -287,6 +263,34 @@ func TestAutonomyHomeTelegramWebFeedCheckOnly(t *testing.T) {
 			if excluded.State != "excluded" || len(excluded.Reserves) != 0 || !excluded.ReserveCheckedAt.IsZero() || len(excluded.Switches) != 0 || checks != 1 {
 				t.Fatal("exclusion retained a reserve, probed or applied", excluded.State, excluded.Reserves, checks)
 			}
+		})
+	}
+}
+
+func telegramWebModelScope(a *App, model *nfqwsPacketModel) func(context.Context, config.Config, autonomy.Service, func(context.Context)) error {
+	return func(c context.Context, cfg config.Config, s autonomy.Service, do func(context.Context)) error {
+		base, err := newNFQWSPacketScopeBinding(c, a, func(ctx context.Context, b *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error) {
+			intent, err := b.intent(ctx)
+			if err != nil {
+				return nil, err
+			}
+			model.b, model.facts.Intent, model.facts.Control = b, intent, b.control.Reference()
+			return model, nil
+		})
+		if err != nil {
+			return err
+		}
+		b := &xrayHomeScopeBinding{base: base}
+		b.self, base.homeOwner = b, b
+		h := &autonomyXrayHomeRound{app: a, store: a.Store, original: c, spec: s, policy: config.CloneNetworkPolicy(cfg.NetworkPolicy), consent: config.CloneDefaultRouteConsent(cfg.DefaultRouteConsent), binding: b, webCheckOnly: true}
+		h.self = h
+		defer h.close()
+		owned := context.WithValue(c, autonomyHomeScopeKey{}, h)
+		if _, err := a.borrowAutonomyXrayHomeScope(owned); err == nil {
+			return errors.New("domain diagnostic could lend routing authority")
+		}
+		return base.use(owned, func(held context.Context) error {
+			return withAutonomyHomeScopeRead(held, b, func(marked context.Context) error { do(marked); return nil })
 		})
 	}
 }

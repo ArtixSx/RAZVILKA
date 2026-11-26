@@ -290,7 +290,9 @@ func (a *App) activateHandedOverServices(ctx context.Context, p autonomy.Policy,
 		r := a.autonomy.doc.Runtime[s.ID].Clone()
 		a.autonomy.mu.Unlock()
 		r.State, r.Message = "pending", "Сервис добавлен в активный список. Автопилот проверит и назначит путь."
-		a.autonomyRuntime(p.Revision, s.ID, r)
+		if a.autonomyRuntime(p.Revision, s.ID, r) {
+			a.wakeAutonomy()
+		}
 	}
 }
 

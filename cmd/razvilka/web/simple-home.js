@@ -168,7 +168,6 @@
   root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, updateNotice, doctorView, nightly, withNightly, bucket, plural });
   if (typeof document === 'undefined') return;
 
-  const KEY = 'razvilka.simpleMode';
   const ui = { open: false, query: '', busy: '', error: '', key: '', community: [], communityQuery: null, communityState: '', note: '', doctor: '', report: null, doctorError: '', settingsBusy: '', settingsError: '', settingsKey: '' };
   let communityTimer = 0, communitySeq = 0, sessionEpoch = 0;
   let communityController = null, doctorController = null;
@@ -199,12 +198,8 @@
     render(true); renderSettings(true); renderDevicesNote();
   }
 
-  function enabled() {
-    try { return localStorage.getItem(KEY) !== '0'; } catch (_) { return true; }
-  }
   function apply() {
-    const on = enabled();
-    document.body.classList.toggle('rz-simple', on);
+    document.body.classList.add('rz-simple');
     ensure();
     render(true);
     renderSettings(true);
@@ -267,10 +262,15 @@
     return {rows, stopped: false};
   }
 
-  function overviewMarkup(overview) {
+  function overviewMarkup(overview, enrolled) {
     const links = '<div class="rz-route-links"><button type="button" class="secondary" data-view="services">Все сервисы</button><button type="button" class="secondary" data-view="exclusions">Исключения</button></div>';
     const heading = '<div class="rz-sh-head"><h3>Маршруты сервисов</h3>' + links + '</div>';
-    if (!overview.rows.length) return heading + '<p class="rz-route-empty">' + (overview.stopped ? 'Сейчас RAZVILKA не обрабатывает трафик сервисов.' : 'Пока нет применённых маршрутов. Выберите сервис и способ подключения.') + '</p>';
+    if (!overview.rows.length) {
+      const hint = overview.stopped ? 'Сейчас RAZVILKA не обрабатывает трафик сервисов.'
+        : enrolled ? 'Маршрутов пока нет. Состояние каждого выбранного сервиса показано ниже.'
+        : 'Пока нет применённых маршрутов. Добавьте сервис для автоподбора.';
+      return heading + '<p class="rz-route-empty">' + hint + '</p>';
+    }
     const rows = overview.rows.slice(0, 6).map(({name, route, sources, proof}) => {
       const via = typeof interfaceRouteName === 'function' ? interfaceRouteName(route) : route;
       const scope = sources.length ? sources.join(', ') : 'По политике домашней сети';
@@ -372,7 +372,6 @@
   }
 
   function render(force = false) {
-    if (!enabled()) return;
     const home = ensure();
     if (!home) return;
     const authenticated = simpleAuthenticated();
@@ -410,12 +409,15 @@
       title = 'Проект остановлен';
       description = 'Роутер остановил маршруты RAZVILKA. Настройки сервисов сохранены.';
       tone = 'paused';
-    } else if (overview && (overview.rows.length || m.phase !== 'setup')) {
+    } else if (overview?.rows.length) {
       const verified = overview.rows.filter(row => row.proof?.kind === 'good').length;
-      title = !overview.rows.length ? 'Нет применённых маршрутов'
-        : verified === overview.rows.length ? 'Сервисы доступны' : 'Маршруты применены';
-      description = overview.rows.length ? 'Сервисы с подтверждённым доступом — ' + verified + ' из ' + overview.rows.length + '.' : 'Роутер пока не применил ни одного правила для сервисов.';
+      title = verified === overview.rows.length ? 'Сервисы доступны' : 'Маршруты применены';
+      description = 'Сервисы с подтверждённым доступом — ' + verified + ' из ' + overview.rows.length + '.';
       tone = verified && verified === overview.rows.length ? 'ok' : 'paused';
+    } else if (overview && m.tone === 'ok') {
+      title = 'Нет применённых маршрутов';
+      description = 'Роутер пока не подтвердил ни одного маршрута для выбранных сервисов.';
+      tone = 'paused';
     }
     const action = m.phase === 'recovery' ? '<button type="button" class="primary" data-view="diagnostics">Открыть восстановление</button>' : m.phase === 'setup' && !overview?.stopped && !overview?.rows.length ? '<button type="button" class="primary" data-view="onboard">Начать настройку</button>'
       : overview?.stopped ? '<button type="button" class="secondary" data-view="activity">Открыть журнал</button>' : m.phase === 'off' ? '<button type="button" class="primary" data-view="autopilot">Открыть автопилот</button>' : '';
@@ -435,7 +437,7 @@
     // engine count never rebuilds the service buttons under the pointer.
     patch(home, 'status', `<span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(title)}</h2><p>${html(description)}</p>${activity ? `<small class="rz-sh-activity">Сейчас: ${html(activity)}</small>` : ''}</div>${action}`, `rz-sh-status rz-sh-${tone}`, 'div');
     patch(home, 'update', updateRow, 'rz-sh-update', 'div');
-    patch(home, 'routes', overview ? overviewMarkup(overview) : '', 'rz-route-card', 'section');
+    patch(home, 'routes', overview ? overviewMarkup(overview, m.services.length > 0) : '', 'rz-route-card', 'section');
     patch(home, 'engines', engines, 'rz-sh-engines', 'aside');
     patch(home, 'main', main, 'rz-sh-main', 'div');
     if (focused) {
@@ -545,7 +547,6 @@
   }
 
   function renderSettings(force = false) {
-    if (!enabled()) return;
     const box = settingsSection();
     if (!box) return;
     const snap = simpleAuthenticated() ? snapshot() : null;

@@ -35,7 +35,7 @@ function fixture(authenticated=true,staticInputs=[],includeQuick=false){
  function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
  const document={hidden:false,createElement:tag=>{const node=element(`created-${++createdElementID}`);node.tagName=tag.toUpperCase();return node;},getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.startsWith('#a1-wizardForm ')||!input.otherForm)&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
- const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>{throw Error('native confirm must not run');},askConfirmation:async()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
+ const context={RazvilkaWizardScope:{open(){},verify:async()=>4},document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>{throw Error('native confirm must not run');},askConfirmation:async()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
   setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval(fn,ms){const id=++timerID;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id),
   showAuth(){authCalls++;document.dispatchEvent({type:'razvilka:auth-required'});},
   fetch(path,options){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
@@ -48,7 +48,7 @@ function fixture(authenticated=true,staticInputs=[],includeQuick=false){
   context.interfaceRequest=async(path,options={})=>{const response=await context.fetch(path,options),data=await response.json();if(!response.ok)throw Object.assign(new Error(data.error||'request failed'),{status:response.status});return data;};
   vm.runInNewContext(quickSource,context);
  }
- return {requests,timeouts,published,components:api=>{context.RazvilkaWizardComponents=api;},contextView:()=>context.state.currentView,confirmWith:fn=>{context.askConfirmation=fn;},e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
+ return {requests,timeouts,published,components:api=>{context.RazvilkaWizardComponents=api;},scope:api=>{context.RazvilkaWizardScope=api;},contextView:()=>context.state.currentView,confirmWith:fn=>{context.askConfirmation=fn;},e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
   hideAuth:()=>context.hideAuth(),actualShowAuth:status=>context.actualShowAuth(status||null,'Войдите снова.'),coreElement:element,
   event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
   navigate(view){context.state.currentView=view;document.dispatchEvent({type:'razvilka:view-change',detail:view});},
@@ -367,7 +367,7 @@ await test('quick start saves a whole-network policy through the shared consent 
  const put=f.requests.find(r=>r.options?.method==='PUT');assert.ok(put,'policy was not saved: '+f.e('quickError').textContent);
  const body=JSON.parse(put.options.body);
  assert.equal(put.path,'/api/v1/autonomy');assert.equal(body.confirm,'SAVE_AUTONOMY');
- assert.equal(body.use_network_scope,true);assert.equal(body.policy.enabled,true);assert.equal(body.policy.setup_complete,true);
+ assert.equal(body.use_network_scope,true);assert.equal(body.expected_network_policy_revision,4);assert.equal(body.policy.enabled,true);assert.equal(body.policy.setup_complete,true);
  assert.ok(!Object.hasOwn(body.policy,'all_lan'));assert.ok(!Object.hasOwn(body.policy,'default_sources'));
  assert.equal(body.policy.install_missing_components,true,'the reviewed quick setup must prepare missing allowed components immediately');
  assert.equal(body.policy.allow_initial_warp_registration,false);
@@ -463,7 +463,7 @@ await test('advanced setup keeps the full four-step wizard',async()=>{
  void f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
  const put=f.requests.find(request=>request.options.method==='PUT');assert.ok(put,f.e('wizardError').textContent);
  const body=JSON.parse(put.options.body);
- assert.equal(body.use_network_scope,true);
+ assert.equal(body.use_network_scope,true);assert.equal(body.expected_network_policy_revision,4);
  assert.ok(!Object.hasOwn(body.policy,'all_lan'));assert.ok(!Object.hasOwn(body.policy,'default_sources'));
  assert.deepEqual(body.starter_service_ids,['youtube']);
 });
@@ -1063,4 +1063,22 @@ await test('leaving the wizard during installation cannot trigger the next selec
  assert.deepEqual(calls,['a']);assert.ok(f.requests.every(request=>request.options.method==='GET'));
 });
 
+await test('first launch requires a fresh network policy read and does not post on failed confirmation',async()=>{
+ const {f}=await componentSetup({list:()=>[],refresh:async()=>{},install:async()=>false});
+ let checked=0;
+ f.scope({open(){},verify:async()=>{checked++;throw Error('Область сети изменилась.');}});
+ f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();
+ assert.equal(checked,1);assert.match(f.e('quickError').textContent,/Область сети изменилась/);
+ assert.ok(f.requests.every(request=>request.options.method==='GET'));
+});
+for(const change of ['leave','consent','unchanged'])await test('certified first-start retry rechecks wizard intent: '+change,async()=>{
+ const {f}=await componentSetup({list:()=>[],refresh:async()=>{},install:async()=>false});
+ f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();
+ const index=f.requests.findIndex(r=>r.options.method==='PUT');
+ assert.ok(index>=0);f.respond(index,409,{code:'RESTORE_OPERATION_BUSY',not_started:true});await flush();
+ if(change==='leave')f.navigate('overview');
+ if(change==='consent')f.e('quickConsent').checked=false;
+ f.runRetry();await flush();
+ assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,change==='unchanged'?2:1);
+});
 console.log(JSON.stringify({status:'passed',tests:passed}));

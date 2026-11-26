@@ -19,6 +19,23 @@ const model = vm.createContext({state, esc, consoleDate:value=>value, ci:()=>'',
 vm.runInContext(slice(consoleCode, 'function consoleEngineState(', 'function consoleNavigate('), model);
 vm.runInContext(slice(interfaceCode, 'const engineProgressEvidence =', 'function renderInterfaceEngines('), model);
 const card = () => model.interfaceEngineCard('usque', meta);
+{
+  const nfq={...base,id:'nfqws2',installed:false,can_install:true,running:false,external_owner:true};
+  state.components.push(nfq);
+  model.managedNFQInstallState=()=>'installed';
+  const html=model.interfaceEngineCard('nfqws2',{...meta,name:'NFQWS2'});
+  assert.match(html,/Управляемый пакет установлен/);
+  assert.match(html,/Получена квитанция управляемого пакета/);
+  assert.match(html,/Запуск управляемого процесса не подтверждён/);
+  assert.match(html,/0 сервисов/);
+  assert.doesNotMatch(html,/Не установлен|Уточнить установку|data-component-action|1\.0\.[13]|Процесс запущен/);
+  model.managedNFQInstallState=()=>'unknown';
+  assert.match(model.interfaceEngineCard('nfqws2',meta),/Установка не подтверждена/);
+  nfq.installed=true;
+  assert.doesNotMatch(model.interfaceEngineCard('nfqws2',meta),/Управляемый пакет установлен|Получена квитанция/);
+  state.components.pop();
+  delete model.managedNFQInstallState;
+}
 assert.match(card(), /1\.0\.1 → 1\.0\.3/);
 assert.doesNotMatch(card(), /different runtime output/);
 assert.match(card(), /Процесс не запущен/);

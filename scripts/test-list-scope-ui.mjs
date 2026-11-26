@@ -24,7 +24,8 @@ function fixture(initial=review(),catalog=options()) {
   const calls=[],events=new Map(),rootEvents=new Map();
   const root={innerHTML:'',contains:()=>false,querySelectorAll:()=>[],addEventListener:(name,fn)=>rootEvents.set(name,fn)};
   const state={authenticated:true,authGeneration:1,currentView:'exclusions',status:{},dataLoad:{networkPolicyReview:{phase:'ready'},resourceExclusions:{phase:'ready'},homeScope:{phase:'ready'}},resourceExclusions:applied(initial)};
-  const c={state,document:{activeElement:null,getElementById:id=>id==='listScopeContent'?root:null,addEventListener:(name,fn)=>events.set(name,fn)},console,Date,Map,Set,JSON,Number,Object,esc:value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))};
+  const wizardNodes=new Map(['a1-homeConfirm','a1-homeRead','a1-homeStatus','a1-quickConsent','a1-confirmConsent'].map(id=>[id,{dataset:{},addEventListener(){}}]));
+  const c={state,document:{activeElement:null,getElementById:id=>id==='listScopeContent'?root:wizardNodes.get(id),addEventListener:(name,fn)=>events.set(name,fn)},console,Date,Map,Set,JSON,Number,Object,esc:value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))};
   let handler=async()=>{throw new Error('Unexpected request');};
   c.interfaceRequest=async(path,opts={})=>{const call={path,method:opts.method||'GET',body:opts.body?JSON.parse(opts.body):null};calls.push(call);return handler(call);};
   c.cancelPanelRefresh=()=>{};
@@ -239,5 +240,65 @@ await check('bounded displayed choices preserve every negative ID and null/empty
 });
 await check('one shared editor is integrated; exclusions and wizard navigate to it',()=>{
   const html=read('cmd/razvilka/web/index.html');assert.equal((html.match(/id="listScopeContent"/g)||[]).length,1);assert(html.indexOf('/list-scope-ui.js?')<html.indexOf('/interface.js?'));assert.match(html,/<section class="view" id="view-exclusions">[\s\S]*?id="listScopeContent"[\s\S]*?<section class="view" id="view-devices">/);const fresh=fixture(review({p:null}));fresh.c.renderListScope();assert.doesNotMatch(fresh.root.innerHTML,/data-scope-field="mode"|Устройства для обхода/);assert.match(fresh.root.innerHTML,/Устройства без обхода/);assert.match(read('cmd/razvilka/web/resource-exclusions-ui.js'),/Сайты без обхода/);
+});
+const untilIdle=()=>new Promise(resolve=>setImmediate(resolve));
+function wizardFixture(initial,catalog,mode) {
+  const f=fixture(initial,catalog),authority={current:copy(initial),observed:copy(catalog)};
+  f.state.currentView='onboard';
+  f.setHandler(async call => {
+    if(call.path.endsWith('/scope-options'))return copy(authority.observed);
+    assert.equal(call.path,'/api/v1/networkpolicy/review');
+    if(call.method==='GET')return copy(authority.current);
+    const p=copy(call.body.policy);p.revision=(authority.current.policy?.revision||0)+1;
+    if(!authority.current.policy)p.resource_exclusions=copy(policy.resource_exclusions);
+    authority.current={...review({revision:authority.current.revision+1,p,g:call.body.grants}),scope_consent_current:true};
+    return {...copy(authority.current),approved:true};
+  });
+  f.c.openWizardScope(mode);
+  return {f,authority,button:f.c.document.getElementById('a1-homeConfirm')};
+}
+await check('first run confirms one observed Home inline, inherits inactive exclusions, launches only after independent GET',async()=>{
+ const {f,button}=wizardFixture(review({p:null}),options({policyRevision:0}),'all');
+ await untilIdle();assert.equal(button.hidden,false);assert.equal(button.dataset.homeId,'br0');
+ await assert.rejects(f.c.verifyWizardScope(),/подтвердите/);
+ assert.equal(f.calls.filter(c=>c.method==='POST').length,0);
+ await f.c.confirmWizardScope();assert.equal(f.e.dirty,false);
+ const writes=f.calls.filter(c=>c.method==='POST');assert.equal(writes.length,1);
+ assert.deepEqual(writes[0].body.policy.clients,{mode:'lan_except',new_devices:'inherit',device_ids:[],segment_ids:['br0'],excluded_device_ids:[],excluded_cidrs:[]});
+ assert.deepEqual(writes[0].body.grants,[]);assert.equal(f.state.currentView,'onboard');
+ assert.deepEqual(f.e.base.policy.resource_exclusions,policy.resource_exclusions);
+ assert.equal(await f.c.verifyWizardScope(),1);assert.equal(f.calls.at(-1).method,'GET');
+});
+await check('saved explicit policy including negative devices/CIDR/grants is reused without writes; changes before launch refuse',async()=>{
+ const current=review();current.policy.clients.mode='selected_devices';current.policy.clients.device_ids=['allowed'];current.policy.clients.new_devices='base';
+ current.consent.policy=copy(current.policy);current.scope_consent_current=true;
+ const {f,authority,button}=wizardFixture(current,options(),'selected');
+ await untilIdle();assert.equal(button.hidden,true);assert.equal(await f.c.verifyWizardScope(),3);
+ authority.current.policy.clients.excluded_cidrs=['198.51.100.0/24'];
+ await assert.rejects(f.c.verifyWizardScope(),/изменилась/);
+ assert.ok(f.calls.every(call=>call.method==='GET'));
+});
+await check('legacy empty/selected scope without LIST is pinned to zero without creating Home',async()=>{
+ for(const mode of ['empty','selected']){
+  const {f,button}=wizardFixture(review({p:null}),options({policyRevision:0}),mode);
+  await untilIdle();assert.equal(button.hidden,true);await f.c.confirmWizardScope();
+  assert.equal(await f.c.verifyWizardScope(),0);assert.ok(f.calls.every(call=>call.method==='GET'));
+ }
+});
+await check('ambiguous and expired discovery refuse without issuing a write',async()=>{
+ for(const expired of [false,true]){
+  const catalog=options({policyRevision:0,expired});
+  if(!expired)catalog.segments.push({...catalog.segments[0],id:'br22',interface:'br22'});
+  const {f,button}=wizardFixture(review({p:null}),catalog,'all');await untilIdle();
+  assert.equal(button.hidden,true);await f.c.confirmWizardScope();
+  await assert.rejects(f.c.verifyWizardScope(),/подтвердите/);assert.ok(f.calls.every(c=>c.method==='GET'));
+ }
+});
+await check('stale existing consent needs explicit confirmation and preserves every saved field and grant',async()=>{
+ const current={...review(),scope_consent_current:false};
+ const {f,button}=wizardFixture(current,options(),'all');await untilIdle();
+ assert.match(button.textContent,/сохранённую/);await assert.rejects(f.c.verifyWizardScope(),/подтвердите/);
+ await f.c.confirmWizardScope();assert.equal(await f.c.verifyWizardScope(),4);
+ const writes=f.calls.filter(c=>c.method==='POST');assert.equal(writes.length,1);assert.deepEqual(writes[0].body.policy,current.policy);assert.deepEqual(writes[0].body.grants,current.consent.grants);
 });
 console.log(JSON.stringify({suite:'list-scope-ui',passed:checks}));

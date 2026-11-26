@@ -1496,11 +1496,13 @@ function renderAll() {
 }
 
 function renderComponents() {
+  const managedOnly = c => c.id === 'nfqws2' && !c.installed && globalThis.managedNFQInstallState?.() === 'installed';
+  const present = c => c.installed || managedOnly(c);
   const counts = {
     all: state.components.length,
-    installed: state.components.filter((c) => c.installed).length,
-    available: state.components.filter((c) => !c.installed && c.available).length,
-    updates: state.components.filter((c) => c.update_available).length,
+    installed: state.components.filter(present).length,
+    available: state.components.filter((c) => !present(c) && c.available).length,
+    updates: state.components.filter((c) => !managedOnly(c) && c.update_available).length,
   };
   $('#componentSummary').innerHTML = `<div><span>Установлено</span><b>${counts.installed}</b></div><div><span>Можно установить</span><b>${counts.available}</b></div><div class="${counts.updates ? 'attention' : ''}"><span>Обновления</span><b>${counts.updates}</b></div><div><span>Всего компонентов</span><b>${counts.all}</b></div>`;
   $$('#componentFilters [data-component-filter]').forEach((button) => {
@@ -1510,9 +1512,9 @@ function renderComponents() {
     button.textContent = `${{ all: 'Все', installed: 'Установлены', available: 'Можно установить', updates: 'Есть обновления' }[filter]} · ${count}`;
   });
   const visible = state.components.filter((component) => {
-    if (state.componentFilter === 'installed') return component.installed;
-    if (state.componentFilter === 'available') return !component.installed && component.available;
-    if (state.componentFilter === 'updates') return component.update_available;
+    if (state.componentFilter === 'installed') return present(component);
+    if (state.componentFilter === 'available') return !present(component) && component.available;
+    if (state.componentFilter === 'updates') return !managedOnly(component) && component.update_available;
     return true;
   });
   $('#componentEmpty').hidden = visible.length > 0;
@@ -1529,7 +1531,9 @@ function renderComponents() {
     // A managed component (NFQWS2) is updated in place while its routes run:
     // the server checks the result and restores the previous version on failure.
     const updateBlocked = busy || (c.running && !c.managed_update) || c.external_owner || inventoryObservationStale();
-    if (c.update_available) {
+    if (managedOnly(c)) {
+      version = 'Управляемый пакет установлен';
+    } else if (c.update_available) {
       version = info ? consoleEngineVersionLabel(info) : `${c.installed_version || 'Версия неизвестна'}${c.available_version ? ` → ${c.available_version}` : ''}`;
       const managedTitle = c.managed_update ? (c.rollback_ready ? ' title="Обновление при работающих маршрутах: проверка и автоматический откат"' : ' title="Сначала нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката"') : '';
       actions += `<button class="primary component-action" data-component="${esc(c.id)}" data-component-action="update"${managedTitle} ${c.can_update && !stale && !updateBlocked && (!c.managed_update || c.rollback_ready) ? '' : 'disabled'}>Обновить</button>`;
@@ -1545,7 +1549,7 @@ function renderComponents() {
     if (c.external_owner) actions = '<span class="external-owner-tag">ВНЕШНЕЕ УПРАВЛЕНИЕ</span>';
     const budget = c.resource_budget || {};
     const budgetText = [budget.ram_mib ? `${budget.ram_mib} МиБ RAM` : '', budget.flash_mib ? `${budget.flash_mib} МиБ flash` : '', budget.cpu_class || ''].filter(Boolean).join(' · ');
-    const statusClass = c.update_available ? 'has-update' : c.installed ? 'is-installed' : c.available ? 'is-available' : 'is-unavailable';
+    const statusClass = managedOnly(c) ? 'is-installed' : c.update_available ? 'has-update' : c.installed ? 'is-installed' : c.available ? 'is-available' : 'is-unavailable';
     const verification = c.verification === 'verified'
       ? ['verified', `УСТАНОВКА ПРОВЕРЕНА${c.verified_version ? ` · ${c.verified_version}` : ''}`]
       : c.verification === 'verified-removed'

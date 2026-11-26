@@ -66,7 +66,7 @@ function acceptListScopeReview(value) {
   const snapshot=listScopeReview(value);
   if (!snapshot) throw new Error('Общая область получена не полностью или режим не поддерживается. Последние данные сохранены.');
   if (state.networkPolicyReview && snapshot.revision < state.networkPolicyReview.revision) throw new Error('Получена прежняя редакция области. Обновите состояние.');
-  state.networkPolicyReview=snapshot;
+  state.networkPolicyReview=snapshot;wizardScope.consentCurrent=value.scope_consent_current===true;
   const e=listScopeEditor;
   if (!e.dirty && !e.pending && !e.unknown) listScopeReset(snapshot);
   else if (e.base && snapshot.revision !== e.base.revision) e.conflict=true;
@@ -91,6 +91,108 @@ function listScopePolicyEqual(a,b,allowInheritedExclusions=false) {
 function listScopeCurrent() {
   return state.authenticated === true && state.dataLoad?.networkPolicyReview?.phase === 'ready' ? state.networkPolicyReview : null;
 }
+const wizardScope = {mode:null, needsRead:false, refreshingPolicy:false, refreshPolicy:null, consentCurrent:false, version:0, displayed:'', message:''};
+function wizardScopeActive() {
+  return state.authenticated === true && state.currentView === 'onboard' && wizardScope.mode !== null;
+}
+function wizardScopeHome() {
+  if (!listScopeOptionsCurrent()) return null;
+  const homes = state.homeScope.segments.filter(s => s.native_name === 'Home' && s.selection_candidate && s.state === 'observed');
+  return homes.length === 1 ? homes[0] : null;
+}
+function wizardScopeState() {
+  const r = listScopeCurrent(), e = listScopeEditor;
+  if (!r || wizardScope.refreshingPolicy || wizardScope.needsRead || e.optionsRead || e.pending || e.unknown || e.conflict || e.dirty || state.applyRequest) return 'waiting';
+  if (r.policy) return wizardScope.consentCurrent ? 'saved' : 'renew';
+  if (['empty','selected'].includes(wizardScope.mode)) return 'legacy';
+  return wizardScope.mode === 'all' && wizardScopeHome() ? 'home' : 'missing';
+}
+function renderWizardScope() {
+  const text=document.getElementById('a1-homeStatus'), confirm=document.getElementById('a1-homeConfirm'), reload=document.getElementById('a1-homeRead');
+  if (!text || !confirm || !reload || !wizardScopeActive()) return;
+  const r=listScopeCurrent(), e=listScopeEditor, outcome=wizardScopeState(), home=wizardScopeHome();
+  const label=home ? (home.label || home.native_name) + (home.interface ? ' ('+home.interface+')' : '') : '';
+  let message='';
+  if (r?.policy) {
+    const clients=r.policy.clients;
+    const segments=listScopeValues(clients.segment_ids).join(', ');
+    message=(clients.mode==='selected_devices'?'Только выбранные устройства':'Домашние сегменты') + ' · ' + segments
+      + '. Устройств без обхода: ' + listScopeValues(clients.excluded_device_ids).length + '. ';
+  }
+  switch(outcome) {
+    case 'saved': message+='Роутер подтвердил сохранённую область. Действующие исключения сохраняются.'; break;
+    case 'renew': message+='Требуется повторное подтверждение с прежними ограничениями и разрешениями.'; break;
+    case 'legacy': message+='Сохраним ранее заданное ограничение устройств. Добавлять всю домашнюю сеть не требуется.'; break;
+    case 'home': message+='Роутер обнаружил домашний сегмент '+label+'. Новые устройства этой сети будут использовать правила выбранных сервисов. Исключения можно добавить позже.'; break;
+    case 'missing': message+='Не удалось однозначно определить домашнюю сеть. Обновите список сетей.'; break;
+    default: message+=wizardScope.refreshingPolicy?'Перечитываем список сервисов для этой области…':e.pending?'Сохраняем область и проверяем ответ роутера…':e.optionsRead?'Читаем настройки сети…':e.unknown||e.conflict||e.dirty?'Сохранение области ещё не подтверждено. Проверьте настройки перед запуском.':'Читаем сохранённую область…';
+  }
+  text.textContent=message+(wizardScope.message?' '+wizardScope.message:'')+((e.unknown||e.conflict)&&e.message?' '+e.message:'');
+  confirm.hidden=!['home','renew'].includes(outcome);
+  confirm.textContent=outcome==='renew'?'Подтвердить сохранённую область':'Подтвердить Home';
+  confirm.disabled=!!(e.optionsRead||e.pending);
+  // Keep the displayed candidate identity with the control the owner selects.
+  confirm.dataset.homeId=outcome==='home'?home.id:'';
+  reload.disabled=!!(e.optionsRead||e.pending);
+  const fingerprint=JSON.stringify([wizardScope.mode,r?.policy,r?.consent,wizardScope.consentCurrent,outcome==='home'?home.id:null]);
+  if (wizardScope.displayed && wizardScope.displayed!==fingerprint) {
+    for(const id of ['a1-quickConsent','a1-confirmConsent']){const node=document.getElementById(id);if(node)node.checked=false;}
+  }
+  wizardScope.displayed=fingerprint;
+}
+function openWizardScope(mode, refreshPolicy) {
+  if(state.authenticated!==true || state.currentView!=='onboard')return;
+  const first=wizardScope.mode===null;
+  wizardScope.mode=mode;wizardScope.refreshPolicy=refreshPolicy;
+  renderWizardScope();
+  if(first)void refreshListScopeOptions(true);
+}
+async function confirmWizardScope() {
+  if(!wizardScopeActive())return;
+  const e=listScopeEditor, outcome=wizardScopeState(), home=wizardScopeHome(), button=document.getElementById('a1-homeConfirm');
+  if(outcome==='home' && home && button?.dataset.homeId===home.id){
+    e.draft.segment_ids=[home.id];
+  } else if(outcome!=='renew')return;
+  wizardScope.message='';
+  e.dirty=true;
+  const generation=wizardScope.version;
+  await saveListScope(true);
+  if(generation===wizardScope.version && !e.dirty && !e.unknown && wizardScope.refreshPolicy){
+    wizardScope.refreshingPolicy=true;renderWizardScope();
+    try {
+      if(!await wizardScope.refreshPolicy())throw new Error('Обновите область и список сервисов перед запуском.');
+    } catch(error){
+      if(generation===wizardScope.version){wizardScope.needsRead=true;wizardScope.message=error.message;}
+    } finally{
+      if(generation===wizardScope.version){wizardScope.refreshingPolicy=false;renderWizardScope();}
+    }
+  }
+  if(generation===wizardScope.version && e.dirty && !e.unknown){
+    // This draft was created by the button above. Discard only its declined
+    // edit. A concurrent policy change must be read before a further attempt.
+    wizardScope.message=e.message;
+    wizardScope.needsRead=e.conflict;
+    listScopeReset(listScopeCurrent() || e.base);
+    renderWizardScope();
+  }
+}
+async function verifyWizardScope() {
+  if(!wizardScopeActive())throw new Error('Откройте первый шаг и проверьте домашнюю сеть.');
+  const kind=wizardScopeState(), before=listScopeCurrent(), version=wizardScope.version,mode=wizardScope.mode;
+  if(!['saved','legacy'].includes(kind))throw new Error('Сначала подтвердите область домашней сети на первом шаге.');
+  const value=await interfaceRequest(listScopeReviewPath);
+  if(!wizardScopeActive() || wizardScope.version!==version || wizardScope.mode!==mode)throw new Error('Настройка прервана. Проверьте область сети ещё раз.');
+  const after=listScopeReview(value);
+  if(wizardScopeState()!==kind || !listScopeSame(listScopeCurrent()?.policy,before.policy) || !listScopeSame(listScopeCurrent()?.consent,before.consent))throw new Error('Область сети изменилась. Проверьте настройки ещё раз.');
+  const allowed=kind==='saved'?value.scope_consent_current===true:after?.policy===null;
+  if(!after || !allowed || !listScopeSame(after.policy,before.policy) || !listScopeSame(after.consent,before.consent)){
+    if(after)acceptPanelSection('networkPolicyReview',value,Date.now());
+    renderWizardScope();
+    throw new Error('Область сети изменилась. Проверьте актуальные ограничения и повторите запуск.');
+  }
+  return after.policy?.revision || 0;
+}
+globalThis.RazvilkaWizardScope={open:openWizardScope,verify:verifyWizardScope};
 function listScopeCanEdit() {
   const e=listScopeEditor;
   return !!listScopeCurrent()
@@ -173,6 +275,7 @@ function listScopeDeviceLabels() {
 }
 let listScopeLastHTML='';
 function renderListScope() {
+  renderWizardScope();
   const root=document.getElementById('listScopeContent');if(!root)return;
   const e=listScopeEditor,r=listScopeCurrent(),catalog=state.homeScope,c=e.draft;
   const available=!!listScopeOptionsCurrent();
@@ -212,9 +315,9 @@ function listScopeSubmissionClients() {
   const members=new Set(catalog.devices.filter(row=>listScopeCandidate('excluded_device_ids',row) && row.segment_id===home).map(row=>row.id));
   return excluded.every(id=>members.has(id)) ? {...draft,segment_ids:[home]} : draft;
 }
-async function saveListScope() {
+async function saveListScope(fromWizard=false) {
   const e=listScopeEditor;if(e.pending || !e.dirty || !e.base)return;
-  if(!listScopeCanEdit()){e.message='Сохранение недоступно. Обновите устройства и сети; при конфликте сначала сравните сохранённые настройки с черновиком.';renderListScope();return;}
+  if(!(fromWizard ? wizardScopeActive()&&!e.conflict&&!e.unknown&&!state.applyRequest&&listScopeCurrent() : listScopeCanEdit())){e.message='Сохранение недоступно. Обновите устройства и сети; при конфликте сначала сравните сохранённые настройки с черновиком.';renderListScope();return;}
   const clients=listScopeSubmissionClients();
   if(!listScopeClientsValid(clients)){e.message='Не удалось определить домашний сегмент. Выберите подтверждённый сегмент. Для ранее сохранённого списка устройств нужен хотя бы один участник.';renderListScope();return;}
   for(const key of ['segment_ids','device_ids','excluded_device_ids']) {
@@ -253,7 +356,7 @@ async function saveListScope() {
 }
 async function refreshListScopeOptions(explicit=false) {
   const e=listScopeEditor;
-  if(state.authenticated!==true || state.currentView!=='exclusions' || e.optionsRead || e.pending || !explicit&&e.optionsAttempted)return;
+  if(state.authenticated!==true || (state.currentView!=='exclusions'&&!wizardScopeActive()) || e.optionsRead || e.pending || !explicit&&e.optionsAttempted)return;
   const ticket={epoch:e.epoch,auth:state.authGeneration||0},current=()=>e.optionsRead===ticket&&ticket.epoch===e.epoch&&state.authenticated&&(state.authGeneration||0)===ticket.auth;
   e.optionsAttempted=true;e.optionsRead=ticket;
   if(typeof panelSectionState==='function')panelSectionState('homeScope','loading');
@@ -263,24 +366,31 @@ async function refreshListScopeOptions(explicit=false) {
       const review=await interfaceRequest(listScopeReviewPath);if(!current())return;
       acceptPanelSection('networkPolicyReview',review,Date.now());
       const read=listScopeReview(review);
+      if(wizardScopeActive() && wizardScope.needsRead){wizardScope.needsRead=wizardScope.refreshPolicy ? !await wizardScope.refreshPolicy() : false;if(!current())return;}
       if(e.unknown&&e.submitted&&read.revision>e.submitted.expectedRevision&&listScopePolicyEqual(e.submitted.policy,read.policy,e.submitted.allowInheritedExclusions)&&listScopeSame(read.consent?.grants,e.submitted.grants)) {
         listScopeReset(read);e.unknown=false;e.submitted=null;e.message='Настройки сохранены — применение ещё не подтверждено.';
       }
     }
     const options=await interfaceRequest(listScopeOptionsPath);if(!current())return;
     acceptListScopeOptions(options);if(typeof panelSectionState==='function')panelSectionState('homeScope','ready');
-    if(explicit){
+    if(explicit && state.currentView==='exclusions'){
       const exclusions=await interfaceRequest('/api/v1/networkpolicy/exclusions');if(!current())return;
       acceptPanelSection('resourceExclusions',exclusions,Date.now());
     }
   } catch(error) {
     if(!current())return;
     if(typeof panelSectionState==='function')panelSectionState('homeScope','error',error);
+    if(wizardScopeActive())wizardScope.message='Не удалось прочитать сведения о сети. Повторите проверку.';
     e.message=`${error.payload?.code || error.message || 'Домашние сегменты не получены.'} Последние ID и черновик сохранены.`;
   } finally {if(current()){e.optionsRead=null;renderListScope();}}
 }
 function bindListScope() {
   const root=document.getElementById('listScopeContent');if(!root)return;
+  document.getElementById('a1-homeConfirm')?.addEventListener('click',()=>void confirmWizardScope());
+  document.getElementById('a1-homeRead')?.addEventListener('click',()=>{wizardScope.message='';void refreshListScopeOptions(true);});
+  function leaveWizard(){wizardScope.version++;wizardScope.refreshingPolicy=false;wizardScope.needsRead=false;wizardScope.refreshPolicy=null;wizardScope.mode=null;wizardScope.displayed='';wizardScope.message='';}
+  document.addEventListener('razvilka:view-change',event=>{if(event.detail!=='onboard')leaveWizard();});
+  document.addEventListener('razvilka:auth-restored',leaveWizard);
   document.getElementById('view-exclusions')?.addEventListener('click',event=>{
     const id=event.target.closest('button[data-exclusion-section]')?.dataset.exclusionSection;
     if(id!=='listScopeContent' && id!=='resourceExclusionsContent')return;
@@ -292,6 +402,6 @@ function bindListScope() {
   root.addEventListener('input',event=>{if(event.target.hasAttribute('data-scope-search')){listScopeEditor.query=event.target.value;renderListScope();}});
   root.addEventListener('click',event=>{const b=event.target.closest('button');if(!b||b.disabled)return;if(b.hasAttribute('data-scope-save'))void saveListScope();if(b.hasAttribute('data-scope-refresh'))void refreshListScopeOptions(true);if(b.hasAttribute('data-scope-remove-cidr'))listScopeRemoveCIDR(b.dataset.scopeRemoveCidr);if(b.hasAttribute('data-scope-reset')&&listScopeCurrent()&&!listScopeEditor.pending){listScopeReset(listScopeCurrent());listScopeEditor.message='Показаны сохранённые настройки.';renderListScope();}});
   document.addEventListener('razvilka:panel-refresh',()=>{void refreshListScopeOptions();});
-  document.addEventListener('razvilka:auth-required',()=>{const e=listScopeEditor;e.epoch++;e.pending=null;e.optionsRead=null;e.optionsAttempted=false;e.unknown=false;e.submitted=null;e.message='';e.query='';state.networkPolicyReview=null;state.homeScope=null;listScopeReset(null);e.draft=null;renderListScope();});
+  document.addEventListener('razvilka:auth-required',()=>{leaveWizard();wizardScope.consentCurrent=false;const e=listScopeEditor;e.epoch++;e.pending=null;e.optionsRead=null;e.optionsAttempted=false;e.unknown=false;e.submitted=null;e.message='';e.query='';state.networkPolicyReview=null;state.homeScope=null;listScopeReset(null);e.draft=null;renderListScope();});
 }
 bindListScope();
