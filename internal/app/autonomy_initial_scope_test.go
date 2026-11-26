@@ -56,7 +56,11 @@ func putInitialScopeWizard(a *App, body map[string]any) *httptest.ResponseRecord
 
 func TestInitialWizardPersonalSourceBeforeFirstImport(t *testing.T) {
 	a := autonomyAPIFixture(t)
-	nodes, err := nodestore.Open(t.TempDir())
+	nodeRoot := filepath.Join(t.TempDir(), "nodes")
+	if err := os.Mkdir(nodeRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := nodestore.Open(nodeRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
