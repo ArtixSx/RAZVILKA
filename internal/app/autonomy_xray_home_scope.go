@@ -123,7 +123,7 @@ func (a *App) autonomyHomeXrayShape(cfg config.Config, serviceID string) bool {
 // A locally supplied definition can override a stock ID. Only the stock
 // web target and its complete TLS/content contract qualify for this check.
 func (a *App) autonomyHomeWebCheck(cfg config.Config, p autonomy.Policy, s autonomy.Service) bool {
-	if s.ID != "telegram-web" || !s.Enabled || s.Removing || !s.AllLAN || len(s.Sources) != 0 || s.ExpectedRoute != "auto" ||
+	if (s.ID != "telegram-web" && s.ID != "discord-web") || !s.Enabled || s.Removing || !s.AllLAN || len(s.Sources) != 0 || s.ExpectedRoute != "auto" ||
 		!cfg.Services[s.ID].Enabled || cfg.AppliedServices[s.ID].Enabled || !slices.Contains(p.PreferredRoutes, "xray") || len(p.SourceIDs) == 0 {
 		return false
 	}

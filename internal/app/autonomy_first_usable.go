@@ -315,7 +315,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		if !homeCheckOnly || h == nil || !h.webCheckOnly || !h.current(ctx, a, cfg, s) {
 			return finish(autonomyStateDomainRouteUnavailable, "Для доменного сервиса недоступна отдельная проверка узла.")
 		}
-		checkedMessage = "Страница Telegram Web ответила через узел Xray. Узел сохранён в резерве. Маршрут для домашних устройств не применён."
+		checkedMessage = service.Probes[0].Label + " ответила через узел Xray. Узел сохранён в резерве. Маршрут для домашних устройств не применён."
 	}
 	if homeCheckOnly {
 		if r.Search == nil || r.Search.Version != version {

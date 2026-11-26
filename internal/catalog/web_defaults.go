@@ -20,6 +20,19 @@ func WithWebDefaults(c Catalog) Catalog {
 			Note: "Доступность веб-страницы проверяется отдельно от MTProto, медиа и звонков.",
 		},
 		{
+			ID: "discord-web", Name: "Discord · веб", Category: "Мессенджеры", Icon: "DC",
+			Description: "Страница веб-приложения Discord.",
+			Domains:     []string{"discord.com"},
+			Strategy:    []string{"auto"},
+			ProbeURL:    "https://discord.com/app",
+			Probes: []Probe{{
+				ID: "web", Label: "Страница Discord", URL: "https://discord.com/app", Required: true,
+				Expect: ProbeExpectation{StatusCodes: []int{200}, ContentTypes: []string{"text/html"}, RedirectPolicy: "none",
+					BodyContains: []string{"Discord", "You need to enable JavaScript to run this app."}},
+			}},
+			Note: "Проверяется загрузка страницы веб-приложения. Вход, сообщения, голос и медиа требуют отдельных проверок.",
+		},
+		{
 			ID: "instagram-web", Name: "Instagram · веб", Category: "Соцсети", Icon: "IG",
 			Description: "Публичная веб-страница Instagram.",
 			Domains:     []string{"www.instagram.com"},
