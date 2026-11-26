@@ -115,7 +115,7 @@ test('dynamically created app update dialog is named and reused',()=>{
 });
 
 test('native inspector accessible name',()=>assert.match(html,/<dialog[^>]*aria-labelledby="ui3InspectorTitle"[^>]*id="ui3ServiceDialog"|<dialog[^>]*id="ui3ServiceDialog"[^>]*aria-labelledby="ui3InspectorTitle"/));
-test('retry fenced across authentication epochs',()=>assert.match(read(root+'console-autonomy.js'),/api\(path,method,body,attempt\+1,requestGeneration\)/));
+test('retry preserves the authentication epoch and reviewed intent',()=>assert.match(read(root+'console-autonomy.js'),/api\(path,method,body,attempt\+1,requestGeneration,reviewIntent\)/));
 test('mutation timeout',()=>assert.match(read(root+'interface.js'),/setTimeout\(\(\)=>controller\.abort\(\),20000\)/));
 test('side drawer always clears on session end',()=>assert.match(read(root+'interface.js'),/interfaceRequests\.clear\(\);interfaceCloseInspector\(\);consoleSnapshot=null/));
 test('visible explanations omit obsolete implementation labels',()=>{
